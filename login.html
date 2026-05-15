@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Nullverse Login</title>
 </head>
+
 <body>
 
     <h1>Nullverse Login</h1>
@@ -23,45 +24,75 @@
         const SUPABASE_URL = "https://baaygzddafopihtxyyjq.supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_O0JPmpCSe7TDoUxotIe4aQ_4EBgEBV8";
 
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    async function signUp() {
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
+        const message = document.getElementById("message");
 
-      const { data, error } = await supabaseClient.auth.signUp({
-        email: email,
-        password: password
-      });
+        async function signUp() {
+            const email = document.getElementById("email").value.trim();
+            const password = document.getElementById("password").value.trim();
 
-      if (error) {
-        document.getElementById("message").textContent = error.message;
-      } else {
-        document.getElementById("message").textContent = "Account created. Check your email if confirmation is required.";
-      }
-    }
+            if (!email || !password) {
+                message.textContent = "Please enter an email and password.";
+                return;
+            }
 
-    async function logIn() {
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
+            const { data, error } = await supabaseClient.auth.signUp({
+                email: email,
+                password: password,
+                options: {
+                    emailRedirectTo: "https://nullverse.dev/dashboard.html"
+                }
+            });
 
-      const { data, error } = await supabaseClient.auth.signInWithPassword({
-        email: email,
-        password: password
-      });
+            if (error) {
+                message.textContent = error.message;
+            } else {
+                message.textContent = "Account created. Check your email to confirm your account.";
+            }
+        }
 
-      if (error) {
-        document.getElementById("message").textContent = error.message;
-      } else {
-        document.getElementById("message").textContent = "Logged in successfully.";
-        window.location.href = "dashboard.html";
-      }
-    }
+        async function logIn() {
+            const email = document.getElementById("email").value.trim();
+            const password = document.getElementById("password").value.trim();
 
-    async function logOut() {
-      await supabaseClient.auth.signOut();
-      document.getElementById("message").textContent = "Logged out.";
-    }
+            if (!email || !password) {
+                message.textContent = "Please enter an email and password.";
+                return;
+            }
+
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
+                email: email,
+                password: password
+            });
+
+            if (error) {
+                message.textContent = error.message;
+            } else {
+                message.textContent = "Logged in successfully.";
+                window.location.href = "dashboard.html";
+            }
+        }
+
+        async function logOut() {
+            const { error } = await supabaseClient.auth.signOut();
+
+            if (error) {
+                message.textContent = error.message;
+            } else {
+                message.textContent = "Logged out.";
+            }
+        }
+
+        async function checkExistingSession() {
+            const { data } = await supabaseClient.auth.getSession();
+
+            if (data.session) {
+                message.textContent = "You are already logged in.";
+            }
+        }
+
+        checkExistingSession();
     </script>
 
 </body>
