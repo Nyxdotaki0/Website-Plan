@@ -3,20 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <title>Nullverse Login</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0d0d12;
+            color: #f2f2f2;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .auth-card {
+            width: 100%;
+            max-width: 430px;
+            background: #15151f;
+            border: 1px solid #2a2a35;
+            border-radius: 14px;
+            padding: 32px;
+        }
+
+        h1 {
+            margin-top: 0;
+            margin-bottom: 8px;
+        }
+
+        p {
+            color: #bdbdca;
+            line-height: 1.5;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 14px;
+            border-radius: 8px;
+            border: 1px solid #333344;
+            background: #0d0d12;
+            color: white;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #2a2a44;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 6px;
+        }
+
+            button:hover {
+                background: #3a3a5c;
+            }
+
+        .link-button {
+            background: none;
+            color: #cfcfd8;
+            padding: 0;
+            margin-top: 18px;
+            text-decoration: underline;
+        }
+
+        .message {
+            margin-top: 14px;
+            color: #c8c8d4;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .logo {
+            font-size: 1.7rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            letter-spacing: 1px;
+        }
+
+        .back-link {
+            display: block;
+            margin-top: 18px;
+            color: #8f8fa3;
+            text-align: center;
+            text-decoration: none;
+        }
+
+            .back-link:hover {
+                color: white;
+            }
+    </style>
 </head>
 
 <body>
 
-    <h1>Nullverse Login</h1>
+    <main class="auth-card">
+        <div class="logo">Nullverse</div>
 
-    <input id="email" type="email" placeholder="Email">
-    <input id="password" type="password" placeholder="Password">
+        <section id="login-section">
+            <h1>Log In</h1>
+            <p>Continue building worlds, stories, characters, and creator profiles.</p>
 
-    <button onclick="signUp()">Create Account</button>
-    <button onclick="logIn()">Log In</button>
-    <button onclick="logOut()">Log Out</button>
+            <input id="login-email" type="email" placeholder="Email">
+            <input id="login-password" type="password" placeholder="Password">
 
-    <p id="message"></p>
+            <button onclick="logIn()">Log In</button>
+
+            <button class="link-button" onclick="showCreateAccount()">
+                Don't have an account? Create one
+            </button>
+        </section>
+
+        <section id="signup-section" class="hidden">
+            <h1>Create Account</h1>
+            <p>Create your Nullverse account. After this, you’ll set up your creator profile.</p>
+
+            <input id="signup-email" type="email" placeholder="Email">
+            <input id="signup-phone" type="tel" placeholder="Phone number, optional">
+            <input id="signup-password" type="password" placeholder="Password">
+            <input id="signup-confirm-password" type="password" placeholder="Confirm password">
+
+            <button onclick="signUp()">Create Account</button>
+
+            <button class="link-button" onclick="showLogin()">
+                Already have an account? Log in
+            </button>
+        </section>
+
+        <p id="message" class="message"></p>
+
+        <a class="back-link" href="index.html">Back to Nullverse</a>
+    </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -28,12 +150,36 @@
 
         const message = document.getElementById("message");
 
-        async function signUp() {
-            const email = document.getElementById("email").value.trim();
-            const password = document.getElementById("password").value.trim();
+        function showCreateAccount() {
+            document.getElementById("login-section").classList.add("hidden");
+            document.getElementById("signup-section").classList.remove("hidden");
+            message.textContent = "";
+        }
 
-            if (!email || !password) {
-                message.textContent = "Please enter an email and password.";
+        function showLogin() {
+            document.getElementById("signup-section").classList.add("hidden");
+            document.getElementById("login-section").classList.remove("hidden");
+            message.textContent = "";
+        }
+
+        async function signUp() {
+            const email = document.getElementById("signup-email").value.trim();
+            const phone = document.getElementById("signup-phone").value.trim();
+            const password = document.getElementById("signup-password").value.trim();
+            const confirmPassword = document.getElementById("signup-confirm-password").value.trim();
+
+            if (!email || !password || !confirmPassword) {
+                message.textContent = "Email, password, and password confirmation are required.";
+                return;
+            }
+
+            if (password.length < 6) {
+                message.textContent = "Password must be at least 6 characters.";
+                return;
+            }
+
+            if (password !== confirmPassword) {
+                message.textContent = "Passwords do not match.";
                 return;
             }
 
@@ -41,23 +187,27 @@
                 email: email,
                 password: password,
                 options: {
-                    emailRedirectTo: "https://nullverse.dev/dashboard.html"
+                    emailRedirectTo: "https://nullverse.dev/profile-setup.html",
+                    data: {
+                        phone: phone
+                    }
                 }
             });
 
             if (error) {
                 message.textContent = error.message;
-            } else {
-                message.textContent = "Account created. Check your email to confirm your account.";
+                return;
             }
+
+            message.textContent = "Account created. Check your email to confirm your account, then continue to profile setup.";
         }
 
         async function logIn() {
-            const email = document.getElementById("email").value.trim();
-            const password = document.getElementById("password").value.trim();
+            const email = document.getElementById("login-email").value.trim();
+            const password = document.getElementById("login-password").value.trim();
 
             if (!email || !password) {
-                message.textContent = "Please enter an email and password.";
+                message.textContent = "Enter your email and password.";
                 return;
             }
 
@@ -68,27 +218,17 @@
 
             if (error) {
                 message.textContent = error.message;
-            } else {
-                message.textContent = "Logged in successfully.";
-                window.location.href = "profile-setup.html";
+                return;
             }
-        }
 
-        async function logOut() {
-            const { error } = await supabaseClient.auth.signOut();
-
-            if (error) {
-                message.textContent = error.message;
-            } else {
-                message.textContent = "Logged out.";
-            }
+            window.location.href = "dashboard.html";
         }
 
         async function checkExistingSession() {
             const { data } = await supabaseClient.auth.getSession();
 
             if (data.session) {
-                message.textContent = "You are already logged in.";
+                window.location.href = "dashboard.html";
             }
         }
 
