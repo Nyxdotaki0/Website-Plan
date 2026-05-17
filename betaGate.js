@@ -1,13 +1,18 @@
 ﻿import { supabase } from "./supabaseClient.js";
 
 export async function requireBetaAccess() {
+    console.log("Checking beta access...");
+
     const {
         data: { user },
         error: userError
     } = await supabase.auth.getUser();
 
+    console.log("Current user:", user);
+
     if (userError || !user) {
-        window.location.href = "/login.html";
+        console.log("No user found. Redirecting to login.");
+        window.location.replace("/login.html");
         return;
     }
 
@@ -17,11 +22,15 @@ export async function requireBetaAccess() {
         .eq("email", user.email)
         .maybeSingle();
 
+    console.log("Beta access result:", data, error);
+
     if (error || !data) {
+        console.log("User is not approved. Redirecting to closed beta page.");
         await supabase.auth.signOut();
-        window.location.href = "/closed-beta.html";
+        window.location.replace("/closed-beta.html");
         return;
     }
 
     localStorage.setItem("nullverse_user_role", data.role);
+    console.log("Access approved:", data.role);
 }
