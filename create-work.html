@@ -1,11 +1,161 @@
 ﻿<!DOCTYPE html>
-
-<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <title></title>
+    <meta charset="UTF-8">
+    <title>Create Work - Nullverse</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0d0d12;
+            color: #f2f2f2;
+        }
+
+        main {
+            max-width: 850px;
+            margin: auto;
+            padding: 40px;
+        }
+
+        .panel {
+            background: #15151f;
+            border: 1px solid #2a2a35;
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            margin-bottom: 14px;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #333344;
+            background: #0d0d12;
+            color: white;
+            font-family: Arial, sans-serif;
+            box-sizing: border-box;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            color: #d7d7e2;
+        }
+
+        button, .button {
+            background: #2a2a44;
+            color: white;
+            border: none;
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: Arial, sans-serif;
+        }
+
+            button:hover, .button:hover {
+                background: #3a3a5c;
+            }
+
+        .message {
+            margin-top: 14px;
+            color: #bdbdca;
+        }
+    </style>
 </head>
+
 <body>
+
+    <main>
+        <section class="panel">
+            <h1>Create a Work</h1>
+            <p>Publish a world, character, story, lore entry, document, or language entry.</p>
+
+            <label>Title</label>
+            <input id="title" placeholder="Example: Static Earth">
+
+            <label>Work Type</label>
+            <select id="work-type">
+                <option value="World">World</option>
+                <option value="Character">Character</option>
+                <option value="Story">Story</option>
+                <option value="Lore">Lore</option>
+                <option value="Document">Document</option>
+                <option value="Language">Language</option>
+            </select>
+
+            <label>Description</label>
+            <textarea id="description" rows="4" placeholder="Short summary shown in feeds and profiles..."></textarea>
+
+            <label>Full Content</label>
+            <textarea id="content" rows="10" placeholder="Write the full entry here..."></textarea>
+
+            <label>
+                <input id="featured" type="checkbox" style="width:auto; margin-right:8px;">
+                Feature this on my profile
+            </label>
+
+            <br><br>
+
+            <button onclick="publishWork()">Publish Work</button>
+            <a class="button" href="dashboard.html">Back to Dashboard</a>
+
+            <p id="message" class="message"></p>
+        </section>
+    </main>
+
+    <script type="module">
+        import { requireBetaAccess } from "./betaGate.js";
+        import { supabase } from "./supabaseClient.js";
+
+        const user = await requireBetaAccess();
+
+        window.publishWork = async function () {
+            const message = document.getElementById("message");
+
+            const title = document.getElementById("title").value.trim();
+            const workType = document.getElementById("work-type").value;
+            const description = document.getElementById("description").value.trim();
+            const content = document.getElementById("content").value.trim();
+            const featured = document.getElementById("featured").checked;
+
+            if (!title) {
+                message.textContent = "Title is required.";
+                return;
+            }
+
+            if (!description) {
+                message.textContent = "Description is required.";
+                return;
+            }
+
+            const { data, error } = await supabase
+                .from("works")
+                .insert({
+                    owner_id: user.id,
+                    title: title,
+                    work_type: workType,
+                    description: description,
+                    content: content,
+                    featured: featured,
+                    visibility: "published"
+                })
+                .select()
+                .single();
+
+            if (error) {
+                message.textContent = error.message;
+                return;
+            }
+
+            message.textContent = "Work published successfully.";
+
+            setTimeout(() => {
+                window.location.href = "dashboard.html";
+            }, 800);
+        };
+    </script>
 
 </body>
 </html>
