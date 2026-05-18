@@ -305,73 +305,56 @@
 
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-    <script>
-        const SUPABASE_URL = "https://baaygzddafopihtxyyjq.supabase.co";
-        const SUPABASE_ANON_KEY = "sb_publishable_O0JPmpCSe7TDoUxotIe4aQ_4EBgEBV8";
-
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-        async function checkUser() {
-            const { data: { user }, error } = await supabaseClient.auth.getUser();
-
-            if (error || !user) {
-                window.location.href = "login.html";
-                return;
-            }
-
-            document.getElementById("dashboard-email").textContent =
-                "Signed in as: " + user.email;
-
-            const { data: profile, error: profileError } = await supabaseClient
-                .from("profiles")
-                .select("*")
-                .eq("id", user.id)
-                .single();
-
-            if (profileError || !profile) {
-                window.location.href = "profile-setup.html";
-                return;
-            }
-
-            document.getElementById("dashboard-display-name").textContent =
-                profile.display_name || "New Creator";
-
-            document.getElementById("dashboard-username").textContent =
-                "@" + (profile.username || "creator");
-
-            document.getElementById("dashboard-bio").textContent =
-                profile.bio || "This creator has not added a bio yet.";
-
-            document.getElementById("dashboard-creator-type").textContent =
-                profile.creator_type || "";
-
-            document.getElementById("dashboard-avatar").src =
-                profile.avatar_url || "https://placehold.co/200x200/1b1b28/ffffff?text=NV";
-
-            const banner = document.getElementById("dashboard-banner");
-
-            banner.style.background =
-                "linear-gradient(135deg, #1b1b28, #2a2a44)";
-
-            if (profile.banner_url) {
-                banner.style.backgroundImage = `url('${profile.banner_url}')`;
-            }
-        }
-
-        async function logOut() {
-            await supabaseClient.auth.signOut();
-            window.location.href = "login.html";
-        }
-
-        checkUser();
-    </script>
-
     <script type="module">
         import { requireBetaAccess } from "./betaGate.js";
-        requireBetaAccess();
+        import { supabase } from "./supabaseClient.js";
+
+        const user = await requireBetaAccess();
+
+        document.getElementById("dashboard-email").textContent =
+            "Signed in as: " + user.email;
+
+        const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", user.id)
+            .single();
+
+        if (profileError || !profile) {
+            window.location.href = "profile-setup.html";
+        }
+
+        document.getElementById("dashboard-display-name").textContent =
+            profile.display_name || "New Creator";
+
+        document.getElementById("dashboard-username").textContent =
+            "@" + (profile.username || "creator");
+
+        document.getElementById("dashboard-bio").textContent =
+            profile.bio || "This creator has not added a bio yet.";
+
+        document.getElementById("dashboard-creator-type").textContent =
+            profile.creator_type || "";
+
+        document.getElementById("dashboard-avatar").src =
+            profile.avatar_url || "https://placehold.co/200x200/1b1b28/ffffff?text=NV";
+
+        const banner = document.getElementById("dashboard-banner");
+
+        banner.style.background =
+            "linear-gradient(135deg, #1b1b28, #2a2a44)";
+
+        if (profile.banner_url) {
+            banner.style.backgroundImage = `url('${profile.banner_url}')`;
+        }
+
+        window.logOut = async function () {
+            await supabase.auth.signOut();
+            window.location.href = "login.html";
+        };
     </script>
+
+    
 
 
 </body>

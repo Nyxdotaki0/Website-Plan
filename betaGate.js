@@ -33,4 +33,6 @@ export async function requireBetaAccess() {
 
     localStorage.setItem("nullverse_user_role", data.role);
     console.log("Access approved:", data.role);
+
+    return user;
 }
