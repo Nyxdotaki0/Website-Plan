@@ -86,7 +86,7 @@
 
         .filters {
             display: grid;
-            grid-template-columns: 1fr 220px;
+            grid-template-columns: 1fr 220px 120px;
             gap: 14px;
         }
 
@@ -100,19 +100,6 @@
             font-family: Arial, sans-serif;
             box-sizing: border-box;
         }
-
-        .feed-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 14px;
-            flex-wrap: wrap;
-            margin-bottom: 16px;
-        }
-
-            .feed-header h2 {
-                margin: 0;
-            }
 
         .button {
             display: inline-block;
@@ -131,13 +118,26 @@
                 background: #3a3a5c;
             }
 
+        .feed-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+            .feed-header h2 {
+                margin: 0;
+            }
+
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
             gap: 18px;
         }
 
-        .work-card {
+        .work-card, .creator-card {
             background: #1b1b28;
             border: 1px solid #2a2a35;
             border-radius: 14px;
@@ -145,7 +145,7 @@
             transition: transform 0.15s ease, border-color 0.15s ease;
         }
 
-            .work-card:hover {
+            .work-card:hover, .creator-card:hover {
                 transform: translateY(-2px);
                 border-color: #44445f;
             }
@@ -160,30 +160,44 @@
             margin-bottom: 12px;
         }
 
-        .work-card h3 {
+        .work-card h3, .creator-card h3 {
             margin: 0 0 8px;
             font-size: 1.35rem;
         }
 
-        .work-card p {
+        .work-card p, .creator-card p {
             color: #c8c8d4;
             line-height: 1.5;
         }
+
+        .creator-card {
+            display: flex;
+            gap: 14px;
+            align-items: center;
+        }
+
+            .creator-card img {
+                width: 62px;
+                height: 62px;
+                border-radius: 50%;
+                object-fit: cover;
+                background: #2a2a35;
+            }
+
+            .creator-card a, .creator a {
+                color: #cfcfd8;
+                text-decoration: none;
+            }
+
+                .creator-card a:hover, .creator a:hover {
+                    color: white;
+                }
 
         .creator {
             margin-top: 14px;
             color: #8f8fa3;
             font-size: 0.9rem;
         }
-
-            .creator a {
-                color: #cfcfd8;
-                text-decoration: none;
-            }
-
-                .creator a:hover {
-                    color: white;
-                }
 
         .empty {
             color: #8f8fa3;
@@ -238,17 +252,17 @@
         <section class="hero">
             <h1>Explore the Nullverse</h1>
             <p>
-                Discover worlds, characters, stories, lore entries, documents, and fictional languages
-                published by creators inside the closed beta.
+                Search creators, worlds, characters, stories, lore entries, documents, and fictional languages
+                published inside the closed beta.
             </p>
         </section>
 
         <section class="panel">
             <div class="filters">
-                <input id="search-input" placeholder="Search by title, description, creator, or type...">
+                <input id="search-input" placeholder="Search creators, usernames, worlds, stories...">
 
                 <select id="type-filter">
-                    <option value="All">All Types</option>
+                    <option value="All">All Work Types</option>
                     <option value="World">Worlds</option>
                     <option value="Character">Characters</option>
                     <option value="Story">Stories</option>
@@ -256,6 +270,18 @@
                     <option value="Document">Documents</option>
                     <option value="Language">Languages</option>
                 </select>
+
+                <button id="search-button" class="button">Search</button>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="feed-header">
+                <h2>Creators</h2>
+            </div>
+
+            <div id="profiles-feed" class="grid">
+                <p class="empty">Loading creators...</p>
             </div>
         </section>
 
@@ -278,10 +304,18 @@
         await requireBetaAccess();
 
         let allWorks = [];
+        let allProfiles = [];
+
+        async function loadExploreData() {
+            await Promise.all([
+                loadWorks(),
+                loadProfiles()
+            ]);
+
+            renderExplore();
+        }
 
         async function loadWorks() {
-            const feed = document.getElementById("works-feed");
-
             const { data: worksData, error } = await supabase
                 .from("works")
                 .select("*")
@@ -289,7 +323,8 @@
                 .order("created_at", { ascending: false });
 
             if (error) {
-                feed.innerHTML = `<p class="empty">${error.message}</p>`;
+                document.getElementById("works-feed").innerHTML =
+                    `<p class="empty">${escapeHtml(error.message)}</p>`;
                 return;
             }
 
@@ -304,7 +339,8 @@
                     .in("id", ownerIds);
 
                 if (profilesError) {
-                    feed.innerHTML = `<p class="empty">${profilesError.message}</p>`;
+                    document.getElementById("works-feed").innerHTML =
+                        `<p class="empty">${escapeHtml(profilesError.message)}</p>`;
                     return;
                 }
 
@@ -319,21 +355,60 @@
                     profile: profile || null
                 };
             });
+        }
 
-            renderWorks();
+        async function loadProfiles() {
+            const { data, error } = await supabase
+                .from("profiles")
+                .select("id, username, display_name, bio, creator_type, avatar_url")
+                .order("created_at", { ascending: false });
 
             if (error) {
-                feed.innerHTML = `<p class="empty">${error.message}</p>`;
+                document.getElementById("profiles-feed").innerHTML =
+                    `<p class="empty">${escapeHtml(error.message)}</p>`;
                 return;
             }
 
-            allWorks = data || [];
+            allProfiles = data || [];
+        }
+
+        function renderExplore() {
+            renderProfiles();
             renderWorks();
+        }
+
+        function getSearchValue() {
+            return document.getElementById("search-input").value.toLowerCase().trim();
+        }
+
+        function renderProfiles() {
+            const feed = document.getElementById("profiles-feed");
+            const searchValue = getSearchValue();
+
+            let filteredProfiles = allProfiles;
+
+            if (searchValue) {
+                filteredProfiles = filteredProfiles.filter(profile => {
+                    return (
+                        profile.display_name?.toLowerCase().includes(searchValue) ||
+                        profile.username?.toLowerCase().includes(searchValue) ||
+                        profile.bio?.toLowerCase().includes(searchValue) ||
+                        profile.creator_type?.toLowerCase().includes(searchValue)
+                    );
+                });
+            }
+
+            if (!filteredProfiles.length) {
+                feed.innerHTML = `<p class="empty">No creators found.</p>`;
+                return;
+            }
+
+            feed.innerHTML = filteredProfiles.map(renderProfileCard).join("");
         }
 
         function renderWorks() {
             const feed = document.getElementById("works-feed");
-            const searchValue = document.getElementById("search-input").value.toLowerCase().trim();
+            const searchValue = getSearchValue();
             const typeValue = document.getElementById("type-filter").value;
 
             let filteredWorks = allWorks;
@@ -350,6 +425,7 @@
                     return (
                         work.title?.toLowerCase().includes(searchValue) ||
                         work.description?.toLowerCase().includes(searchValue) ||
+                        work.content?.toLowerCase().includes(searchValue) ||
                         work.work_type?.toLowerCase().includes(searchValue) ||
                         creatorName.toLowerCase().includes(searchValue) ||
                         username.toLowerCase().includes(searchValue)
@@ -363,6 +439,29 @@
             }
 
             feed.innerHTML = filteredWorks.map(renderWorkCard).join("");
+        }
+
+        function renderProfileCard(profile) {
+            const username = profile.username || "unknown";
+            const displayName = profile.display_name || "Unnamed Creator";
+            const avatar = profile.avatar_url || "https://placehold.co/200x200/1b1b28/ffffff?text=NV";
+
+            return `
+                <article class="creator-card">
+                    <img src="${escapeAttribute(avatar)}" alt="${escapeAttribute(displayName)} profile picture">
+
+                    <div>
+                        <h3>
+                            <a href="profile.html?user=${encodeURIComponent(username)}">
+                                ${escapeHtml(displayName)}
+                            </a>
+                        </h3>
+
+                        <p>@${escapeHtml(username)}</p>
+                        <p>${escapeHtml(profile.creator_type || "Creator")}</p>
+                    </div>
+                </article>
+            `;
         }
 
         function renderWorkCard(work) {
@@ -387,7 +486,7 @@
         }
 
         function escapeHtml(value) {
-            return String(value)
+            return String(value || "")
                 .replaceAll("&", "&amp;")
                 .replaceAll("<", "&lt;")
                 .replaceAll(">", "&gt;")
@@ -395,15 +494,26 @@
                 .replaceAll("'", "&#039;");
         }
 
-        document.getElementById("search-input").addEventListener("input", renderWorks);
-        document.getElementById("type-filter").addEventListener("change", renderWorks);
+        function escapeAttribute(value) {
+            return escapeHtml(value).replaceAll("`", "&#096;");
+        }
+
+        document.getElementById("search-button").addEventListener("click", renderExplore);
+
+        document.getElementById("search-input").addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                renderExplore();
+            }
+        });
+
+        document.getElementById("type-filter").addEventListener("change", renderExplore);
 
         window.logOut = async function () {
             await supabase.auth.signOut();
             window.location.href = "login.html";
         };
 
-        loadWorks();
+        loadExploreData();
     </script>
 
 </body>
