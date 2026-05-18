@@ -240,77 +240,16 @@
         </section>
 
         <section class="content-section">
-            <h2>Worlds</h2>
-
-            <div class="grid">
-
-                <div class="card">
-                    <h3>Static Earth</h3>
-
-                    <p>
-                        A grounded psychological crime-thriller world where
-                        normal people hide disturbing truths beneath ordinary lives.
-                    </p>
-                </div>
-
-                <div class="card empty">
-                    <h3>More Worlds Coming Soon</h3>
-
-                    <p>
-                        User-created worlds will appear here once the creation system is built.
-                    </p>
-                </div>
-
+            <h2>Featured Works</h2>
+            <div id="featured-works" class="grid">
+                <p class="empty">Loading featured works...</p>
             </div>
         </section>
 
         <section class="content-section">
-            <h2>Characters</h2>
-
-            <div class="grid">
-
-                <div class="card">
-                    <h3>Nyx</h3>
-
-                    <p>
-                        A charismatic but deeply sadistic individual who hides
-                        violent tendencies behind charm and trust.
-                    </p>
-                </div>
-
-                <div class="card empty">
-                    <h3>More Characters Coming Soon</h3>
-
-                    <p>
-                        Creator characters will eventually populate this section automatically.
-                    </p>
-                </div>
-
-            </div>
-        </section>
-
-        <section class="content-section">
-            <h2>Stories</h2>
-
-            <div class="grid">
-
-                <div class="card">
-                    <h3>The Mask He Wore</h3>
-
-                    <p>
-                        A story centered around hidden cruelty,
-                        manipulation, and the danger of trusting appearances.
-                    </p>
-                </div>
-
-                <div class="card empty">
-                    <h3>More Stories Coming Soon</h3>
-
-                    <p>
-                        Published stories and lore entries will appear here later.
-                    </p>
-                </div>
-
+            <h2>All Works</h2>
+            <div id="all-works" class="grid">
+                <p class="empty">Loading works...</p>
             </div>
         </section>
 
@@ -376,7 +315,49 @@
             if (profile.banner_url) {
                 document.getElementById("profile-banner").style.backgroundImage =
                     `url('${profile.banner_url}')`;
+                await loadProfileWorks(profile.id);
             }
+        }
+        async function loadProfileWorks(profileId) {
+            const featuredContainer = document.getElementById("featured-works");
+            const allContainer = document.getElementById("all-works");
+
+            const { data: works, error } = await supabase
+                .from("works")
+                .select("*")
+                .eq("owner_id", profileId)
+                .eq("visibility", "published")
+                .order("created_at", { ascending: false });
+
+            if (error) {
+                featuredContainer.innerHTML = `<p class="empty">${error.message}</p>`;
+                allContainer.innerHTML = `<p class="empty">${error.message}</p>`;
+                return;
+            }
+
+            if (!works || works.length === 0) {
+                featuredContainer.innerHTML = `<p class="empty">No featured works yet.</p>`;
+                allContainer.innerHTML = `<p class="empty">No published works yet.</p>`;
+                return;
+            }
+
+            const featuredWorks = works.filter(work => work.featured);
+
+            featuredContainer.innerHTML = featuredWorks.length
+                ? featuredWorks.map(renderWorkCard).join("")
+                : `<p class="empty">No featured works yet.</p>`;
+
+            allContainer.innerHTML = works.map(renderWorkCard).join("");
+        }
+
+        function renderWorkCard(work) {
+            return `
+        <div class="card">
+            <p class="empty">${work.work_type}</p>
+            <h3>${work.title}</h3>
+            <p>${work.description || "No description."}</p>
+        </div>
+    `;
         }
 
         window.logOut = async function () {
