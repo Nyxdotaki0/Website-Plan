@@ -316,35 +316,33 @@
 
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script type="module">
+        import { requireBetaAccess } from "./betaGate.js";
+        import { supabase } from "./supabaseClient.js";
 
-    <script>
-        const SUPABASE_URL = "https://baaygzddafopihtxyyjq.supabase.co";
-        const SUPABASE_ANON_KEY = "sb_publishable_O0JPmpCSe7TDoUxotIe4aQ_4EBgEBV8";
+        await requireBetaAccess();
 
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const params = new URLSearchParams(window.location.search);
+        const usernameFromUrl = params.get("user");
 
-        async function loadProfile() {
+        let query = supabase
+            .from("profiles")
+            .select("*");
 
-            const { data: { user }, error } =
-                await supabaseClient.auth.getUser();
+        if (usernameFromUrl) {
+            query = query.eq("username", usernameFromUrl);
+        } else {
+            const { data: { user } } = await supabase.auth.getUser();
+            query = query.eq("id", user.id);
+        }
 
-            if (error || !user) {
-                window.location.href = "login.html";
-                return;
-            }
+        const { data: profile, error } = await query.single();
 
-            const { data: profile, error: profileError } =
-                await supabaseClient
-                    .from("profiles")
-                    .select("*")
-                    .eq("id", user.id)
-                    .single();
-
-            if (profileError || !profile) {
-                return;
-            }
-
+        if (error || !profile) {
+            document.getElementById("profile-display-name").textContent = "Profile not found";
+            document.getElementById("profile-username").textContent = "";
+            document.getElementById("profile-bio").textContent = "This creator profile does not exist.";
+        } else {
             document.getElementById("profile-display-name").textContent =
                 profile.display_name || "Unnamed Creator";
 
@@ -358,8 +356,7 @@
                 profile.creator_type || "";
 
             if (profile.avatar_url) {
-                document.getElementById("profile-avatar").src =
-                    profile.avatar_url;
+                document.getElementById("profile-avatar").src = profile.avatar_url;
             }
 
             if (profile.banner_url) {
@@ -368,19 +365,8 @@
             }
         }
 
-        async function logOut() {
-            await supabaseClient.auth.signOut();
+        window.logOut = async function () {
+            await supabase.auth.signOut();
             window.location.href = "login.html";
-        }
-
-        loadProfile();
+        };
     </script>
-
-    <script type="module">
-        import { requireBetaAccess } from "./betaGate.js";
-        requireBetaAccess();
-    </script>
-
-
-</body>
-</html>
