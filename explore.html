@@ -282,25 +282,45 @@
         async function loadWorks() {
             const feed = document.getElementById("works-feed");
 
-            const { data, error } = await supabase
+            const { data: worksData, error } = await supabase
                 .from("works")
-                .select(`
-                    id,
-                    title,
-                    work_type,
-                    description,
-                    content,
-                    featured,
-                    created_at,
-                    owner_id,
-                    profiles (
-                        username,
-                        display_name,
-                        avatar_url
-                    )
-                `)
+                .select("*")
                 .eq("visibility", "published")
                 .order("created_at", { ascending: false });
+
+            if (error) {
+                feed.innerHTML = `<p class="empty">${error.message}</p>`;
+                return;
+            }
+
+            const ownerIds = [...new Set((worksData || []).map(work => work.owner_id))];
+
+            let profilesData = [];
+
+            if (ownerIds.length > 0) {
+                const { data: profiles, error: profilesError } = await supabase
+                    .from("profiles")
+                    .select("id, username, display_name, avatar_url")
+                    .in("id", ownerIds);
+
+                if (profilesError) {
+                    feed.innerHTML = `<p class="empty">${profilesError.message}</p>`;
+                    return;
+                }
+
+                profilesData = profiles || [];
+            }
+
+            allWorks = (worksData || []).map(work => {
+                const profile = profilesData.find(profile => profile.id === work.owner_id);
+
+                return {
+                    ...work,
+                    profile: profile || null
+                };
+            });
+
+            renderWorks();
 
             if (error) {
                 feed.innerHTML = `<p class="empty">${error.message}</p>`;
@@ -324,8 +344,8 @@
 
             if (searchValue) {
                 filteredWorks = filteredWorks.filter(work => {
-                    const creatorName = work.profiles?.display_name || "";
-                    const username = work.profiles?.username || "";
+                    const creatorName = work.profile?.display_name || "";
+                    const username = work.profile?.username || "";
 
                     return (
                         work.title?.toLowerCase().includes(searchValue) ||
@@ -346,8 +366,8 @@
         }
 
         function renderWorkCard(work) {
-            const username = work.profiles?.username || "unknown";
-            const displayName = work.profiles?.display_name || "Unknown Creator";
+            const username = work.profile?.username || "unknown";
+            const displayName = work.profile?.display_name || "Unknown Creator";
 
             return `
                 <article class="work-card">
