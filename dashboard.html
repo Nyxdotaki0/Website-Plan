@@ -281,25 +281,10 @@
 
         <section class="panel">
             <h2>Your Works</h2>
+            <p class="muted">Manage your published works.</p>
 
-            <div class="grid">
-                <div class="card">
-                    <h3>Worlds</h3>
-                    <p>No worlds published yet.</p>
-                    <a class="button" href="world.html">View Sample World</a>
-                </div>
-
-                <div class="card">
-                    <h3>Characters</h3>
-                    <p>No characters published yet.</p>
-                    <a class="button" href="character.html">View Sample Character</a>
-                </div>
-
-                <div class="card">
-                    <h3>Stories</h3>
-                    <p>No stories published yet.</p>
-                    <a class="button" href="story.html">View Sample Story</a>
-                </div>
+            <div id="your-works" class="grid">
+                <p class="muted">Loading works...</p>
             </div>
         </section>
 
@@ -361,6 +346,61 @@
         if (profile.banner_url) {
             banner.style.backgroundImage = `url('${profile.banner_url}')`;
         }
+
+
+        async function loadYourWorks() {
+            const worksContainer = document.getElementById("your-works");
+
+            const { data: works, error } = await supabase
+                .from("works")
+                .select("*")
+                .eq("owner_id", user.id)
+                .order("created_at", { ascending: false });
+
+            if (error) {
+                worksContainer.innerHTML = `<p class="muted">${error.message}</p>`;
+                return;
+            }
+
+            if (!works || works.length === 0) {
+                worksContainer.innerHTML = `<p class="muted">You have not published any works yet.</p>`;
+                return;
+            }
+
+            worksContainer.innerHTML = works.map(work => `
+        <div class="card">
+            <p class="muted">${work.work_type}</p>
+            <h3>${work.title}</h3>
+            <p>${work.description || "No description."}</p>
+            <p class="muted">${work.featured ? "Featured on profile" : "Not featured"}</p>
+
+            <button class="button danger-button" onclick="deleteWork('${work.id}')">
+                Delete
+            </button>
+        </div>
+    `).join("");
+        }
+
+        window.deleteWork = async function (workId) {
+            const confirmed = confirm("Delete this work? This cannot be undone.");
+
+            if (!confirmed) return;
+
+            const { error } = await supabase
+                .from("works")
+                .delete()
+                .eq("id", workId)
+                .eq("owner_id", user.id);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            loadYourWorks();
+        };
+
+        loadYourWorks();
 
         window.logOut = async function () {
             await supabase.auth.signOut();
