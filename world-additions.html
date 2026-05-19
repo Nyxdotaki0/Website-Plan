@@ -280,13 +280,7 @@
 
         const { data: additions, error } = await supabase
             .from("world_additions")
-            .select(`
-                *,
-                profiles (
-                    username,
-                    display_name
-                )
-            `)
+            .select("*")
             .eq("world_id", worldId)
             .eq("status", "approved")
             .order("created_at", { ascending: false });
@@ -301,9 +295,22 @@
             return;
         }
 
+        const authorIds = [
+            ...new Set(additions.map(addition => addition.author_id))
+        ];
+
+        const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, username, display_name")
+            .in("id", authorIds);
+
         container.innerHTML = additions.map(addition => {
-            const username = addition.profiles?.username || "unknown";
-            const displayName = addition.profiles?.display_name || username;
+            const profile = profiles?.find(profile => profile.id === addition.author_id);
+
+            const username = profile?.username || "unknown";
+            const displayName = profile?.display_name || username;
+
+            return `
 
             return `
                 <article class="addition-card">

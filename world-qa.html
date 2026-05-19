@@ -222,13 +222,7 @@
 
         const { data: questions, error } = await supabase
             .from("world_questions")
-            .select(`
-                *,
-                profiles (
-                    username,
-                    display_name
-                )
-            `)
+            .select("*")
             .eq("world_id", worldId)
             .order("created_at", { ascending: false });
 
@@ -242,13 +236,25 @@
             return;
         }
 
-        container.innerHTML = questions.map(renderQuestionCard).join("");
+        const userIds = [
+            ...new Set(questions.map(question => question.user_id))
+        ];
+
+        const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, username, display_name")
+            .in("id", userIds);
+
+        container.innerHTML = questions.map(question => {
+            const profile = profiles?.find(profile => profile.id === question.user_id);
+            return renderQuestionCard(question, profile);
+        }).join("");
     }
 
-    function renderQuestionCard(question) {
-        const username = question.profiles?.username || "unknown";
-        const displayName = question.profiles?.display_name || username;
-        const isOwner = currentUser.id === currentWorld.owner_id;
+        function renderQuestionCard(question, profile) {
+            const username = profile?.username || "unknown";
+            const displayName = profile?.display_name || username;
+            const isOwner = currentUser.id === currentWorld.owner_id;
 
         return `
             <article class="question-card">
