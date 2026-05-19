@@ -1,0 +1,496 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Edit World - Nullverse</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0d0d12;
+            color: #f2f2f2;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: #111118;
+            border-right: 1px solid #2a2a35;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid #2a2a35;
+        }
+
+            .sidebar-header h1 {
+                margin: 0 0 10px;
+                font-size: 1.5rem;
+            }
+
+            .sidebar-header p {
+                color: #9f9fb1;
+                margin: 0;
+                line-height: 1.5;
+            }
+
+        .section-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 18px;
+        }
+
+        .section-card {
+            background: #1b1b28;
+            border: 1px solid #2a2a35;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: 0.15s ease;
+        }
+
+            .section-card:hover {
+                border-color: #45455f;
+            }
+
+            .section-card.active {
+                border-color: #6d6da5;
+            }
+
+            .section-card p {
+                margin: 6px 0 0;
+                color: #8f8fa3;
+                font-size: 0.9rem;
+            }
+
+        .sidebar-footer {
+            padding: 18px;
+            border-top: 1px solid #2a2a35;
+        }
+
+        .main {
+            flex: 1;
+            overflow-y: auto;
+            padding: 40px;
+        }
+
+        .editor-panel {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-bottom: 28px;
+        }
+
+        .topbar-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .panel {
+            background: #15151f;
+            border: 1px solid #2a2a35;
+            border-radius: 14px;
+            padding: 28px;
+            margin-bottom: 24px;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 12px;
+            margin-bottom: 16px;
+            border-radius: 8px;
+            border: 1px solid #333344;
+            background: #0d0d12;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        textarea {
+            resize: vertical;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #d8d8e5;
+        }
+
+        .button {
+            background: #2a2a44;
+            color: white;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: Arial, sans-serif;
+        }
+
+            .button:hover {
+                background: #3a3a5c;
+            }
+
+        .danger-button {
+            background: #552d36;
+        }
+
+            .danger-button:hover {
+                background: #6a3743;
+            }
+
+        .message {
+            margin-top: 12px;
+            color: #9f9fb1;
+        }
+
+        @media (max-width: 900px) {
+            body {
+                flex-direction: column;
+                height: auto;
+            }
+
+            .sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid #2a2a35;
+            }
+
+            .main {
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="sidebar">
+
+        <div class="sidebar-header">
+            <h1 id="world-name">
+                Loading...
+            </h1>
+
+            <p>
+                Expand your world with stories, characters, lore, timelines,
+                locations, languages, and more.
+            </p>
+        </div>
+
+        <div id="section-list" class="section-list">
+            <p style="color:#8f8fa3;">Loading sections...</p>
+        </div>
+
+        <div class="sidebar-footer">
+            <button class="button" onclick="openNewSectionModal()">
+                + Add Section
+            </button>
+        </div>
+
+    </div>
+
+    <div class="main">
+
+        <div class="editor-panel">
+
+            <div class="topbar">
+                <div>
+                    <h1 style="margin:0;" id="editor-title">
+                        World Editor
+                    </h1>
+
+                    <p style="margin-top:8px; color:#8f8fa3;">
+                        Edit and expand your universe over time.
+                    </p>
+                </div>
+
+                <div class="topbar-actions">
+                    <a class="button" id="view-world-button">
+                        View World
+                    </a>
+
+                    <button class="button" onclick="saveCurrentSection()">
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+
+            <div class="panel">
+
+                <label>Section Type</label>
+
+                <select id="section-type">
+                    <option>Main Story</option>
+                    <option>Characters</option>
+                    <option>Locations</option>
+                    <option>Timeline</option>
+                    <option>Languages</option>
+                    <option>Lore</option>
+                    <option>Politics</option>
+                    <option>Religion</option>
+                    <option>Organizations</option>
+                    <option>Technology</option>
+                    <option>Artifacts</option>
+                    <option>Custom</option>
+                </select>
+
+                <label>Section Title</label>
+
+                <input id="section-title" placeholder="Section title...">
+
+                <label>Content</label>
+
+                <textarea id="section-content"
+                          rows="18"
+                          placeholder="Write your world content here..."></textarea>
+
+                <button class="button danger-button"
+                        onclick="deleteCurrentSection()">
+                    Delete Section
+                </button>
+
+                <p id="message" class="message"></p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <script type="module">
+    import { requireBetaAccess } from "./betaGate.js";
+    import { supabase } from "./supabaseClient.js";
+
+    const user = await requireBetaAccess();
+
+    const params = new URLSearchParams(window.location.search);
+
+    const worldId = params.get("id");
+
+    let currentWorld = null;
+    let currentSection = null;
+    let allSections = [];
+
+    if (!worldId) {
+        alert("No world ID provided.");
+        window.location.href = "dashboard.html";
+    }
+
+    await loadWorld();
+    await loadSections();
+
+    async function loadWorld() {
+        const { data, error } = await supabase
+            .from("worlds")
+            .select("*")
+            .eq("id", worldId)
+            .single();
+
+        if (error || !data) {
+            alert("World not found.");
+            window.location.href = "dashboard.html";
+            return;
+        }
+
+        currentWorld = data;
+
+        document.getElementById("world-name").textContent =
+            currentWorld.title;
+
+        document.getElementById("editor-title").textContent =
+            currentWorld.title;
+
+        document.getElementById("view-world-button").href =
+            `world.html?id=${currentWorld.id}`;
+    }
+
+    async function loadSections() {
+        const { data, error } = await supabase
+            .from("world_sections")
+            .select("*")
+            .eq("world_id", worldId)
+            .order("created_at", { ascending: true });
+
+        if (error) {
+            document.getElementById("message").textContent =
+                error.message;
+
+            return;
+        }
+
+        allSections = data || [];
+
+        renderSections();
+
+        if (allSections.length > 0) {
+            openSection(allSections[0].id);
+        } else {
+            document.getElementById("section-list").innerHTML = `
+                <p style="color:#8f8fa3;">
+                    No sections yet.
+                </p>
+            `;
+        }
+    }
+
+    function renderSections() {
+        const container =
+            document.getElementById("section-list");
+
+        container.innerHTML = allSections.map(section => `
+            <div class="section-card"
+                 onclick="openSection('${section.id}')"
+                 id="section-${section.id}">
+
+                <strong>${escapeHtml(section.title)}</strong>
+
+                <p>${escapeHtml(section.section_type)}</p>
+            </div>
+        `).join("");
+    }
+
+    window.openSection = function(sectionId) {
+        const section =
+            allSections.find(s => s.id === sectionId);
+
+        if (!section) return;
+
+        currentSection = section;
+
+        document.querySelectorAll(".section-card")
+            .forEach(card => card.classList.remove("active"));
+
+        const activeCard =
+            document.getElementById(`section-${sectionId}`);
+
+        if (activeCard) {
+            activeCard.classList.add("active");
+        }
+
+        document.getElementById("section-type").value =
+            section.section_type || "Custom";
+
+        document.getElementById("section-title").value =
+            section.title || "";
+
+        document.getElementById("section-content").value =
+            section.content || "";
+    };
+
+    window.openNewSectionModal = async function() {
+        const title =
+            prompt("Section title:");
+
+        if (!title) return;
+
+        const { data, error } = await supabase
+            .from("world_sections")
+            .insert({
+                world_id: worldId,
+                owner_id: user.id,
+                title: title,
+                section_type: "Custom",
+                content: ""
+            })
+            .select()
+            .single();
+
+        if (error || !data) {
+            alert(error?.message || "Failed to create section.");
+            return;
+        }
+
+        await loadSections();
+
+        openSection(data.id);
+    };
+
+    window.saveCurrentSection = async function() {
+        if (!currentSection) return;
+
+        const type =
+            document.getElementById("section-type").value;
+
+        const title =
+            document.getElementById("section-title").value.trim();
+
+        const content =
+            document.getElementById("section-content").value;
+
+        const { error } = await supabase
+            .from("world_sections")
+            .update({
+                section_type: type,
+                title: title,
+                content: content,
+                updated_at: new Date().toISOString()
+            })
+            .eq("id", currentSection.id);
+
+        if (error) {
+            document.getElementById("message").textContent =
+                error.message;
+
+            return;
+        }
+
+        document.getElementById("message").textContent =
+            "Saved successfully.";
+
+        await loadSections();
+    };
+
+    window.deleteCurrentSection = async function() {
+        if (!currentSection) return;
+
+        const confirmed =
+            confirm("Delete this section?");
+
+        if (!confirmed) return;
+
+        const { error } = await supabase
+            .from("world_sections")
+            .delete()
+            .eq("id", currentSection.id);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        currentSection = null;
+
+        await loadSections();
+
+        document.getElementById("section-title").value = "";
+        document.getElementById("section-content").value = "";
+    };
+
+    function escapeHtml(value) {
+        return String(value || "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+    }
+    </script>
+
+</body>
+</html>
