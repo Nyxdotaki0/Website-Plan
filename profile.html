@@ -67,7 +67,7 @@
 
         .banner {
             height: 240px;
-            background: #242436;
+            background: linear-gradient(135deg, #1b1b28, #2a2a44);
             background-size: cover;
             background-position: center;
         }
@@ -138,6 +138,15 @@
                 margin-top: 0;
             }
 
+                .card h3 a {
+                    color: white;
+                    text-decoration: none;
+                }
+
+                    .card h3 a:hover {
+                        text-decoration: underline;
+                    }
+
             .card p {
                 color: #c8c8d4;
                 line-height: 1.5;
@@ -200,54 +209,45 @@
     <main>
 
         <section class="profile-header">
-
             <div id="profile-banner" class="banner"></div>
 
             <div class="profile-info">
-
                 <img id="profile-avatar"
                      class="avatar"
-                     src=""
+                     src="https://placehold.co/200x200/1b1b28/ffffff?text=NV"
                      alt="Profile picture">
 
                 <div class="info-text">
                     <h1 id="profile-display-name">Loading...</h1>
 
-                    <div id="profile-username"
-                         class="username">
+                    <div id="profile-username" class="username">
                         @username
                     </div>
 
-                    <div id="profile-bio"
-                         class="bio">
+                    <div id="profile-bio" class="bio">
                         Loading bio...
                     </div>
 
-                    <div id="profile-creator-type"
-                         class="creator-type">
-                    </div>
+                    <div id="profile-creator-type" class="creator-type"></div>
 
-                    <a class="button"
-                       href="account-settings.html">
+                    <a class="button" href="account-settings.html">
                         Edit Profile
                     </a>
                 </div>
-
-            </div>
-
-        </section>
-
-        <section class="content-section">
-            <h2>Featured Works</h2>
-            <div id="featured-works" class="grid">
-                <p class="empty">Loading featured works...</p>
             </div>
         </section>
 
         <section class="content-section">
-            <h2>All Works</h2>
-            <div id="all-works" class="grid">
-                <p class="empty">Loading works...</p>
+            <h2>Featured Worlds</h2>
+            <div id="featured-worlds" class="grid">
+                <p class="empty">Loading featured worlds...</p>
+            </div>
+        </section>
+
+        <section class="content-section">
+            <h2>Published Worlds</h2>
+            <div id="all-worlds" class="grid">
+                <p class="empty">Loading worlds...</p>
             </div>
         </section>
 
@@ -276,24 +276,13 @@
         const { data: profile, error } = await query.single();
 
         if (error || !profile) {
-            document.getElementById("profile-display-name").textContent = "Profile not found";
-            document.getElementById("profile-username").textContent = "";
-            document.getElementById("profile-bio").textContent = "This creator profile does not exist.";
-            document.getElementById("profile-creator-type").textContent = "";
-
-            document.getElementById("profile-avatar").src =
-                "https://placehold.co/200x200/1b1b28/ffffff?text=?";
-
-            document.getElementById("profile-banner").style.background =
-                "linear-gradient(135deg, #1b1b28, #2a2a44)";
-
-            const editButton = document.querySelector('a[href="account-settings.html"]');
-            if (editButton) {
-                editButton.style.display = "none";
-            }
-
-            throw new Error("Profile not found");
+            showProfileNotFound();
         } else {
+            renderProfile(profile);
+            await loadProfileWorlds(profile.id);
+        }
+
+        function renderProfile(profile) {
             document.getElementById("profile-display-name").textContent =
                 profile.display_name || "Unnamed Creator";
 
@@ -313,19 +302,48 @@
             if (profile.banner_url) {
                 document.getElementById("profile-banner").style.backgroundImage =
                     `url('${profile.banner_url}')`;
-                await loadProfileWorks(profile.id);
             }
         }
-        async function loadProfileWorks(profileId) {
-            const featuredContainer = document.getElementById("featured-works");
-            const allContainer = document.getElementById("all-works");
 
-            const { data: works, error } = await supabase
-                .from("works")
+        function showProfileNotFound() {
+            document.getElementById("profile-display-name").textContent =
+                "Profile not found";
+
+            document.getElementById("profile-username").textContent = "";
+
+            document.getElementById("profile-bio").textContent =
+                "This creator profile does not exist.";
+
+            document.getElementById("profile-creator-type").textContent = "";
+
+            document.getElementById("profile-avatar").src =
+                "https://placehold.co/200x200/1b1b28/ffffff?text=?";
+
+            document.getElementById("profile-banner").style.background =
+                "linear-gradient(135deg, #1b1b28, #2a2a44)";
+
+            document.getElementById("featured-worlds").innerHTML =
+                `<p class="empty">No featured worlds.</p>`;
+
+            document.getElementById("all-worlds").innerHTML =
+                `<p class="empty">No published worlds.</p>`;
+
+            const editButton = document.querySelector('a[href="account-settings.html"]');
+            if (editButton) {
+                editButton.style.display = "none";
+            }
+        }
+
+        async function loadProfileWorlds(profileId) {
+            const featuredContainer = document.getElementById("featured-worlds");
+            const allContainer = document.getElementById("all-worlds");
+
+            const { data: worlds, error } = await supabase
+                .from("worlds")
                 .select("*")
                 .eq("owner_id", profileId)
                 .eq("visibility", "published")
-                .order("created_at", { ascending: false });
+                .order("updated_at", { ascending: false });
 
             if (error) {
                 featuredContainer.innerHTML = `<p class="empty">${error.message}</p>`;
@@ -333,29 +351,56 @@
                 return;
             }
 
-            if (!works || works.length === 0) {
-                featuredContainer.innerHTML = `<p class="empty">No featured works yet.</p>`;
-                allContainer.innerHTML = `<p class="empty">No published works yet.</p>`;
+            if (!worlds || worlds.length === 0) {
+                featuredContainer.innerHTML =
+                    `<p class="empty">No featured worlds yet.</p>`;
+
+                allContainer.innerHTML =
+                    `<p class="empty">No published worlds yet.</p>`;
+
                 return;
             }
 
-            const featuredWorks = works.filter(work => work.featured);
+            const featuredWorlds = worlds.filter(world => world.featured);
 
-            featuredContainer.innerHTML = featuredWorks.length
-                ? featuredWorks.map(renderWorkCard).join("")
-                : `<p class="empty">No featured works yet.</p>`;
+            featuredContainer.innerHTML = featuredWorlds.length
+                ? featuredWorlds.map(renderWorldCard).join("")
+                : `<p class="empty">No featured worlds yet.</p>`;
 
-            allContainer.innerHTML = works.map(renderWorkCard).join("");
+            allContainer.innerHTML = worlds.map(renderWorldCard).join("");
         }
 
-        function renderWorkCard(work) {
+        function renderWorldCard(world) {
             return `
-        <div class="card">
-            <p class="empty">${work.work_type}</p>
-            <h3>${work.title}</h3>
-            <p>${work.description || "No description."}</p>
-        </div>
-    `;
+                <div class="card">
+                    <p class="empty">
+                        ${escapeHtml(world.genres || "World")}
+                    </p>
+
+                    <h3>
+                        <a href="world.html?id=${encodeURIComponent(world.id)}">
+                            ${escapeHtml(world.title || "Untitled World")}
+                        </a>
+                    </h3>
+
+                    <p>
+                        ${escapeHtml(world.summary || "No summary yet.")}
+                    </p>
+
+                    <p class="empty">
+                        ${escapeHtml(world.themes || "")}
+                    </p>
+                </div>
+            `;
+        }
+
+        function escapeHtml(value) {
+            return String(value || "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
         }
 
         window.logOut = async function () {
@@ -363,3 +408,6 @@
             window.location.href = "login.html";
         };
     </script>
+
+</body>
+</html>
