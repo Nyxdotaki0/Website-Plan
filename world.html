@@ -272,6 +272,32 @@
             <div id="owner-actions" class="owner-actions"></div>
         </section>
 
+        <section class="section-nav">
+
+            <h2>World Interaction</h2>
+
+            <div id="interaction-tabs">
+
+                <a href="#sections-container">
+                    World
+                </a>
+
+                <a href="#additions-panel">
+                    Additions
+                </a>
+
+                <a href="#comments-panel">
+                    Comments
+                </a>
+
+                <a href="#questions-panel">
+                    Q&A
+                </a>
+
+            </div>
+
+        </section>
+
         <section id="section-nav" class="section-nav" style="display:none;">
             <h2>World Index</h2>
             <div id="section-nav-links"></div>
@@ -280,7 +306,53 @@
         <section id="sections-container">
             <p class="empty">Loading sections...</p>
         </section>
-    </main>
+
+        <section id="sections-container">
+            <section id="additions-panel" class="world-section">
+                <h2>Community Additions</h2>
+
+                <div id="addition-actions"></div>
+
+                <div id="additions-container">
+                    <p class="empty">No additions yet.</p>
+                </div>
+            </section>
+
+            <section id="comments-panel" class="world-section">
+                <h2>Comments</h2>
+
+                <textarea id="comment-input"
+                          rows="4"
+                          placeholder="Share your thoughts..."></textarea>
+
+                <button class="button"
+                        onclick="submitComment()">
+                    Post Comment
+                </button>
+
+                <div id="comments-container"
+                     style="margin-top:24px;">
+                </div>
+            </section>
+
+            <section id="questions-panel" class="world-section">
+                <h2>Q&A</h2>
+
+                <textarea id="question-input"
+                          rows="4"
+                          placeholder="Ask the creator a question..."></textarea>
+
+                <button class="button"
+                        onclick="submitQuestion()">
+                    Ask Question
+                </button>
+
+                <div id="questions-container"
+                     style="margin-top:24px;">
+                </div>
+            </section>
+
+</main>
 
     <script type="module">
         import { requireBetaAccess } from "./betaGate.js";
@@ -340,6 +412,11 @@
             renderOwnerActions(world);
             await loadLikes();
             await loadSections(world.id);
+            await Promise.all([
+                loadComments(),
+                loadQuestions(),
+                loadAdditionControls()
+            ]);
         }
 
         async function loadSections(id) {
@@ -514,6 +591,169 @@
 
             await loadLikes();
         });
+
+        async function loadAdditionControls() {
+
+            const container =
+                document.getElementById("addition-actions");
+
+            if (!currentWorld || !currentUser) {
+                return;
+            }
+
+            if (currentWorld.addition_mode === "locked") {
+
+                container.innerHTML = `
+            <p class="empty">
+                This world does not allow public additions.
+            </p>
+        `;
+
+                return;
+            }
+
+            if (currentWorld.addition_mode === "open") {
+
+                container.innerHTML = `
+            <button class="button">
+                Add to This World
+            </button>
+        `;
+
+                return;
+            }
+
+            container.innerHTML = `
+        <button class="button">
+            Request Contribution Access
+        </button>
+    `;
+        }
+
+        async function loadComments() {
+
+            const container =
+                document.getElementById("comments-container");
+
+            const { data } = await supabase
+                .from("world_comments")
+                .select("*")
+                .eq("world_id", currentWorld.id)
+                .order("created_at", { ascending: false });
+
+            if (!data || !data.length) {
+
+                container.innerHTML = `
+            <p class="empty">
+                No comments yet.
+            </p>
+        `;
+
+                return;
+            }
+
+            container.innerHTML = data.map(comment => `
+        <div class="panel"
+             style="margin-bottom:16px;">
+
+            <p>
+                ${escapeHtml(comment.content)}
+            </p>
+
+        </div>
+    `).join("");
+        }
+
+        window.submitComment = async function () {
+
+            const input =
+                document.getElementById("comment-input");
+
+            const content =
+                input.value.trim();
+
+            if (!content) return;
+
+            await supabase
+                .from("world_comments")
+                .insert({
+                    world_id: currentWorld.id,
+                    user_id: currentUser.id,
+                    content
+                });
+
+            input.value = "";
+
+            loadComments();
+        };
+
+        async function loadQuestions() {
+
+            const container =
+                document.getElementById("questions-container");
+
+            const { data } = await supabase
+                .from("world_questions")
+                .select("*")
+                .eq("world_id", currentWorld.id)
+                .order("created_at", { ascending: false });
+
+            if (!data || !data.length) {
+
+                container.innerHTML = `
+            <p class="empty">
+                No questions yet.
+            </p>
+        `;
+
+                return;
+            }
+
+            container.innerHTML = data.map(question => `
+        <div class="panel"
+             style="margin-bottom:16px;">
+
+            <p>
+                <strong>Q:</strong>
+                ${escapeHtml(question.question)}
+            </p>
+
+            ${question.creator_answer ? `
+                <p style="margin-top:16px;">
+                    <strong>A:</strong>
+                    ${escapeHtml(question.creator_answer)}
+                </p>
+            ` : `
+                <p class="empty">
+                    Awaiting creator response.
+                </p>
+            `}
+        </div>
+    `).join("");
+        }
+
+        window.submitQuestion = async function () {
+
+            const input =
+                document.getElementById("question-input");
+
+            const question =
+                input.value.trim();
+
+            if (!question) return;
+
+            await supabase
+                .from("world_questions")
+                .insert({
+                    world_id: currentWorld.id,
+                    user_id: currentUser.id,
+                    question
+                });
+
+            input.value = "";
+
+            loadQuestions();
+        };
 
         function showNotFound(message) {
             document.getElementById("world-title").textContent = "World not found";
