@@ -1,0 +1,366 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World Q&A - Nullverse</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0d0d12;
+            color: #f2f2f2;
+        }
+
+        header {
+            padding: 24px 40px;
+            border-bottom: 1px solid #2a2a35;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #111118;
+        }
+
+        .logo a, nav a, nav button {
+            color: #cfcfd8;
+            text-decoration: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: Arial, sans-serif;
+        }
+
+        .logo a {
+            color: white;
+            font-size: 1.6rem;
+            font-weight: bold;
+        }
+
+        nav {
+            display: flex;
+            gap: 22px;
+            flex-wrap: wrap;
+        }
+
+        main {
+            max-width: 900px;
+            margin: auto;
+            padding: 45px 40px 80px;
+        }
+
+        .hero, .panel {
+            background: #15151f;
+            border: 1px solid #2a2a35;
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: 2.5rem;
+        }
+
+        p {
+            color: #c8c8d4;
+            line-height: 1.6;
+        }
+
+        textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 14px;
+            border-radius: 10px;
+            border: 1px solid #333344;
+            background: #0d0d12;
+            color: white;
+            resize: vertical;
+            font-family: Arial, sans-serif;
+            margin-bottom: 14px;
+        }
+
+        .button {
+            display: inline-block;
+            background: #2a2a44;
+            color: white;
+            border: none;
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: Arial, sans-serif;
+        }
+
+            .button:hover {
+                background: #3a3a5c;
+            }
+
+        .question-card {
+            background: #15151f;
+            border: 1px solid #2a2a35;
+            border-radius: 14px;
+            padding: 22px;
+            margin-bottom: 18px;
+        }
+
+        .author {
+            color: #9f9fb1;
+            margin-bottom: 12px;
+        }
+
+        .answer {
+            margin-top: 18px;
+            padding: 16px;
+            border-radius: 12px;
+            background: #1b1b28;
+            border: 1px solid #2a2a35;
+        }
+
+        .empty {
+            color: #8f8fa3;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">
+            <a href="index.html">Nullverse</a>
+        </div>
+
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="explore.html">Explore</a>
+            <a href="dashboard.html">Dashboard</a>
+            <button onclick="logOut()">Log Out</button>
+        </nav>
+    </header>
+
+    <main>
+
+        <a id="back-to-world" class="button">← Back to World</a>
+
+        <section class="hero" style="margin-top:24px;">
+            <h1 id="page-title">World Q&A</h1>
+            <p id="page-subtitle">Loading world...</p>
+        </section>
+
+        <section id="question-form-section" class="panel">
+            <h2>Ask the Creator</h2>
+
+            <textarea id="question-input"
+                      rows="5"
+                      placeholder="Ask a question about this world..."></textarea>
+
+            <button class="button" onclick="submitQuestion()">
+                Ask Question
+            </button>
+        </section>
+
+        <section>
+            <h2>Questions</h2>
+            <div id="questions-container">
+                <p class="empty">Loading questions...</p>
+            </div>
+        </section>
+
+    </main>
+
+    <script type="module">
+    import { requireBetaAccess } from "./betaGate.js";
+    import { supabase } from "./supabaseClient.js";
+
+    const currentUser = await requireBetaAccess();
+
+    const params = new URLSearchParams(window.location.search);
+    const worldId = params.get("id");
+
+    let currentWorld = null;
+
+    if (!worldId) {
+        alert("No world ID provided.");
+        window.location.href = "explore.html";
+    }
+
+    await loadWorld();
+    await loadQuestions();
+
+    async function loadWorld() {
+        const { data, error } = await supabase
+            .from("worlds")
+            .select("*")
+            .eq("id", worldId)
+            .single();
+
+        if (error || !data) {
+            alert("World not found.");
+            window.location.href = "explore.html";
+            return;
+        }
+
+        currentWorld = data;
+
+        document.getElementById("page-title").textContent =
+            `${data.title} Q&A`;
+
+        document.getElementById("page-subtitle").textContent =
+            `Ask questions about ${data.title}, or read what the creator has answered.`;
+
+        document.getElementById("back-to-world").href =
+            `world.html?id=${encodeURIComponent(worldId)}`;
+
+        if (currentUser.id === currentWorld.owner_id) {
+            document.getElementById("question-form-section").style.display =
+                "none";
+        }
+    }
+
+    async function loadQuestions() {
+        const container = document.getElementById("questions-container");
+
+        const { data: questions, error } = await supabase
+            .from("world_questions")
+            .select(`
+                *,
+                profiles (
+                    username,
+                    display_name
+                )
+            `)
+            .eq("world_id", worldId)
+            .order("created_at", { ascending: false });
+
+        if (error) {
+            container.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
+            return;
+        }
+
+        if (!questions || questions.length === 0) {
+            container.innerHTML = `<p class="empty">No questions yet.</p>`;
+            return;
+        }
+
+        container.innerHTML = questions.map(renderQuestionCard).join("");
+    }
+
+    function renderQuestionCard(question) {
+        const username = question.profiles?.username || "unknown";
+        const displayName = question.profiles?.display_name || username;
+        const isOwner = currentUser.id === currentWorld.owner_id;
+
+        return `
+            <article class="question-card">
+                <div class="author">
+                    Asked by <strong>${escapeHtml(displayName)}</strong>
+                    (@${escapeHtml(username)})
+                </div>
+
+                <p>
+                    <strong>Q:</strong>
+                    ${escapeHtml(question.question)}
+                </p>
+
+                ${question.creator_answer ? `
+                    <div class="answer">
+                        <strong>Creator Answer:</strong>
+                        <p>${escapeHtml(question.creator_answer)}</p>
+                    </div>
+                ` : `
+                    <p class="empty">Awaiting creator response.</p>
+
+                    ${isOwner ? `
+                        <textarea
+                            id="answer-${question.id}"
+                            rows="4"
+                            placeholder="Write your answer..."
+                        ></textarea>
+
+                        <button
+                            class="button"
+                            onclick="answerQuestion('${question.id}')"
+                        >
+                            Reply
+                        </button>
+                    ` : ""}
+                `}
+            </article>
+        `;
+    }
+
+    window.submitQuestion = async function () {
+        if (!currentWorld) return;
+
+        if (currentUser.id === currentWorld.owner_id) {
+            return;
+        }
+
+        const input = document.getElementById("question-input");
+        const question = input.value.trim();
+
+        if (!question) return;
+
+        const { error } = await supabase
+            .from("world_questions")
+            .insert({
+                world_id: worldId,
+                user_id: currentUser.id,
+                question
+            });
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        input.value = "";
+        await loadQuestions();
+    };
+
+    window.answerQuestion = async function (questionId) {
+        if (!currentWorld) return;
+
+        if (currentUser.id !== currentWorld.owner_id) {
+            return;
+        }
+
+        const input = document.getElementById(`answer-${questionId}`);
+        const answer = input.value.trim();
+
+        if (!answer) return;
+
+        const { error } = await supabase
+            .from("world_questions")
+            .update({
+                creator_answer: answer,
+                answered_at: new Date().toISOString()
+            })
+            .eq("id", questionId)
+            .eq("world_id", worldId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        await loadQuestions();
+    };
+
+    function escapeHtml(value) {
+        return String(value || "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+    }
+
+    window.logOut = async function () {
+        await supabase.auth.signOut();
+        window.location.href = "login.html";
+    };
+    </script>
+
+</body>
+</html>

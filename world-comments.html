@@ -1,0 +1,357 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World Comments - Nullverse</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0d0d12;
+            color: #f2f2f2;
+        }
+
+        header {
+            padding: 24px 40px;
+            border-bottom: 1px solid #2a2a35;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #111118;
+        }
+
+        .logo a {
+            color: white;
+            text-decoration: none;
+            font-size: 1.6rem;
+            font-weight: bold;
+        }
+
+        nav {
+            display: flex;
+            gap: 22px;
+            flex-wrap: wrap;
+        }
+
+            nav a, nav button {
+                color: #cfcfd8;
+                text-decoration: none;
+                background: none;
+                border: none;
+                cursor: pointer;
+                font-family: Arial, sans-serif;
+            }
+
+        main {
+            max-width: 900px;
+            margin: auto;
+            padding: 45px 40px 80px;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #15151f, #1b1b2b);
+            border: 1px solid #2a2a35;
+            border-radius: 18px;
+            padding: 30px;
+            margin-bottom: 28px;
+        }
+
+            .hero h1 {
+                margin: 0 0 10px;
+                font-size: 2.5rem;
+            }
+
+            .hero p {
+                color: #9f9fb1;
+                line-height: 1.6;
+            }
+
+        .button {
+            display: inline-block;
+            background: #2a2a44;
+            color: white;
+            border: none;
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: Arial, sans-serif;
+        }
+
+            .button:hover {
+                background: #3a3a5c;
+            }
+
+        textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 14px;
+            border-radius: 10px;
+            border: 1px solid #333344;
+            background: #111118;
+            color: white;
+            resize: vertical;
+            font-family: Arial, sans-serif;
+            margin-bottom: 14px;
+        }
+
+        .comment-card {
+            background: #15151f;
+            border: 1px solid #2a2a35;
+            border-radius: 14px;
+            padding: 22px;
+            margin-bottom: 18px;
+        }
+
+        .comment-author {
+            color: #bdbdd2;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+        }
+
+        .comment-content {
+            line-height: 1.75;
+            color: #f2f2f2;
+            white-space: pre-wrap;
+        }
+
+        .empty {
+            color: #8f8fa3;
+        }
+
+        .top-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 26px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">
+            <a href="index.html">Nullverse</a>
+        </div>
+
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="explore.html">Explore</a>
+            <a href="dashboard.html">Dashboard</a>
+            <button onclick="logOut()">Log Out</button>
+        </nav>
+    </header>
+
+    <main>
+
+        <div class="top-row">
+            <a id="back-to-world" class="button">
+                ← Back to World
+            </a>
+        </div>
+
+        <section class="hero">
+            <h1 id="page-title">
+                World Comments
+            </h1>
+
+            <p id="page-subtitle">
+                Loading world...
+            </p>
+        </section>
+
+        <section id="comment-form-section">
+
+            <textarea id="comment-input"
+                      rows="5"
+                      placeholder="Share your thoughts about this world..."></textarea>
+
+            <button class="button"
+                    onclick="submitComment()">
+                Post Comment
+            </button>
+
+        </section>
+
+        <br>
+
+        <section id="comments-container">
+            <p class="empty">Loading comments...</p>
+        </section>
+
+    </main>
+
+    <script type="module">
+    import { requireBetaAccess } from "./betaGate.js";
+    import { supabase } from "./supabaseClient.js";
+
+    const currentUser = await requireBetaAccess();
+
+    const params = new URLSearchParams(window.location.search);
+
+    const worldId = params.get("id");
+
+    let currentWorld = null;
+
+    if (!worldId) {
+        alert("No world ID provided.");
+        window.location.href = "explore.html";
+    }
+
+    await loadWorld();
+    await loadComments();
+
+    async function loadWorld() {
+
+        const { data, error } = await supabase
+            .from("worlds")
+            .select("*")
+            .eq("id", worldId)
+            .single();
+
+        if (error || !data) {
+            alert("World not found.");
+            window.location.href = "explore.html";
+            return;
+        }
+
+        currentWorld = data;
+
+        document.getElementById("page-title").textContent =
+            `${data.title} Comments`;
+
+        document.getElementById("page-subtitle").textContent =
+            `Discuss ${data.title} with the community.`;
+
+        document.getElementById("back-to-world").href =
+            `world.html?id=${encodeURIComponent(worldId)}`;
+
+        const isOwner =
+            currentUser.id === currentWorld.owner_id;
+
+        if (isOwner) {
+            document.getElementById("comment-form-section").style.display =
+                "none";
+        }
+    }
+
+    async function loadComments() {
+
+        const container =
+            document.getElementById("comments-container");
+
+        const { data: comments, error } = await supabase
+            .from("world_comments")
+            .select(`
+                *,
+                profiles (
+                    username,
+                    display_name
+                )
+            `)
+            .eq("world_id", worldId)
+            .order("created_at", { ascending: false });
+
+        if (error) {
+            container.innerHTML = `
+                <p class="empty">
+                    ${escapeHtml(error.message)}
+                </p>
+            `;
+            return;
+        }
+
+        if (!comments || comments.length === 0) {
+            container.innerHTML = `
+                <p class="empty">
+                    No comments yet.
+                </p>
+            `;
+            return;
+        }
+
+        container.innerHTML = comments.map(comment => {
+
+            const username =
+                comment.profiles?.username || "unknown";
+
+            const displayName =
+                comment.profiles?.display_name ||
+                username;
+
+            return `
+                <article class="comment-card">
+
+                    <div class="comment-author">
+                        <strong>
+                            ${escapeHtml(displayName)}
+                        </strong>
+
+                        (@${escapeHtml(username)})
+                    </div>
+
+                    <div class="comment-content">
+                        ${escapeHtml(comment.content)}
+                    </div>
+
+                </article>
+            `;
+        }).join("");
+    }
+
+    window.submitComment = async function () {
+
+        if (!currentWorld) return;
+
+        if (currentUser.id === currentWorld.owner_id) {
+            return;
+        }
+
+        const input =
+            document.getElementById("comment-input");
+
+        const content =
+            input.value.trim();
+
+        if (!content) return;
+
+        const { error } = await supabase
+            .from("world_comments")
+            .insert({
+                world_id: worldId,
+                user_id: currentUser.id,
+                content
+            });
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        input.value = "";
+
+        await loadComments();
+    };
+
+    function escapeHtml(value) {
+        return String(value || "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+    }
+
+    window.logOut = async function () {
+        await supabase.auth.signOut();
+        window.location.href = "login.html";
+    };
+    </script>
+
+</body>
+</html>
