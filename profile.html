@@ -39,19 +39,19 @@
             align-items: center;
         }
 
-            nav a, nav button {
-                color: #cfcfd8;
-                text-decoration: none;
-                background: none;
-                border: none;
-                cursor: pointer;
-                font-family: Arial, sans-serif;
-                font-size: 0.95rem;
-            }
+        nav a, nav button {
+            color: #cfcfd8;
+            text-decoration: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: Arial, sans-serif;
+            font-size: 0.95rem;
+        }
 
-                nav a:hover, nav button:hover {
-                    color: white;
-                }
+        nav a:hover, nav button:hover {
+            color: white;
+        }
 
         main {
             max-width: 1100px;
@@ -116,10 +116,10 @@
             padding: 40px;
         }
 
-            .content-section h2 {
-                margin-top: 0;
-                margin-bottom: 20px;
-            }
+        .content-section h2 {
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
 
         .grid {
             display: grid;
@@ -134,23 +134,23 @@
             padding: 20px;
         }
 
-            .card h3 {
-                margin-top: 0;
-            }
+        .card h3 {
+            margin-top: 0;
+        }
 
-                .card h3 a {
-                    color: white;
-                    text-decoration: none;
-                }
+        .card h3 a {
+            color: white;
+            text-decoration: none;
+        }
 
-                    .card h3 a:hover {
-                        text-decoration: underline;
-                    }
+        .card h3 a:hover {
+            text-decoration: underline;
+        }
 
-            .card p {
-                color: #c8c8d4;
-                line-height: 1.5;
-            }
+        .card p {
+            color: #c8c8d4;
+            line-height: 1.5;
+        }
 
         .empty {
             color: #8f8fa3;
@@ -168,9 +168,13 @@
             cursor: pointer;
         }
 
-            .button:hover {
-                background: #3a3a5c;
-            }
+        .button:hover {
+            background: #3a3a5c;
+        }
+
+        .follow-button.following {
+            background: #4a2d36;
+        }
 
         @media (max-width: 800px) {
             header {
@@ -192,222 +196,314 @@
 
 <body>
 
-    <header>
-        <div class="logo">
-            <a href="index.html">Nullverse</a>
+<header>
+    <div class="logo">
+        <a href="index.html">Nullverse</a>
+    </div>
+
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="explore.html">Explore</a>
+        <a href="profile.html">Profile</a>
+        <a href="dashboard.html">Dashboard</a>
+        <button onclick="logOut()">Log Out</button>
+    </nav>
+</header>
+
+<main>
+
+    <section class="profile-header">
+        <div id="profile-banner" class="banner"></div>
+
+        <div class="profile-info">
+            <img id="profile-avatar"
+                 class="avatar"
+                 src="https://placehold.co/200x200/1b1b28/ffffff?text=NV"
+                 alt="Profile picture">
+
+            <div class="info-text">
+                <h1 id="profile-display-name">Loading...</h1>
+
+                <div id="profile-username" class="username">
+                    @username
+                </div>
+
+                <div id="profile-bio" class="bio">
+                    Loading bio...
+                </div>
+
+                <div id="profile-creator-type" class="creator-type"></div>
+
+                <div id="follow-stats" style="
+                    display:flex;
+                    gap:18px;
+                    margin-top:16px;
+                    color:#bdbdca;
+                    flex-wrap:wrap;
+                ">
+                    <span id="followers-count">0 Followers</span>
+                    <span id="following-count">0 Following</span>
+                </div>
+
+                <div id="follow-button-container"></div>
+
+                <a class="button" href="account-settings.html">
+                    Edit Profile
+                </a>
+            </div>
         </div>
+    </section>
 
-        <nav>
-            <a href="index.html">Home</a>
-            <a href="explore.html">Explore</a>
-            <a href="profile.html">Profile</a>
-            <a href="dashboard.html">Dashboard</a>
-            <button onclick="logOut()">Log Out</button>
-        </nav>
-    </header>
+    <section class="content-section">
+        <h2>Featured Worlds</h2>
+        <div id="featured-worlds" class="grid">
+            <p class="empty">Loading featured worlds...</p>
+        </div>
+    </section>
 
-    <main>
+    <section class="content-section">
+        <h2>Published Worlds</h2>
+        <div id="all-worlds" class="grid">
+            <p class="empty">Loading worlds...</p>
+        </div>
+    </section>
 
-        <section class="profile-header">
-            <div id="profile-banner" class="banner"></div>
+</main>
 
-            <div class="profile-info">
-                <img id="profile-avatar"
-                     class="avatar"
-                     src="https://placehold.co/200x200/1b1b28/ffffff?text=NV"
-                     alt="Profile picture">
+<script type="module">
+    import { requireBetaAccess } from "./betaGate.js";
+    import { supabase } from "./supabaseClient.js";
 
-                <div class="info-text">
-                    <h1 id="profile-display-name">Loading...</h1>
+    const currentUser = await requireBetaAccess();
 
-                    <div id="profile-username" class="username">
-                        @username
-                    </div>
+    const params = new URLSearchParams(window.location.search);
+    const usernameFromUrl = params.get("user");
 
-                    <div id="profile-bio" class="bio">
-                        Loading bio...
-                    </div>
+    let query = supabase
+        .from("profiles")
+        .select("*");
 
-                    <div id="profile-creator-type" class="creator-type"></div>
+    if (usernameFromUrl) {
+        query = query.eq("username", usernameFromUrl);
+    } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        query = query.eq("id", user.id);
+    }
 
-                    <a class="button" href="account-settings.html">
-                        Edit Profile
+    const { data: profile, error } = await query.single();
+
+    if (error || !profile) {
+        showProfileNotFound();
+    } else {
+        renderProfile(profile);
+
+        await Promise.all([
+            loadProfileWorlds(profile.id),
+            loadFollowData(profile.id)
+        ]);
+    }
+
+    function renderProfile(profile) {
+        document.getElementById("profile-display-name").textContent =
+            profile.display_name || "Unnamed Creator";
+
+        document.getElementById("profile-username").textContent =
+            "@" + (profile.username || "username");
+
+        document.getElementById("profile-bio").textContent =
+            profile.bio || "No bio yet.";
+
+        document.getElementById("profile-creator-type").textContent =
+            profile.creator_type || "";
+
+        if (profile.avatar_url) {
+            document.getElementById("profile-avatar").src = profile.avatar_url;
+        }
+
+        if (profile.banner_url) {
+            document.getElementById("profile-banner").style.backgroundImage =
+                `url('${profile.banner_url}')`;
+        }
+    }
+
+    function showProfileNotFound() {
+        document.getElementById("profile-display-name").textContent =
+            "Profile not found";
+
+        document.getElementById("profile-username").textContent = "";
+
+        document.getElementById("profile-bio").textContent =
+            "This creator profile does not exist.";
+
+        document.getElementById("profile-creator-type").textContent = "";
+
+        document.getElementById("profile-avatar").src =
+            "https://placehold.co/200x200/1b1b28/ffffff?text=?";
+
+        document.getElementById("profile-banner").style.background =
+            "linear-gradient(135deg, #1b1b28, #2a2a44)";
+
+        document.getElementById("featured-worlds").innerHTML =
+            `<p class="empty">No featured worlds.</p>`;
+
+        document.getElementById("all-worlds").innerHTML =
+            `<p class="empty">No published worlds.</p>`;
+
+        const editButton = document.querySelector('a[href="account-settings.html"]');
+        if (editButton) {
+            editButton.style.display = "none";
+        }
+    }
+
+    async function loadProfileWorlds(profileId) {
+        const featuredContainer = document.getElementById("featured-worlds");
+        const allContainer = document.getElementById("all-worlds");
+
+        const { data: worlds, error } = await supabase
+            .from("worlds")
+            .select("*")
+            .eq("owner_id", profileId)
+            .eq("visibility", "published")
+            .order("updated_at", { ascending: false });
+
+        if (error) {
+            featuredContainer.innerHTML = `<p class="empty">${error.message}</p>`;
+            allContainer.innerHTML = `<p class="empty">${error.message}</p>`;
+            return;
+        }
+
+        if (!worlds || worlds.length === 0) {
+            featuredContainer.innerHTML =
+                `<p class="empty">No featured worlds yet.</p>`;
+
+            allContainer.innerHTML =
+                `<p class="empty">No published worlds yet.</p>`;
+
+            return;
+        }
+
+        const featuredWorlds = worlds.filter(world => world.featured);
+
+        featuredContainer.innerHTML = featuredWorlds.length
+            ? featuredWorlds.map(renderWorldCard).join("")
+            : `<p class="empty">No featured worlds yet.</p>`;
+
+        allContainer.innerHTML = worlds.map(renderWorldCard).join("");
+    }
+
+    function renderWorldCard(world) {
+        return `
+            <div class="card">
+                <p class="empty">
+                    ${escapeHtml(world.genres || "World")}
+                </p>
+
+                <h3>
+                    <a href="world.html?id=${encodeURIComponent(world.id)}">
+                        ${escapeHtml(world.title || "Untitled World")}
                     </a>
-                </div>
+                </h3>
+
+                <p>
+                    ${escapeHtml(world.summary || "No summary yet.")}
+                </p>
+
+                <p class="empty">
+                    ${escapeHtml(world.themes || "")}
+                </p>
             </div>
-        </section>
+        `;
+    }
 
-        <section class="content-section">
-            <h2>Featured Worlds</h2>
-            <div id="featured-worlds" class="grid">
-                <p class="empty">Loading featured worlds...</p>
-            </div>
-        </section>
+    async function loadFollowData(profileId) {
 
-        <section class="content-section">
-            <h2>Published Worlds</h2>
-            <div id="all-worlds" class="grid">
-                <p class="empty">Loading worlds...</p>
-            </div>
-        </section>
+        const { count: followerCount } = await supabase
+            .from("follows")
+            .select("*", { count: "exact", head: true })
+            .eq("following_id", profileId);
 
-    </main>
+        const { count: followingCount } = await supabase
+            .from("follows")
+            .select("*", { count: "exact", head: true })
+            .eq("follower_id", profileId);
 
-    <script type="module">
-        import { requireBetaAccess } from "./betaGate.js";
-        import { supabase } from "./supabaseClient.js";
+        document.getElementById("followers-count").textContent =
+            `${followerCount || 0} Followers`;
 
-        await requireBetaAccess();
+        document.getElementById("following-count").textContent =
+            `${followingCount || 0} Following`;
 
-        const params = new URLSearchParams(window.location.search);
-        const usernameFromUrl = params.get("user");
-
-        let query = supabase
-            .from("profiles")
-            .select("*");
-
-        if (usernameFromUrl) {
-            query = query.eq("username", usernameFromUrl);
-        } else {
-            const { data: { user } } = await supabase.auth.getUser();
-            query = query.eq("id", user.id);
+        if (!currentUser || currentUser.id === profileId) {
+            return;
         }
 
-        const { data: profile, error } = await query.single();
+        const { data: existingFollow } = await supabase
+            .from("follows")
+            .select("*")
+            .eq("follower_id", currentUser.id)
+            .eq("following_id", profileId)
+            .maybeSingle();
 
-        if (error || !profile) {
-            showProfileNotFound();
-        } else {
-            renderProfile(profile);
-            await loadProfileWorlds(profile.id);
-        }
+        renderFollowButton(profileId, !!existingFollow);
+    }
 
-        function renderProfile(profile) {
-            document.getElementById("profile-display-name").textContent =
-                profile.display_name || "Unnamed Creator";
+    function renderFollowButton(profileId, isFollowing) {
 
-            document.getElementById("profile-username").textContent =
-                "@" + (profile.username || "username");
+        document.getElementById("follow-button-container").innerHTML = `
+        <button
+            id="follow-button"
+            class="button follow-button ${isFollowing ? "following" : ""}"
+        >
+            ${isFollowing ? "Following" : "Follow"}
+        </button>
+    `;
 
-            document.getElementById("profile-bio").textContent =
-                profile.bio || "No bio yet.";
+        document.getElementById("follow-button")
+            .addEventListener("click", async () => {
 
-            document.getElementById("profile-creator-type").textContent =
-                profile.creator_type || "";
+                const button =
+                    document.getElementById("follow-button");
 
-            if (profile.avatar_url) {
-                document.getElementById("profile-avatar").src = profile.avatar_url;
-            }
+                button.disabled = true;
 
-            if (profile.banner_url) {
-                document.getElementById("profile-banner").style.backgroundImage =
-                    `url('${profile.banner_url}')`;
-            }
-        }
+                if (isFollowing) {
 
-        function showProfileNotFound() {
-            document.getElementById("profile-display-name").textContent =
-                "Profile not found";
+                    await supabase
+                        .from("follows")
+                        .delete()
+                        .eq("follower_id", currentUser.id)
+                        .eq("following_id", profileId);
 
-            document.getElementById("profile-username").textContent = "";
+                } else {
 
-            document.getElementById("profile-bio").textContent =
-                "This creator profile does not exist.";
+                    await supabase
+                        .from("follows")
+                        .insert({
+                            follower_id: currentUser.id,
+                            following_id: profileId
+                        });
+                }
 
-            document.getElementById("profile-creator-type").textContent = "";
+                await loadFollowData(profileId);
 
-            document.getElementById("profile-avatar").src =
-                "https://placehold.co/200x200/1b1b28/ffffff?text=?";
+                button.disabled = false;
+            });
+    }
 
-            document.getElementById("profile-banner").style.background =
-                "linear-gradient(135deg, #1b1b28, #2a2a44)";
+    function escapeHtml(value) {
+        return String(value || "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+    }
 
-            document.getElementById("featured-worlds").innerHTML =
-                `<p class="empty">No featured worlds.</p>`;
-
-            document.getElementById("all-worlds").innerHTML =
-                `<p class="empty">No published worlds.</p>`;
-
-            const editButton = document.querySelector('a[href="account-settings.html"]');
-            if (editButton) {
-                editButton.style.display = "none";
-            }
-        }
-
-        async function loadProfileWorlds(profileId) {
-            const featuredContainer = document.getElementById("featured-worlds");
-            const allContainer = document.getElementById("all-worlds");
-
-            const { data: worlds, error } = await supabase
-                .from("worlds")
-                .select("*")
-                .eq("owner_id", profileId)
-                .eq("visibility", "published")
-                .order("updated_at", { ascending: false });
-
-            if (error) {
-                featuredContainer.innerHTML = `<p class="empty">${error.message}</p>`;
-                allContainer.innerHTML = `<p class="empty">${error.message}</p>`;
-                return;
-            }
-
-            if (!worlds || worlds.length === 0) {
-                featuredContainer.innerHTML =
-                    `<p class="empty">No featured worlds yet.</p>`;
-
-                allContainer.innerHTML =
-                    `<p class="empty">No published worlds yet.</p>`;
-
-                return;
-            }
-
-            const featuredWorlds = worlds.filter(world => world.featured);
-
-            featuredContainer.innerHTML = featuredWorlds.length
-                ? featuredWorlds.map(renderWorldCard).join("")
-                : `<p class="empty">No featured worlds yet.</p>`;
-
-            allContainer.innerHTML = worlds.map(renderWorldCard).join("");
-        }
-
-        function renderWorldCard(world) {
-            return `
-                <div class="card">
-                    <p class="empty">
-                        ${escapeHtml(world.genres || "World")}
-                    </p>
-
-                    <h3>
-                        <a href="world.html?id=${encodeURIComponent(world.id)}">
-                            ${escapeHtml(world.title || "Untitled World")}
-                        </a>
-                    </h3>
-
-                    <p>
-                        ${escapeHtml(world.summary || "No summary yet.")}
-                    </p>
-
-                    <p class="empty">
-                        ${escapeHtml(world.themes || "")}
-                    </p>
-                </div>
-            `;
-        }
-
-        function escapeHtml(value) {
-            return String(value || "")
-                .replaceAll("&", "&amp;")
-                .replaceAll("<", "&lt;")
-                .replaceAll(">", "&gt;")
-                .replaceAll('"', "&quot;")
-                .replaceAll("'", "&#039;");
-        }
-
-        window.logOut = async function () {
-            await supabase.auth.signOut();
-            window.location.href = "login.html";
-        };
-    </script>
+    window.logOut = async function () {
+        await supabase.auth.signOut();
+        window.location.href = "login.html";
+    };
+</script>
 
 </body>
 </html>
