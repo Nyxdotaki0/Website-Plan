@@ -97,9 +97,36 @@
 
         .topbar-actions {
             display: flex;
-            gap: 12px;
+            align-items: center;
+            gap: 10px;
             flex-wrap: wrap;
         }
+
+        .topbar-nav {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav-link {
+            color: #9f9fb1;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: 0.15s ease;
+        }
+
+            .nav-link:hover {
+                color: white;
+            }
+
+        .primary-button {
+            background: #4d4d7a;
+        }
+
+            .primary-button:hover {
+                background: #62629a;
+            }
 
         .panel {
             background: #15151f;
@@ -193,8 +220,19 @@
             </p>
         </div>
 
-        <div id="section-list" class="section-list">
-            <p style="color:#8f8fa3;">Loading sections...</p>
+        <div class="section-list">
+
+            <div class="section-card active"
+                 id="overview-card"
+                 onclick="openOverviewSettings()">
+
+                <strong>Overview Settings</strong>
+
+                <p>World details, tags, visibility</p>
+            </div>
+
+            <div id="section-list"></div>
+
         </div>
 
         <div class="sidebar-footer">
@@ -221,56 +259,28 @@
                 </div>
 
                 <div class="topbar-actions">
-                    <a class="button" href="dashboard.html">
-                        Back to Dashboard
-                    </a>
-                    <a class="button" id="view-world-button">
-                        View World
-                    </a>
 
-                    <button class="button" onclick="saveCurrentSection()">
+                    <div class="topbar-nav">
+
+                        <a class="nav-link" href="dashboard.html">
+                            ← Dashboard
+                        </a>
+
+                        <a class="nav-link" href="#" id="overview-settings-button">
+                            Overview Settings
+                        </a>
+
+                    </div>
+
+                    <button class="button primary-button"
+                            onclick="saveCurrentSection()">
                         Save Changes
                     </button>
+
                 </div>
             </div>
 
-            <div class="panel">
-
-                <label>Section Type</label>
-
-                <select id="section-type">
-                    <option>Main Story</option>
-                    <option>Characters</option>
-                    <option>Locations</option>
-                    <option>Timeline</option>
-                    <option>Languages</option>
-                    <option>Lore</option>
-                    <option>Politics</option>
-                    <option>Religion</option>
-                    <option>Organizations</option>
-                    <option>Technology</option>
-                    <option>Artifacts</option>
-                    <option>Custom</option>
-                </select>
-
-                <label>Section Title</label>
-
-                <input id="section-title" placeholder="Section title...">
-
-                <label>Content</label>
-
-                <textarea id="section-content"
-                          rows="18"
-                          placeholder="Write your world content here..."></textarea>
-
-                <button class="button danger-button"
-                        onclick="deleteCurrentSection()">
-                    Delete Section
-                </button>
-
-                <p id="message" class="message"></p>
-
-            </div>
+            <div id="editor-content"></div>
 
         </div>
 
@@ -368,6 +378,92 @@
         `).join("");
     }
 
+        window.openOverviewSettings = function () {
+
+            currentSection = null;
+
+            document.querySelectorAll(".section-card")
+                .forEach(card => card.classList.remove("active"));
+
+            document.getElementById("overview-card")
+                .classList.add("active");
+
+            document.getElementById("editor-content").innerHTML = `
+        <div class="panel">
+
+            <label>World Title</label>
+
+            <input id="overview-title"
+                   value="${escapeHtml(currentWorld.title || "")}">
+
+            <label>Short Summary</label>
+
+            <textarea id="overview-summary"
+                      rows="5">${escapeHtml(currentWorld.summary || "")}</textarea>
+
+            <label>Genres</label>
+
+            <input id="overview-genres"
+                   value="${escapeHtml(currentWorld.genres || "")}"
+                   placeholder="Horror, Fantasy, Cyberpunk...">
+
+            <label>Themes</label>
+
+            <input id="overview-themes"
+                   value="${escapeHtml(currentWorld.themes || "")}"
+                   placeholder="Psychological, Political, Cosmic Horror...">
+
+            <label>Visibility</label>
+
+            <select id="overview-visibility">
+                <option value="published"
+                    ${currentWorld.visibility === "published" ? "selected" : ""}>
+                    Published
+                </option>
+
+                <option value="draft"
+                    ${currentWorld.visibility === "draft" ? "selected" : ""}>
+                    Draft
+                </option>
+            </select>
+
+            <label style="
+                display:flex;
+                align-items:center;
+                gap:10px;
+                margin-top:14px;
+            ">
+
+                <input id="overview-featured"
+                       type="checkbox"
+                       style="width:auto;"
+                       ${currentWorld.featured ? "checked" : ""}>
+
+                Feature on profile
+
+            </label>
+
+            <div style="
+                display:flex;
+                justify-content:flex-end;
+                margin-top:22px;
+            ">
+
+                <button class="button primary-button"
+                        onclick="saveOverviewSettings()">
+                    Save Overview
+                </button>
+
+            </div>
+
+            <p id="message"
+               class="message">
+            </p>
+
+        </div>
+    `;
+        };
+
     window.openSection = function(sectionId) {
         const section =
             allSections.find(s => s.id === sectionId);
@@ -423,6 +519,63 @@
 
         openSection(data.id);
     };
+
+        window.saveOverviewSettings = async function () {
+
+            const title =
+                document.getElementById("overview-title").value.trim();
+
+            const summary =
+                document.getElementById("overview-summary").value.trim();
+
+            const genres =
+                document.getElementById("overview-genres").value.trim();
+
+            const themes =
+                document.getElementById("overview-themes").value.trim();
+
+            const visibility =
+                document.getElementById("overview-visibility").value;
+
+            const featured =
+                document.getElementById("overview-featured").checked;
+
+            const { error } = await supabase
+                .from("worlds")
+                .update({
+                    title: title,
+                    summary: summary,
+                    genres: genres,
+                    themes: themes,
+                    visibility: visibility,
+                    featured: featured,
+                    updated_at: new Date().toISOString()
+                })
+                .eq("id", currentWorld.id);
+
+            if (error) {
+                document.getElementById("message").textContent =
+                    error.message;
+
+                return;
+            }
+
+            currentWorld.title = title;
+            currentWorld.summary = summary;
+            currentWorld.genres = genres;
+            currentWorld.themes = themes;
+            currentWorld.visibility = visibility;
+            currentWorld.featured = featured;
+
+            document.getElementById("world-name").textContent =
+                title;
+
+            document.getElementById("editor-title").textContent =
+                title;
+
+            document.getElementById("message").textContent =
+                "Overview updated successfully.";
+        };
 
     window.saveCurrentSection = async function() {
         if (!currentSection) return;
@@ -480,6 +633,8 @@
         currentSection = null;
 
         await loadSections();
+
+        openOverviewSettings();
 
         document.getElementById("section-title").value = "";
         document.getElementById("section-content").value = "";
