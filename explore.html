@@ -86,7 +86,7 @@
 
         .filters {
             display: grid;
-            grid-template-columns: 1fr 220px 120px;
+            grid-template-columns: 1fr 220px 120px 160px;
             gap: 14px;
         }
 
@@ -281,6 +281,11 @@
                 </select>
 
                 <button id="search-button" class="button">Search</button>
+                <select id="sort-filter">
+                    <option value="Newest">Newest</option>
+                    <option value="Popular">Popular</option>
+                </select>
+
             </div>
         </section>
 
@@ -356,12 +361,21 @@
                 profilesData = profiles || [];
             }
 
+            const { data: likesData } = await supabase
+                .from("work_likes")
+                .select("work_id");
+
             allWorks = (worksData || []).map(work => {
                 const profile = profilesData.find(profile => profile.id === work.owner_id);
 
+                const likeCount = likesData
+                    ? likesData.filter(like => like.work_id === work.id).length
+                    : 0;
+
                 return {
                     ...work,
-                    profile: profile || null
+                    profile: profile || null,
+                    likeCount: likeCount
                 };
             });
         }
@@ -421,6 +435,7 @@
             const typeValue = document.getElementById("type-filter").value;
 
             let filteredWorks = allWorks;
+            const sortValue = document.getElementById("sort-filter").value;
 
             if (typeValue !== "All") {
                 filteredWorks = filteredWorks.filter(work => work.work_type === typeValue);
@@ -440,6 +455,14 @@
                         username.toLowerCase().includes(searchValue)
                     );
                 });
+            }
+
+            if (sortValue === "Popular") {
+                filteredWorks.sort((a, b) => b.likeCount - a.likeCount);
+            } else {
+                filteredWorks.sort((a, b) =>
+                    new Date(b.created_at) - new Date(a.created_at)
+                );
             }
 
             if (!filteredWorks.length) {
@@ -487,6 +510,7 @@
                     </h3>
                     <p>${escapeHtml(work.description || "No description provided.")}</p>
 
+                    <p class="empty">♥ ${work.likeCount || 0} Likes</p>
                     <div class="creator">
                         by <a href="profile.html?user=${encodeURIComponent(username)}">
                             ${escapeHtml(displayName)} (@${escapeHtml(username)})
@@ -518,6 +542,7 @@
         });
 
         document.getElementById("type-filter").addEventListener("change", renderExplore);
+        document.getElementById("sort-filter").addEventListener("change", renderExplore);
 
         window.logOut = async function () {
             await supabase.auth.signOut();
