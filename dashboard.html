@@ -196,9 +196,6 @@
         <nav>
             <a href="index.html">Home</a>
             <a href="explore.html">Explore</a>
-            <a href="world.html">Worlds</a>
-            <a href="character.html">Characters</a>
-            <a href="story.html">Stories</a>
             <a href="profile.html">Profile</a>
             <a href="dashboard.html">Dashboard</a>
             <button onclick="logOut()">Log Out</button>
@@ -237,66 +234,31 @@
                     <div class="profile-actions">
                         <a id="view-public-profile" class="button" href="profile.html">View Public Profile</a>
                         <a class="button" href="account-settings.html">Edit Profile</a>
-                        <a class="button" href="create-work.html">Create New Work</a>
+                        <a class="button" href="create-world.html">Create World</a>
                     </div>
                 </div>
             </div>
         </section>
 
         <section class="panel">
-            <h2>Quick Actions</h2>
+            <h2>Your Worlds</h2>
 
-            <div class="card">
-                <h3>Create New Work</h3>
-                <p>Publish a world, character, story, lore entry, document, or language entry.</p>
-                <a class="button" href="create-work.html">Create Work</a>
-            </div>
-
-            <div class="grid">
-                <div class="card">
-                    <h3>Create a World</h3>
-                    <p>Start building a fictional universe, timeline, setting, or story space.</p>
-                    <button class="button" onclick="alert('World creation will be added next.')">
-                        Create World
-                    </button>
-                </div>
-
-                <div class="card">
-                    <h3>Create a Character</h3>
-                    <p>Add an original character and connect them to one of your worlds.</p>
-                    <button class="button" onclick="alert('Character creation will be added next.')">
-                        Create Character
-                    </button>
-                </div>
-
-                <div class="card">
-                    <h3>Write a Story</h3>
-                    <p>Publish a story entry, lore post, document, scene, or chapter.</p>
-                    <button class="button" onclick="alert('Story creation will be added next.')">
-                        Create Story
-                    </button>
-                </div>
-            </div>
-        </section>
-
-        <section class="panel">
-            <h2>Your Works</h2>
-            <p class="muted">Manage your published works.</p>
-
-            <div id="your-works" class="grid">
-                <p class="muted">Loading works...</p>
-            </div>
-        </section>
-
-        <section class="panel">
-            <h2>Account Status</h2>
-            <p>
-                You are signed in. This dashboard is private and only available to your account.
-            </p>
             <p class="muted">
-                Login credentials such as email and password are managed from Account Settings.
+                Build, organize, and continuously expand your fictional universes.
             </p>
+
+            <div style="margin-bottom:20px;">
+                <a class="button" href="create-world.html">
+                    Create New World
+                </a>
+            </div>
+
+            <div id="your-worlds" class="grid">
+                <p class="muted">Loading worlds...</p>
+            </div>
         </section>
+
+       
 
     </main>
 
@@ -348,48 +310,75 @@
         }
 
 
-        async function loadYourWorks() {
-            const worksContainer = document.getElementById("your-works");
+        async function loadYourWorlds() {
+            const container = document.getElementById("your-worlds");
 
-            const { data: works, error } = await supabase
-                .from("works")
+            const { data: worlds, error } = await supabase
+                .from("worlds")
                 .select("*")
                 .eq("owner_id", user.id)
-                .order("created_at", { ascending: false });
+                .order("updated_at", { ascending: false });
 
             if (error) {
-                worksContainer.innerHTML = `<p class="muted">${error.message}</p>`;
+                container.innerHTML =
+                    `<p class="muted">${error.message}</p>`;
+
                 return;
             }
 
-            if (!works || works.length === 0) {
-                worksContainer.innerHTML = `<p class="muted">You have not published any works yet.</p>`;
+            if (!worlds || worlds.length === 0) {
+                container.innerHTML = `
+            <p class="muted">
+                You have not created any worlds yet.
+            </p>
+        `;
+
                 return;
             }
 
-            worksContainer.innerHTML = works.map(work => `
+            container.innerHTML = worlds.map(world => `
         <div class="card">
-            <p class="muted">${work.work_type}</p>
-            <h3>${work.title}</h3>
-            <p>${work.description || "No description."}</p>
-            <p class="muted">${work.featured ? "Featured on profile" : "Not featured"}</p>
+            <p class="muted">
+                ${world.genres || "No genres"}
+            </p>
 
-            <button class="button danger-button" onclick="deleteWork('${work.id}')">
-                Delete
-            </button>
+            <h3>${world.title}</h3>
+
+            <p>
+                ${world.summary || "No summary provided."}
+            </p>
+
+            <p class="muted">
+                ${world.featured ? "Featured on profile" : "Not featured"}
+            </p>
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
+
+                <a class="button"
+                   href="edit-world.html?id=${world.id}">
+                    Continue Building
+                </a>
+
+                <button class="button"
+                        onclick="deleteWorld('${world.id}')">
+                    Delete
+                </button>
+            </div>
         </div>
     `).join("");
         }
 
-        window.deleteWork = async function (workId) {
-            const confirmed = confirm("Delete this work? This cannot be undone.");
+        window.deleteWorld = async function (worldId) {
+            const confirmed = confirm(
+                "Delete this world? This cannot be undone."
+            );
 
             if (!confirmed) return;
 
             const { error } = await supabase
-                .from("works")
+                .from("worlds")
                 .delete()
-                .eq("id", workId)
+                .eq("id", worldId)
                 .eq("owner_id", user.id);
 
             if (error) {
@@ -397,10 +386,12 @@
                 return;
             }
 
-            loadYourWorks();
+            loadYourWorlds();
         };
 
-        loadYourWorks();
+        loadYourWorlds();
+
+        
 
         window.logOut = async function () {
             await supabase.auth.signOut();
