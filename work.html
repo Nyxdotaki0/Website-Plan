@@ -94,6 +94,35 @@
             margin-bottom: 24px;
         }
 
+        .like-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 26px;
+        }
+
+        .like-button {
+            background: #2a2a44;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+
+            .like-button:hover {
+                background: #3a3a5c;
+            }
+
+            .like-button.liked {
+                background: #6b2d44;
+            }
+
+        .like-count {
+            color: #9c9cb0;
+        }
+
         .content {
             white-space: pre-wrap;
             color: #f2f2f2;
@@ -145,6 +174,16 @@
 
             <div id="work-description" class="description"></div>
 
+            <div class="like-row">
+                <button id="like-button" class="like-button">
+                    ♡ Like
+                </button>
+
+                <span id="like-count" class="like-count">
+                    0 Likes
+                </span>
+            </div>
+
             <article id="work-content" class="content"></article>
         </section>
     </main>
@@ -153,10 +192,12 @@
     import { requireBetaAccess } from "./betaGate.js";
     import { supabase } from "./supabaseClient.js";
 
-    await requireBetaAccess();
+        currentUser = await requireBetaAccess();
 
     const params = new URLSearchParams(window.location.search);
-    const workId = params.get("id");
+        const workId = params.get("id");
+        let currentUser = null;
+        let currentWork = null;
 
     if (!workId) {
         showNotFound("No work ID was provided.");
@@ -172,6 +213,8 @@
             .eq("visibility", "published")
             .single();
 
+
+        currentWork = work;
         if (error || !work) {
             showNotFound("This work does not exist or is not published.");
             return;
@@ -197,6 +240,8 @@
         document.getElementById("work-content").textContent =
             work.content || "No full content provided.";
 
+
+        await loadLikes();
         if (profile) {
             document.getElementById("work-creator").innerHTML =
                 `by <a href="profile.html?user=${encodeURIComponent(profile.username)}">${escapeHtml(profile.display_name || profile.username)} (@${escapeHtml(profile.username)})</a>`;
@@ -222,6 +267,58 @@
             .replaceAll('"', "&quot;")
             .replaceAll("'", "&#039;");
     }
+
+        async function loadLikes() {
+            if (!currentWork) return;
+
+            const { data: likes } = await supabase
+                .from("work_likes")
+                .select("*")
+                .eq("work_id", currentWork.id);
+
+            const likeCount = likes ? likes.length : 0;
+
+            document.getElementById("like-count").textContent =
+                `${likeCount} ${likeCount === 1 ? "Like" : "Likes"}`;
+
+            const userLiked = likes?.some(
+                like => like.user_id === currentUser.id
+            );
+
+            const button = document.getElementById("like-button");
+
+            if (userLiked) {
+                button.classList.add("liked");
+                button.textContent = "♥ Liked";
+            } else {
+                button.classList.remove("liked");
+                button.textContent = "♡ Like";
+            }
+        }
+
+        document.getElementById("like-button").addEventListener("click", async () => {
+            if (!currentWork || !currentUser) return;
+
+            const button = document.getElementById("like-button");
+            const alreadyLiked = button.classList.contains("liked");
+
+            if (alreadyLiked) {
+                await supabase
+                    .from("work_likes")
+                    .delete()
+                    .eq("work_id", currentWork.id)
+                    .eq("user_id", currentUser.id);
+            } else {
+                await supabase
+                    .from("work_likes")
+                    .insert({
+                        work_id: currentWork.id,
+                        user_id: currentUser.id
+                    });
+            }
+
+            await loadLikes();
+        });
 
     window.logOut = async function () {
         await supabase.auth.signOut();
