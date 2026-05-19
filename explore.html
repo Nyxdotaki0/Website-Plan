@@ -268,15 +268,7 @@
             <div class="filters">
                 <input id="search-input" placeholder="Search creators, usernames, worlds, stories...">
 
-                <select id="type-filter">
-                    <option value="All">All Work Types</option>
-                    <option value="World">Worlds</option>
-                    <option value="Character">Characters</option>
-                    <option value="Story">Stories</option>
-                    <option value="Lore">Lore</option>
-                    <option value="Document">Documents</option>
-                    <option value="Language">Languages</option>
-                </select>
+                <option value="All">All Worlds</option>
 
                 <button id="search-button" class="button">Search</button>
                 <select id="sort-filter">
@@ -299,8 +291,8 @@
 
         <section class="panel">
             <div class="feed-header">
-                <h2>Published Works</h2>
-                <a class="button" href="create-work.html">Create Work</a>
+                <h2>Published Worlds</h2>
+                <a class="button" href="create-world.html">Create World</a>
             </div>
 
             <div id="works-feed" class="grid">
@@ -315,24 +307,25 @@
 
         await requireBetaAccess();
 
-        let allWorks = [];
+        let allWorlds = [];
         let allProfiles = [];
 
         async function loadExploreData() {
             await Promise.all([
-                loadWorks(),
+                loadWorlds(),
                 loadProfiles()
             ]);
 
             renderExplore();
         }
 
-        async function loadWorks() {
-            const { data: worksData, error } = await supabase
-                .from("works")
+        async function loadWorlds() {
+
+            const { data: worldsData, error } = await supabase
+                .from("worlds")
                 .select("*")
                 .eq("visibility", "published")
-                .order("created_at", { ascending: false });
+                .order("updated_at", { ascending: false });
 
             if (error) {
                 document.getElementById("works-feed").innerHTML =
@@ -340,11 +333,16 @@
                 return;
             }
 
-            const ownerIds = [...new Set((worksData || []).map(work => work.owner_id))];
+            const ownerIds = [
+                ...new Set(
+                    (worldsData || []).map(world => world.owner_id)
+                )
+            ];
 
             let profilesData = [];
 
             if (ownerIds.length > 0) {
+
                 const { data: profiles, error: profilesError } = await supabase
                     .from("profiles")
                     .select("id, username, display_name, avatar_url")
@@ -360,18 +358,24 @@
             }
 
             const { data: likesData } = await supabase
-                .from("work_likes")
-                .select("work_id");
+                .from("world_likes")
+                .select("world_id");
 
-            allWorks = (worksData || []).map(work => {
-                const profile = profilesData.find(profile => profile.id === work.owner_id);
+            allWorlds = (worldsData || []).map(world => {
+
+                const profile =
+                    profilesData.find(
+                        profile => profile.id === world.owner_id
+                    );
 
                 const likeCount = likesData
-                    ? likesData.filter(like => like.work_id === work.id).length
+                    ? likesData.filter(
+                        like => like.world_id === world.id
+                    ).length
                     : 0;
 
                 return {
-                    ...work,
+                    ...world,
                     profile: profile || null,
                     likeCount: likeCount
                 };
@@ -379,6 +383,7 @@
         }
 
         async function loadProfiles() {
+
             const { data, error } = await supabase
                 .from("profiles")
                 .select("id, username, display_name, bio, creator_type, avatar_url")
@@ -395,92 +400,132 @@
 
         function renderExplore() {
             renderProfiles();
-            renderWorks();
+            renderWorlds();
         }
 
         function getSearchValue() {
-            return document.getElementById("search-input").value.toLowerCase().trim();
+            return document.getElementById("search-input")
+                .value
+                .toLowerCase()
+                .trim();
         }
 
         function renderProfiles() {
-            const feed = document.getElementById("profiles-feed");
-            const searchValue = getSearchValue();
 
-            let filteredProfiles = allProfiles;
+            const feed =
+                document.getElementById("profiles-feed");
+
+            const searchValue =
+                getSearchValue();
+
+            let filteredProfiles =
+                allProfiles;
 
             if (searchValue) {
-                filteredProfiles = filteredProfiles.filter(profile => {
-                    return (
-                        profile.display_name?.toLowerCase().includes(searchValue) ||
-                        profile.username?.toLowerCase().includes(searchValue) ||
-                        profile.bio?.toLowerCase().includes(searchValue) ||
-                        profile.creator_type?.toLowerCase().includes(searchValue)
-                    );
-                });
+
+                filteredProfiles =
+                    filteredProfiles.filter(profile => {
+
+                        return (
+                            profile.display_name?.toLowerCase().includes(searchValue) ||
+                            profile.username?.toLowerCase().includes(searchValue) ||
+                            profile.bio?.toLowerCase().includes(searchValue) ||
+                            profile.creator_type?.toLowerCase().includes(searchValue)
+                        );
+                    });
             }
 
             if (!filteredProfiles.length) {
-                feed.innerHTML = `<p class="empty">No creators found.</p>`;
+                feed.innerHTML =
+                    `<p class="empty">No creators found.</p>`;
                 return;
             }
 
-            feed.innerHTML = filteredProfiles.map(renderProfileCard).join("");
+            feed.innerHTML =
+                filteredProfiles.map(renderProfileCard).join("");
         }
 
-        function renderWorks() {
-            const feed = document.getElementById("works-feed");
-            const searchValue = getSearchValue();
-            const typeValue = document.getElementById("type-filter").value;
+        function renderWorlds() {
 
-            let filteredWorks = allWorks;
-            const sortValue = document.getElementById("sort-filter").value;
+            const feed =
+                document.getElementById("works-feed");
 
-            if (typeValue !== "All") {
-                filteredWorks = filteredWorks.filter(work => work.work_type === typeValue);
-            }
+            const searchValue =
+                getSearchValue();
+
+            const sortValue =
+                document.getElementById("sort-filter").value;
+
+            let filteredWorlds =
+                allWorlds;
 
             if (searchValue) {
-                filteredWorks = filteredWorks.filter(work => {
-                    const creatorName = work.profile?.display_name || "";
-                    const username = work.profile?.username || "";
 
-                    return (
-                        work.title?.toLowerCase().includes(searchValue) ||
-                        work.description?.toLowerCase().includes(searchValue) ||
-                        work.content?.toLowerCase().includes(searchValue) ||
-                        work.work_type?.toLowerCase().includes(searchValue) ||
-                        creatorName.toLowerCase().includes(searchValue) ||
-                        username.toLowerCase().includes(searchValue)
-                    );
-                });
+                filteredWorlds =
+                    filteredWorlds.filter(world => {
+
+                        const creatorName =
+                            world.profile?.display_name || "";
+
+                        const username =
+                            world.profile?.username || "";
+
+                        return (
+                            world.title?.toLowerCase().includes(searchValue) ||
+                            world.summary?.toLowerCase().includes(searchValue) ||
+                            world.genres?.toLowerCase().includes(searchValue) ||
+                            world.themes?.toLowerCase().includes(searchValue) ||
+                            creatorName.toLowerCase().includes(searchValue) ||
+                            username.toLowerCase().includes(searchValue)
+                        );
+                    });
             }
 
             if (sortValue === "Popular") {
-                filteredWorks.sort((a, b) => b.likeCount - a.likeCount);
+
+                filteredWorlds.sort(
+                    (a, b) => b.likeCount - a.likeCount
+                );
+
             } else {
-                filteredWorks.sort((a, b) =>
-                    new Date(b.created_at) - new Date(a.created_at)
+
+                filteredWorlds.sort(
+                    (a, b) =>
+                        new Date(b.updated_at || b.created_at) -
+                        new Date(a.updated_at || a.created_at)
                 );
             }
 
-            if (!filteredWorks.length) {
-                feed.innerHTML = `<p class="empty">No works found.</p>`;
+            if (!filteredWorlds.length) {
+                feed.innerHTML =
+                    `<p class="empty">No worlds found.</p>`;
                 return;
             }
 
-            feed.innerHTML = filteredWorks.map(renderWorkCard).join("");
+            feed.innerHTML =
+                filteredWorlds.map(renderWorldCard).join("");
         }
 
         function renderProfileCard(profile) {
-            const username = profile.username || "unknown";
-            const displayName = profile.display_name || "Unnamed Creator";
-            const avatar = profile.avatar_url || "https://placehold.co/200x200/1b1b28/ffffff?text=NV";
+
+            const username =
+                profile.username || "unknown";
+
+            const displayName =
+                profile.display_name || "Unnamed Creator";
+
+            const avatar =
+                profile.avatar_url ||
+                "https://placehold.co/200x200/1b1b28/ffffff?text=NV";
 
             return `
                 <article class="creator-card">
-                    <img src="${escapeAttribute(avatar)}" alt="${escapeAttribute(displayName)} profile picture">
+
+                    <img src="${escapeAttribute(avatar)}"
+                         alt="${escapeAttribute(displayName)} profile picture">
 
                     <div>
+
                         <h3>
                             <a href="profile.html?user=${encodeURIComponent(username)}">
                                 ${escapeHtml(displayName)}
@@ -488,32 +533,58 @@
                         </h3>
 
                         <p>@${escapeHtml(username)}</p>
-                        <p>${escapeHtml(profile.creator_type || "Creator")}</p>
+
+                        <p>
+                            ${escapeHtml(profile.creator_type || "Creator")}
+                        </p>
+
                     </div>
+
                 </article>
             `;
         }
 
-        function renderWorkCard(work) {
-            const username = work.profile?.username || "unknown";
-            const displayName = work.profile?.display_name || "Unknown Creator";
+        function renderWorldCard(world) {
+
+            const username =
+                world.profile?.username || "unknown";
+
+            const displayName =
+                world.profile?.display_name || "Unknown Creator";
 
             return `
                 <article class="work-card">
-                    <span class="work-type">${escapeHtml(work.work_type || "Work")}</span>
+
+                    <span class="work-type">
+                        ${escapeHtml(world.genres || "World")}
+                    </span>
+
                     <h3>
-                        <a href="work.html?id=${encodeURIComponent(work.id)}">
-                            ${escapeHtml(work.title || "Untitled Work")}
+                        <a href="world.html?id=${encodeURIComponent(world.id)}">
+                            ${escapeHtml(world.title || "Untitled World")}
                         </a>
                     </h3>
-                    <p>${escapeHtml(work.description || "No description provided.")}</p>
 
-                    <p class="empty">♥ ${work.likeCount || 0} Likes</p>
+                    <p>
+                        ${escapeHtml(world.summary || "No summary provided.")}
+                    </p>
+
+                    <p class="empty">
+                        ${escapeHtml(world.themes || "")}
+                    </p>
+
+                    <p class="empty">
+                        ♥ ${world.likeCount || 0} Likes
+                    </p>
+
                     <div class="creator">
-                        by <a href="profile.html?user=${encodeURIComponent(username)}">
-                            ${escapeHtml(displayName)} (@${escapeHtml(username)})
+                        by
+                        <a href="profile.html?user=${encodeURIComponent(username)}">
+                            ${escapeHtml(displayName)}
+                            (@${escapeHtml(username)})
                         </a>
                     </div>
+
                 </article>
             `;
         }
@@ -528,19 +599,23 @@
         }
 
         function escapeAttribute(value) {
-            return escapeHtml(value).replaceAll("`", "&#096;");
+            return escapeHtml(value)
+                .replaceAll("`", "&#096;");
         }
 
-        document.getElementById("search-button").addEventListener("click", renderExplore);
+        document.getElementById("search-button")
+            .addEventListener("click", renderExplore);
 
-        document.getElementById("search-input").addEventListener("keydown", function (event) {
-            if (event.key === "Enter") {
-                renderExplore();
-            }
-        });
+        document.getElementById("search-input")
+            .addEventListener("keydown", function (event) {
 
-        document.getElementById("type-filter").addEventListener("change", renderExplore);
-        document.getElementById("sort-filter").addEventListener("change", renderExplore);
+                if (event.key === "Enter") {
+                    renderExplore();
+                }
+            });
+
+        document.getElementById("sort-filter")
+            .addEventListener("change", renderExplore);
 
         window.logOut = async function () {
             await supabase.auth.signOut();
