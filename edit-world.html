@@ -186,6 +186,47 @@
             color: #9f9fb1;
         }
 
+        .tag-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .tag-pill {
+            background: #232338;
+            border: 1px solid #3b3b55;
+            color: #d7d7e8;
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 0.92rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+            .tag-pill button {
+                background: none;
+                border: none;
+                color: #9f9fb1;
+                cursor: pointer;
+                font-size: 0.85rem;
+            }
+
+                .tag-pill button:hover {
+                    color: white;
+                }
+
+        .tag-input-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+            .tag-input-row input {
+                margin-bottom: 0;
+            }
+
         @media (max-width: 900px) {
             body {
                 flex-direction: column;
@@ -266,7 +307,7 @@
                             ← Dashboard
                         </a>
 
-                        <a class="nav-link" href="#" id="overview-settings-button">
+                        <a class="nav-link" href="#" onclick="openOverviewSettings()">
                             Overview Settings
                         </a>
 
@@ -298,7 +339,10 @@
 
     let currentWorld = null;
     let currentSection = null;
-    let allSections = [];
+        let allSections = [];
+
+        let genreTags = [];
+        let themeTags = [];
 
     if (!worldId) {
         alert("No world ID provided.");
@@ -329,8 +373,7 @@
         document.getElementById("editor-title").textContent =
             currentWorld.title;
 
-        document.getElementById("view-world-button").href =
-            `dashboard.html`;
+        
     }
 
     async function loadSections() {
@@ -376,7 +419,83 @@
                 <p>${escapeHtml(section.section_type)}</p>
             </div>
         `).join("");
-    }
+        }
+
+        function renderGenreTags() {
+            const container =
+                document.getElementById("genre-tags");
+
+            if (!container) return;
+
+            container.innerHTML = genreTags.map((tag, index) => `
+        <div class="tag-pill">
+            ${escapeHtml(tag)}
+
+            <button onclick="removeGenreTag(${index})">
+                ✕
+            </button>
+        </div>
+    `).join("");
+        }
+
+        function renderThemeTags() {
+            const container =
+                document.getElementById("theme-tags");
+
+            if (!container) return;
+
+            container.innerHTML = themeTags.map((tag, index) => `
+        <div class="tag-pill">
+            ${escapeHtml(tag)}
+
+            <button onclick="removeThemeTag(${index})">
+                ✕
+            </button>
+        </div>
+    `).join("");
+        }
+
+        window.addGenreTag = function () {
+            const input =
+                document.getElementById("genre-input");
+
+            const value = input.value.trim();
+
+            if (!value) return;
+
+            genreTags.push(value);
+
+            input.value = "";
+
+            renderGenreTags();
+        };
+
+        window.addThemeTag = function () {
+            const input =
+                document.getElementById("theme-input");
+
+            const value = input.value.trim();
+
+            if (!value) return;
+
+            themeTags.push(value);
+
+            input.value = "";
+
+            renderThemeTags();
+        };
+
+        window.removeGenreTag = function (index) {
+            genreTags.splice(index, 1);
+
+            renderGenreTags();
+        };
+
+        window.removeThemeTag = function (index) {
+            themeTags.splice(index, 1);
+
+            renderThemeTags();
+        };
 
         window.openOverviewSettings = function () {
 
@@ -387,6 +506,14 @@
 
             document.getElementById("overview-card")
                 .classList.add("active");
+
+            genreTags = currentWorld.genres
+                ? currentWorld.genres.split(",").map(t => t.trim()).filter(Boolean)
+                : [];
+
+            themeTags = currentWorld.themes
+                ? currentWorld.themes.split(",").map(t => t.trim()).filter(Boolean)
+                : [];
 
             document.getElementById("editor-content").innerHTML = `
         <div class="panel">
@@ -403,15 +530,35 @@
 
             <label>Genres</label>
 
-            <input id="overview-genres"
-                   value="${escapeHtml(currentWorld.genres || "")}"
-                   placeholder="Horror, Fantasy, Cyberpunk...">
+<div class="tag-input-row">
+    <input id="genre-input"
+           placeholder="Add genre...">
 
-            <label>Themes</label>
+    <button class="button"
+            onclick="addGenreTag()">
+        Add
+    </button>
+</div>
 
-            <input id="overview-themes"
-                   value="${escapeHtml(currentWorld.themes || "")}"
-                   placeholder="Psychological, Political, Cosmic Horror...">
+<div id="genre-tags"
+     class="tag-container">
+</div>
+
+<label>Themes</label>
+
+<div class="tag-input-row">
+    <input id="theme-input"
+           placeholder="Add theme...">
+
+    <button class="button"
+            onclick="addThemeTag()">
+        Add
+    </button>
+</div>
+
+<div id="theme-tags"
+     class="tag-container">
+</div>
 
             <label>Visibility</label>
 
@@ -461,8 +608,15 @@
             </p>
 
         </div>
+
+
     `;
+
+            renderGenreTags();
+            renderThemeTags();
         };
+
+
 
     window.openSection = function(sectionId) {
         const section =
@@ -471,6 +625,45 @@
         if (!section) return;
 
         currentSection = section;
+
+        document.getElementById("editor-content").innerHTML = `
+    <div class="panel">
+        <label>Section Type</label>
+
+        <select id="section-type">
+            <option>Main Story</option>
+            <option>Characters</option>
+            <option>Locations</option>
+            <option>Timeline</option>
+            <option>Languages</option>
+            <option>Lore</option>
+            <option>Politics</option>
+            <option>Religion</option>
+            <option>Organizations</option>
+            <option>Technology</option>
+            <option>Artifacts</option>
+            <option>Custom</option>
+        </select>
+
+        <label>Section Title</label>
+        <input id="section-title" placeholder="Section title...">
+
+        <label>Content</label>
+        <textarea id="section-content" rows="18" placeholder="Write your world content here..."></textarea>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:18px; flex-wrap:wrap;">
+            <button class="button danger-button" onclick="deleteCurrentSection()">
+                Delete Section
+            </button>
+
+            <button class="button primary-button" onclick="saveCurrentSection()">
+                Save Changes
+            </button>
+        </div>
+
+        <p id="message" class="message"></p>
+    </div>
+`;
 
         document.querySelectorAll(".section-card")
             .forEach(card => card.classList.remove("active"));
@@ -528,11 +721,8 @@
             const summary =
                 document.getElementById("overview-summary").value.trim();
 
-            const genres =
-                document.getElementById("overview-genres").value.trim();
-
-            const themes =
-                document.getElementById("overview-themes").value.trim();
+            const genres = genreTags.join(", ");
+            const themes = themeTags.join(", ");
 
             const visibility =
                 document.getElementById("overview-visibility").value;
