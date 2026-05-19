@@ -520,6 +520,22 @@
             <input id="overview-title"
                    value="${escapeHtml(currentWorld.title || "")}">
 
+                   ${currentWorld.cover_image_url ? `
+    <img
+        src="${escapeHtml(currentWorld.cover_image_url)}"
+        style="
+            width:160px;
+            height:160px;
+            object-fit:cover;
+            border-radius:14px;
+            border:1px solid #333344;
+        "
+    >
+
+
+` : ""}
+
+
             <label>Short Summary</label>
 
             <textarea id="overview-summary"
@@ -642,8 +658,52 @@
             <option>Custom</option>
         </select>
 
+        ${currentWorld.cover_image_url ? `
+    <img
+        src="${escapeHtml(currentWorld.cover_image_url)}"
+        style="
+            width:160px;
+            height:160px;
+            object-fit:cover;
+            border-radius:14px;
+            border:1px solid #333344;
+        "
+    >
+` : ""}
+
         <label>Section Title</label>
         <input id="section-title" placeholder="Section title...">
+
+        <label>Section Image</label>
+
+<input
+    id="section-image-input"
+    type="file"
+    accept="image/*"
+>
+
+<label>Image Position</label>
+
+<select id="image-position">
+    <option value="top">Top</option>
+    <option value="left">Left</option>
+    <option value="right">Right</option>
+    <option value="bottom">Bottom</option>
+    <option value="full">Full Width</option>
+</select>
+
+${section.image_url ? `
+    <img
+        src="${escapeHtml(section.image_url)}"
+        style="
+            width:220px;
+            max-width:100%;
+            border-radius:14px;
+            margin-bottom:18px;
+            border:1px solid #333344;
+        "
+    >
+` : ""}
 
         <label>Content</label>
         <textarea id="section-content" rows="18" placeholder="Write your world content here..."></textarea>
@@ -680,6 +740,9 @@
 
         document.getElementById("section-content").value =
             section.content || "";
+
+        document.getElementById("image-position").value =
+            section.image_position || "top";
     };
 
     window.openNewSectionModal = async function() {
@@ -712,6 +775,12 @@
 
         window.saveOverviewSettings = async function () {
 
+            const coverFile =
+                document.getElementById("cover-image-input").files[0];
+
+            let coverImageUrl =
+                currentWorld.cover_image_url || null;
+
             const title =
                 document.getElementById("overview-title").value.trim();
 
@@ -727,9 +796,31 @@
             const featured =
                 document.getElementById("overview-featured").checked;
 
+            if (coverFile) {
+
+                const filePath =
+                    `${user.id}/${Date.now()}-${coverFile.name}`;
+
+                const { error: uploadError } =
+                    await supabase.storage
+                        .from("world-covers")
+                        .upload(filePath, coverFile);
+
+                if (!uploadError) {
+
+                    const { data } =
+                        supabase.storage
+                            .from("world-covers")
+                            .getPublicUrl(filePath);
+
+                    coverImageUrl = data.publicUrl;
+                }
+            }
+
             const { error } = await supabase
                 .from("worlds")
                 .update({
+                    cover_image_url: coverImageUrl,
                     title: title,
                     summary: summary,
                     genres: genres,
@@ -767,6 +858,15 @@
     window.saveCurrentSection = async function() {
         if (!currentSection) return;
 
+        const imageFile =
+            document.getElementById("section-image-input").files[0];
+
+        let imageUrl =
+            currentSection.image_url || null;
+
+        const imagePosition =
+            document.getElementById("image-position").value;
+
         const type =
             document.getElementById("section-type").value;
 
@@ -776,9 +876,32 @@
         const content =
             document.getElementById("section-content").value;
 
+        if (imageFile) {
+
+            const filePath =
+                `${user.id}/${Date.now()}-${imageFile.name}`;
+
+            const { error: uploadError } =
+                await supabase.storage
+                    .from("world-images")
+                    .upload(filePath, imageFile);
+
+            if (!uploadError) {
+
+                const { data } =
+                    supabase.storage
+                        .from("world-images")
+                        .getPublicUrl(filePath);
+
+                imageUrl = data.publicUrl;
+            }
+        }
+
         const { error } = await supabase
             .from("world_sections")
             .update({
+                image_url: imageUrl,
+                image_position: imagePosition,
                 section_type: type,
                 title: title,
                 content: content,
