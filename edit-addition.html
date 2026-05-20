@@ -1,0 +1,342 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Addition - Nullverse</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial,sans-serif;
+            background: #0d0d12;
+            color: #f2f2f2
+        }
+
+        header {
+            padding: 24px 40px;
+            border-bottom: 1px solid #2a2a35;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #111118
+        }
+
+        .logo a, nav a, nav button {
+            color: #cfcfd8;
+            text-decoration: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: Arial,sans-serif
+        }
+
+        .logo a {
+            color: white;
+            font-size: 1.6rem;
+            font-weight: bold
+        }
+
+        nav {
+            display: flex;
+            gap: 22px;
+            flex-wrap: wrap
+        }
+
+        main {
+            max-width: 900px;
+            margin: auto;
+            padding: 45px 40px 80px
+        }
+
+        .hero, .panel {
+            background: #15151f;
+            border: 1px solid #2a2a35;
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 24px
+        }
+
+        .hero {
+            background: linear-gradient(135deg,#15151f,#1b1b2b)
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: 2.5rem
+        }
+
+        p {
+            color: #c8c8d4;
+            line-height: 1.6
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #d8d8e5
+        }
+
+        input, textarea, select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 13px;
+            border-radius: 10px;
+            border: 1px solid #333344;
+            background: #0d0d12;
+            color: white;
+            font-family: Arial,sans-serif;
+            margin-bottom: 16px
+        }
+
+        textarea {
+            resize: vertical
+        }
+
+        .button {
+            display: inline-block;
+            background: #2a2a44;
+            color: white;
+            border: none;
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: Arial,sans-serif
+        }
+
+            .button:hover {
+                background: #3a3a5c
+            }
+
+        .primary {
+            background: #4d4d7a
+        }
+
+            .primary:hover {
+                background: #62629a
+            }
+
+        .empty {
+            color: #8f8fa3
+        }
+
+        .cover-preview {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 14px;
+            border: 1px solid #333344;
+            margin-bottom: 16px
+        }
+
+        .actions {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 22px
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo"><a href="index.html">Nullverse</a></div>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="explore.html">Explore</a>
+            <a href="dashboard.html">Dashboard</a>
+            <button onclick="logOut()">Log Out</button>
+        </nav>
+    </header>
+
+    <main>
+        <a id="back-link" class="button">← Back to Addition</a>
+
+        <section class="hero" style="margin-top:24px;">
+            <h1>Edit Community Addition</h1>
+            <p id="page-subtitle">Loading addition...</p>
+        </section>
+
+        <section class="panel">
+            <label>Addition Type</label>
+            <select id="addition-type">
+                <option>Story</option>
+                <option>Character</option>
+                <option>Location</option>
+                <option>Language</option>
+                <option>Lore</option>
+                <option>Timeline</option>
+                <option>Map</option>
+                <option>Custom</option>
+            </select>
+
+            <label>Title</label>
+            <input id="addition-title">
+
+            <label>Short Summary</label>
+<textarea id="addition-summary" rows="4"></textarea>
+
+            <label>Cover Image</label>
+            <div id="cover-preview"></div>
+            <input id="addition-cover" type="file" accept="image/*">
+
+            <label>Main Content</label>
+<textarea id="addition-content" rows="14"></textarea>
+
+            <div class="actions">
+                <a id="cancel-link" class="button">Cancel</a>
+                <button class="button primary" onclick="saveAddition()">Save Changes</button>
+            </div>
+
+            <p id="message" class="empty"></p>
+        </section>
+    </main>
+
+    <script type="module">
+import { requireBetaAccess } from "./betaGate.js";
+import { supabase } from "./supabaseClient.js";
+
+const currentUser = await requireBetaAccess();
+const params = new URLSearchParams(window.location.search);
+const additionId = params.get("id");
+
+let currentAddition = null;
+
+if (!additionId) {
+    alert("No addition ID provided.");
+    window.location.href = "explore.html";
+}
+
+await loadAddition();
+
+async function loadAddition() {
+    const { data, error } = await supabase
+        .from("world_additions")
+        .select("*")
+        .eq("id", additionId)
+        .single();
+
+    if (error || !data) {
+        alert("Addition not found.");
+        window.location.href = "explore.html";
+        return;
+    }
+
+    if (data.author_id !== currentUser.id) {
+        alert("You can only edit your own additions.");
+        window.location.href =
+            `addition.html?id=${encodeURIComponent(additionId)}`;
+        return;
+    }
+
+    currentAddition = data;
+
+    document.getElementById("page-subtitle").textContent =
+        `Editing ${data.title || "Untitled Addition"}.`;
+
+    document.getElementById("back-link").href =
+        `addition.html?id=${encodeURIComponent(additionId)}`;
+
+    document.getElementById("cancel-link").href =
+        `addition.html?id=${encodeURIComponent(additionId)}`;
+
+    document.getElementById("addition-type").value =
+        data.addition_type || "Story";
+
+    document.getElementById("addition-title").value =
+        data.title || "";
+
+    document.getElementById("addition-summary").value =
+        data.summary || "";
+
+    document.getElementById("addition-content").value =
+        data.content || "";
+
+    const cover = data.cover_image_url || data.image_url;
+
+    if (cover) {
+        document.getElementById("cover-preview").innerHTML =
+            `<img class="cover-preview" src="${escapeHtml(cover)}">`;
+    }
+}
+
+window.saveAddition = async function() {
+    if (!currentAddition) return;
+
+    const message = document.getElementById("message");
+
+    const type = document.getElementById("addition-type").value;
+    const title = document.getElementById("addition-title").value.trim();
+    const summary = document.getElementById("addition-summary").value.trim();
+    const content = document.getElementById("addition-content").value.trim();
+    const coverFile = document.getElementById("addition-cover").files[0];
+
+    if (!title) {
+        message.textContent = "Title is required.";
+        return;
+    }
+
+    let coverImageUrl =
+        currentAddition.cover_image_url ||
+        currentAddition.image_url ||
+        null;
+
+    if (coverFile) {
+        const filePath =
+            `${currentUser.id}/${Date.now()}-${coverFile.name}`;
+
+        const { error: uploadError } = await supabase.storage
+            .from("world-images")
+            .upload(filePath, coverFile);
+
+        if (uploadError) {
+            message.textContent = uploadError.message;
+            return;
+        }
+
+        const { data } = supabase.storage
+            .from("world-images")
+            .getPublicUrl(filePath);
+
+        coverImageUrl = data.publicUrl;
+    }
+
+    const { error } = await supabase
+        .from("world_additions")
+        .update({
+            addition_type: type,
+            title,
+            summary,
+            content,
+            cover_image_url: coverImageUrl,
+            image_url: coverImageUrl,
+            updated_at: new Date().toISOString()
+        })
+        .eq("id", additionId)
+        .eq("author_id", currentUser.id);
+
+    if (error) {
+        message.textContent = error.message;
+        return;
+    }
+
+    window.location.href =
+        `addition.html?id=${encodeURIComponent(additionId)}`;
+};
+
+function escapeHtml(value) {
+    return String(value || "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+}
+
+window.logOut = async function () {
+    await supabase.auth.signOut();
+    window.location.href = "login.html";
+};
+    </script>
+</body>
+</html>
