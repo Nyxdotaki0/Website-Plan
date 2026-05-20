@@ -334,6 +334,34 @@
                     <p style="white-space:pre-wrap;">
                         ${escapeHtml(addition.content || "")}
                     </p>
+
+                    ${(
+                    currentUser.id === addition.author_id ||
+                    currentUser.id === currentWorld.owner_id
+                ) ? `
+    <div style="margin-top:18px; display:flex; gap:10px; flex-wrap:wrap;">
+
+        ${currentUser.id === addition.author_id ? `
+            <button
+                class="button"
+                onclick="editAddition(
+                    '${addition.id}',
+                    \`${escapeHtml(addition.title || "")}\`,
+                    \`${escapeHtml(addition.content || "")}\`
+                )">
+                Edit
+            </button>
+        ` : ""}
+
+        <button
+            class="button"
+            onclick="deleteAddition('${addition.id}')">
+            Delete
+        </button>
+
+    </div>
+` : ""}
+
                 </article>
             `;
         }).join("");
@@ -410,6 +438,54 @@
         } else {
             alert("Addition submitted for creator approval.");
         }
+    };
+
+    window.deleteAddition = async function (additionId) {
+
+        const confirmed =
+            confirm("Delete this addition?");
+
+        if (!confirmed) return;
+
+        const { error } = await supabase
+            .from("world_additions")
+            .delete()
+            .eq("id", additionId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        await loadAdditions();
+    };
+
+    window.editAddition = async function (additionId, oldTitle, oldContent) {
+
+        const title =
+            prompt("Edit title:", oldTitle);
+
+        if (!title) return;
+
+        const content =
+            prompt("Edit content:", oldContent);
+
+        if (!content) return;
+
+        const { error } = await supabase
+            .from("world_additions")
+            .update({
+                title,
+                content
+            })
+            .eq("id", additionId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        await loadAdditions();
     };
 
     function escapeHtml(value) {

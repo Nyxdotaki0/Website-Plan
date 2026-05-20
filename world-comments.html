@@ -292,8 +292,31 @@
             </div>
 
             <div class="comment-content">
-                ${escapeHtml(comment.content)}
-            </div>
+    ${escapeHtml(comment.content)}
+</div>
+
+${(
+                    currentUser.id === comment.user_id ||
+                    currentUser.id === currentWorld.owner_id
+                ) ? `
+    <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+
+        ${currentUser.id === comment.user_id ? `
+            <button
+                class="button"
+                onclick="editComment('${comment.id}', \`${escapeHtml(comment.content)}\`)">
+                Edit
+            </button>
+        ` : ""}
+
+        <button
+            class="button"
+            onclick="deleteComment('${comment.id}')">
+            Delete
+        </button>
+
+    </div>
+` : ""}
         </article>
     `;
         }).join("");
@@ -332,6 +355,48 @@
 
         await loadComments();
     };
+
+        window.deleteComment = async function (commentId) {
+
+            const confirmed =
+                confirm("Delete this comment?");
+
+            if (!confirmed) return;
+
+            const { error } = await supabase
+                .from("world_comments")
+                .delete()
+                .eq("id", commentId);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await loadComments();
+        };
+
+        window.editComment = async function (commentId, oldContent) {
+
+            const updated =
+                prompt("Edit comment:", oldContent);
+
+            if (!updated) return;
+
+            const { error } = await supabase
+                .from("world_comments")
+                .update({
+                    content: updated
+                })
+                .eq("id", commentId);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await loadComments();
+        };
 
     function escapeHtml(value) {
         return String(value || "")

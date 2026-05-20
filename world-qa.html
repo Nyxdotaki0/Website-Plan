@@ -256,7 +256,30 @@
             const displayName = profile?.display_name || username;
             const isOwner = currentUser.id === currentWorld.owner_id;
 
-        return `
+
+            return `
+        ${(
+                    currentUser.id === question.user_id ||
+                    currentUser.id === currentWorld.owner_id
+                ) ? `
+    <div style="margin-top:18px; display:flex; gap:10px; flex-wrap:wrap;">
+
+        ${currentUser.id === question.user_id ? `
+            <button
+                class="button"
+                onclick="editQuestion('${question.id}', \`${escapeHtml(question.question)}\`)">
+                Edit Question
+            </button>
+        ` : ""}
+
+        <button
+            class="button"
+            onclick="deleteQuestion('${question.id}')">
+            Delete
+        </button>
+
+    </div>
+` : ""}
             <article class="question-card">
                 <div class="author">
                     Asked by <strong>${escapeHtml(displayName)}</strong>
@@ -352,6 +375,48 @@
 
         await loadQuestions();
     };
+
+        window.deleteQuestion = async function (questionId) {
+
+            const confirmed =
+                confirm("Delete this question?");
+
+            if (!confirmed) return;
+
+            const { error } = await supabase
+                .from("world_questions")
+                .delete()
+                .eq("id", questionId);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await loadQuestions();
+        };
+
+        window.editQuestion = async function (questionId, oldQuestion) {
+
+            const updated =
+                prompt("Edit question:", oldQuestion);
+
+            if (!updated) return;
+
+            const { error } = await supabase
+                .from("world_questions")
+                .update({
+                    question: updated
+                })
+                .eq("id", questionId);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await loadQuestions();
+        };
 
     function escapeHtml(value) {
         return String(value || "")
