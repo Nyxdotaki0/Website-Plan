@@ -132,6 +132,40 @@
             color: #9f9fb1;
             margin-bottom: 14px;
         }
+
+        .community-topbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 22px;
+        }
+
+        .community-controls {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 28px;
+            flex-wrap: wrap;
+        }
+
+            .community-controls input {
+                flex: 1;
+                min-width: 220px;
+            }
+
+            .community-controls select {
+                width: 180px;
+            }
+
+        .addition-card {
+            transition: 0.2s ease;
+        }
+
+            .addition-card:hover {
+                transform: translateY(-3px);
+                border-color: #404060;
+            }
     </style>
 </head>
 
@@ -191,11 +225,43 @@
 
     <section>
         <h2>Community Additions</h2>
+        <section>
 
-        <div id="additions-container">
-            <p class="empty">Loading additions...</p>
-        </div>
-    </section>
+            <div class="community-topbar">
+
+                <div>
+                    <h2 style="margin:0;">
+                        Community Additions
+                    </h2>
+
+                    <p class="empty" style="margin-top:8px;">
+                        Explore stories, characters, lore, and creations made by the community.
+                    </p>
+                </div>
+
+                <button class="button"
+                        id="scroll-to-addition-form">
+                    + Add to This World
+                </button>
+
+            </div>
+
+            <div class="community-controls">
+
+                <input id="addition-search"
+                       placeholder="Search additions...">
+
+                <select id="addition-sort">
+                    <option value="newest">Newest</option>
+                    <option value="oldest">Oldest</option>
+                    <option value="popular">Popular</option>
+                </select>
+
+            </div>
+            <div id="additions-container">
+                <p class="empty">Loading additions...</p>
+            </div>
+        </section>
 
 </main>
 
@@ -209,6 +275,7 @@
     const worldId = params.get("id");
 
     let currentWorld = null;
+    let allAdditions = [];
 
     if (!worldId) {
         alert("No world ID provided.");
@@ -290,6 +357,8 @@
             return;
         }
 
+        allAdditions = additions || [];
+
         if (!additions || additions.length === 0) {
             container.innerHTML = `<p class="empty">No approved additions yet.</p>`;
             return;
@@ -304,41 +373,7 @@
             .select("id, username, display_name")
             .in("id", authorIds);
 
-        container.innerHTML = additions.map(addition => {
-            const profile = profiles?.find(profile => profile.id === addition.author_id);
-
-            const username = profile?.username || "unknown";
-            const displayName = profile?.display_name || username;
-
-            
-
-            return `
-                <article class="addition-card">
-                    <span class="badge">${escapeHtml(addition.addition_type || "Addition")}</span>
-
-                    <h2>${escapeHtml(addition.title || "Untitled Addition")}</h2>
-
-                    <div class="author">
-                        Added by <strong>${escapeHtml(displayName)}</strong>
-                        (@${escapeHtml(username)})
-                    </div>
-
-                    ${addition.image_url ? `
-                        <img
-                            class="addition-image"
-                            src="${escapeHtml(addition.image_url)}"
-                            alt="${escapeHtml(addition.title || "Addition image")}"
-                        >
-                    ` : ""}
-
-                    <p style="white-space:pre-wrap;">
-                        ${escapeHtml(addition.content || "")}
-                    </p>
-
-                    ${(
-                    currentUser.id === addition.author_id ||
-                    currentUser.id === currentWorld.owner_id
-                ) ? `
+        renderAdditions(additions, profiles); `
     <div style="margin-top:18px; display:flex; gap:10px; flex-wrap:wrap;">
 
         ${currentUser.id === addition.author_id ? `
@@ -364,6 +399,105 @@
 
                 </article>
             `;
+        }).join("");
+    }
+
+    function renderAdditions(additions, profiles) {
+
+        const container =
+            document.getElementById("additions-container");
+
+        if (!additions || additions.length === 0) {
+            container.innerHTML = `
+            <p class="empty">
+                No additions found.
+            </p>
+        `;
+            return;
+        }
+
+        container.innerHTML = additions.map(addition => {
+
+            const profile =
+                profiles?.find(profile =>
+                    profile.id === addition.author_id
+                );
+
+            const username =
+                profile?.username || "unknown";
+
+            const displayName =
+                profile?.display_name || username;
+
+            return `
+            <article class="addition-card">
+
+                <span class="badge">
+                    ${escapeHtml(addition.addition_type || "Addition")}
+                </span>
+
+                <h2>
+                    ${escapeHtml(addition.title || "Untitled Addition")}
+                </h2>
+
+                <div class="author">
+                    Added by
+                    <strong>${escapeHtml(displayName)}</strong>
+                    (@${escapeHtml(username)})
+                </div>
+
+                ${addition.image_url ? `
+                    <img
+                        class="addition-image"
+                        src="${escapeHtml(addition.image_url)}"
+                        alt="${escapeHtml(addition.title || "Addition image")}"
+                    >
+                ` : ""}
+
+                <p style="white-space:pre-wrap;">
+                    ${escapeHtml(addition.content || "")}
+                </p>
+
+                <div style="
+                    margin-top:18px;
+                    display:flex;
+                    gap:10px;
+                    flex-wrap:wrap;
+                ">
+
+                    <a
+                        class="button"
+                        href="addition.html?id=${addition.id}">
+                        Open Addition
+                    </a>
+
+                    ${(
+                    currentUser.id === addition.author_id ||
+                    currentUser.id === currentWorld.owner_id
+                ) ? `
+                        ${currentUser.id === addition.author_id ? `
+                            <button
+                                class="button"
+                                onclick="editAddition(
+                                    '${addition.id}',
+                                    \`${escapeHtml(addition.title || "")}\`,
+                                    \`${escapeHtml(addition.content || "")}\`
+                                )">
+                                Edit
+                            </button>
+                        ` : ""}
+
+                        <button
+                            class="button"
+                            onclick="deleteAddition('${addition.id}')">
+                            Delete
+                        </button>
+                    ` : ""}
+
+                </div>
+
+            </article>
+        `;
         }).join("");
     }
 
@@ -487,6 +621,93 @@
 
         await loadAdditions();
     };
+
+    document
+        .getElementById("addition-search")
+        .addEventListener("input", filterAndSortAdditions);
+
+    document
+        .getElementById("addition-sort")
+        .addEventListener("change", filterAndSortAdditions);
+
+    document
+        .getElementById("scroll-to-addition-form")
+        .addEventListener("click", () => {
+
+            const form =
+                document.getElementById("addition-form-section");
+
+            if (!form) return;
+
+            form.scrollIntoView({
+                behavior: "smooth"
+            });
+        });
+
+    async function filterAndSortAdditions() {
+
+        const search =
+            document
+                .getElementById("addition-search")
+                .value
+                .trim()
+                .toLowerCase();
+
+        const sort =
+            document
+                .getElementById("addition-sort")
+                .value;
+
+        let filtered =
+            [...allAdditions];
+
+        if (search) {
+
+            filtered = filtered.filter(addition => {
+
+                return (
+                    addition.title?.toLowerCase().includes(search) ||
+                    addition.content?.toLowerCase().includes(search) ||
+                    addition.addition_type?.toLowerCase().includes(search)
+                );
+            });
+        }
+
+        if (sort === "newest") {
+
+            filtered.sort((a, b) =>
+                new Date(b.created_at) -
+                new Date(a.created_at)
+            );
+        }
+
+        if (sort === "oldest") {
+
+            filtered.sort((a, b) =>
+                new Date(a.created_at) -
+                new Date(b.created_at)
+            );
+        }
+
+        if (sort === "popular") {
+
+            filtered.sort((a, b) =>
+                (b.like_count || 0) -
+                (a.like_count || 0)
+            );
+        }
+
+        const authorIds = [
+            ...new Set(filtered.map(addition => addition.author_id))
+        ];
+
+        const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, username, display_name")
+            .in("id", authorIds);
+
+        renderAdditions(filtered, profiles);
+    }
 
     function escapeHtml(value) {
         return String(value || "")
