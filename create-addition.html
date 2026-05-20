@@ -1,0 +1,367 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Addition - Nullverse</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0d0d12;
+            color: #f2f2f2;
+        }
+
+        header {
+            padding: 24px 40px;
+            border-bottom: 1px solid #2a2a35;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #111118;
+        }
+
+        .logo a, nav a, nav button {
+            color: #cfcfd8;
+            text-decoration: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: Arial, sans-serif;
+        }
+
+        .logo a {
+            color: white;
+            font-size: 1.6rem;
+            font-weight: bold;
+        }
+
+        nav {
+            display: flex;
+            gap: 22px;
+            flex-wrap: wrap;
+        }
+
+        main {
+            max-width: 900px;
+            margin: auto;
+            padding: 45px 40px 80px;
+        }
+
+        .hero, .panel {
+            background: #15151f;
+            border: 1px solid #2a2a35;
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 24px;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #15151f, #1b1b2b);
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: 2.5rem;
+        }
+
+        p {
+            color: #c8c8d4;
+            line-height: 1.6;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #d8d8e5;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 13px;
+            border-radius: 10px;
+            border: 1px solid #333344;
+            background: #0d0d12;
+            color: white;
+            font-family: Arial, sans-serif;
+            margin-bottom: 16px;
+        }
+
+        textarea {
+            resize: vertical;
+        }
+
+        .button {
+            display: inline-block;
+            background: #2a2a44;
+            color: white;
+            border: none;
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: Arial, sans-serif;
+            font-size: 0.95rem;
+        }
+
+            .button:hover {
+                background: #3a3a5c;
+            }
+
+        .primary {
+            background: #4d4d7a;
+        }
+
+            .primary:hover {
+                background: #62629a;
+            }
+
+        .empty {
+            color: #8f8fa3;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 22px;
+        }
+
+        @media (max-width: 800px) {
+            header {
+                flex-direction: column;
+                gap: 14px;
+                padding: 20px;
+            }
+
+            nav {
+                justify-content: center;
+            }
+
+            main {
+                padding: 30px 24px 70px;
+            }
+
+            h1 {
+                font-size: 2.1rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">
+            <a href="index.html">Nullverse</a>
+        </div>
+
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="explore.html">Explore</a>
+            <a href="dashboard.html">Dashboard</a>
+            <button onclick="logOut()">Log Out</button>
+        </nav>
+    </header>
+
+    <main>
+
+        <a id="back-to-community" class="button">
+            ← Back to Community
+        </a>
+
+        <section class="hero" style="margin-top:24px;">
+            <h1>Create a Community Addition</h1>
+            <p id="world-context">
+                Loading world...
+            </p>
+        </section>
+
+        <section class="panel">
+            <p class="empty">
+                This is not a main world. This is your own connected story, OC entry, lore branch, map, language, or side idea inside another creator’s universe.
+            </p>
+
+            <label>Addition Type</label>
+            <select id="addition-type">
+                <option>Story</option>
+                <option>Character</option>
+                <option>Location</option>
+                <option>Language</option>
+                <option>Lore</option>
+                <option>Timeline</option>
+                <option>Map</option>
+                <option>Custom</option>
+            </select>
+
+            <label>Title</label>
+            <input id="addition-title" placeholder="Example: My OC enters the city of Veyra">
+
+            <label>Short Summary</label>
+            <textarea id="addition-summary" rows="4" placeholder="A quick preview of what your addition is about..."></textarea>
+
+            <label>Cover Image</label>
+            <input id="addition-cover" type="file" accept="image/*">
+
+            <label>Opening Content</label>
+            <textarea id="addition-content" rows="12" placeholder="Start writing your addition here..."></textarea>
+
+            <div class="actions">
+                <a id="cancel-link" class="button">
+                    Cancel
+                </a>
+
+                <button class="button primary" onclick="createAddition()">
+                    Publish Addition
+                </button>
+            </div>
+
+            <p id="message" class="empty"></p>
+        </section>
+
+    </main>
+
+    <script type="module">
+    import { requireBetaAccess } from "./betaGate.js";
+    import { supabase } from "./supabaseClient.js";
+
+    const currentUser = await requireBetaAccess();
+
+    const params = new URLSearchParams(window.location.search);
+    const worldId = params.get("id");
+
+    let currentWorld = null;
+
+    if (!worldId) {
+        alert("No world ID provided.");
+        window.location.href = "explore.html";
+    }
+
+    await loadWorld();
+
+    async function loadWorld() {
+        const { data, error } = await supabase
+            .from("worlds")
+            .select("*")
+            .eq("id", worldId)
+            .single();
+
+        if (error || !data) {
+            alert("World not found.");
+            window.location.href = "explore.html";
+            return;
+        }
+
+        currentWorld = data;
+
+        if (currentWorld.owner_id === currentUser.id) {
+            alert("You cannot create a community addition on your own world.");
+            window.location.href =
+                `world-additions.html?id=${encodeURIComponent(worldId)}`;
+            return;
+        }
+
+        if (currentWorld.addition_mode === "locked") {
+            alert("This world is locked from community additions.");
+            window.location.href =
+                `world-additions.html?id=${encodeURIComponent(worldId)}`;
+            return;
+        }
+
+        document.getElementById("world-context").textContent =
+            `You are adding onto ${currentWorld.title}. Your addition will be clearly credited to you and kept separate from the original creator’s world.`;
+
+        document.getElementById("back-to-community").href =
+            `world-additions.html?id=${encodeURIComponent(worldId)}`;
+
+        document.getElementById("cancel-link").href =
+            `world-additions.html?id=${encodeURIComponent(worldId)}`;
+    }
+
+    window.createAddition = async function () {
+        if (!currentWorld) return;
+
+        const message = document.getElementById("message");
+
+        const type = document.getElementById("addition-type").value;
+        const title = document.getElementById("addition-title").value.trim();
+        const summary = document.getElementById("addition-summary").value.trim();
+        const content = document.getElementById("addition-content").value.trim();
+        const coverFile = document.getElementById("addition-cover").files[0];
+
+        if (!title) {
+            message.textContent = "Title is required.";
+            return;
+        }
+
+        if (!summary) {
+            message.textContent = "Summary is required.";
+            return;
+        }
+
+        let coverImageUrl = null;
+
+        if (coverFile) {
+            const filePath =
+                `${currentUser.id}/${Date.now()}-${coverFile.name}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from("world-images")
+                .upload(filePath, coverFile);
+
+            if (uploadError) {
+                message.textContent = uploadError.message;
+                return;
+            }
+
+            const { data } = supabase.storage
+                .from("world-images")
+                .getPublicUrl(filePath);
+
+            coverImageUrl = data.publicUrl;
+        }
+
+        const status =
+            currentWorld.addition_mode === "open"
+                ? "approved"
+                : "pending";
+
+        const { error } = await supabase
+            .from("world_additions")
+            .insert({
+                world_id: worldId,
+                author_id: currentUser.id,
+                addition_type: type,
+                title,
+                summary,
+                content,
+                cover_image_url: coverImageUrl,
+                image_url: coverImageUrl,
+                status
+            });
+
+        if (error) {
+            message.textContent = error.message;
+            return;
+        }
+
+        if (status === "approved") {
+            window.location.href =
+                `world-additions.html?id=${encodeURIComponent(worldId)}`;
+        } else {
+            message.textContent =
+                "Addition submitted for creator approval.";
+        }
+    };
+
+    window.logOut = async function () {
+        await supabase.auth.signOut();
+        window.location.href = "login.html";
+    };
+    </script>
+
+</body>
+</html>
