@@ -282,8 +282,15 @@
 <script type="module">
     import { requireBetaAccess } from "./betaGate.js";
     import { supabase } from "./supabaseClient.js";
+    import { createNotification } from "./notifications.js";
 
     const currentUser = await requireBetaAccess();
+
+    const { data: currentProfile } = await supabase
+        .from("profiles")
+        .select("username, display_name")
+        .eq("id", currentUser.id)
+        .single();
 
     const params = new URLSearchParams(window.location.search);
     const usernameFromUrl = params.get("user");
@@ -531,6 +538,14 @@
                             follower_id: currentUser.id,
                             following_id: profileId
                         });
+
+                    await createNotification({
+                        recipientId: profileId,
+                        actorId: currentUser.id,
+                        type: "new_follower",
+                        message: `${currentProfile?.display_name || currentProfile?.username || "Someone"} followed you.`,
+                        link: `profile.html?user=${encodeURIComponent(profile.username)}`
+                    });
                 }
 
                 await loadFollowData(profileId);
