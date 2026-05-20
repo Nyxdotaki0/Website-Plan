@@ -533,20 +533,22 @@
 
                 } else {
 
-                    await supabase
+                    const { error: followError } = await supabase
                         .from("follows")
                         .insert({
                             follower_id: currentUser.id,
                             following_id: profileId
                         });
 
-                    await createNotification({
-                        recipientId: profileId,
-                        actorId: currentUser.id,
-                        type: "new_follower",
-                        message: `${currentProfile?.display_name || currentProfile?.username || "Someone"} followed you.`,
-                        link: `profile.html?user=${encodeURIComponent(profile.username)}`
-                    });
+                    if (!followError) {
+                        await createNotification({
+                            recipientId: profileId,
+                            actorId: currentUser.id,
+                            type: "new_follower",
+                            message: `${currentProfile?.display_name || currentProfile?.username || "Someone"} followed you.`,
+                            link: `profile.html?user=${encodeURIComponent(currentProfile?.username || "")}`
+                        });
+                    }
                 }
 
                 await loadFollowData(profileId);
