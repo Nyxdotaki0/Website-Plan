@@ -180,6 +180,8 @@
 import { requireBetaAccess } from "./betaGate.js";
 import { supabase } from "./supabaseClient.js";
 
+import { createNotification } from "./notifications.js";
+
 const currentUser = await requireBetaAccess();
 const params = new URLSearchParams(window.location.search);
 const additionId = params.get("id");
@@ -284,12 +286,23 @@ document.getElementById("like-button").addEventListener("click", async () => {
             .eq("addition_id", additionId)
             .eq("user_id", currentUser.id);
     } else {
-        await supabase
+        const { error: likeError } = await supabase
             .from("world_addition_likes")
             .insert({
                 addition_id: additionId,
                 user_id: currentUser.id
             });
+
+        if (!likeError) {
+            await createNotification({
+                recipientId: currentAddition.author_id,
+                actorId: currentUser.id,
+                additionId: currentAddition.id,
+                type: "addition_liked",
+                message: `Someone liked your addition: ${currentAddition.title}.`,
+                link: `addition.html?id=${encodeURIComponent(currentAddition.id)}`
+            });
+        }
     }
 
     await loadLikes();

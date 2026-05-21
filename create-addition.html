@@ -227,6 +227,8 @@
     <script type="module">
     import { requireBetaAccess } from "./betaGate.js";
     import { supabase } from "./supabaseClient.js";
+    import { createNotification } from "./notifications.js";
+
 
     const currentUser = await requireBetaAccess();
 
@@ -342,6 +344,21 @@
                 image_url: coverImageUrl,
                 status
             });
+
+        if (!error) {
+            await createNotification({
+                recipientId: currentWorld.owner_id,
+                actorId: currentUser.id,
+                worldId: worldId,
+                type: status === "approved"
+                    ? "world_addition_posted"
+                    : "world_addition_submitted",
+                message: status === "approved"
+                    ? `Someone added to ${currentWorld.title}.`
+                    : `Someone submitted an addition to ${currentWorld.title}.`,
+                link: `world-additions.html?id=${encodeURIComponent(worldId)}`
+            });
+        }
 
         if (error) {
             message.textContent = error.message;

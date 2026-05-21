@@ -333,6 +333,8 @@
         import { requireBetaAccess } from "./betaGate.js";
         import { supabase } from "./supabaseClient.js";
 
+        import { createNotification } from "./notifications.js";
+
         const currentUser = await requireBetaAccess();
 
         const params = new URLSearchParams(window.location.search);
@@ -563,11 +565,23 @@
                     .eq("user_id", currentUser.id);
             } else {
                 await supabase
+                const { error: likeError } = await supabase
                     .from("world_likes")
                     .insert({
                         world_id: currentWorld.id,
                         user_id: currentUser.id
                     });
+
+                if (!likeError) {
+                    await createNotification({
+                        recipientId: currentWorld.owner_id,
+                        actorId: currentUser.id,
+                        worldId: currentWorld.id,
+                        type: "world_liked",
+                        message: `Someone liked ${currentWorld.title}.`,
+                        link: `world.html?id=${encodeURIComponent(currentWorld.id)}`
+                    });
+                }
             }
 
             await loadLikes();
