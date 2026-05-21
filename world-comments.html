@@ -189,6 +189,7 @@
     <script type="module">
     import { requireBetaAccess } from "./betaGate.js";
     import { supabase } from "./supabaseClient.js";
+    import { createNotification } from "./notifications.js";
 
     const currentUser = await requireBetaAccess();
 
@@ -196,7 +197,8 @@
 
     const worldId = params.get("id");
 
-    let currentWorld = null;
+        let currentWorld = null;
+        let allAdditions = [];
 
     if (!worldId) {
         alert("No world ID provided.");
@@ -345,6 +347,17 @@ ${(
                 user_id: currentUser.id,
                 content
             });
+
+        if (!error) {
+            await createNotification({
+                recipientId: currentWorld.owner_id,
+                actorId: currentUser.id,
+                worldId: worldId,
+                type: "world_commented",
+                message: `Someone commented on ${currentWorld.title}.`,
+                link: `world-comments.html?id=${encodeURIComponent(worldId)}`
+            });
+        }
 
         if (error) {
             alert(error.message);
