@@ -172,6 +172,8 @@
     import { requireBetaAccess } from "./betaGate.js";
     import { supabase } from "./supabaseClient.js";
 
+    import { createNotification } from "./notifications.js";
+
     const currentUser = await requireBetaAccess();
 
     const params = new URLSearchParams(window.location.search);
@@ -338,6 +340,17 @@
                 question
             });
 
+        if (!error) {
+            await createNotification({
+                recipientId: currentWorld.owner_id,
+                actorId: currentUser.id,
+                worldId: worldId,
+                type: "world_question",
+                message: `Someone asked a question about ${currentWorld.title}.`,
+                link: `world-qa.html?id=${encodeURIComponent(worldId)}`
+            });
+        }
+
         if (error) {
             alert(error.message);
             return;
@@ -367,6 +380,23 @@
             })
             .eq("id", questionId)
             .eq("world_id", worldId);
+
+        const questionData = await supabase
+            .from("world_questions")
+            .select("user_id")
+            .eq("id", questionId)
+            .single();
+
+        if (!error && questionData.data) {
+            await createNotification({
+                recipientId: questionData.data.user_id,
+                actorId: currentUser.id,
+                worldId: worldId,
+                type: "question_answered",
+                message: `Your question about ${currentWorld.title} was answered.`,
+                link: `world-qa.html?id=${encodeURIComponent(worldId)}`
+            });
+        }
 
         if (error) {
             alert(error.message);
