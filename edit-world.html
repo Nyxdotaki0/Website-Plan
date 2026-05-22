@@ -347,6 +347,35 @@
             .move-button:hover {
                 background: #3b3b55;
             }
+
+
+        .reorder-panel {
+            background: #15151f;
+            border: 1px solid #2a2a35;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+
+        .reorder-title {
+            margin: 0 0 10px;
+            color: #d8d8e5;
+        }
+
+        .reorder-row {
+            display: flex;
+            gap: 8px;
+        }
+
+            .reorder-row input {
+                margin-bottom: 10px;
+            }
+
+        .reorder-help {
+            margin: 6px 0 0;
+            color: #8f8fa3;
+            font-size: .8rem;
+        }
     </style>
 </head>
 
@@ -378,6 +407,53 @@
         </div>
 
         <div class="section-list">
+            <div class="reorder-panel">
+
+                <p class="reorder-title">
+                    Quick Reorder
+                </p>
+
+                <div class="reorder-row">
+
+                    <input id="move-from"
+                           type="number"
+                           min="1"
+                           placeholder="#">
+
+                    <input id="move-to"
+                           type="number"
+                           min="1"
+                           placeholder="#">
+
+                </div>
+
+                <div class="reorder-row">
+
+                    <button class="button"
+                            onclick="moveSectionToPosition()">
+
+                        Move
+
+                    </button>
+
+                    <button class="button"
+                            onclick="swapSectionPositions()">
+
+                        Swap
+
+                    </button>
+
+                </div>
+
+                <p class="reorder-help">
+
+                    Move shifts sections.
+
+                    Swap exchanges positions.
+
+                </p>
+
+            </div>
 
             <div style="margin-bottom:16px;">
 
@@ -811,6 +887,140 @@ ${index},
                         );
 
                 }
+
+                renderSections();
+
+            };
+
+        async function saveSectionOrder() {
+
+            for (
+                let i = 0;
+                i < allSections.length;
+                i++
+            ) {
+
+                await supabase
+                    .from(
+                        "world_sections"
+                    )
+                    .update({
+
+                        display_order:
+                            i + 1
+
+                    })
+                    .eq(
+                        "id",
+                        allSections[i].id
+                    );
+
+            }
+
+        }
+
+        window.moveSectionToPosition =
+            async function () {
+
+                const from =
+                    Number(
+                        document.getElementById(
+                            "move-from"
+                        ).value
+                    ) - 1;
+
+                const to =
+                    Number(
+                        document.getElementById(
+                            "move-to"
+                        ).value
+                    ) - 1;
+
+                if (
+                    from < 0
+                    ||
+                    to < 0
+                    ||
+                    from >= allSections.length
+                    ||
+                    to >= allSections.length
+                ) {
+
+                    alert(
+                        "Invalid positions."
+                    );
+
+                    return;
+
+                }
+
+                const moved =
+                    allSections.splice(
+                        from,
+                        1
+                    )[0];
+
+                allSections.splice(
+                    to,
+                    0,
+                    moved
+                );
+
+                await saveSectionOrder();
+
+                renderSections();
+
+            };
+
+        window.swapSectionPositions =
+            async function () {
+
+                const first =
+                    Number(
+                        document.getElementById(
+                            "move-from"
+                        ).value
+                    ) - 1;
+
+                const second =
+                    Number(
+                        document.getElementById(
+                            "move-to"
+                        ).value
+                    ) - 1;
+
+                if (
+                    first < 0
+                    ||
+                    second < 0
+                    ||
+                    first >= allSections.length
+                    ||
+                    second >= allSections.length
+                ) {
+
+                    alert(
+                        "Invalid positions."
+                    );
+
+                    return;
+
+                }
+
+                [
+                    allSections[first],
+                    allSections[second]
+
+                ]
+
+                    =
+
+                    [
+                        allSections[second],
+                        allSections[first]
+                    ];
+
+                await saveSectionOrder();
 
                 renderSections();
 
