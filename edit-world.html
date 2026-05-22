@@ -334,6 +334,19 @@
                     pointer-events: auto;
                 }
         }
+        .move-button {
+            width: 30px;
+            height: 30px;
+            background: #232338;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+        }
+
+            .move-button:hover {
+                background: #3b3b55;
+            }
     </style>
 </head>
 
@@ -365,6 +378,18 @@
         </div>
 
         <div class="section-list">
+
+            <div style="margin-bottom:16px;">
+
+                <input id="section-search"
+                       placeholder="Search sections..."
+                       oninput="filterSections()"
+                       style="
+margin:0;
+background:#15151f;
+">
+
+            </div>
 
             <div class="section-card active"
                  id="overview-card"
@@ -590,7 +615,9 @@
                 .from("world_sections")
                 .select("*")
                 .eq("world_id", worldId)
-                .order("created_at", { ascending: true });
+                .order("display_order", {
+                    ascending: true
+                });
 
             if (error) {
                 document.getElementById("message").textContent =
@@ -613,20 +640,188 @@
         }
 
         function renderSections() {
+
             const container =
                 document.getElementById("section-list");
 
-            container.innerHTML = allSections.map(section => `
-                    <div class="section-card"
-                         onclick="openSection('${section.id}')"
-                         id="section-${section.id}">
+            const search =
+                (
+                    document.getElementById("section-search")
+                        ?.value
+                    ||
+                    ""
+                )
+                    .toLowerCase();
 
-                        <strong>${escapeHtml(section.title)}</strong>
+            const filtered =
+                allSections.filter(section => {
 
-                        <p>${escapeHtml(section.section_type)}</p>
-                    </div>
-                `).join("");
+                    return (
+                        section.title
+                        ||
+                        ""
+                    )
+                        .toLowerCase()
+                        .includes(search)
+
+                        ||
+
+                        (
+                            section.section_type
+                            ||
+                            ""
+                        )
+                            .toLowerCase()
+                            .includes(search);
+
+                });
+
+            container.innerHTML =
+                filtered
+                    .map((section, index) => `
+
+<div
+class="section-card"
+
+id="section-${section.id}">
+
+<div
+style="
+display:flex;
+justify-content:space-between;
+gap:8px;
+align-items:start;
+">
+
+<div
+style="
+flex:1;
+cursor:pointer;
+"
+onclick="openSection('${section.id}')">
+
+<strong>
+
+${escapeHtml(section.title)}
+
+</strong>
+
+<p>
+
+${escapeHtml(section.section_type)}
+
+</p>
+
+</div>
+
+<div
+style="
+display:flex;
+flex-direction:column;
+gap:6px;
+">
+
+<button
+class="move-button"
+onclick="
+event.stopPropagation();
+moveSection(
+${index},
+-1
+)
+">
+
+↑
+
+</button>
+
+<button
+class="move-button"
+onclick="
+event.stopPropagation();
+moveSection(
+${index},
+1
+)
+">
+
+↓
+
+</button>
+
+</div>
+
+</div>
+
+</div>
+
+`).join("");
+
         }
+        window.moveSection =
+            async function (
+                index,
+                direction
+            ) {
+
+                const newIndex =
+                    index +
+                    direction;
+
+                if (
+                    newIndex < 0
+                    ||
+                    newIndex >= allSections.length
+                )
+                    return;
+
+                [
+                    allSections[index],
+                    allSections[newIndex]
+
+                ]
+
+                    =
+
+                    [
+                        allSections[newIndex],
+                        allSections[index]
+
+                    ];
+
+                for (
+                    let i = 0;
+                    i < allSections.length;
+                    i++
+                ) {
+
+                    await supabase
+                        .from(
+                            "world_sections"
+                        )
+                        .update({
+
+                            display_order: i
+
+                        })
+
+                        .eq(
+                            "id",
+                            allSections[i].id
+                        );
+
+                }
+
+                renderSections();
+
+            };
+
+        window.filterSections =
+            function () {
+
+                renderSections();
+
+            };
 
         function renderGenreTags() {
             const container =
