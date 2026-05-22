@@ -78,6 +78,25 @@
             padding: 55px 40px 80px;
         }
 
+        .notification-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .notification-badge {
+            min-width: 18px;
+            height: 18px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background: #56568a;
+            color: white;
+            font-size: 0.72rem;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
         .panel {
             background: #15151f;
             border: 1px solid #2a2a35;
@@ -305,24 +324,6 @@
                     pointer-events: auto;
                 }
         }
-        .notification-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .notification-badge {
-            min-width: 18px;
-            height: 18px;
-            padding: 0 6px;
-            border-radius: 999px;
-            background: #56568a;
-            color: white;
-            font-size: 0.72rem;
-            align-items: center;
-            justify-content: center;
-            line-height: 1;
-        }
     </style>
 </head>
 
@@ -479,7 +480,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
-        import { setupNotificationBadge } from "./notificationBadge.js";
         const SUPABASE_URL = "https://baaygzddafopihtxyyjq.supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_O0JPmpCSe7TDoUxotIe4aQ_4EBgEBV8";
 
@@ -490,7 +490,73 @@
         let currentBannerUrl = "";
 
         const defaultAvatar = "https://baaygzddafopihtxyyjq.supabase.co/storage/v1/object/public/avatars/default-avatar.png";
-        setupNotificationBadge();
+
+        async function setupNotificationBadge() {
+            const navNotificationLink =
+                document.querySelector('a[href="notifications.html"]');
+
+            if (!navNotificationLink || !currentUser) return;
+
+            navNotificationLink.classList.add("notification-link");
+
+            let badge = navNotificationLink.querySelector(".notification-badge");
+
+            if (!badge) {
+                badge = document.createElement("span");
+                badge.className = "notification-badge";
+                navNotificationLink.appendChild(badge);
+            }
+
+            async function updateBadge() {
+                const { count, error } = await supabaseClient
+                    .from("notifications")
+                    .select("id", {
+                        count: "exact",
+                        head: true
+                    })
+                    .eq("recipient_id", currentUser.id)
+                    .eq("is_read", false);
+
+                if (error) {
+                    console.error("Notification badge error:", error.message);
+                    badge.style.display = "none";
+                    return;
+                }
+
+                if (!count || count <= 0) {
+                    badge.style.display = "none";
+                    badge.textContent = "";
+                    return;
+                }
+
+                badge.style.display = "inline-flex";
+                badge.textContent = count > 99 ? "99+" : String(count);
+            }
+
+            await updateBadge();
+
+            const channel = supabaseClient
+                .channel(`notification-badge-${currentUser.id}`)
+                .on(
+                    "postgres_changes",
+                    {
+                        event: "*",
+                        schema: "public",
+                        table: "notifications",
+                        filter: `recipient_id=eq.${currentUser.id}`
+                    },
+                    async () => {
+                        await updateBadge();
+                    }
+                )
+                .subscribe();
+
+            window.addEventListener("beforeunload", () => {
+                supabaseClient.removeChannel(channel);
+            });
+        }
+
+
         async function checkUserAndLoadProfile() {
             const { data: { user }, error } = await supabaseClient.auth.getUser();
 
@@ -500,6 +566,7 @@
             }
 
             currentUser = user;
+            await setupNotificationBadge();
             document.getElementById("account-email").textContent = "Signed in as: " + user.email;
 
             const { data: profile, error: profileError } = await supabaseClient
