@@ -479,6 +479,20 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
+    <script type="module">
+
+        import {
+            optimizeImage
+
+        }
+
+            from "./imageUtils.js";
+
+        window.optimizeImage =
+            optimizeImage;
+
+    </script>
+
     <script>
         const SUPABASE_URL = "https://baaygzddafopihtxyyjq.supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_O0JPmpCSe7TDoUxotIe4aQ_4EBgEBV8";
@@ -609,30 +623,147 @@
             }
         }
 
-        async function uploadFileIfSelected(inputId, bucketName, currentUrl, fileNameBase) {
-            const fileInput = document.getElementById(inputId);
-            const file = fileInput.files[0];
+        async function uploadFileIfSelected(
+            inputId,
+            bucketName,
+            currentUrl,
+            fileNameBase
+        ) {
 
-            if (!file) {
+            const fileInput =
+                document.getElementById(
+                    inputId
+                );
+
+            const original =
+                fileInput.files[0];
+
+            if (
+                !original
+            ) {
+
                 return currentUrl;
+
             }
 
-            const fileExtension = file.name.split(".").pop();
-            const filePath = currentUser.id + "/" + fileNameBase + "-" + Date.now() + "." + fileExtension;
+            let optimized =
+                original;
 
-            const { error: uploadError } = await supabaseClient.storage
-                .from(bucketName)
-                .upload(filePath, file);
+            if (
+                inputId ===
+                "avatar-file"
+            ) {
 
-            if (uploadError) {
+                optimized =
+                    await window.optimizeImage(
+                        original,
+                        {
+
+                            maxWidth:
+                                512,
+
+                            maxHeight:
+                                512,
+
+                            quality:
+                                .85
+
+                        }
+                    );
+
+            }
+
+            if (
+                inputId ===
+                "banner-file"
+            ) {
+
+                optimized =
+                    await window.optimizeImage(
+                        original,
+                        {
+
+                            maxWidth:
+                                1600,
+
+                            maxHeight:
+                                900,
+
+                            quality:
+                                .82
+
+                        }
+                    );
+
+            }
+
+            const filePath =
+                currentUser.id
+                +
+                "/"
+                +
+                fileNameBase
+                +
+                "-"
+                +
+                Date.now()
+                +
+                ".webp";
+
+            const {
+                error:
+                uploadError
+            }
+
+                =
+
+                await supabaseClient
+                    .storage
+                    .from(
+                        bucketName
+                    )
+                    .upload(
+                        filePath,
+                        optimized,
+                        {
+
+                            upsert:
+                                true
+
+                        }
+                    );
+
+            if (
+                uploadError
+            ) {
+
                 throw uploadError;
+
             }
 
-            const { data } = supabaseClient.storage
-                .from(bucketName)
-                .getPublicUrl(filePath);
+            const {
+                data
+            }
 
-            return data.publicUrl + "?v=" + Date.now();
+                =
+
+                supabaseClient
+                    .storage
+                    .from(
+                        bucketName
+                    )
+                    .getPublicUrl(
+                        filePath
+                    );
+
+            return (
+                data.publicUrl
+                +
+                "?v="
+                +
+                Date.now()
+            );
+
         }
 
         async function saveProfile() {
