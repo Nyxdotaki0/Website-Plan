@@ -372,7 +372,7 @@
         import { requireBetaAccess } from "./betaGate.js";
         import { supabase } from "./supabaseClient.js";
         import { createNotification } from "./notifications.js";
-
+        import { optimizeImage } from "./imageUtils.js";
 
         const currentUser = await requireBetaAccess();
 
@@ -451,12 +451,42 @@
             let coverImageUrl = null;
 
             if (coverFile) {
-                const filePath =
-                    `${currentUser.id}/${Date.now()}-${coverFile.name}`;
 
-                const { error: uploadError } = await supabase.storage
-                    .from("world-images")
-                    .upload(filePath, coverFile);
+                const optimized =
+                    await optimizeImage(
+                        coverFile,
+                        {
+                            maxWidth: 1600,
+                            maxHeight: 900,
+                            quality: .82
+                        }
+                    );
+
+                const filePath =
+                    `${currentUser.id}/${Date.now()}-addition.webp`;
+
+                const { error: uploadError } =
+                    await supabase.storage
+                        .from("world-images")
+                        .upload(
+                            filePath,
+                            optimized
+                        );
+
+                if (uploadError) {
+                    message.textContent =
+                        uploadError.message;
+                    return;
+                }
+
+                const { data } =
+                    supabase.storage
+                        .from("world-images")
+                        .getPublicUrl(filePath);
+
+                coverImageUrl =
+                    data.publicUrl;
+            }
 
                 if (uploadError) {
                     message.textContent = uploadError.message;
