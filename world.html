@@ -605,135 +605,98 @@
         }
 
         function renderSectionNav(sections) {
+            const nav = document.getElementById("section-nav");
+            const links = document.getElementById("section-nav-links");
+            const search = document.getElementById("section-search");
+            const filters = document.getElementById("section-type-filter");
+            const count = document.getElementById("section-count");
 
-            const nav =
-                document.getElementById(
-                    "section-nav"
-                );
-
-            const links =
-                document.getElementById(
-                    "section-nav-links"
-                );
-
-            const search =
-                document.getElementById(
-                    "section-search"
-                );
-
-            const filters =
-                document.getElementById(
-                    "section-type-filter"
-                );
-
-            const count =
-                document.getElementById(
-                    "section-count"
-                );
-
-            if (sections.length <= 1) {
+            if (!sections || sections.length <= 1) {
                 nav.style.display = "none";
                 return;
             }
 
             nav.style.display = "block";
 
-            const types = [
-                ...new Set(
-                    sections.map(
-                        s => s.section_type
-                    ).filter(Boolean)
-                )
-            ];
+            const types = [...new Set(
+                sections
+                    .map(section => section.section_type || "Section")
+                    .map(type => type.trim())
+                    .filter(Boolean)
+            )];
 
-            filters.innerHTML =
-                `
-<button class="filter-chip active">
-All
-</button>
-`
-                +
-                types.map(type =>
-                    `
-<button class="filter-chip">
-${escapeHtml(type)}
-</button>
-`
-                ).join("");
+            filters.innerHTML = `
+        <button class="filter-chip active" data-type="All">All</button>
+        ${types.map(type => `
+            <button class="filter-chip" data-type="${escapeHtml(type)}">
+                ${escapeHtml(type)}
+            </button>
+        `).join("")}
+    `;
 
-            let active = "All";
+            let activeType = "All";
 
             function draw() {
+                const query = (search.value || "").toLowerCase().trim();
 
-                const query =
-                    search.value
-                        .toLowerCase();
+                const filtered = sections.filter(section => {
+                    const title = (section.title || "").toLowerCase();
+                    const type = (section.section_type || "Section").trim();
+                    const content = (section.content || "").toLowerCase();
 
-                const filtered =
-                    sections.filter(s => {
+                    const matchesSearch =
+                        title.includes(query) ||
+                        type.toLowerCase().includes(query) ||
+                        content.includes(query);
 
-                        const matchTitle =
-                            (s.title || "")
-                                .toLowerCase()
-                                .includes(query);
+                    const matchesType =
+                        activeType === "All" || type === activeType;
 
-                        const matchType =
-                            active === "All"
-                            ||
-                            s.section_type === active;
-
-                        return matchTitle
-                            &&
-                            matchType;
-
-                    });
+                    return matchesSearch && matchesType;
+                });
 
                 count.textContent =
-                    `${filtered.length} Sections`;
+                    `${filtered.length} ${filtered.length === 1 ? "Section" : "Sections"}`;
 
-                links.innerHTML =
-                    filtered.map((s, i) => `
-<a href="#section-${sections.indexOf(s)}">
-${escapeHtml(s.title)}
-</a>
-`).join("");
+                if (!filtered.length) {
+                    links.innerHTML = `
+                <p class="empty">
+                    No sections match this search.
+                </p>
+            `;
+                    return;
+                }
 
+                links.innerHTML = filtered.map(section => {
+                    const realIndex = sections.indexOf(section);
+
+                    return `
+                <a href="#section-${realIndex}">
+                    <span>${escapeHtml(section.title || "Untitled")}</span>
+                    <small>${escapeHtml(section.section_type || "Section")}</small>
+                </a>
+            `;
+                }).join("");
             }
 
-            filters.onclick = e => {
+            filters.addEventListener("click", function (e) {
+                const button = e.target.closest(".filter-chip");
+                if (!button) return;
 
-                if (
-                    !e.target.classList
-                        .contains("filter-chip")
-                ) return;
+                activeType = button.dataset.type || "All";
 
-                filters
-                    .querySelectorAll(
-                        ".filter-chip"
-                    )
-                    .forEach(
-                        x =>
-                            x.classList.remove(
-                                "active"
-                            )
-                    );
+                filters.querySelectorAll(".filter-chip").forEach(chip => {
+                    chip.classList.remove("active");
+                });
 
-                e.target.classList.add(
-                    "active"
-                );
-
-                active =
-                    e.target.textContent;
+                button.classList.add("active");
 
                 draw();
+            });
 
-            };
-
-            search.oninput =
-                draw;
+            search.addEventListener("input", draw);
 
             draw();
-
         }
 
         function renderTags(world) {
