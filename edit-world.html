@@ -466,6 +466,54 @@
                 background: linear-gradient( 180deg, rgba(255,255,255,.9), rgba(0,0,0,.9) );
             }
 
+        .background-art-preview {
+            position: relative;
+            height: 220px;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,0.12);
+            overflow: hidden;
+            margin-bottom: 22px;
+            background: radial-gradient(circle at 15% 10%, rgba(255,255,255,0.08), transparent 28%), linear-gradient(180deg,#050505,#000000);
+            box-shadow: 0 14px 34px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06);
+        }
+
+        .background-art-preview-image {
+            position: absolute;
+            inset: 0;
+            background-image: var(--preview-bg-image);
+            background-size: var(--preview-bg-size, cover);
+            background-position: var(--preview-bg-position, center);
+            background-repeat: var(--preview-bg-repeat, no-repeat);
+            opacity: var(--preview-bg-opacity, 0.35);
+            filter: blur(var(--preview-bg-blur, 0px));
+            transform: scale(1.03);
+        }
+
+        .background-art-preview-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,var(--preview-overlay-strength, 0.35));
+        }
+
+        .background-art-preview-content {
+            position: relative;
+            z-index: 2;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-align: center;
+            color: white;
+            padding: 20px;
+        }
+
+            .background-art-preview-content span {
+                color: var(--text-secondary);
+                font-size: .92rem;
+            }
+
         .reorder-title {
             margin: 0 0 12px;
             color: var(--text-primary);
@@ -1482,17 +1530,23 @@ margin-bottom:20px;
 
 <input id="world-background-input" type="file" accept="image/*">
 
-<div style="margin-bottom:20px;">
-    ${currentWorld.theme_background_image_url ? `
-        <img src="${escapeHtml(currentWorld.theme_background_image_url)}"
-             style="width:100%;height:180px;object-fit:cover;border-radius:14px;border:1px solid var(--border-color);">
-    ` : `
-        <div style="width:100%;height:160px;border-radius:14px;border:1px dashed var(--border-color);display:flex;align-items:center;justify-content:center;color:var(--text-muted);">
-            No background artwork uploaded
-        </div>
-    `}
-</div>
+<div id="background-art-preview"
+     class="background-art-preview">
 
+    <div id="background-art-preview-image"
+         class="background-art-preview-image"></div>
+
+    <div id="background-art-preview-overlay"
+         class="background-art-preview-overlay"></div>
+
+    <div class="background-art-preview-content">
+        <strong>Background Preview</strong>
+        <span>
+            Upload artwork or adjust the controls below.
+        </span>
+    </div>
+
+</div>
 <label>Artwork Opacity</label>
 <input id="theme-background-image-opacity"
        type="range"
@@ -1710,6 +1764,105 @@ margin-bottom:20px;
                 });
 
             updateGradientPreview();
+
+            const backgroundInput =
+                document.getElementById("world-background-input");
+
+            const backgroundPreview =
+                document.getElementById("background-art-preview");
+
+            const backgroundPreviewImage =
+                document.getElementById("background-art-preview-image");
+
+            const backgroundOpacity =
+                document.getElementById("theme-background-image-opacity");
+
+            const backgroundBlur =
+                document.getElementById("theme-background-image-blur");
+
+            const backgroundOverlay =
+                document.getElementById("theme-background-overlay-strength");
+
+            const backgroundPosition =
+                document.getElementById("theme-background-image-position");
+
+            const backgroundSize =
+                document.getElementById("theme-background-image-size");
+
+            const backgroundRepeat =
+                document.getElementById("theme-background-image-repeat");
+
+            let backgroundPreviewUrl =
+                currentWorld.theme_background_image_url || "";
+
+            function updateBackgroundPreview() {
+                if (backgroundPreviewUrl) {
+                    backgroundPreviewImage.style.setProperty(
+                        "--preview-bg-image",
+                        `url("${backgroundPreviewUrl}")`
+                    );
+                } else {
+                    backgroundPreviewImage.style.setProperty(
+                        "--preview-bg-image",
+                        "none"
+                    );
+                }
+
+                backgroundPreviewImage.style.setProperty(
+                    "--preview-bg-opacity",
+                    backgroundOpacity.value
+                );
+
+                backgroundPreviewImage.style.setProperty(
+                    "--preview-bg-blur",
+                    `${backgroundBlur.value}px`
+                );
+
+                backgroundPreviewImage.style.setProperty(
+                    "--preview-bg-position",
+                    backgroundPosition.value
+                );
+
+                backgroundPreviewImage.style.setProperty(
+                    "--preview-bg-size",
+                    backgroundSize.value
+                );
+
+                backgroundPreviewImage.style.setProperty(
+                    "--preview-bg-repeat",
+                    backgroundRepeat.value
+                );
+
+                backgroundPreview.style.setProperty(
+                    "--preview-overlay-strength",
+                    backgroundOverlay.value
+                );
+            }
+
+            backgroundInput.addEventListener("change", function () {
+                const file = this.files[0];
+
+                if (!file) return;
+
+                backgroundPreviewUrl =
+                    URL.createObjectURL(file);
+
+                updateBackgroundPreview();
+            });
+
+            [
+                backgroundOpacity,
+                backgroundBlur,
+                backgroundOverlay,
+                backgroundPosition,
+                backgroundSize,
+                backgroundRepeat
+            ].forEach(control => {
+                control.addEventListener("input", updateBackgroundPreview);
+                control.addEventListener("change", updateBackgroundPreview);
+            });
+
+            updateBackgroundPreview();
 
 
             const presetSelect =
