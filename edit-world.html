@@ -1472,6 +1472,73 @@ margin-bottom:20px;
        value="${currentWorld.theme_gradient_strength || "medium"}">
 
 
+       <div class="info-wrap">
+    <label>Background Artwork</label>
+    <div class="info-icon">i</div>
+    <div class="tooltip">
+        Optional artwork behind your world. Leave empty to use only the default theme or gradient.
+    </div>
+</div>
+
+<input id="world-background-input" type="file" accept="image/*">
+
+<div style="margin-bottom:20px;">
+    ${currentWorld.theme_background_image_url ? `
+        <img src="${escapeHtml(currentWorld.theme_background_image_url)}"
+             style="width:100%;height:180px;object-fit:cover;border-radius:14px;border:1px solid var(--border-color);">
+    ` : `
+        <div style="width:100%;height:160px;border-radius:14px;border:1px dashed var(--border-color);display:flex;align-items:center;justify-content:center;color:var(--text-muted);">
+            No background artwork uploaded
+        </div>
+    `}
+</div>
+
+<label>Artwork Opacity</label>
+<input id="theme-background-image-opacity"
+       type="range"
+       min="0"
+       max="1"
+       step="0.05"
+       value="${currentWorld.theme_background_image_opacity ?? 0.35}">
+
+<label>Artwork Blur</label>
+<input id="theme-background-image-blur"
+       type="range"
+       min="0"
+       max="12"
+       step="1"
+       value="${currentWorld.theme_background_image_blur ?? 0}">
+
+<label>Dark Overlay Strength</label>
+<input id="theme-background-overlay-strength"
+       type="range"
+       min="0"
+       max="0.85"
+       step="0.05"
+       value="${currentWorld.theme_background_overlay_strength ?? 0.35}">
+
+<label>Artwork Position</label>
+<select id="theme-background-image-position">
+    <option value="center" ${currentWorld.theme_background_image_position === "center" ? "selected" : ""}>Center</option>
+    <option value="top" ${currentWorld.theme_background_image_position === "top" ? "selected" : ""}>Top</option>
+    <option value="bottom" ${currentWorld.theme_background_image_position === "bottom" ? "selected" : ""}>Bottom</option>
+</select>
+
+<label>Artwork Size</label>
+<select id="theme-background-image-size">
+    <option value="cover" ${currentWorld.theme_background_image_size === "cover" ? "selected" : ""}>Cover</option>
+    <option value="contain" ${currentWorld.theme_background_image_size === "contain" ? "selected" : ""}>Contain</option>
+    <option value="auto" ${currentWorld.theme_background_image_size === "auto" ? "selected" : ""}>Original Size</option>
+</select>
+
+<label>Repeat Artwork</label>
+<select id="theme-background-image-repeat">
+    <option value="no-repeat" ${currentWorld.theme_background_image_repeat === "no-repeat" ? "selected" : ""}>No Repeat</option>
+    <option value="repeat" ${currentWorld.theme_background_image_repeat === "repeat" ? "selected" : ""}>Repeat</option>
+    <option value="repeat-y" ${currentWorld.theme_background_image_repeat === "repeat-y" ? "selected" : ""}>Repeat Down Page</option>
+</select>
+
+
         <div class="info-wrap">
             <label>Visibility</label>
             <div class="info-icon">i</div>
@@ -1497,9 +1564,18 @@ margin-bottom:20px;
         </div>
 
         <div style="display:flex; justify-content:flex-end; margin-top:22px;">
-            <button class="button primary-button" onclick="saveOverviewSettings()">
-                Save Overview
-            </button>
+            <div style="display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap;margin-top:22px;">
+    <button class="button"
+            type="button"
+            onclick="revertWorldThemeToDefault()">
+        Revert to Default
+    </button>
+
+    <button class="button primary-button"
+            onclick="saveOverviewSettings()">
+        Save Overview
+    </button>
+</div>
         </div>
 
         <p id="message" class="message"></p>
@@ -1531,6 +1607,54 @@ margin-bottom:20px;
             ${color2.value}
         )`;
             }
+
+            window.revertWorldThemeToDefault = function () {
+                document.getElementById("theme-gradient-enabled").checked = false;
+                document.getElementById("theme-gradient-color-1").value = "#000000";
+                document.getElementById("theme-gradient-color-2").value = "#1a1a1a";
+                document.getElementById("theme-gradient-direction").value = "180deg";
+                document.getElementById("theme-gradient-strength").value = "medium";
+
+                const backgroundInput =
+                    document.getElementById("world-background-input");
+
+                if (backgroundInput) {
+                    backgroundInput.value = "";
+                }
+
+                document.getElementById("theme-background-image-opacity").value = 0.35;
+                document.getElementById("theme-background-image-blur").value = 0;
+                document.getElementById("theme-background-overlay-strength").value = 0.35;
+                document.getElementById("theme-background-image-position").value = "center";
+                document.getElementById("theme-background-image-size").value = "cover";
+                document.getElementById("theme-background-image-repeat").value = "no-repeat";
+
+                currentWorld.theme_background_image_url = null;
+
+                const preview =
+                    document.getElementById("gradient-preview");
+
+                if (preview) {
+                    preview.style.background =
+                        "linear-gradient(180deg,#000000,#1a1a1a)";
+                }
+
+                document.querySelectorAll(".gradient-direction")
+                    .forEach(button => {
+                        button.classList.toggle(
+                            "active",
+                            button.dataset.direction === "180deg"
+                        );
+                    });
+
+                document.querySelectorAll(".gradient-strength")
+                    .forEach(button => {
+                        button.classList.toggle(
+                            "active",
+                            button.dataset.strength === "medium"
+                        );
+                    });
+            };
 
             color1.addEventListener("input", updateGradientPreview);
 
@@ -1785,6 +1909,15 @@ margin-bottom:20px;
             let coverImageUrl =
                 currentWorld.cover_image_url || null;
 
+            const backgroundInput =
+                document.getElementById("world-background-input");
+
+            const backgroundFile =
+                backgroundInput ? backgroundInput.files[0] : null;
+
+            let themeBackgroundImageUrl =
+                currentWorld.theme_background_image_url || null;
+
             const title =
                 document.getElementById("overview-title").value.trim();
 
@@ -1823,6 +1956,24 @@ margin-bottom:20px;
             const themeGradientStrength =
                 document.getElementById("theme-gradient-strength").value;
 
+            const themeBackgroundImageOpacity =
+                Number(document.getElementById("theme-background-image-opacity").value);
+
+            const themeBackgroundImageBlur =
+                Number(document.getElementById("theme-background-image-blur").value);
+
+            const themeBackgroundImagePosition =
+                document.getElementById("theme-background-image-position").value;
+
+            const themeBackgroundImageSize =
+                document.getElementById("theme-background-image-size").value;
+
+            const themeBackgroundImageRepeat =
+                document.getElementById("theme-background-image-repeat").value;
+
+            const themeBackgroundOverlayStrength =
+                Number(document.getElementById("theme-background-overlay-strength").value);
+
             if (coverFile) {
 
                 const optimized =
@@ -1857,6 +2008,39 @@ margin-bottom:20px;
                 }
             }
 
+
+            if (backgroundFile) {
+                const optimizedBackground =
+                    await optimizeImage(
+                        backgroundFile,
+                        {
+                            maxWidth: 2200,
+                            maxHeight: 2200,
+                            quality: .82
+                        }
+                    );
+
+                const backgroundPath =
+                    `${user.id}/${Date.now()}-background.webp`;
+
+                const { error: backgroundUploadError } =
+                    await supabase.storage
+                        .from("world-backgrounds")
+                        .upload(
+                            backgroundPath,
+                            optimizedBackground
+                        );
+
+                if (!backgroundUploadError) {
+                    const { data } =
+                        supabase.storage
+                            .from("world-backgrounds")
+                            .getPublicUrl(backgroundPath);
+
+                    themeBackgroundImageUrl = data.publicUrl;
+                }
+            }
+
             const { error } = await supabase
                 .from("worlds")
                 .update({
@@ -1877,6 +2061,13 @@ margin-bottom:20px;
                     theme_gradient_color_2: themeGradientColor2,
                     theme_gradient_direction: themeGradientDirection,
                     theme_gradient_strength: themeGradientStrength,
+                    theme_background_image_url: themeBackgroundImageUrl,
+                    theme_background_image_opacity: themeBackgroundImageOpacity,
+                    theme_background_image_blur: themeBackgroundImageBlur,
+                    theme_background_image_position: themeBackgroundImagePosition,
+                    theme_background_image_size: themeBackgroundImageSize,
+                    theme_background_image_repeat: themeBackgroundImageRepeat,
+                    theme_background_overlay_strength: themeBackgroundOverlayStrength,
 
                     updated_at: new Date().toISOString()
                 })
@@ -1889,19 +2080,7 @@ margin-bottom:20px;
                 return;
             }
 
-            window.revertWorldThemeToDefault = function () {
-                document.getElementById("theme-gradient-enabled").checked = false;
-                document.getElementById("theme-gradient-color-1").value = "#000000";
-                document.getElementById("theme-gradient-color-2").value = "#1a1a1a";
-                document.getElementById("theme-gradient-direction").value = "180deg";
-                document.getElementById("theme-gradient-strength").value = "medium";
-
-                const preview = document.getElementById("gradient-preview");
-
-                if (preview) {
-                    preview.style.background =
-                        "linear-gradient(180deg,#000000,#1a1a1a)";
-                }
+            
 
                 document.querySelectorAll(".gradient-direction")
                     .forEach(button => {
@@ -1934,6 +2113,13 @@ margin-bottom:20px;
             currentWorld.theme_gradient_color_2 = themeGradientColor2;
             currentWorld.theme_gradient_direction = themeGradientDirection;
             currentWorld.theme_gradient_strength = themeGradientStrength;
+            currentWorld.theme_background_image_url = themeBackgroundImageUrl;
+            currentWorld.theme_background_image_opacity = themeBackgroundImageOpacity;
+            currentWorld.theme_background_image_blur = themeBackgroundImageBlur;
+            currentWorld.theme_background_image_position = themeBackgroundImagePosition;
+            currentWorld.theme_background_image_size = themeBackgroundImageSize;
+            currentWorld.theme_background_image_repeat = themeBackgroundImageRepeat;
+            currentWorld.theme_background_overlay_strength = themeBackgroundOverlayStrength;
 
             document.getElementById("world-name").textContent =
                 title;
