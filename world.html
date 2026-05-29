@@ -33,6 +33,32 @@
             color: var(--text-primary);
             transition: background 0.25s ease, color 0.25s ease;
         }
+        .world-background-layer {
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .world-background-image {
+            position: absolute;
+            inset: 0;
+            background-position: center;
+            background-size: cover;
+            background-repeat: no-repeat;
+        }
+
+        .world-background-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,.35);
+        }
+
+        .world-gradient-layer {
+            position: absolute;
+            inset: 0;
+        }
 
         header {
             padding: 12px 40px;
@@ -412,6 +438,23 @@
 
 <body>
 
+    <div id="world-background-layer"
+         class="world-background-layer">
+
+        <div id="world-background-image"
+             class="world-background-image">
+        </div>
+
+        <div id="world-gradient-layer"
+             class="world-gradient-layer">
+        </div>
+
+        <div id="world-background-overlay"
+             class="world-background-overlay">
+        </div>
+
+    </div>
+
     <header>
         <div class="logo">
             <a href="index.html">
@@ -583,7 +626,7 @@
             document.getElementById("community-link").href =
                 `world-additions.html?id=${encodeURIComponent(world.id)}`;
 
-            
+
         }
 
         function applyWorldTheme(world) {
@@ -591,7 +634,9 @@
             const root = document.documentElement;
 
             const accent =
-                world.theme_gradient_color_2 || "#e8e8ef";
+                world.theme_gradient_enabled
+                    ? world.theme_gradient_color_2
+                    : "#e8e8ef";
 
             const background =
                 world.theme_gradient_color_1 || "#000000";
@@ -631,59 +676,109 @@
                 glow
             );
 
-            let pageBackground = "var(--page-bg)";
+            const imageLayer =
+                document.getElementById(
+                    "world-background-image"
+                );
+
+            const gradientLayer =
+                document.getElementById(
+                    "world-gradient-layer"
+                );
+
+            const overlayLayer =
+                document.getElementById(
+                    "world-background-overlay"
+                );
+
+            imageLayer.style.backgroundImage = "none";
+
+            if (world.theme_background_image_url) {
+
+                imageLayer.style.backgroundImage =
+                    `url("${world.theme_background_image_url}")`;
+
+                imageLayer.style.opacity =
+                    world.theme_background_image_opacity ?? .35;
+
+                imageLayer.style.filter =
+                    `blur(${world.theme_background_image_blur || 0}px)`;
+
+                imageLayer.style.backgroundRepeat =
+                    world.theme_background_image_repeat ||
+                    "no-repeat";
+
+                imageLayer.style.backgroundPosition =
+                    `${world.theme_background_position_x || 50}% ${world.theme_background_position_y || 50}%`;
+
+                imageLayer.style.backgroundSize =
+                    `${world.theme_background_zoom || 100}%`;
+            }
+
+            let gradientBackground =
+                "transparent";
 
             if (world.theme_gradient_enabled) {
 
                 let opacity = "0.22";
 
-                if (world.theme_gradient_strength === "subtle") {
+                if (
+                    world.theme_gradient_strength ===
+                    "subtle"
+                ) {
                     opacity = "0.14";
                 }
 
-                if (world.theme_gradient_strength === "strong") {
+                if (
+                    world.theme_gradient_strength ===
+                    "strong"
+                ) {
                     opacity = "0.34";
                 }
 
                 const color1 =
                     hexToRgb(
-                        world.theme_gradient_color_1 || accent,
+                        world.theme_gradient_color_1,
                         opacity
                     );
 
                 const color2 =
                     hexToRgb(
-                        world.theme_gradient_color_2 || background,
+                        world.theme_gradient_color_2,
                         opacity
                     );
 
-                const direction =
-                    world.theme_gradient_direction || "180deg";
+                gradientBackground = `
+        radial-gradient(
+            circle at 15% 10%,
+            ${color1},
+            transparent 30%
+        ),
 
-                pageBackground = `
-            radial-gradient(circle at 15% 10%, ${color1}, transparent 30%),
-            radial-gradient(circle at 85% 20%, ${color2}, transparent 34%),
+        radial-gradient(
+            circle at 85% 20%,
+            ${color2},
+            transparent 34%
+        ),
 
-            radial-gradient(circle at 10% 16%, rgba(255,255,255,0.9) 0 1px, transparent 1.7px),
-            radial-gradient(circle at 18% 72%, rgba(255,255,255,0.42) 0 1px, transparent 1.6px),
-            radial-gradient(circle at 25% 38%, rgba(255,255,255,0.55) 0 1px, transparent 1.6px),
-            radial-gradient(circle at 36% 12%, rgba(255,255,255,0.45) 0 1px, transparent 1.5px),
-            radial-gradient(circle at 48% 58%, rgba(255,255,255,0.35) 0 1px, transparent 1.5px),
-            radial-gradient(circle at 54% 30%, rgba(255,255,255,0.6) 0 1px, transparent 1.6px),
-            radial-gradient(circle at 70% 18%, rgba(255,255,255,0.7) 0 1px, transparent 1.7px),
-            linear-gradient(
-                ${direction},
-                ${world.theme_gradient_color_1 || background} 0%,
-                ${world.theme_gradient_color_2 || "#000000"} 100%
-            )
-        `;
+        linear-gradient(
+            ${world.theme_gradient_direction || "180deg"},
+            ${world.theme_gradient_color_1},
+            ${world.theme_gradient_color_2}
+        )
+    `;
             }
 
-            if (world.theme_gradient_enabled) {
-                document.body.style.background = pageBackground;
-            } else {
-                document.body.style.background = "var(--page-bg)";
-            }
+            gradientLayer.style.background =
+                gradientBackground;
+
+            overlayLayer.style.background =
+                `rgba(
+        0,
+        0,
+        0,
+        ${world.theme_background_overlay_strength ?? .35}
+    )`;
 
             document.body.style.color =
                 text;
@@ -739,35 +834,35 @@
                 return `
 <article id="${sectionId}" class="world-section">
 
-    <h2>
-        ${escapeHtml(section.title || "Untitled Section")}
-    </h2>
+        <h2>
+            ${escapeHtml(section.title || "Untitled Section")}
+        </h2>
 
-    <div class="section-type">
-        ${escapeHtml(section.section_type || "Section")}
-    </div>
+        <div class="section-type">
+            ${escapeHtml(section.section_type || "Section")}
+        </div>
 
-    ${section.image_url ? `
-        <img
-            src="${escapeHtml(section.image_url)}"
-            style="
-                width:${section.image_position === "full" ? "100%" : "320px"};
-                max-width:100%;
-                border-radius:16px;
-                margin-bottom:20px;
-                display:block;
-                object-fit:cover;
-                float:${section.image_position === "left" ? "left" :
+        ${section.image_url ? `
+            <img
+                src="${escapeHtml(section.image_url)}"
+                style="
+                    width:${section.image_position === "full" ? "100%" : "320px"};
+                    max-width:100%;
+                    border-radius:16px;
+                    margin-bottom:20px;
+                    display:block;
+                    object-fit:cover;
+                    float:${section.image_position === "left" ? "left" :
                             section.image_position === "right" ? "right" : "none"};
-                margin-right:${section.image_position === "left" ? "22px" : "0"};
-                margin-left:${section.image_position === "right" ? "22px" : "0"};
-            "
-        >
-    ` : ""}
+                    margin-right:${section.image_position === "left" ? "22px" : "0"};
+                    margin-left:${section.image_position === "right" ? "22px" : "0"};
+                "
+            >
+        ` : ""}
 
-    <div class="section-content">
-        ${escapeHtml(section.content || "No content yet.")}
-    </div>
+        <div class="section-content">
+            ${escapeHtml(section.content || "No content yet.")}
+        </div>
 
 </article>
 `;
@@ -796,13 +891,13 @@
             )];
 
             filters.innerHTML = `
-        <button class="filter-chip active" data-type="All">All</button>
-        ${types.map(type => `
-            <button class="filter-chip" data-type="${escapeHtml(type)}">
-                ${escapeHtml(type)}
-            </button>
-        `).join("")}
-    `;
+            <button class="filter-chip active" data-type="All">All</button>
+            ${types.map(type => `
+                <button class="filter-chip" data-type="${escapeHtml(type)}">
+                    ${escapeHtml(type)}
+                </button>
+            `).join("")}
+        `;
 
             let activeType = "All";
 
@@ -830,10 +925,10 @@
 
                 if (!filtered.length) {
                     links.innerHTML = `
-                <p class="empty">
-                    No sections match this search.
-                </p>
-            `;
+                    <p class="empty">
+                        No sections match this search.
+                    </p>
+                `;
                     return;
                 }
 
@@ -841,11 +936,11 @@
                     const realIndex = sections.indexOf(section);
 
                     return `
-                <a href="#section-${realIndex}">
-                    <span>${escapeHtml(section.title || "Untitled")}</span>
-                    <small>${escapeHtml(section.section_type || "Section")}</small>
-                </a>
-            `;
+                    <a href="#section-${realIndex}">
+                        <span>${escapeHtml(section.title || "Untitled")}</span>
+                        <small>${escapeHtml(section.section_type || "Section")}</small>
+                    </a>
+                `;
                 }).join("");
             }
 
@@ -894,10 +989,10 @@
 
             if (currentUser && currentUser.id === world.owner_id) {
                 container.innerHTML = `
-                    <a class="button" href="edit-world.html?id=${encodeURIComponent(world.id)}">
-                        Edit World
-                    </a>
-                `;
+                        <a class="button" href="edit-world.html?id=${encodeURIComponent(world.id)}">
+                            Edit World
+                        </a>
+                    `;
             } else {
                 container.innerHTML = "";
             }
@@ -985,10 +1080,10 @@
             if (currentWorld.addition_mode === "locked") {
 
                 container.innerHTML = `
-            <p class="empty">
-                This world does not allow public additions.
-            </p>
-        `;
+                <p class="empty">
+                    This world does not allow public additions.
+                </p>
+            `;
 
                 return;
             }
@@ -996,19 +1091,19 @@
             if (currentWorld.addition_mode === "open") {
 
                 container.innerHTML = `
-            <button class="button">
-                Add to This World
-            </button>
-        `;
+                <button class="button">
+                    Add to This World
+                </button>
+            `;
 
                 return;
             }
 
             container.innerHTML = `
-        <button class="button">
-            Request Contribution Access
-        </button>
-    `;
+            <button class="button">
+                Request Contribution Access
+            </button>
+        `;
         }
 
         async function loadComments() {
@@ -1025,24 +1120,24 @@
             if (!data || !data.length) {
 
                 container.innerHTML = `
-            <p class="empty">
-                No comments yet.
-            </p>
-        `;
+                <p class="empty">
+                    No comments yet.
+                </p>
+            `;
 
                 return;
             }
 
             container.innerHTML = data.map(comment => `
-        <div class="panel"
-             style="margin-bottom:16px;">
+            <div class="panel"
+                 style="margin-bottom:16px;">
 
-            <p>
-                ${escapeHtml(comment.content)}
-            </p>
+                <p>
+                    ${escapeHtml(comment.content)}
+                </p>
 
-        </div>
-    `).join("");
+            </div>
+        `).join("");
         }
 
         window.submitComment = async function () {
@@ -1082,35 +1177,35 @@
             if (!data || !data.length) {
 
                 container.innerHTML = `
-            <p class="empty">
-                No questions yet.
-            </p>
-        `;
+                <p class="empty">
+                    No questions yet.
+                </p>
+            `;
 
                 return;
             }
 
             container.innerHTML = data.map(question => `
-        <div class="panel"
-             style="margin-bottom:16px;">
+            <div class="panel"
+                 style="margin-bottom:16px;">
 
-            <p>
-                <strong>Q:</strong>
-                ${escapeHtml(question.question)}
-            </p>
+                <p>
+                    <strong>Q:</strong>
+                    ${escapeHtml(question.question)}
+                </p>
 
-            ${question.creator_answer ? `
-                <p style="margin-top:16px;">
-                    <strong>A:</strong>
-                    ${escapeHtml(question.creator_answer)}
-                </p>
-            ` : `
-                <p class="empty">
-                    Awaiting creator response.
-                </p>
-            `}
-        </div>
-    `).join("");
+                ${question.creator_answer ? `
+                    <p style="margin-top:16px;">
+                        <strong>A:</strong>
+                        ${escapeHtml(question.creator_answer)}
+                    </p>
+                ` : `
+                    <p class="empty">
+                        Awaiting creator response.
+                    </p>
+                `}
+            </div>
+        `).join("");
         }
 
         window.submitQuestion = async function () {
