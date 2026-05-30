@@ -1571,7 +1571,50 @@ background:#15151f;
         </select>
 
         
-    
+    <hr style="border:0;border-top:1px solid var(--border-color);margin:26px 0;">
+
+<h2>World Index Appearance</h2>
+
+<div id="index-preview" class="mini-live-card">
+    <span class="tag">Search This World</span>
+    <p>Search box</p>
+    <div class="mini-button-preview">
+        <span class="mini-preview-button">All</span>
+        <span class="mini-preview-button">Lore</span>
+        <span class="mini-preview-button">Characters</span>
+    </div>
+    <p>The Beginning</p>
+    <p>The Fall</p>
+</div>
+
+<label>Index Style</label>
+<div class="style-choice-grid">
+    <button type="button" class="style-choice" data-index-style="default"></button>
+    <button type="button" class="style-choice" data-index-style="solid"></button>
+    <button type="button" class="style-choice" data-index-style="gradient"></button>
+    <button type="button" class="style-choice" data-index-style="image"></button>
+</div>
+
+<input id="theme-index-style" type="hidden" value="${currentWorld.theme_index_style || "default"}">
+
+<label>Index Colors</label>
+<div class="connected-color-picker">
+    <input id="theme-index-color-1" type="color" value="${currentWorld.theme_index_color_1 || "#141416"}">
+    <div id="index-color-preview" class="connected-gradient"></div>
+    <input id="theme-index-color-2" type="color" value="${currentWorld.theme_index_color_2 || "#0b0b0d"}">
+</div>
+
+<label>Index Text Color</label>
+<input id="theme-index-text-color" type="color" value="${currentWorld.theme_index_text_color || "#f5f5f5"}">
+
+<label>Index Image</label>
+<input id="theme-index-image-input" type="file" accept="image/*">
+
+<label>Index Opacity</label>
+<input id="theme-index-opacity" type="range" min="0.2" max="1" step="0.05" value="${currentWorld.theme_index_opacity ?? 0.85}">
+
+<label>Index Overlay</label>
+<input id="theme-index-overlay" type="range" min="0" max="0.85" step="0.05" value="${currentWorld.theme_index_overlay ?? 0.35}">
 
 
         <div class="info-wrap">
@@ -1691,10 +1734,7 @@ background:#15151f;
             renderGenreTags();
             renderThemeTags();
             initializeOverviewAppearanceControls();
-
-
-            
-
+            initializeIndexAppearanceControls();
 
             
         };
@@ -1825,6 +1865,80 @@ background:#15151f;
 
             updateCardPreview();
             updateButtonPreview();
+        }
+
+        function initializeIndexAppearanceControls() {
+            const indexPreview = document.getElementById("index-preview");
+            const indexStyleInput = document.getElementById("theme-index-style");
+            const indexColor1 = document.getElementById("theme-index-color-1");
+            const indexColor2 = document.getElementById("theme-index-color-2");
+            const indexColorPreview = document.getElementById("index-color-preview");
+            const indexTextColor = document.getElementById("theme-index-text-color");
+            const indexImageInput = document.getElementById("theme-index-image-input");
+            const indexOpacity = document.getElementById("theme-index-opacity");
+            const indexOverlay = document.getElementById("theme-index-overlay");
+
+            let indexImageUrl = currentWorld.theme_index_image_url || "";
+
+            function updateIndexPreview() {
+                const style = indexStyleInput.value;
+                const color1 = indexColor1.value;
+                const color2 = indexColor2.value;
+
+                indexColorPreview.style.setProperty("--left-color", color1);
+                indexColorPreview.style.setProperty("--right-color", color2);
+
+                indexPreview.style.setProperty("--mini-card-text", indexTextColor.value);
+                indexPreview.style.setProperty("--mini-card-opacity", indexOpacity.value);
+                indexPreview.style.setProperty("--mini-card-overlay", indexOverlay.value);
+
+                if (style === "solid") {
+                    indexPreview.style.setProperty("--mini-card-bg", color1);
+                    indexPreview.style.setProperty("--mini-card-image", "none");
+                } else if (style === "gradient") {
+                    indexPreview.style.setProperty("--mini-card-bg", `linear-gradient(135deg, ${color1}, ${color2})`);
+                    indexPreview.style.setProperty("--mini-card-image", "none");
+                } else if (style === "image" && indexImageUrl) {
+                    indexPreview.style.setProperty("--mini-card-bg", `linear-gradient(135deg, ${color1}, ${color2})`);
+                    indexPreview.style.setProperty("--mini-card-image", `url("${indexImageUrl}")`);
+                } else {
+                    indexPreview.style.setProperty("--mini-card-bg", "linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.025)), rgba(12,12,14,.72)");
+                    indexPreview.style.setProperty("--mini-card-image", "none");
+                }
+
+                document.querySelectorAll("[data-index-style]").forEach(button => {
+                    button.classList.toggle("active", button.dataset.indexStyle === style);
+                });
+            }
+
+            document.querySelectorAll("[data-index-style]").forEach(button => {
+                button.addEventListener("click", () => {
+                    indexStyleInput.value = button.dataset.indexStyle;
+                    updateIndexPreview();
+                });
+            });
+
+            indexImageInput.addEventListener("change", function () {
+                const file = this.files[0];
+                if (!file) return;
+
+                indexImageUrl = URL.createObjectURL(file);
+                indexStyleInput.value = "image";
+                updateIndexPreview();
+            });
+
+            [
+                indexColor1,
+                indexColor2,
+                indexTextColor,
+                indexOpacity,
+                indexOverlay
+            ].forEach(control => {
+                control.addEventListener("input", updateIndexPreview);
+                control.addEventListener("change", updateIndexPreview);
+            });
+
+            updateIndexPreview();
         }
 
         function initializeSectionAppearanceControls() {
@@ -2580,7 +2694,9 @@ margin-bottom:20px;
             const overviewCardImageInput = document.getElementById("theme-overview-card-image-input");
             const overviewCardImageFile = overviewCardImageInput ? overviewCardImageInput.files[0] : null;
             let overviewCardImageUrl = currentWorld.theme_overview_card_image_url || null;
-
+            const indexImageInput = document.getElementById("theme-index-image-input");
+            const indexImageFile = indexImageInput ? indexImageInput.files[0] : null;
+            let indexImageUrl = currentWorld.theme_index_image_url || null;
             const title = document.getElementById("overview-title").value.trim();
             const summary = document.getElementById("overview-summary").value.trim();
             const genres = genreTags.join(", ");
@@ -2600,7 +2716,12 @@ margin-bottom:20px;
             const buttonColor1 = document.getElementById("theme-button-color-1").value;
             const buttonColor2 = document.getElementById("theme-button-color-2").value;
             const buttonTextColor = document.getElementById("theme-button-text-color").value;
-
+            const indexStyle = document.getElementById("theme-index-style").value;
+            const indexColor1 = document.getElementById("theme-index-color-1").value;
+            const indexColor2 = document.getElementById("theme-index-color-2").value;
+            const indexTextColor = document.getElementById("theme-index-text-color").value;
+            const indexOpacity = Number(document.getElementById("theme-index-opacity").value);
+            const indexOverlay = Number(document.getElementById("theme-index-overlay").value);
             if (coverFile) {
                 const optimized = await optimizeImage(coverFile, {
                     maxWidth: 1600,
@@ -2651,6 +2772,31 @@ margin-bottom:20px;
                 overviewCardImageUrl = data.publicUrl;
             }
 
+            if (indexImageFile) {
+                const optimizedIndexImage = await optimizeImage(indexImageFile, {
+                    maxWidth: 1600,
+                    maxHeight: 1000,
+                    quality: .82
+                });
+
+                const indexPath = `${user.id}/${Date.now()}-world-index.webp`;
+
+                const { error: indexUploadError } = await supabase.storage
+                    .from("world-index-images")
+                    .upload(indexPath, optimizedIndexImage);
+
+                if (indexUploadError) {
+                    document.getElementById("message").textContent = indexUploadError.message;
+                    return;
+                }
+
+                const { data } = supabase.storage
+                    .from("world-index-images")
+                    .getPublicUrl(indexPath);
+
+                indexImageUrl = data.publicUrl;
+            }
+
             
 
             const { error } = await supabase
@@ -2675,6 +2821,13 @@ margin-bottom:20px;
                     theme_button_color_1: buttonColor1,
                     theme_button_color_2: buttonColor2,
                     theme_button_text_color: buttonTextColor,
+                    theme_index_style: indexStyle,
+                    theme_index_color_1: indexColor1,
+                    theme_index_color_2: indexColor2,
+                    theme_index_text_color: indexTextColor,
+                    theme_index_image_url: indexImageUrl,
+                    theme_index_opacity: indexOpacity,
+                    theme_index_overlay: indexOverlay,
                     updated_at: new Date().toISOString()
                 })
                 .eq("id", currentWorld.id);
@@ -2702,6 +2855,13 @@ margin-bottom:20px;
             currentWorld.theme_button_color_1 = buttonColor1;
             currentWorld.theme_button_color_2 = buttonColor2;
             currentWorld.theme_button_text_color = buttonTextColor;
+            currentWorld.theme_index_style = indexStyle;
+            currentWorld.theme_index_color_1 = indexColor1;
+            currentWorld.theme_index_color_2 = indexColor2;
+            currentWorld.theme_index_text_color = indexTextColor;
+            currentWorld.theme_index_image_url = indexImageUrl;
+            currentWorld.theme_index_opacity = indexOpacity;
+            currentWorld.theme_index_overlay = indexOverlay;
 
             document.getElementById("world-name").textContent = title;
             document.getElementById("editor-title").textContent = title;
