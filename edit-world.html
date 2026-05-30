@@ -1750,6 +1750,80 @@ background:#15151f;
                 });
             }
 
+            function initializeSectionAppearanceControls() {
+                const cardPreview = document.getElementById("section-card-preview");
+                const cardStyleInput = document.getElementById("section-card-style");
+                const cardColor1 = document.getElementById("section-card-color-1");
+                const cardColor2 = document.getElementById("section-card-color-2");
+                const cardColorPreview = document.getElementById("section-card-color-preview");
+                const cardTextColor = document.getElementById("section-card-text-color");
+                const cardImageInput = document.getElementById("section-card-image-input");
+                const cardOpacity = document.getElementById("section-card-opacity");
+                const cardOverlay = document.getElementById("section-card-overlay");
+
+                let cardImageUrl = currentSection.theme_card_image_url || "";
+
+                function updateSectionCardPreview() {
+                    const style = cardStyleInput.value;
+                    const color1 = cardColor1.value;
+                    const color2 = cardColor2.value;
+
+                    cardColorPreview.style.setProperty("--left-color", color1);
+                    cardColorPreview.style.setProperty("--right-color", color2);
+
+                    cardPreview.style.setProperty("--mini-card-text", cardTextColor.value);
+                    cardPreview.style.setProperty("--mini-card-opacity", cardOpacity.value);
+                    cardPreview.style.setProperty("--mini-card-overlay", cardOverlay.value);
+
+                    if (style === "solid") {
+                        cardPreview.style.setProperty("--mini-card-bg", color1);
+                        cardPreview.style.setProperty("--mini-card-image", "none");
+                    } else if (style === "gradient") {
+                        cardPreview.style.setProperty("--mini-card-bg", `linear-gradient(135deg, ${color1}, ${color2})`);
+                        cardPreview.style.setProperty("--mini-card-image", "none");
+                    } else if (style === "image" && cardImageUrl) {
+                        cardPreview.style.setProperty("--mini-card-bg", `linear-gradient(135deg, ${color1}, ${color2})`);
+                        cardPreview.style.setProperty("--mini-card-image", `url("${cardImageUrl}")`);
+                    } else {
+                        cardPreview.style.setProperty("--mini-card-bg", "linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.025)), rgba(12,12,14,.72)");
+                        cardPreview.style.setProperty("--mini-card-image", "none");
+                    }
+
+                    document.querySelectorAll("[data-section-card-style]").forEach(button => {
+                        button.classList.toggle("active", button.dataset.sectionCardStyle === style);
+                    });
+                }
+
+                document.querySelectorAll("[data-section-card-style]").forEach(button => {
+                    button.addEventListener("click", () => {
+                        cardStyleInput.value = button.dataset.sectionCardStyle;
+                        updateSectionCardPreview();
+                    });
+                });
+
+                cardImageInput.addEventListener("change", function () {
+                    const file = this.files[0];
+                    if (!file) return;
+
+                    cardImageUrl = URL.createObjectURL(file);
+                    cardStyleInput.value = "image";
+                    updateSectionCardPreview();
+                });
+
+                [
+                    cardColor1,
+                    cardColor2,
+                    cardTextColor,
+                    cardOpacity,
+                    cardOverlay
+                ].forEach(control => {
+                    control.addEventListener("input", updateSectionCardPreview);
+                    control.addEventListener("change", updateSectionCardPreview);
+                });
+
+                updateSectionCardPreview();
+            }
+
             function updateButtonPreview() {
                 const style = buttonStyleInput.value;
                 const color1 = buttonColor1.value;
@@ -2380,6 +2454,45 @@ margin-bottom:20px;
 
         <textarea id="section-content" rows="18" placeholder="Write your world content here..."></textarea>
 
+        <hr style="border:0;border-top:1px solid var(--border-color);margin:26px 0;">
+
+<h2>Section Card Appearance</h2>
+
+<div id="section-card-preview" class="mini-live-card">
+    <span class="tag">Preview</span>
+    <h2>${escapeHtml(section.title || "Section Title")}</h2>
+    <p>${escapeHtml(section.content || "Your section content preview will appear here.")}</p>
+</div>
+
+<label>Card Style</label>
+<div class="style-choice-grid">
+    <button type="button" class="style-choice" data-section-card-style="default"></button>
+    <button type="button" class="style-choice" data-section-card-style="solid"></button>
+    <button type="button" class="style-choice" data-section-card-style="gradient"></button>
+    <button type="button" class="style-choice" data-section-card-style="image"></button>
+</div>
+
+<input id="section-card-style" type="hidden" value="${section.theme_card_style || "default"}">
+
+<label>Card Colors</label>
+<div class="connected-color-picker">
+    <input id="section-card-color-1" type="color" value="${section.theme_card_color_1 || "#141416"}">
+    <div id="section-card-color-preview" class="connected-gradient"></div>
+    <input id="section-card-color-2" type="color" value="${section.theme_card_color_2 || "#0b0b0d"}">
+</div>
+
+<label>Card Text Color</label>
+<input id="section-card-text-color" type="color" value="${section.theme_card_text_color || "#f5f5f5"}">
+
+<label>Card Image</label>
+<input id="section-card-image-input" type="file" accept="image/*">
+
+<label>Card Opacity</label>
+<input id="section-card-opacity" type="range" min="0.2" max="1" step="0.05" value="${section.theme_card_opacity ?? 0.85}">
+
+<label>Card Overlay</label>
+<input id="section-card-overlay" type="range" min="0" max="0.85" step="0.05" value="${section.theme_card_overlay ?? 0.35}">
+
         <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:18px; flex-wrap:wrap;">
 
             <div class="info-wrap" style="margin-bottom:0;">
@@ -2425,6 +2538,8 @@ margin-bottom:20px;
 
             document.getElementById("image-position").value =
                 section.image_position || "top";
+
+            initializeSectionAppearanceControls();
         };
 
         window.openNewSectionModal = async function () {
@@ -2532,6 +2647,35 @@ margin-bottom:20px;
                     .getPublicUrl(cardPath);
 
                 overviewCardImageUrl = data.publicUrl;
+            }
+
+            if (cardImageFile) {
+                const optimizedCardImage = await optimizeImage(cardImageFile, {
+                    maxWidth: 1600,
+                    maxHeight: 1000,
+                    quality: .82
+                });
+
+                const cardPath =
+                    `${user.id}/${Date.now()}-section-card.webp`;
+
+                const { error: cardUploadError } =
+                    await supabase.storage
+                        .from("world-section-card-images")
+                        .upload(cardPath, optimizedCardImage);
+
+                if (cardUploadError) {
+                    document.getElementById("message").textContent =
+                        cardUploadError.message;
+                    return;
+                }
+
+                const { data } =
+                    supabase.storage
+                        .from("world-section-card-images")
+                        .getPublicUrl(cardPath);
+
+                cardImageUrl = data.publicUrl;
             }
 
             const { error } = await supabase
@@ -2745,6 +2889,15 @@ margin-bottom:20px;
             let imageUrl =
                 currentSection.image_url || null;
 
+            const cardImageInput =
+                document.getElementById("section-card-image-input");
+
+            const cardImageFile =
+                cardImageInput ? cardImageInput.files[0] : null;
+
+            let cardImageUrl =
+                currentSection.theme_card_image_url || null;
+
             const imagePosition =
                 document.getElementById("image-position").value;
 
@@ -2756,6 +2909,24 @@ margin-bottom:20px;
 
             const content =
                 document.getElementById("section-content").value;
+
+            const cardStyle =
+                document.getElementById("section-card-style").value;
+
+            const cardColor1 =
+                document.getElementById("section-card-color-1").value;
+
+            const cardColor2 =
+                document.getElementById("section-card-color-2").value;
+
+            const cardTextColor =
+                document.getElementById("section-card-text-color").value;
+
+            const cardOpacity =
+                Number(document.getElementById("section-card-opacity").value);
+
+            const cardOverlay =
+                Number(document.getElementById("section-card-overlay").value);
 
             if (imageFile) {
 
@@ -2812,6 +2983,14 @@ margin-bottom:20px;
 
             document.getElementById("message").textContent =
                 "Saved successfully.";
+
+            currentSection.theme_card_style = cardStyle;
+            currentSection.theme_card_color_1 = cardColor1;
+            currentSection.theme_card_color_2 = cardColor2;
+            currentSection.theme_card_text_color = cardTextColor;
+            currentSection.theme_card_image_url = cardImageUrl;
+            currentSection.theme_card_opacity = cardOpacity;
+            currentSection.theme_card_overlay = cardOverlay;
 
             await loadSections();
         };
