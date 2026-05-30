@@ -365,7 +365,10 @@
             }
 
         .world-section {
-            background: linear-gradient( 180deg, rgba(255,255,255,.04), rgba(255,255,255,.012) ), var(--card-bg);
+            position: relative;
+            overflow: hidden;
+            background: var( --section-card-background, linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.012)) ), var(--card-bg);
+            color: var(--section-card-text, var(--text-primary));
             border: 1px solid var(--border-color);
             border-radius: 18px;
             padding: 30px;
@@ -373,6 +376,30 @@
             box-shadow: 0 14px 34px rgba(0,0,0,0.20);
             transition: .18s ease;
         }
+
+            .world-section::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                background-image: var(--section-card-image);
+                background-size: cover;
+                background-position: center;
+                opacity: var(--section-card-image-opacity, .85);
+                z-index: 0;
+            }
+
+            .world-section::after {
+                content: "";
+                position: absolute;
+                inset: 0;
+                background: rgba(0,0,0,var(--section-card-overlay,.35));
+                z-index: 1;
+            }
+
+            .world-section > * {
+                position: relative;
+                z-index: 2;
+            }
 
             .world-section:hover {
                 border-color: rgba(255,255,255,0.10);
@@ -385,14 +412,14 @@
             }
 
         .section-type {
-            color: var(--text-muted);
+            color: var(--section-card-text, var(--text-muted));
             margin-bottom: 18px;
             font-size: 0.95rem;
         }
 
         .section-content {
             white-space: pre-wrap;
-            color: var(--text-primary);
+            color: var(--section-card-text, var(--text-primary));
             line-height: 1.9;
         }
 
@@ -912,6 +939,41 @@ root.style.setProperty(
             return `rgba(${r}, ${g}, ${b}, ${alpha})`;
         }
 
+        function buildSectionCardStyle(section) {
+            let cardBackground =
+                "linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.012))";
+
+            if (section.theme_card_style === "solid") {
+                cardBackground =
+                    section.theme_card_color_1 || "#141416";
+            }
+
+            if (
+                section.theme_card_style === "gradient" ||
+                section.theme_card_style === "image"
+            ) {
+                cardBackground =
+                    `linear-gradient(
+                135deg,
+                ${section.theme_card_color_1 || "#141416"},
+                ${section.theme_card_color_2 || "#0b0b0d"}
+            )`;
+            }
+
+            const cardImage =
+                section.theme_card_image_url
+                    ? `url("${section.theme_card_image_url}")`
+                    : "none";
+
+            return `
+        --section-card-background:${cardBackground};
+        --section-card-text:${section.theme_card_text_color || "#f5f5f5"};
+        --section-card-image:${cardImage};
+        --section-card-image-opacity:${section.theme_card_opacity ?? .85};
+        --section-card-overlay:${section.theme_card_overlay ?? .35};
+    `;
+        }
+
         async function loadSections(id) {
             const container = document.getElementById("sections-container");
 
@@ -938,7 +1000,9 @@ root.style.setProperty(
                 const sectionId = `section-${index}`;
 
                 return `
-<article id="${sectionId}" class="world-section">
+<article id="${sectionId}"
+         class="world-section"
+         style="${buildSectionCardStyle(section)}">
 
         <h2>
             ${escapeHtml(section.title || "Untitled Section")}
