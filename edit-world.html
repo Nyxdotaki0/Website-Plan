@@ -1576,15 +1576,21 @@ background:#15151f;
 <h2>World Index Appearance</h2>
 
 <div id="index-preview" class="mini-live-card">
-    <span class="tag">Search This World</span>
-    <p>Search box</p>
-    <div class="mini-button-preview">
-        <span class="mini-preview-button">All</span>
-        <span class="mini-preview-button">Lore</span>
-        <span class="mini-preview-button">Characters</span>
+    <h3 style="margin-top:0;">Search This World</h3>
+    <p style="margin:6px 0 14px;">Jump between sections instantly</p>
+
+    <div style="
+        padding:11px 13px;
+        border-radius:12px;
+        border:1px solid rgba(255,255,255,.14);
+        background:rgba(0,0,0,.25);
+        margin-bottom:14px;
+    ">
+        Search sections...
     </div>
-    <p>The Beginning</p>
-    <p>The Fall</p>
+
+    <div id="index-preview-filters" class="mini-button-preview"></div>
+    <div id="index-preview-links" style="display:flex;flex-direction:column;gap:10px;"></div>
 </div>
 
 <label>Index Style</label>
@@ -1615,6 +1621,29 @@ background:#15151f;
 
 <label>Index Overlay</label>
 <input id="theme-index-overlay" type="range" min="0" max="0.85" step="0.05" value="${currentWorld.theme_index_overlay ?? 0.35}">
+
+<hr style="border:0;border-top:1px solid var(--border-color);margin:26px 0;">
+
+<h3>Index Section Button Appearance</h3>
+
+<label>Button Style</label>
+<div class="style-choice-grid">
+    <button type="button" class="style-choice" data-index-button-style="default"></button>
+    <button type="button" class="style-choice" data-index-button-style="solid"></button>
+    <button type="button" class="style-choice" data-index-button-style="gradient"></button>
+</div>
+
+<input id="theme-index-button-style" type="hidden" value="${currentWorld.theme_index_button_style || "default"}">
+
+<label>Button Colors</label>
+<div class="connected-color-picker">
+    <input id="theme-index-button-color-1" type="color" value="${currentWorld.theme_index_button_color_1 || "#222228"}">
+    <div id="index-button-color-preview" class="connected-gradient"></div>
+    <input id="theme-index-button-color-2" type="color" value="${currentWorld.theme_index_button_color_2 || "#141418"}">
+</div>
+
+<label>Button Text Color</label>
+<input id="theme-index-button-text-color" type="color" value="${currentWorld.theme_index_button_text_color || "#f5f5f5"}">
 
 
         <div class="info-wrap">
@@ -1868,7 +1897,11 @@ background:#15151f;
         }
 
         function initializeIndexAppearanceControls() {
+
             const indexPreview = document.getElementById("index-preview");
+            const filtersContainer = document.getElementById("index-preview-filters");
+            const linksContainer = document.getElementById("index-preview-links");
+
             const indexStyleInput = document.getElementById("theme-index-style");
             const indexColor1 = document.getElementById("theme-index-color-1");
             const indexColor2 = document.getElementById("theme-index-color-2");
@@ -1878,64 +1911,313 @@ background:#15151f;
             const indexOpacity = document.getElementById("theme-index-opacity");
             const indexOverlay = document.getElementById("theme-index-overlay");
 
-            let indexImageUrl = currentWorld.theme_index_image_url || "";
+            const buttonStyleInput = document.getElementById("theme-index-button-style");
+            const buttonColor1 = document.getElementById("theme-index-button-color-1");
+            const buttonColor2 = document.getElementById("theme-index-button-color-2");
+            const buttonColorPreview = document.getElementById("index-button-color-preview");
+            const buttonTextColor = document.getElementById("theme-index-button-text-color");
 
-            function updateIndexPreview() {
-                const style = indexStyleInput.value;
-                const color1 = indexColor1.value;
-                const color2 = indexColor2.value;
+            let indexImageUrl =
+                currentWorld.theme_index_image_url || "";
 
-                indexColorPreview.style.setProperty("--left-color", color1);
-                indexColorPreview.style.setProperty("--right-color", color2);
+            function buildPreviewSections() {
 
-                indexPreview.style.setProperty("--mini-card-text", indexTextColor.value);
-                indexPreview.style.setProperty("--mini-card-opacity", indexOpacity.value);
-                indexPreview.style.setProperty("--mini-card-overlay", indexOverlay.value);
+                const previewSections =
+                    allSections.slice(0, 2);
 
-                if (style === "solid") {
-                    indexPreview.style.setProperty("--mini-card-bg", color1);
-                    indexPreview.style.setProperty("--mini-card-image", "none");
-                } else if (style === "gradient") {
-                    indexPreview.style.setProperty("--mini-card-bg", `linear-gradient(135deg, ${color1}, ${color2})`);
-                    indexPreview.style.setProperty("--mini-card-image", "none");
-                } else if (style === "image" && indexImageUrl) {
-                    indexPreview.style.setProperty("--mini-card-bg", `linear-gradient(135deg, ${color1}, ${color2})`);
-                    indexPreview.style.setProperty("--mini-card-image", `url("${indexImageUrl}")`);
-                } else {
-                    indexPreview.style.setProperty("--mini-card-bg", "linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.025)), rgba(12,12,14,.72)");
-                    indexPreview.style.setProperty("--mini-card-image", "none");
+                filtersContainer.innerHTML = `
+            <span class="mini-preview-button">
+                All
+            </span>
+        `;
+
+                linksContainer.innerHTML = "";
+
+                if (previewSections.length === 0) {
+
+                    linksContainer.innerHTML = `
+                <div style="
+                    opacity:.75;
+                    font-size:.9rem;
+                ">
+                    No sections yet
+                </div>
+            `;
+
+                    return;
                 }
 
-                document.querySelectorAll("[data-index-style]").forEach(button => {
-                    button.classList.toggle("active", button.dataset.indexStyle === style);
+                previewSections.forEach(section => {
+
+                    const type =
+                        section.section_type || "Custom";
+
+                    const title =
+                        section.title || "Untitled Section";
+
+                    filtersContainer.innerHTML += `
+                <span class="mini-preview-button">
+                    ${type}
+                </span>
+            `;
+
+                    linksContainer.innerHTML += `
+                <div style="
+                    padding:12px;
+                    border-radius:12px;
+                    background:rgba(255,255,255,.06);
+                    border:1px solid rgba(255,255,255,.08);
+                ">
+                    ${title}
+                </div>
+            `;
                 });
             }
 
-            document.querySelectorAll("[data-index-style]").forEach(button => {
-                button.addEventListener("click", () => {
-                    indexStyleInput.value = button.dataset.indexStyle;
-                    updateIndexPreview();
+            function updateIndexPreview() {
+
+                const style =
+                    indexStyleInput.value;
+
+                const color1 =
+                    indexColor1.value;
+
+                const color2 =
+                    indexColor2.value;
+
+                indexColorPreview.style.setProperty(
+                    "--left-color",
+                    color1
+                );
+
+                indexColorPreview.style.setProperty(
+                    "--right-color",
+                    color2
+                );
+
+                indexPreview.style.setProperty(
+                    "--mini-card-text",
+                    indexTextColor.value
+                );
+
+                indexPreview.style.setProperty(
+                    "--mini-card-opacity",
+                    indexOpacity.value
+                );
+
+                indexPreview.style.setProperty(
+                    "--mini-card-overlay",
+                    indexOverlay.value
+                );
+
+                if (style === "solid") {
+
+                    indexPreview.style.setProperty(
+                        "--mini-card-bg",
+                        color1
+                    );
+
+                    indexPreview.style.setProperty(
+                        "--mini-card-image",
+                        "none"
+                    );
+                }
+                else if (style === "gradient") {
+
+                    indexPreview.style.setProperty(
+                        "--mini-card-bg",
+                        `linear-gradient(
+                    135deg,
+                    ${color1},
+                    ${color2}
+                )`
+                    );
+
+                    indexPreview.style.setProperty(
+                        "--mini-card-image",
+                        "none"
+                    );
+                }
+                else if (
+                    style === "image"
+                    &&
+                    indexImageUrl
+                ) {
+
+                    indexPreview.style.setProperty(
+                        "--mini-card-bg",
+                        `linear-gradient(
+                    135deg,
+                    ${color1},
+                    ${color2}
+                )`
+                    );
+
+                    indexPreview.style.setProperty(
+                        "--mini-card-image",
+                        `url("${indexImageUrl}")`
+                    );
+                }
+                else {
+
+                    indexPreview.style.setProperty(
+                        "--mini-card-bg",
+                        "linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.025)), rgba(12,12,14,.72)"
+                    );
+
+                    indexPreview.style.setProperty(
+                        "--mini-card-image",
+                        "none"
+                    );
+                }
+
+                let buttonBackground =
+                    "linear-gradient(180deg,#2a2a2f,#0d0d10)";
+
+                if (
+                    buttonStyleInput.value ===
+                    "solid"
+                ) {
+
+                    buttonBackground =
+                        buttonColor1.value;
+                }
+
+                if (
+                    buttonStyleInput.value ===
+                    "gradient"
+                ) {
+
+                    buttonBackground =
+                        `linear-gradient(
+                    180deg,
+                    ${buttonColor1.value},
+                    ${buttonColor2.value}
+                )`;
+                }
+
+                buttonColorPreview.style.setProperty(
+                    "--left-color",
+                    buttonColor1.value
+                );
+
+                buttonColorPreview.style.setProperty(
+                    "--right-color",
+                    buttonColor2.value
+                );
+
+                document
+                    .querySelectorAll(
+                        "#index-preview .mini-preview-button"
+                    )
+                    .forEach(button => {
+
+                        button.style.background =
+                            buttonBackground;
+
+                        button.style.color =
+                            buttonTextColor.value;
+                    });
+
+                document
+                    .querySelectorAll(
+                        "[data-index-style]"
+                    )
+                    .forEach(button => {
+
+                        button.classList.toggle(
+                            "active",
+                            button.dataset.indexStyle === style
+                        );
+                    });
+
+                document
+                    .querySelectorAll(
+                        "[data-index-button-style]"
+                    )
+                    .forEach(button => {
+
+                        button.classList.toggle(
+                            "active",
+                            button.dataset.indexButtonStyle ===
+                            buttonStyleInput.value
+                        );
+                    });
+            }
+
+            buildPreviewSections();
+
+            document
+                .querySelectorAll("[data-index-style]")
+                .forEach(button => {
+
+                    button.addEventListener(
+                        "click",
+                        () => {
+
+                            indexStyleInput.value =
+                                button.dataset.indexStyle;
+
+                            updateIndexPreview();
+                        }
+                    );
                 });
-            });
 
-            indexImageInput.addEventListener("change", function () {
-                const file = this.files[0];
-                if (!file) return;
+            document
+                .querySelectorAll("[data-index-button-style]")
+                .forEach(button => {
 
-                indexImageUrl = URL.createObjectURL(file);
-                indexStyleInput.value = "image";
-                updateIndexPreview();
-            });
+                    button.addEventListener(
+                        "click",
+                        () => {
+
+                            buttonStyleInput.value =
+                                button.dataset.indexButtonStyle;
+
+                            updateIndexPreview();
+                        }
+                    );
+                });
+
+            indexImageInput.addEventListener(
+                "change",
+                function () {
+
+                    const file =
+                        this.files[0];
+
+                    if (!file) return;
+
+                    indexImageUrl =
+                        URL.createObjectURL(file);
+
+                    indexStyleInput.value =
+                        "image";
+
+                    updateIndexPreview();
+                }
+            );
 
             [
                 indexColor1,
                 indexColor2,
                 indexTextColor,
                 indexOpacity,
-                indexOverlay
+                indexOverlay,
+                buttonColor1,
+                buttonColor2,
+                buttonTextColor
             ].forEach(control => {
-                control.addEventListener("input", updateIndexPreview);
-                control.addEventListener("change", updateIndexPreview);
+
+                control.addEventListener(
+                    "input",
+                    updateIndexPreview
+                );
+
+                control.addEventListener(
+                    "change",
+                    updateIndexPreview
+                );
             });
 
             updateIndexPreview();
