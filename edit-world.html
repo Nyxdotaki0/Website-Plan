@@ -2783,6 +2783,46 @@ margin-bottom:20px;
                 cardImageUrl = data.publicUrl;
             }
 
+            if (cardImageFile) {
+
+                const optimizedCardImage =
+                    await optimizeImage(
+                        cardImageFile,
+                        {
+                            maxWidth: 1600,
+                            maxHeight: 1000,
+                            quality: .82
+                        }
+                    );
+
+                const cardPath =
+                    `${user.id}/${Date.now()}-section-card.webp`;
+
+                const { error: cardUploadError } =
+                    await supabase.storage
+                        .from("world-section-card-images")
+                        .upload(
+                            cardPath,
+                            optimizedCardImage
+                        );
+
+                if (cardUploadError) {
+
+                    document.getElementById("message").textContent =
+                        cardUploadError.message;
+
+                    return;
+                }
+
+                const { data } =
+                    supabase.storage
+                        .from("world-section-card-images")
+                        .getPublicUrl(cardPath);
+
+                cardImageUrl =
+                    data.publicUrl;
+            }
+
             const { error } = await supabase
                 .from("worlds")
                 .update({
