@@ -1,38 +1,66 @@
 ﻿import { supabase } from "./supabaseClient.js";
 
-export async function requireBetaAccess() {
-    console.log("Checking beta access...");
+export async function requireBetaAccess(options = {}) {
+    const {
+        allowRestricted = true,
+        allowSuspended = false,
+        allowBanned = false
+    } = options;
 
     const {
         data: { user },
         error: userError
     } = await supabase.auth.getUser();
 
-    console.log("Current user:", user);
-
     if (userError || !user) {
-        console.log("No user found. Redirecting to login.");
         window.location.replace("/login.html");
-        return;
+        return null;
     }
 
-    const { data, error } = await supabase
+    const { data: betaData, error: betaError } = await supabase
         .from("beta_access")
         .select("role")
         .eq("email", user.email)
         .maybeSingle();
 
-    console.log("Beta access result:", data, error);
-
-    if (error || !data) {
-        console.log("User is not approved. Redirecting to closed beta page.");
+    if (betaError || !betaData) {
         await supabase.auth.signOut();
         window.location.replace("/closed-beta.html");
-        return;
+        return null;
     }
 
-    localStorage.setItem("nullverse_user_role", data.role);
-    console.log("Access approved:", data.role);
+    const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, role, account_status")
+        .eq("id", user.id)
+        .maybeSingle();
+
+    if (profileError || !profile) {
+        window.location.replace("/profile-setup.html");
+        return null;
+    }
+
+    const status = profile.account_status || "active";
+
+    if (status === "banned" && !allowBanned) {
+        await supabase.auth.signOut();
+        window.location.replace("/banned.html");
+        return null;
+    }
+
+    if (status === "suspended" && !allowSuspended) {
+        window.location.replace("/suspended.html");
+        return null;
+    }
+
+    if (status === "restricted" && !allowRestricted) {
+        window.location.replace("/restricted.html");
+        return null;
+    }
+
+    localStorage.setItem("nullverse_user_role", betaData.role);
+    localStorage.setItem("nullverse_profile_role", profile.role || "creator");
+    localStorage.setItem("nullverse_account_status", status);
 
     return user;
 }
