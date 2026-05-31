@@ -525,7 +525,47 @@
                     Edit Profile
                 </a>
             </div>
-    </section>
+
+            <div id="moderation-panel"
+                 style="
+        display:none;
+        margin-top:16px;
+        padding:16px;
+        border:1px solid var(--border-color);
+        border-radius:12px;
+        background:rgba(255,255,255,0.03);
+     ">
+
+                <h3 style="margin-top:0;">Void Architect Controls</h3>
+
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+
+                    <button class="button"
+                            onclick="setAccountStatus('active')">
+                        Restore
+                    </button>
+
+                    <button class="button"
+                            onclick="setAccountStatus('restricted')">
+                        Restrict
+                    </button>
+
+                    <button class="button"
+                            onclick="setAccountStatus('suspended')">
+                        Suspend
+                    </button>
+
+                    <button class="button"
+                            onclick="setAccountStatus('banned')">
+                        Ban
+                    </button>
+
+                </div>
+
+            </div>
+</section>
+
+
 
     <section class="content-section">
         <h2>Featured Worlds</h2>
@@ -553,7 +593,7 @@
     setupNotificationBadge();
     const { data: currentProfile } = await supabase
         .from("profiles")
-        .select("username, display_name")
+        .select("username, display_name, role")
         .eq("id", currentUser.id)
         .single();
 
@@ -649,6 +689,12 @@ ${escapeHtml(
 
         if (editButton && currentUser.id !== profile.id) {
             editButton.style.display = "none";
+        }
+        if (
+            currentProfile?.role === "void_architect" &&
+            currentUser.id !== profile.id
+        ) {
+            document.getElementById("moderation-panel").style.display = "block";
         }
     }
 
@@ -927,6 +973,27 @@ ${escapeHtml(
         }
 
     });
+
+    window.setAccountStatus = async function (status) {
+
+        if (!confirm(`Set account to ${status}?`)) {
+            return;
+        }
+
+        const { error } = await supabase
+            .from("profiles")
+            .update({
+                account_status: status
+            })
+            .eq("id", profile.id);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        alert(`Account updated to ${status}.`);
+    };
 </script>
 
 </body>
