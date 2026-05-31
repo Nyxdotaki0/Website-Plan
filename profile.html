@@ -539,28 +539,13 @@
                 <h3 style="margin-top:0;">Void Architect Controls</h3>
 
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
-
-                    <button class="button"
-                            onclick="setAccountStatus('active')">
-                        Restore
-                    </button>
-
-                    <button class="button"
-                            onclick="setAccountStatus('restricted')">
-                        Restrict
-                    </button>
-
-                    <button class="button"
-                            onclick="setAccountStatus('suspended')">
-                        Suspend
-                    </button>
-
-                    <button class="button"
-                            onclick="setAccountStatus('banned')">
-                        Ban
-                    </button>
-
+                    <button class="button" onclick="setAccountStatus('active')">Restore</button>
+                    <button class="button" onclick="openModerationTimer('restricted')">Restrict</button>
+                    <button class="button" onclick="openModerationTimer('suspended')">Suspend</button>
+                    <button class="button" onclick="openModerationTimer('banned')">Ban</button>
                 </div>
+
+                <div id="moderation-status-display" style="margin-top:12px; color:var(--text-secondary);"></div>
 
             </div>
 </section>
@@ -696,6 +681,13 @@ ${escapeHtml(
             profile.role !== "void_architect"
         ) {
             document.getElementById("moderation-panel").style.display = "block";
+
+            const expires = profile.moderation_expires_at
+                ? new Date(profile.moderation_expires_at).toLocaleString()
+                : "Permanent";
+
+            document.getElementById("moderation-status-display").textContent =
+                `Status: ${profile.account_status || "active"} | Expires: ${expires}`;
         }
     }
 
@@ -975,16 +967,36 @@ ${escapeHtml(
 
     });
 
-    window.setAccountStatus = async function (status) {
+    window.openModerationTimer = async function (status) {
+        const amount = prompt(`How long should this ${status} last? Enter a number. Example: 7`);
+        if (!amount) return;
 
-        if (!confirm(`Set account to ${status}?`)) {
+        const unit = prompt("Use: hours, days, weeks, or months").toLowerCase();
+        if (!["hours", "days", "weeks", "months"].includes(unit)) {
+            alert("Invalid unit. Use hours, days, weeks, or months.");
             return;
         }
+
+        const reason = prompt("Reason for this moderation action:") || "";
+        const expiresAt = new Date();
+
+        if (unit === "hours") expiresAt.setHours(expiresAt.getHours() + Number(amount));
+        if (unit === "days") expiresAt.setDate(expiresAt.getDate() + Number(amount));
+        if (unit === "weeks") expiresAt.setDate(expiresAt.getDate() + Number(amount) * 7);
+        if (unit === "months") expiresAt.setMonth(expiresAt.getMonth() + Number(amount));
+
+        await setAccountStatus(status, expiresAt.toISOString(), reason);
+    };
+
+    window.setAccountStatus = async function (status, expiresAt = null, reason = "") {
+        if (!confirm(`Set account to ${status}?`)) return;
 
         const { error } = await supabase
             .from("profiles")
             .update({
-                account_status: status
+                account_status: status,
+                moderation_expires_at: status === "active" ? null : expiresAt,
+                moderation_reason: status === "active" ? null : reason
             })
             .eq("id", profile.id);
 
@@ -994,6 +1006,7 @@ ${escapeHtml(
         }
 
         alert(`Account updated to ${status}.`);
+        window.location.reload();
     };
 </script>
 

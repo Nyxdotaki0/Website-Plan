@@ -31,7 +31,7 @@ export async function requireBetaAccess(options = {}) {
 
     const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("id, role, account_status")
+        .select("id, role, account_status, moderation_expires_at, moderation_reason")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -40,7 +40,39 @@ export async function requireBetaAccess(options = {}) {
         return null;
     }
 
-    const status = profile.account_status || "active";
+    let status = profile.account_status || "active";
+
+    const expiresAt = profile.moderation_expires_at
+        ? new Date(profile.moderation_expires_at)
+        : null;
+
+    if (
+        status !== "active" &&
+        expiresAt &&
+        expiresAt <= new Date()
+    ) {
+        const { error: restoreError } = await supabase
+            .from("profiles")
+            .update({
+                account_status: "active",
+                moderation_expires_at: null,
+                moderation_reason: null
+            })
+            .eq("id", user.id);
+
+        if (!restoreError) {
+            status = "active";
+            profile.account_status = "active";
+            profile.moderation_expires_at = null;
+            profile.moderation_reason = null;
+        }
+    }
+
+    localStorage.setItem("nullverse_user_role", betaData.role);
+    localStorage.setItem("nullverse_profile_role", profile.role || "creator");
+    localStorage.setItem("nullverse_account_status", status);
+    localStorage.setItem("nullverse_moderation_reason", profile.moderation_reason || "");
+    localStorage.setItem("nullverse_moderation_expires_at", profile.moderation_expires_at || "");
 
     if (status === "banned" && !allowBanned) {
         await supabase.auth.signOut();
@@ -57,10 +89,6 @@ export async function requireBetaAccess(options = {}) {
         window.location.replace("/restricted.html");
         return null;
     }
-
-    localStorage.setItem("nullverse_user_role", betaData.role);
-    localStorage.setItem("nullverse_profile_role", profile.role || "creator");
-    localStorage.setItem("nullverse_account_status", status);
 
     return user;
 }
