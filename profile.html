@@ -538,11 +538,29 @@
 
                 <h3 style="margin-top:0;">Void Architect Controls</h3>
 
+                <label style="display:block;margin-top:10px;color:var(--text-secondary);">
+                    Duration in seconds
+                </label>
+
+                <input id="moderation-duration-seconds"
+                       type="number"
+                       min="1"
+                       placeholder="Example: 3600"
+                       style="width:100%;box-sizing:border-box;margin-top:8px;margin-bottom:10px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:rgba(0,0,0,0.25);color:var(--text-primary);">
+
+                <label style="display:block;color:var(--text-secondary);">
+                    Reason
+                </label>
+
+                <input id="moderation-reason"
+                       placeholder="Reason for action..."
+                       style="width:100%;box-sizing:border-box;margin-top:8px;margin-bottom:12px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:rgba(0,0,0,0.25);color:var(--text-primary);">
+
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
                     <button class="button" onclick="setAccountStatus('active')">Restore</button>
-                    <button class="button" onclick="openModerationTimer('restricted')">Restrict</button>
-                    <button class="button" onclick="openModerationTimer('suspended')">Suspend</button>
-                    <button class="button" onclick="openModerationTimer('banned')">Ban</button>
+                    <button class="button" onclick="setTimedAccountStatus('restricted')">Restrict</button>
+                    <button class="button" onclick="setTimedAccountStatus('suspended')">Suspend</button>
+                    <button class="button" onclick="setTimedAccountStatus('banned')">Ban</button>
                 </div>
 
                 <div id="moderation-status-display" style="margin-top:12px; color:var(--text-secondary);"></div>
@@ -967,23 +985,20 @@ ${escapeHtml(
 
     });
 
-    window.openModerationTimer = async function (status) {
-        const amount = prompt(`How long should this ${status} last? Enter a number. Example: 7`);
-        if (!amount) return;
+    window.setTimedAccountStatus = async function (status) {
+        const secondsInput = document.getElementById("moderation-duration-seconds");
+        const reasonInput = document.getElementById("moderation-reason");
 
-        const unit = prompt("Use: hours, days, weeks, or months").toLowerCase();
-        if (!["hours", "days", "weeks", "months"].includes(unit)) {
-            alert("Invalid unit. Use hours, days, weeks, or months.");
+        const seconds = Number(secondsInput.value);
+        const reason = reasonInput.value.trim();
+
+        if (!seconds || seconds < 1) {
+            alert("Enter a valid duration in seconds.");
             return;
         }
 
-        const reason = prompt("Reason for this moderation action:") || "";
         const expiresAt = new Date();
-
-        if (unit === "hours") expiresAt.setHours(expiresAt.getHours() + Number(amount));
-        if (unit === "days") expiresAt.setDate(expiresAt.getDate() + Number(amount));
-        if (unit === "weeks") expiresAt.setDate(expiresAt.getDate() + Number(amount) * 7);
-        if (unit === "months") expiresAt.setMonth(expiresAt.getMonth() + Number(amount));
+        expiresAt.setSeconds(expiresAt.getSeconds() + seconds);
 
         await setAccountStatus(status, expiresAt.toISOString(), reason);
     };
