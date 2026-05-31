@@ -75,7 +75,6 @@ export async function requireBetaAccess(options = {}) {
     localStorage.setItem("nullverse_moderation_expires_at", profile.moderation_expires_at || "");
 
     if (status === "banned" && !allowBanned) {
-        await supabase.auth.signOut();
         window.location.replace("/banned.html");
         return null;
     }
