@@ -706,6 +706,15 @@ ${escapeHtml(
 
             document.getElementById("moderation-status-display").textContent =
                 `Status: ${profile.account_status || "active"} | Expires: ${expires}`;
+
+            const expires = profile.moderation_expires_at
+                ? new Date(profile.moderation_expires_at).toLocaleString()
+                : profile.account_status === "active"
+                    ? "None"
+                    : "Permanent";
+
+            document.getElementById("moderation-status-display").textContent =
+                `Status: ${profile.account_status || "active"} | Expires: ${expires}`;
         }
     }
 
@@ -986,11 +995,8 @@ ${escapeHtml(
     });
 
     window.setTimedAccountStatus = async function (status) {
-        const secondsInput = document.getElementById("moderation-duration-seconds");
-        const reasonInput = document.getElementById("moderation-reason");
-
-        const seconds = Number(secondsInput.value);
-        const reason = reasonInput.value.trim();
+        const seconds = Number(document.getElementById("moderation-duration-seconds").value);
+        const reason = document.getElementById("moderation-reason").value.trim();
 
         if (!seconds || seconds < 1) {
             alert("Enter a valid duration in seconds.");
@@ -1001,6 +1007,17 @@ ${escapeHtml(
         expiresAt.setSeconds(expiresAt.getSeconds() + seconds);
 
         await setAccountStatus(status, expiresAt.toISOString(), reason);
+    };
+
+    window.setPermanentAccountStatus = async function () {
+        const status = prompt("Permanent status: restricted, suspended, or banned");
+        if (!["restricted", "suspended", "banned"].includes(status)) {
+            alert("Use restricted, suspended, or banned.");
+            return;
+        }
+
+        const reason = document.getElementById("moderation-reason").value.trim();
+        await setAccountStatus(status, null, reason);
     };
 
     window.setAccountStatus = async function (status, expiresAt = null, reason = "") {
