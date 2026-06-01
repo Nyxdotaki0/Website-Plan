@@ -539,29 +539,31 @@
                 <h3 style="margin-top:0;">Void Architect Controls</h3>
 
                 <label style="display:block;margin-top:10px;color:var(--text-secondary);">
+                    Moderation Type
+                </label>
+
+                <select id="moderation-duration-mode" style="width:100%;box-sizing:border-box;margin-top:8px;margin-bottom:10px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:rgba(0,0,0,0.25);color:var(--text-primary);">
+                    <option value="timed">Timed</option>
+                    <option value="permanent">Permanent</option>
+                </select>
+
+                <label style="display:block;color:var(--text-secondary);">
                     Duration in seconds
                 </label>
 
-                <input id="moderation-duration-seconds"
-                       type="number"
-                       min="1"
-                       placeholder="Example: 3600"
-                       style="width:100%;box-sizing:border-box;margin-top:8px;margin-bottom:10px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:rgba(0,0,0,0.25);color:var(--text-primary);">
+                <input id="moderation-duration-seconds" type="number" min="1" placeholder="Example: 3600" style="width:100%;box-sizing:border-box;margin-top:8px;margin-bottom:10px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:rgba(0,0,0,0.25);color:var(--text-primary);">
 
                 <label style="display:block;color:var(--text-secondary);">
-                    Reason
+                    Message shown to user
                 </label>
 
-                <input id="moderation-reason"
-                       placeholder="Reason for action..."
-                       style="width:100%;box-sizing:border-box;margin-top:8px;margin-bottom:12px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:rgba(0,0,0,0.25);color:var(--text-primary);">
+                <input id="moderation-reason" placeholder="Reason for action..." style="width:100%;box-sizing:border-box;margin-top:8px;margin-bottom:12px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:rgba(0,0,0,0.25);color:var(--text-primary);">
 
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
                     <button class="button" onclick="setAccountStatus('active')">Restore</button>
-                    <button class="button" onclick="setTimedAccountStatus('restricted')">Restrict</button>
-                    <button class="button" onclick="setTimedAccountStatus('suspended')">Suspend</button>
-                    <button class="button" onclick="setTimedAccountStatus('banned')">Ban</button>
-                    <button class="button" onclick="setPermanentAccountStatus()">Permanent</button>
+                    <button class="button" onclick="applyModerationStatus('restricted')">Restrict</button>
+                    <button class="button" onclick="applyModerationStatus('suspended')">Suspend</button>
+                    <button class="button" onclick="applyModerationStatus('banned')">Ban</button>
                 </div>
 
                 <div id="moderation-status-display" style="margin-top:12px; color:var(--text-secondary);"></div>
@@ -593,7 +595,7 @@
     import { createNotification } from "./notifications.js";
     import { setupNotificationBadge } from "./notificationBadge.js";
 
-    const currentUser = await requireBetaAccess({ allowRestricted: false });
+    const currentUser = await requireBetaAccess();
     setupNotificationBadge();
     const { data: currentProfile } = await supabase
         .from("profiles")
@@ -1014,26 +1016,47 @@ ${escapeHtml(
         await setAccountStatus(status, null, reason);
     };
 
-    window.setAccountStatus = async function (status, expiresAt = null, reason = "") {
-        if (!confirm(`Set account to ${status}?`)) return;
+    window.applyModerationStatus = async function(status) {
+    const mode = document.getElementById("moderation-duration-mode").value;
+    const seconds = Number(document.getElementById("moderation-duration-seconds").value);
+    const reason = document.getElementById("moderation-reason").value.trim();
 
-        const { error } = await supabase
-            .from("profiles")
-            .update({
-                account_status: status,
-                moderation_expires_at: status === "active" ? null : expiresAt,
-                moderation_reason: status === "active" ? null : reason
-            })
-            .eq("id", profile.id);
+    let expiresAt = null;
 
-        if (error) {
-            alert(error.message);
+    if (mode === "timed") {
+        if (!seconds || seconds < 1) {
+            alert("Enter a valid duration in seconds.");
             return;
         }
 
-        alert(`Account updated to ${status}.`);
-        window.location.reload();
-    };
+        const expiration = new Date();
+        expiration.setSeconds(expiration.getSeconds() + seconds);
+        expiresAt = expiration.toISOString();
+    }
+
+    await setAccountStatus(status, expiresAt, reason);
+};
+
+window.setAccountStatus = async function(status, expiresAt = null, reason = "") {
+    if (!confirm(`Set account to ${status}?`)) return;
+
+    const { error } = await supabase
+        .from("profiles")
+        .update({
+            account_status: status,
+            moderation_expires_at: status === "active" ? null : expiresAt,
+            moderation_reason: status === "active" ? null : reason
+        })
+        .eq("id", profile.id);
+
+    if (error) {
+        alert(error.message);
+        return;
+    }
+
+    alert(`Account updated to ${status}.`);
+    window.location.reload();
+};
 </script>
 
 </body>
