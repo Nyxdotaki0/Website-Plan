@@ -731,6 +731,25 @@
             await loadWorld(worldId);
         }
 
+        async function areUsersBlocked(userA, userB) {
+
+            const { data, error } = await supabase
+                .from("user_blocks")
+                .select("id")
+                .or(
+                    `and(blocker_id.eq.${userA},blocked_id.eq.${userB}),
+             and(blocker_id.eq.${userB},blocked_id.eq.${userA})`
+                )
+                .limit(1);
+
+            if (error) {
+                console.error(error);
+                return false;
+            }
+
+            return data && data.length > 0;
+        }
+
         async function loadWorld(id) {
             const { data: world, error } = await supabase
                 .from("worlds")
@@ -746,6 +765,19 @@
 
             currentWorld = world;
             applyWorldTheme(world);
+            const blocked = await areUsersBlocked(
+                currentUser.id,
+                world.owner_id
+            );
+
+            if (blocked) {
+
+                showNotFound(
+                    "This world is unavailable."
+                );
+
+                return;
+            }
             const ownerAccess =
                 currentUser &&
                 currentUser.id === world.owner_id;
