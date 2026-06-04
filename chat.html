@@ -124,62 +124,106 @@
         }
 
         .message {
-            padding: 14px 16px;
-            max-width: 72%;
-            width: fit-content;
+            position: relative;
         }
 
-            .message.mine {
-                margin-left: auto;
-                background: linear-gradient(135deg,rgba(255,255,255,.08),rgba(255,255,255,.025)), var(--card-bg);
-            }
+        .message-menu-wrap {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+        }
 
-            .message.other {
-                margin-right: auto;
-            }
+        .message.mine .message-menu-wrap {
+            right: auto;
+            left: 8px;
+        }
 
-        .message-meta {
+        .message-menu-btn {
+            background: transparent;
+            border: none;
             color: var(--text-muted);
-            font-size: .8rem;
-            margin-bottom: 7px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            line-height: 1;
+            padding: 4px 7px;
+            border-radius: 999px;
         }
 
-        .message-body {
-            white-space: pre-wrap;
-            line-height: 1.55;
-        }
+            .message-menu-btn:hover {
+                background: rgba(255,255,255,.08);
+                color: white;
+            }
 
-        .message-image {
-            max-width: 280px;
-            max-height: 320px;
-            border-radius: 14px;
+        .message-menu {
+            display: none;
+            position: absolute;
+            top: 28px;
+            right: 0;
+            min-width: 120px;
+            background: rgba(12,12,14,.98);
             border: 1px solid var(--border-color);
-            display: block;
-            margin-top: 8px;
+            border-radius: 12px;
+            padding: 8px;
+            z-index: 50;
+            box-shadow: 0 16px 40px rgba(0,0,0,.42);
         }
 
-        .message-actions {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-top: 10px;
+        .message.mine .message-menu {
+            right: auto;
+            left: 0;
+        }
+
+        .message-menu.open {
+            display: block;
+        }
+
+        .message-menu button {
+            width: 100%;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            text-align: left;
+            padding: 8px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: Arial,sans-serif;
+        }
+
+            .message-menu button:hover {
+                background: rgba(255,255,255,.07);
+                color: white;
+            }
+
+        .message-time {
+            margin-top: 8px;
+            color: var(--text-muted);
+            font-size: .74rem;
+            opacity: .72;
+        }
+
+        .read-receipt {
+            text-align: right;
+            color: var(--text-muted);
+            font-size: .75rem;
+            margin-top: 4px;
+            opacity: .78;
         }
 
         .composer {
             position: fixed;
             left: 50%;
-            bottom: 0;
+            bottom: 22px;
             transform: translateX(-50%);
-            width: min(980px, calc(100% - 32px));
-            background: rgba(12,12,14,.92);
+            width: min(900px, calc(100% - 34px));
+            background: rgba(12,12,14,.94);
             border: 1px solid var(--border-color);
-            border-bottom: none;
-            border-radius: 20px 20px 0 0;
+            border-radius: 22px;
             padding: 14px;
             box-sizing: border-box;
             backdrop-filter: blur(18px);
             -webkit-backdrop-filter: blur(18px);
             z-index: 80;
+            box-shadow: 0 22px 55px rgba(0,0,0,.42), 0 0 22px rgba(255,255,255,.04);
         }
 
         textarea {
@@ -516,32 +560,66 @@
                     ? `<img class="message-image" src="${escapeAttribute(message.image_url)}" alt="Message image">`
                     : "";
 
+            const sentTime =
+                new Date(message.created_at).toLocaleString();
+
             return `
-                <article class="message ${mine ? "mine" : "other"}">
-                    <div class="message-meta">
-                        ${mine ? "You" : escapeHtml(otherUser?.display_name || otherUser?.username || "User")}
-                        · ${escapeHtml(new Date(message.created_at).toLocaleString())}
-                    </div>
+        <article class="message ${mine ? "mine" : "other"}">
 
-                    ${body}
-                    ${image}
+            <div class="message-menu-wrap">
+                <button class="message-menu-btn"
+                        onclick="toggleMessageMenu('${message.id}')">
+                    ⋮
+                </button>
 
-                    <div class="message-actions">
-                        <button class="button"
-                                onclick="openMessageReport('${message.id}', '${message.sender_id}', \`${escapeHtml(message.body || "")}\`)">
-                            Report
+                <div id="message-menu-${message.id}" class="message-menu">
+                    <button onclick="openMessageReport('${message.id}', '${message.sender_id}', \`${escapeHtml(message.body || "")}\`)">
+                        Report
+                    </button>
+
+                    ${mine ? `
+                        <button onclick="deleteMessage('${message.id}')">
+                            Delete
                         </button>
+                    ` : ""}
+                </div>
+            </div>
 
-                        ${mine ? `
-                            <button class="button danger"
-                                    onclick="deleteMessage('${message.id}')">
-                                Delete
-                            </button>
-                        ` : ""}
-                    </div>
-                </article>
-            `;
+            <div class="message-meta">
+                ${mine ? "You" : escapeHtml(otherUser?.display_name || otherUser?.username || "User")}
+            </div>
+
+            ${body}
+            ${image}
+
+            <div class="message-time">
+                ${escapeHtml(sentTime)}
+            </div>
+        </article>
+    `;
         }
+
+        window.toggleMessageMenu = function (messageId) {
+            document.querySelectorAll(".message-menu").forEach(menu => {
+                if (menu.id !== `message-menu-${messageId}`) {
+                    menu.classList.remove("open");
+                }
+            });
+
+            document
+                .getElementById(`message-menu-${messageId}`)
+                ?.classList.toggle("open");
+        };
+
+        document.addEventListener("click", function (e) {
+            if (
+                !e.target.closest(".message-menu-wrap")
+            ) {
+                document.querySelectorAll(".message-menu").forEach(menu => {
+                    menu.classList.remove("open");
+                });
+            }
+        });
 
         window.sendMessage = async function () {
             if (!canSendMessages || !otherUser) {
