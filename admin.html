@@ -318,6 +318,15 @@
             <button id="open-hidden-worlds-button" class="button">
                 Open Hidden Worlds Panel
             </button>
+
+            <h2 style="margin-top:28px;">Hidden Additions</h2>
+            <p class="empty">
+                Review and restore additions hidden by moderation.
+            </p>
+
+            <button id="open-hidden-additions-button" class="button">
+                Open Hidden Additions Panel
+            </button>
         </section>
     </main>
 
@@ -332,6 +341,20 @@
 
         <div id="hidden-worlds-container">
             <p class="empty">Loading hidden worlds...</p>
+        </div>
+    </div>
+
+    <div id="hidden-additions-drawer" class="hidden-worlds-drawer">
+        <div class="drawer-top">
+            <h2 style="margin:0;">Hidden Additions</h2>
+            <button id="close-hidden-additions-button" class="button">X</button>
+        </div>
+
+        <input id="hidden-additions-search"
+               placeholder="Search hidden additions...">
+
+        <div id="hidden-additions-container">
+            <p class="empty">Loading hidden additions...</p>
         </div>
     </div>
 
@@ -359,7 +382,7 @@
             document.getElementById("access-panel").innerHTML =
                 `<span class="badge">Signed in as Void Architect: ${escapeHtml(myProfile.display_name || myProfile.username || currentUser.email)}</span>`;
             document.getElementById("admin-content").style.display = "block";
-            
+
 
         }
 
@@ -475,6 +498,17 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
         document.getElementById("open-hidden-worlds-button").addEventListener("click", async () => {
             document.getElementById("hidden-worlds-drawer").classList.add("open");
             await loadHiddenWorlds();
+
+            document.getElementById("open-hidden-additions-button").addEventListener("click", async () => {
+                document.getElementById("hidden-additions-drawer").classList.add("open");
+                await loadHiddenAdditions();
+            });
+
+            document.getElementById("close-hidden-additions-button").addEventListener("click", () => {
+                document.getElementById("hidden-additions-drawer").classList.remove("open");
+            });
+
+            document.getElementById("hidden-additions-search").addEventListener("input", loadHiddenAdditions);
         });
 
         document.getElementById("close-hidden-worlds-button").addEventListener("click", () => {
@@ -518,30 +552,112 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
             }
 
             container.innerHTML = data.map(world => `
-        <article class="drawer-card">
-            <strong>${escapeHtml(world.title || "Untitled World")}</strong>
+            <article class="drawer-card">
+                <strong>${escapeHtml(world.title || "Untitled World")}</strong>
 
-            <p class="empty">
-                ${escapeHtml(world.summary || "No summary.")}
-            </p>
+                <p class="empty">
+                    ${escapeHtml(world.summary || "No summary.")}
+                </p>
 
-            <div class="meta">
-    Status: Hidden
+                <div class="meta">
+        Status: Hidden
 </div>
 
 <p class="empty">
-    Reason: ${escapeHtml(world.moderation_reason || "No reason provided.")}
+        Reason: ${escapeHtml(world.moderation_reason || "No reason provided.")}
 </p>
 
+                <div class="actions">
+                    <a class="button" href="world.html?id=${encodeURIComponent(world.id)}">
+                        Open
+                    </a>
+
+                    <button class="button" onclick="restoreWorld('${world.id}')">
+                        Restore
+                    </button>
+                </div>
+            </article>
+        `).join("");
+        }
+
+        async function loadHiddenAdditions() {
+            const container =
+                document.getElementById("hidden-additions-container");
+
+            const search =
+                document.getElementById("hidden-additions-search")
+                    .value
+                    .trim();
+
+            container.innerHTML =
+                `<p class="empty">Loading hidden additions...</p>`;
+
+            let query = supabase
+                .from("world_additions")
+                .select(`
+            id,
+            title,
+            author_id,
+            summary,
+            moderation_reason,
+            moderation_status
+        `)
+                .eq("moderation_status", "hidden");
+
+            if (search) {
+                query = query.or(
+                    `title.ilike.%${search}%,summary.ilike.%${search}%`
+                );
+            }
+
+            const { data, error } = await query;
+
+            if (error) {
+                container.innerHTML =
+                    `<p class="empty">${escapeHtml(error.message)}</p>`;
+                return;
+            }
+
+            if (!data?.length) {
+                container.innerHTML =
+                    `<p class="empty">No hidden additions found.</p>`;
+                return;
+            }
+
+            container.innerHTML = data.map(addition => `
+        <article class="drawer-card">
+
+            <strong>
+                ${escapeHtml(addition.title || "Untitled Addition")}
+            </strong>
+
+            <p class="empty">
+                ${escapeHtml(addition.summary || "No summary.")}
+            </p>
+
+            <div class="meta">
+                Status: Hidden
+            </div>
+
+            <p class="empty">
+                Reason:
+                ${escapeHtml(addition.moderation_reason || "No reason provided.")}
+            </p>
+
             <div class="actions">
-                <a class="button" href="world.html?id=${encodeURIComponent(world.id)}">
+
+                <a class="button"
+                   href="addition.html?id=${encodeURIComponent(addition.id)}">
                     Open
                 </a>
 
-                <button class="button" onclick="restoreWorld('${world.id}')">
+                <button class="button"
+                        onclick="restoreAddition('${addition.id}')">
                     Restore
                 </button>
+
             </div>
+
         </article>
     `).join("");
         }
@@ -605,6 +721,55 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
         window.logOut = async function () {
             await supabase.auth.signOut();
             window.location.href = "login.html";
+        };
+
+        window.restoreAddition = async function (additionId) {
+
+            const { data: addition, error: additionError } =
+                await supabase
+                    .from("world_additions")
+                    .select("id,title,author_id")
+                    .eq("id", additionId)
+                    .single();
+
+            if (additionError || !addition) {
+                alert(additionError?.message || "Addition not found.");
+                return;
+            }
+
+            const { error } = await supabase
+                .from("world_additions")
+                .update({
+                    moderation_status: "visible",
+                    moderation_reason: null
+                })
+                .eq("id", additionId);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await supabase
+                .from("moderation_logs")
+                .insert({
+                    target_user_id: addition.author_id,
+                    moderator_id: currentUser.id,
+                    action: "addition_visible",
+                    reason: `Addition "${addition.title}" restored from admin.`,
+                    expires_at: null
+                });
+
+            await createNotification({
+                recipientId: addition.author_id,
+                actorId: currentUser.id,
+                additionId: addition.id,
+                type: "addition_restored",
+                message: `Your addition "${addition.title}" was restored by moderation.`,
+                link: `addition.html?id=${encodeURIComponent(addition.id)}`
+            });
+
+            await loadHiddenAdditions();
         };
     </script>
 </body>
