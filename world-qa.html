@@ -293,6 +293,31 @@
 
     </main>
 
+    <div id="report-modal"
+         style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;justify-content:center;align-items:center;">
+        <div style="width:500px;max-width:90%;background:var(--panel-bg);border:1px solid var(--border-color);border-radius:18px;padding:24px;">
+            <h2 id="report-modal-title">Report</h2>
+
+            <select id="report-reason" style="width:100%;padding:12px;margin-bottom:12px;">
+                <option>Spam</option>
+                <option>Harassment</option>
+                <option>Hate Speech</option>
+                <option>NSFW Content</option>
+                <option>Misinformation</option>
+                <option>Other</option>
+            </select>
+
+            <textarea id="report-details"
+                      placeholder="Additional details..."
+                      style="width:100%;height:120px;box-sizing:border-box;padding:12px;margin-bottom:16px;"></textarea>
+
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="button" id="submit-report-btn">Submit Report</button>
+                <button class="button" id="close-report-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { requireBetaAccess } from "./betaGate.js";
         import { supabase } from "./supabaseClient.js";
@@ -306,6 +331,13 @@
         const worldId = params.get("id");
 
         let currentWorld = null;
+        let pendingReport = null;
+
+        document.getElementById("close-report-btn").addEventListener("click", () => {
+            document.getElementById("report-modal").style.display = "none";
+        });
+
+        document.getElementById("submit-report-btn").addEventListener("click", submitQaReport);
 
         if (!worldId) {
             alert("No world ID provided.");
@@ -386,64 +418,140 @@
 
 
             return `
-            ${(
+<article class="question-card">
+    <div class="author">
+        Asked by <strong>${escapeHtml(displayName)}</strong>
+        (@${escapeHtml(username)})
+    </div>
+
+    <p>
+        <strong>Q:</strong>
+        ${escapeHtml(question.question)}
+    </p>
+
+    <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="button"
+                onclick="openQaReport('question','${question.id}')">
+            Report Question
+        </button>
+
+        ${(
                     currentUser.id === question.user_id ||
                     currentUser.id === currentWorld.owner_id
                 ) ? `
-        <div style="margin-top:18px; display:flex; gap:10px; flex-wrap:wrap;">
-
             ${currentUser.id === question.user_id ? `
-                <button
-                    class="button"
-                    onclick="editQuestion('${question.id}', \`${escapeHtml(question.question)}\`)">
+                <button class="button"
+                        onclick="editQuestion('${question.id}', \`${escapeHtml(question.question)}\`)">
                     Edit Question
                 </button>
             ` : ""}
 
-            <button
-                class="button"
-                onclick="deleteQuestion('${question.id}')">
+            <button class="button"
+                    onclick="deleteQuestion('${question.id}')">
                 Delete
             </button>
+        ` : ""}
+    </div>
 
+    ${question.creator_answer ? `
+        <div class="answer">
+            <strong>Creator Answer:</strong>
+            <p>${escapeHtml(question.creator_answer)}</p>
+
+            <button class="button"
+                    style="margin-top:14px;"
+                    onclick="openQaReport('answer','${question.id}')">
+                Report Answer
+            </button>
         </div>
-` : ""}
-                <article class="question-card">
-                    <div class="author">
-                        Asked by <strong>${escapeHtml(displayName)}</strong>
-                        (@${escapeHtml(username)})
-                    </div>
+    ` : `
+        <p class="empty">Awaiting creator response.</p>
 
-                    <p>
-                        <strong>Q:</strong>
-                        ${escapeHtml(question.question)}
-                    </p>
+        ${isOwner ? `
+            <textarea id="answer-${question.id}"
+                      rows="4"
+                      placeholder="Write your answer..."></textarea>
 
-                    ${question.creator_answer ? `
-                        <div class="answer">
-                            <strong>Creator Answer:</strong>
-                            <p>${escapeHtml(question.creator_answer)}</p>
-                        </div>
-                    ` : `
-                        <p class="empty">Awaiting creator response.</p>
+            <button class="button"
+                    onclick="answerQuestion('${question.id}')">
+                Reply
+            </button>
+        ` : ""}
+    `}
+</article>
+`;
+        }
 
-                        ${isOwner ? `
-                            <textarea
-                                id="answer-${question.id}"
-                                rows="4"
-                                placeholder="Write your answer..."
-                            ></textarea>
+        window.openQaReport = async function (reportTarget, questionId) {
+            const { data: question, error } = await supabase
+                .from("world_questions")
+                .select("*")
+                .eq("id", questionId)
+                .single();
 
-                            <button
-                                class="button"
-                                onclick="answerQuestion('${question.id}')"
-                            >
-                                Reply
-                            </button>
-                        ` : ""}
-                    `}
-                </article>
-            `;
+            if (error || !question) {
+                alert("This question could not be loaded.");
+                return;
+            }
+
+            const reportedText =
+                reportTarget === "answer"
+                    ? question.creator_answer || ""
+                    : question.question || "";
+
+            if (!reportedText.trim()) {
+                alert("There is no text to report.");
+                return;
+            }
+
+            pendingReport = {
+                reportTarget,
+                questionId,
+                reportedUserId: reportTarget === "answer"
+                    ? currentWorld.owner_id
+                    : question.user_id,
+                reportedText
+            };
+
+            document.getElementById("report-modal-title").textContent =
+                reportTarget === "answer"
+                    ? "Report Creator Answer"
+                    : "Report Question";
+
+            document.getElementById("report-details").value = "";
+            document.getElementById("report-modal").style.display = "flex";
+        };
+
+        async function submitQaReport() {
+            if (!pendingReport || !currentWorld) return;
+
+            const reason = document.getElementById("report-reason").value;
+            const details = document.getElementById("report-details").value.trim();
+
+            const { error } = await supabase
+                .from("reports")
+                .insert({
+                    reporter_id: currentUser.id,
+                    reported_user_id: pendingReport.reportedUserId,
+                    world_id: worldId,
+                    question_id: pendingReport.questionId,
+                    report_type: pendingReport.reportTarget === "answer"
+                        ? "qa_answer"
+                        : "qa_question",
+                    reason,
+                    details,
+                    reported_text: pendingReport.reportedText,
+                    status: "open"
+                });
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            pendingReport = null;
+            document.getElementById("report-modal").style.display = "none";
+            alert("Report submitted.");
         }
 
         window.submitQuestion = async function () {
