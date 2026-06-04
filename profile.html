@@ -436,6 +436,37 @@
                 pointer-events: auto;
             }
 
+
+        .history-drawer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 390px;
+            max-width: calc(100vw - 32px);
+            height: 100dvh;
+            z-index: 10000;
+            background: rgba(12,12,14,0.97);
+            border-right: 1px solid var(--border-color);
+            box-shadow: 20px 0 50px rgba(0,0,0,0.45);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 24px;
+            box-sizing: border-box;
+            transition: transform 0.22s ease, opacity 0.22s ease, visibility 0.22s ease;
+            overflow-y: auto;
+            transform: translateX(-110%);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+            .history-drawer.open {
+                transform: translateX(0);
+                opacity: 1;
+                visibility: visible;
+                pointer-events: auto;
+            }
+
         .drawer-top {
             display: flex;
             justify-content: space-between;
@@ -646,10 +677,13 @@
 
         <div class="drawer-card">
             <h4>Moderation History</h4>
+            <p style="color:var(--text-secondary);line-height:1.5;">
+                View this account’s moderation record in a separate panel.
+            </p>
 
-            <div id="moderation-history">
-                Loading history...
-            </div>
+            <button class="button" onclick="toggleHistoryDrawer()">
+                Moderation History
+            </button>
         </div>
 
         <div class="drawer-card">
@@ -752,6 +786,19 @@
         </div>
 
         <p id="moderation-message" class="drawer-message"></p>
+    </div>
+
+    <div id="history-drawer" class="history-drawer">
+        <div class="drawer-top">
+            <h3 style="margin:0;">Moderation History</h3>
+            <button class="button" onclick="toggleHistoryDrawer()">X</button>
+        </div>
+
+        <div class="drawer-card">
+            <div id="moderation-history">
+                Loading history...
+            </div>
+        </div>
     </div>
 
     <script type="module">
@@ -944,48 +991,48 @@ ${escapeHtml(
                 "https://placehold.co/600x600/1b1b28/ffffff?text=World";
 
             return `
-            <div class="card">
+                <div class="card">
 
-               <div style="
-        width:100%;
-        height:145px;
-        border-radius:12px;
-        overflow:hidden;
-        margin-bottom:16px;
-        background:#222;
+                   <div style="
+            width:100%;
+            height:145px;
+            border-radius:12px;
+            overflow:hidden;
+            margin-bottom:16px;
+            background:#222;
 ">
-        <img
-            src="${escapeHtml(coverImage)}"
-            alt="${escapeHtml(world.title || "World cover")}"
-            style="
-                width:100%;
-                height:100%;
-                object-fit:cover;
-                display:block;
-            "
-        >
+            <img
+                src="${escapeHtml(coverImage)}"
+                alt="${escapeHtml(world.title || "World cover")}"
+                style="
+                    width:100%;
+                    height:100%;
+                    object-fit:cover;
+                    display:block;
+                "
+            >
 </div>
 
-                <p class="empty">
-                    ${escapeHtml(world.genres || "World")}
-                </p>
+                    <p class="empty">
+                        ${escapeHtml(world.genres || "World")}
+                    </p>
 
-                <h3>
-                    <a href="world.html?id=${encodeURIComponent(world.id)}">
-                        ${escapeHtml(world.title || "Untitled World")}
-                    </a>
-                </h3>
+                    <h3>
+                        <a href="world.html?id=${encodeURIComponent(world.id)}">
+                            ${escapeHtml(world.title || "Untitled World")}
+                        </a>
+                    </h3>
 
-                <p>
-                    ${escapeHtml(world.summary || "No summary yet.")}
-                </p>
+                    <p>
+                        ${escapeHtml(world.summary || "No summary yet.")}
+                    </p>
 
-                <p class="empty">
-                    ${escapeHtml(world.themes || "")}
-                </p>
+                    <p class="empty">
+                        ${escapeHtml(world.themes || "")}
+                    </p>
 
-            </div>
-        `;
+                </div>
+            `;
         }
 
         async function loadFollowData(profileId) {
@@ -1023,13 +1070,13 @@ ${escapeHtml(
         function renderFollowButton(profileId, isFollowing) {
 
             document.getElementById("follow-button-container").innerHTML = `
-            <button
-                id="follow-button"
-                class="button follow-button ${isFollowing ? "following" : ""}"
-            >
-                ${isFollowing ? "Following" : "Follow"}
-            </button>
-        `;
+                <button
+                    id="follow-button"
+                    class="button follow-button ${isFollowing ? "following" : ""}"
+                >
+                    ${isFollowing ? "Following" : "Follow"}
+                </button>
+            `;
 
             document.getElementById("follow-button")
                 .addEventListener("click", async () => {
@@ -1156,10 +1203,10 @@ ${escapeHtml(
                     : "Permanent";
 
             document.getElementById("moderation-status-display").innerHTML = `
-            <strong>Current Status:</strong> ${escapeHtml(profile.account_status || "active")}<br>
-            <strong>Expires:</strong> ${escapeHtml(expires)}<br>
-            <strong>Reason:</strong> ${escapeHtml(profile.moderation_reason || "None")}
-        `;
+                <strong>Current Status:</strong> ${escapeHtml(profile.account_status || "active")}<br>
+                <strong>Expires:</strong> ${escapeHtml(expires)}<br>
+                <strong>Reason:</strong> ${escapeHtml(profile.moderation_reason || "None")}
+            `;
         }
 
         async function loadModerationHistory() {
@@ -1170,12 +1217,12 @@ ${escapeHtml(
             const { data, error } = await supabase
                 .from("moderation_logs")
                 .select(`
-            *,
-            moderator:profiles!moderation_logs_moderator_id_fkey(
-                username,
-                display_name
-            )
-        `)
+                *,
+                moderator:profiles!moderation_logs_moderator_id_fkey(
+                    username,
+                    display_name
+                )
+            `)
                 .eq("target_user_id", profile.id)
                 .order("created_at", { ascending: false })
                 .limit(20);
@@ -1194,28 +1241,28 @@ ${escapeHtml(
 
             container.innerHTML =
                 data.map(log => `
-            <div style="
-                border-bottom:1px solid var(--border-color);
-                padding-bottom:10px;
-                margin-bottom:10px;
-            ">
-                <strong>${escapeHtml(log.action)}</strong><br>
+                <div style="
+                    border-bottom:1px solid var(--border-color);
+                    padding-bottom:10px;
+                    margin-bottom:10px;
+                ">
+                    <strong>${escapeHtml(log.action)}</strong><br>
 
-                By:
-                ${escapeHtml(
+                    By:
+                    ${escapeHtml(
                     log.moderator?.display_name ||
                     log.moderator?.username ||
                     "Unknown"
                 )}
-                <br>
+                    <br>
 
-                Reason:
-                ${escapeHtml(log.reason || "None")}
-                <br>
+                    Reason:
+                    ${escapeHtml(log.reason || "None")}
+                    <br>
 
-                ${new Date(log.created_at).toLocaleString()}
-            </div>
-        `).join("");
+                    ${new Date(log.created_at).toLocaleString()}
+                </div>
+            `).join("");
         }
 
         window.toggleModerationDrawer = function () {
@@ -1318,6 +1365,10 @@ ${escapeHtml(
                 box.textContent = message;
             }
         }
+
+        window.toggleHistoryDrawer = function () {
+            document.getElementById("history-drawer").classList.toggle("open");
+        };
     </script>
 
 </body>
