@@ -332,6 +332,31 @@
 
         let currentWorld = null;
         let pendingReport = null;
+        let blockedUserIds = [];
+
+        async function loadBlockedUsers() {
+
+            const { data, error } = await supabase
+                .from("user_blocks")
+                .select("blocker_id, blocked_id")
+                .in("blocker_id", [currentUser.id]);
+
+            const { data: reverseData, error: reverseError } = await supabase
+                .from("user_blocks")
+                .select("blocker_id, blocked_id")
+                .in("blocked_id", [currentUser.id]);
+
+            if (error || reverseError) {
+                console.error(error || reverseError);
+                blockedUserIds = [];
+                return;
+            }
+
+            blockedUserIds = [
+                ...(data || []).map(x => x.blocked_id),
+                ...(reverseData || []).map(x => x.blocker_id)
+            ];
+        }
 
         document.getElementById("close-report-btn").addEventListener("click", () => {
             document.getElementById("report-modal").style.display = "none";
@@ -344,6 +369,7 @@
             window.location.href = "explore.html";
         }
 
+        await loadBlockedUsers();
         await loadWorld();
         await loadQuestions();
 
@@ -361,6 +387,15 @@
             }
 
             currentWorld = data;
+            if (
+                blockedUserIds.includes(
+                    currentWorld.owner_id
+                )
+            ) {
+                alert("This Q&A is unavailable.");
+                window.location.href = "explore.html";
+                return;
+            }
 
             document.getElementById("page-title").textContent =
                 `${data.title} Q&A`;
@@ -391,13 +426,18 @@
                 return;
             }
 
-            if (!questions || questions.length === 0) {
+            const visibleQuestions =
+                (questions || []).filter(question =>
+                    !blockedUserIds.includes(question.user_id)
+                );
+
+            if (!visibleQuestions.length) {
                 container.innerHTML = `<p class="empty">No questions yet.</p>`;
                 return;
             }
 
             const userIds = [
-                ...new Set(questions.map(question => question.user_id))
+                ...new Set(visibleQuestions.map(question => question.user_id))
             ];
 
             const { data: profiles } = await supabase
@@ -405,7 +445,7 @@
                 .select("id, username, display_name")
                 .in("id", userIds);
 
-            container.innerHTML = questions.map(question => {
+            container.innerHTML = visibleQuestions.map(question => {
                 const profile = profiles?.find(profile => profile.id === question.user_id);
                 return renderQuestionCard(question, profile);
             }).join("");
@@ -555,6 +595,18 @@
         }
 
         window.submitQuestion = async function () {
+            if (
+                blockedUserIds.includes(
+                    currentWorld.owner_id
+                )
+            ) {
+
+                alert(
+                    "You cannot interact with this creator."
+                );
+
+                return;
+            }
             if (!currentWorld) return;
 
             if (currentUser.id === currentWorld.owner_id) {
