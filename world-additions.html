@@ -429,12 +429,38 @@
         let currentWorld = null;
         let allAdditions = [];
         let profileCache = [];
+        let blockedUserIds = [];
+
+        async function loadBlockedUsers() {
+
+            const { data, error } = await supabase
+                .from("user_blocks")
+                .select("blocker_id, blocked_id")
+                .in("blocker_id", [currentUser.id]);
+
+            const { data: reverseData, error: reverseError } = await supabase
+                .from("user_blocks")
+                .select("blocker_id, blocked_id")
+                .in("blocked_id", [currentUser.id]);
+
+            if (error || reverseError) {
+                console.error(error || reverseError);
+                blockedUserIds = [];
+                return;
+            }
+
+            blockedUserIds = [
+                ...(data || []).map(x => x.blocked_id),
+                ...(reverseData || []).map(x => x.blocker_id)
+            ];
+        }
 
         if (!worldId) {
             alert("No world ID provided.");
             window.location.href = "explore.html";
         }
 
+        await loadBlockedUsers();
         await loadWorld();
         await loadAdditions();
 
@@ -452,6 +478,13 @@
             }
 
             currentWorld = data;
+            if (
+                blockedUserIds.includes(currentWorld.owner_id)
+            ) {
+                alert("This community is unavailable.");
+                window.location.href = "explore.html";
+                return;
+            }
 
             document.getElementById("page-title").textContent =
                 `${data.title} Community`;
@@ -466,6 +499,17 @@
         }
 
         function configureCommunityAccess() {
+            if (
+                blockedUserIds.includes(currentWorld.owner_id)
+            ) {
+
+                createLink.style.display = "none";
+
+                message.textContent =
+                    "You cannot contribute to this world.";
+
+                return;
+            }
             const createLink =
                 document.getElementById("create-addition-link");
 
@@ -527,7 +571,12 @@
                 return;
             }
 
-            allAdditions = additions || [];
+            allAdditions =
+                (additions || []).filter(addition =>
+                    !blockedUserIds.includes(
+                        addition.author_id
+                    )
+                );
 
             const authorIds = [
                 ...new Set(allAdditions.map(addition => addition.author_id))
