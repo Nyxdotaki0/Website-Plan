@@ -92,6 +92,24 @@ export function canReplaceImages(userPermissions) {
     return can(userPermissions, "replace_images");
 }
 
+export function canModerateContentOwner(actorProfile, ownerProfile) {
+    if (!actorProfile || !ownerProfile) return false;
+    if (actorProfile.id === ownerProfile.id) return false;
+
+    const actorRole = getRoleName(actorProfile);
+    const ownerRole = getRoleName(ownerProfile);
+
+    if (actorRole === "void_architect") {
+        return ownerRole !== "void_architect";
+    }
+
+    if (actorRole === "moderator") {
+        return ownerRole === "creator";
+    }
+
+    return false;
+}
+
 export function canModerateTarget(actorProfile, targetProfile) {
     if (!actorProfile || !targetProfile) return false;
     if (actorProfile.id === targetProfile.id) return false;

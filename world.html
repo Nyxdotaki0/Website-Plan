@@ -641,8 +641,9 @@
         import { createNotification } from "./notifications.js";
         import {
             getCurrentUserWithPermissions,
-            canModerateWorlds
-        } from "./permissions.js?v=3";
+            canModerateWorlds,
+            canModerateContentOwner
+        } from "./permissions.js?v=4";
 
         const currentUser = await requireBetaAccess();
         setupNotificationBadge();
@@ -680,9 +681,11 @@
 
             const { data: profile } = await supabase
                 .from("profiles")
-                .select("username, display_name")
+                .select("id, username, display_name, role, role_name")
                 .eq("id", world.owner_id)
                 .single();
+
+            currentWorld.ownerProfile = profile;
 
             document.title = `${world.title || "World"} - Nullverse`;
 
@@ -1282,7 +1285,10 @@ root.style.setProperty(
         `;
             }
 
-            if (canModerateWorlds(currentPermissions)) {
+            if (
+                canModerateWorlds(currentPermissions) &&
+                canModerateContentOwner(currentProfile, world.ownerProfile)
+            ) {
                 html += `
             <div style="margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
                 <strong>World Moderation</strong>
