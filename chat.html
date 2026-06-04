@@ -458,6 +458,7 @@
         let otherUser = null;
         let canSendMessages = false;
         let pendingReport = null;
+        let otherMemberLastRead = null;
 
         if (!conversationId) {
             alert("No conversation selected.");
@@ -499,7 +500,7 @@
         async function loadConversation() {
             const { data: members, error } = await supabase
                 .from("conversation_members")
-                .select("user_id")
+                .select("user_id, last_read_at")
                 .eq("conversation_id", conversationId);
 
             if (error || !members || !members.some(m => m.user_id === currentUser.id)) {
@@ -510,6 +511,9 @@
 
             const otherMember =
                 members.find(member => member.user_id !== currentUser.id);
+
+            otherMemberLastRead =
+                otherMember?.last_read_at || null;
 
             if (!otherMember) {
                 alert("Conversation member not found.");
@@ -590,9 +594,21 @@
             }
 
             if (!messages || !messages.length) {
+                const newestMyMessage =
+                    [...messages]
+                        .reverse()
+                        .find(
+                            message =>
+                                message.sender_id === currentUser.id
+                        );
+
                 container.innerHTML =
-                    `<p class="empty">No messages yet.</p>`;
-                return;
+                    messages.map(message =>
+                        renderMessage(
+                            message,
+                            newestMyMessage?.id
+                        )
+                    ).join("");
             }
 
             container.innerHTML =
@@ -604,7 +620,10 @@
             });
         }
 
-        function renderMessage(message) {
+        function renderMessage(
+            message,
+            newestMyMessageId
+        ) {
             const mine =
                 message.sender_id === currentUser.id;
 
@@ -620,6 +639,25 @@
 
             const sentTime =
                 new Date(message.created_at).toLocaleString();
+
+            let readReceipt = "";
+
+            if (
+                message.sender_id === currentUser.id &&
+                message.id === newestMyMessageId
+            ) {
+
+                const wasRead =
+                    otherMemberLastRead &&
+                    new Date(otherMemberLastRead) >=
+                    new Date(message.created_at);
+
+                readReceipt = `
+        <div class="read-receipt">
+            ${wasRead ? "Read" : "Sent"}
+        </div>
+    `;
+            }
 
             return `
         <article class="message ${mine ? "mine" : "other"}">
@@ -651,8 +689,10 @@
             ${image}
 
             <div class="message-time">
-                ${escapeHtml(sentTime)}
-            </div>
+    ${escapeHtml(sentTime)}
+</div>
+
+${readReceipt}
         </article>
     `;
         }
