@@ -273,6 +273,31 @@
 
     </main>
 
+    <div id="report-modal"
+         style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;justify-content:center;align-items:center;">
+        <div style="width:500px;max-width:90%;background:var(--panel-bg);border:1px solid var(--border-color);border-radius:18px;padding:24px;">
+            <h2 id="report-modal-title">Report</h2>
+
+            <select id="report-reason" style="width:100%;padding:12px;margin-bottom:12px;">
+                <option>Spam</option>
+                <option>Harassment</option>
+                <option>Hate Speech</option>
+                <option>NSFW Content</option>
+                <option>Misinformation</option>
+                <option>Other</option>
+            </select>
+
+            <textarea id="report-details"
+                      placeholder="Additional details..."
+                      style="width:100%;height:120px;box-sizing:border-box;padding:12px;margin-bottom:16px;"></textarea>
+
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="button" id="submit-report-btn">Submit Report</button>
+                <button class="button" id="close-report-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { requireBetaAccess } from "./betaGate.js";
         import { supabase } from "./supabaseClient.js";
@@ -288,6 +313,7 @@
 
         let currentWorld = null;
         let allAdditions = [];
+        let pendingCommentReport = null;
 
         if (!worldId) {
             alert("No world ID provided.");
@@ -321,6 +347,13 @@
 
             document.getElementById("back-to-world").href =
                 `world.html?id=${encodeURIComponent(worldId)}`;
+            document.getElementById("close-report-btn")
+                .addEventListener("click", () => {
+                    document.getElementById("report-modal").style.display = "none";
+                });
+
+            document.getElementById("submit-report-btn")
+                .addEventListener("click", submitCommentReport);
 
             const isOwner =
                 currentUser.id === currentWorld.owner_id;
@@ -344,19 +377,19 @@
 
             if (error) {
                 container.innerHTML = `
-                    <p class="empty">
-                        ${escapeHtml(error.message)}
-                    </p>
-                `;
+                        <p class="empty">
+                            ${escapeHtml(error.message)}
+                        </p>
+                    `;
                 return;
             }
 
             if (!comments || comments.length === 0) {
                 container.innerHTML = `
-                    <p class="empty">
-                        No comments yet.
-                    </p>
-                `;
+                        <p class="empty">
+                            No comments yet.
+                        </p>
+                    `;
                 return;
             }
 
@@ -376,41 +409,111 @@
                 const displayName = profile?.display_name || username;
 
                 return `
-            <article class="comment-card">
-                <div class="comment-author">
-                    <strong>${escapeHtml(displayName)}</strong>
-                    (@${escapeHtml(username)})
-                </div>
+                <article class="comment-card">
+                    <div class="comment-author">
+                        <strong>${escapeHtml(displayName)}</strong>
+                        (@${escapeHtml(username)})
+                    </div>
 
-                <div class="comment-content">
-        ${escapeHtml(comment.content)}
+
+                    <div class="comment-content">
+            ${escapeHtml(comment.content)}
+</div>
+<div style="margin-top:14px;">
+    <button
+        class="button"
+        onclick="openCommentReport(
+            '${comment.id}',
+            '${comment.user_id}',
+            \`${escapeHtml(comment.content)}\`
+        )">
+        Report Comment
+    </button>
 </div>
 
 ${(
                         currentUser.id === comment.user_id ||
                         currentUser.id === currentWorld.owner_id
                     ) ? `
-        <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+            <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
 
-            ${currentUser.id === comment.user_id ? `
+                ${currentUser.id === comment.user_id ? `
+                    <button
+                        class="button"
+                        onclick="editComment('${comment.id}', \`${escapeHtml(comment.content)}\`)">
+                        Edit
+                    </button>
+                ` : ""}
+
                 <button
                     class="button"
-                    onclick="editComment('${comment.id}', \`${escapeHtml(comment.content)}\`)">
-                    Edit
+                    onclick="deleteComment('${comment.id}')">
+                    Delete
                 </button>
-            ` : ""}
 
-            <button
-                class="button"
-                onclick="deleteComment('${comment.id}')">
-                Delete
-            </button>
-
-        </div>
+            </div>
 ` : ""}
-            </article>
-        `;
+                </article>
+            `;
             }).join("");
+        }
+
+        window.openCommentReport = function (
+            commentId,
+            userId,
+            commentText
+        ) {
+
+            pendingCommentReport = {
+                commentId,
+                userId,
+                commentText
+            };
+
+            document.getElementById("report-modal").style.display =
+                "flex";
+
+            document.getElementById("report-details").value = "";
+        };
+
+        async function submitCommentReport() {
+
+            if (!pendingCommentReport) return;
+
+            const reason =
+                document.getElementById("report-reason").value;
+
+            const details =
+                document.getElementById("report-details")
+                    .value
+                    .trim();
+
+            const { error } = await supabase
+                .from("reports")
+                .insert({
+                    reporter_id: currentUser.id,
+                    reported_user_id: pendingCommentReport.userId,
+                    world_id: worldId,
+                    comment_id: pendingCommentReport.commentId,
+                    report_type: "world_comment",
+                    reason,
+                    details,
+                    reported_text:
+                        pendingCommentReport.commentText,
+                    status: "open"
+                });
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            pendingCommentReport = null;
+
+            document.getElementById("report-modal").style.display =
+                "none";
+
+            alert("Report submitted.");
         }
 
         window.submitComment = async function () {
