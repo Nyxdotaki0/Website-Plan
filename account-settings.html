@@ -319,6 +319,52 @@
             box-shadow: 0 16px 40px rgba(0,0,0,.45);
         }
 
+        .blocked-users-drawer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 420px;
+            max-width: calc(100vw - 32px);
+            height: 100dvh;
+            z-index: 10000;
+            background: rgba(12,12,14,0.97);
+            border-left: 1px solid var(--border-color);
+            box-shadow: -20px 0 50px rgba(0,0,0,0.45);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 24px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            transform: translateX(110%);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: transform .22s ease, opacity .22s ease, visibility .22s ease;
+        }
+
+            .blocked-users-drawer.open {
+                transform: translateX(0);
+                opacity: 1;
+                visibility: visible;
+                pointer-events: auto;
+            }
+
+        .drawer-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .drawer-card {
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+            background: rgba(255,255,255,0.035);
+        }
+
         @media (hover: hover) {
             .info-icon:hover + .tooltip {
                 opacity: 1;
@@ -515,12 +561,40 @@
         </section>
 
         <section class="panel">
+            <h2>Blocked Users</h2>
+            <p>
+                Manage people you have blocked. Blocked users will be separated from your profile and future contact features.
+            </p>
+
+            <button id="open-blocked-users-button">
+                Open Blocked Users
+            </button>
+        </section>
+
+        <section class="panel">
             <h2>Works Gallery</h2>
             <p>Your worlds, characters, stories, documents, and languages will appear here later.</p>
             <a class="button" href="dashboard.html">Back to Dashboard</a>
         </section>
 
     </main>
+
+    <div id="blocked-users-drawer" class="blocked-users-drawer">
+        <div class="drawer-top">
+            <div>
+                <h2 style="margin:0;">Blocked Users</h2>
+                <p style="margin:6px 0 0;color:var(--text-secondary);">
+                    Unblock users from here.
+                </p>
+            </div>
+
+            <button id="close-blocked-users-button">X</button>
+        </div>
+
+        <div id="blocked-users-container">
+            <p class="message">Loading blocked users...</p>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -547,6 +621,7 @@
         let currentUser = null;
         let currentAvatarUrl = "";
         let currentBannerUrl = "";
+        let blockedUsersLoaded = false;
 
         const defaultAvatar = "https://baaygzddafopihtxyyjq.supabase.co/storage/v1/object/public/avatars/default-avatar.png";
 
@@ -907,11 +982,114 @@
                 document.getElementById("new-password").value = "";
             }
         }
+        function escapeHtml(value) {
+            return String(value || "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
 
         async function logOut() {
             await supabaseClient.auth.signOut();
             window.location.href = "login.html";
         }
+
+        document.getElementById("open-blocked-users-button")
+            .addEventListener("click", async () => {
+                document.getElementById("blocked-users-drawer")
+                    .classList.add("open");
+
+                await loadBlockedUsers();
+            });
+
+        document.getElementById("close-blocked-users-button")
+            .addEventListener("click", () => {
+                document.getElementById("blocked-users-drawer")
+                    .classList.remove("open");
+            });
+
+        async function loadBlockedUsers() {
+            const container = document.getElementById("blocked-users-container");
+
+            if (!currentUser) {
+                container.innerHTML = `<p class="message">Account not loaded yet.</p>`;
+                return;
+            }
+
+            container.innerHTML = `<p class="message">Loading blocked users...</p>`;
+
+            const { data: blocks, error } = await supabaseClient
+                .from("user_blocks")
+                .select("id, blocked_id, created_at")
+                .eq("blocker_id", currentUser.id)
+                .order("created_at", { ascending: false });
+
+            if (error) {
+                container.innerHTML = `<p class="message">${escapeHtml(error.message)}</p>`;
+                return;
+            }
+
+            if (!blocks || !blocks.length) {
+                container.innerHTML = `<p class="message">You have not blocked anyone.</p>`;
+                return;
+            }
+
+            const blockedIds = blocks.map(block => block.blocked_id);
+
+            const { data: profiles, error: profileError } = await supabaseClient
+                .from("profiles")
+                .select("id, username, display_name, avatar_url")
+                .in("id", blockedIds);
+
+            if (profileError) {
+                container.innerHTML = `<p class="message">${escapeHtml(profileError.message)}</p>`;
+                return;
+            }
+
+            const profileMap = new Map(
+                (profiles || []).map(profile => [profile.id, profile])
+            );
+
+            container.innerHTML = blocks.map(block => {
+                const blockedProfile = profileMap.get(block.blocked_id);
+
+                return `
+            <div class="drawer-card">
+                <strong>
+                    ${escapeHtml(blockedProfile?.display_name || "Unknown User")}
+                </strong>
+
+                <p class="message" style="margin:6px 0;">
+                    @${escapeHtml(blockedProfile?.username || "unknown")}
+                </p>
+
+                <button onclick="unblockUser('${block.blocked_id}')">
+                    Unblock
+                </button>
+            </div>
+        `;
+            }).join("");
+        }
+
+        window.unblockUser = async function (blockedId) {
+            const confirmed = confirm("Unblock this user?");
+            if (!confirmed) return;
+
+            const { error } = await supabaseClient
+                .from("user_blocks")
+                .delete()
+                .eq("blocker_id", currentUser.id)
+                .eq("blocked_id", blockedId);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await loadBlockedUsers();
+        };
 
         checkUserAndLoadProfile();
     </script>
