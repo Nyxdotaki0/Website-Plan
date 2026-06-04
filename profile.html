@@ -957,12 +957,18 @@ ${escapeHtml(
             const featuredContainer = document.getElementById("featured-worlds");
             const allContainer = document.getElementById("all-worlds");
 
-            const { data: worlds, error } = await supabase
+            let worldsQuery = supabase
                 .from("worlds")
                 .select("*")
                 .eq("owner_id", profileId)
                 .eq("visibility", "published")
                 .order("updated_at", { ascending: false });
+
+            if (currentUser.id !== profileId) {
+                worldsQuery = worldsQuery.eq("moderation_status", "visible");
+            }
+
+            const { data: worlds, error } = await worldsQuery;
 
             if (error) {
                 featuredContainer.innerHTML = `<p class="empty">${error.message}</p>`;
