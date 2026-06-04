@@ -645,6 +645,14 @@
         </div>
 
         <div class="drawer-card">
+            <h4>Moderation History</h4>
+
+            <div id="moderation-history">
+                Loading history...
+            </div>
+        </div>
+
+        <div class="drawer-card">
             <h4>Restrict Account</h4>
 
             <label>Duration Type</label>
@@ -860,6 +868,7 @@ ${escapeHtml(
             ) {
                 document.getElementById("moderation-toggle").style.display = "inline-block";
                 updateModerationStatusDisplay(profile);
+                loadModerationHistory();
             }
         }
 
@@ -1153,6 +1162,62 @@ ${escapeHtml(
         `;
         }
 
+        async function loadModerationHistory() {
+
+            const container =
+                document.getElementById("moderation-history");
+
+            const { data, error } = await supabase
+                .from("moderation_logs")
+                .select(`
+            *,
+            moderator:profiles!moderation_logs_moderator_id_fkey(
+                username,
+                display_name
+            )
+        `)
+                .eq("target_user_id", profile.id)
+                .order("created_at", { ascending: false })
+                .limit(20);
+
+            if (error) {
+                container.innerHTML =
+                    `<p class="empty">${error.message}</p>`;
+                return;
+            }
+
+            if (!data || data.length === 0) {
+                container.innerHTML =
+                    `<p class="empty">No moderation history.</p>`;
+                return;
+            }
+
+            container.innerHTML =
+                data.map(log => `
+            <div style="
+                border-bottom:1px solid var(--border-color);
+                padding-bottom:10px;
+                margin-bottom:10px;
+            ">
+                <strong>${escapeHtml(log.action)}</strong><br>
+
+                By:
+                ${escapeHtml(
+                    log.moderator?.display_name ||
+                    log.moderator?.username ||
+                    "Unknown"
+                )}
+                <br>
+
+                Reason:
+                ${escapeHtml(log.reason || "None")}
+                <br>
+
+                ${new Date(log.created_at).toLocaleString()}
+            </div>
+        `).join("");
+        }
+
         window.toggleModerationDrawer = function () {
             document.getElementById("moderation-drawer").classList.toggle("open");
         };
@@ -1228,6 +1293,16 @@ ${escapeHtml(
                 showModerationMessage(error.message);
                 return;
             }
+
+            await supabase
+                .from("moderation_logs")
+                .insert({
+                    target_user_id: profile.id,
+                    moderator_id: currentUser.id,
+                    action: status,
+                    reason: reason || null,
+                    expires_at: expiresAt
+                });
 
             showModerationMessage(`Account updated to ${status}.`);
 
