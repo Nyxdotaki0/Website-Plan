@@ -641,6 +641,38 @@
 
         const currentUser = await requireBetaAccess();
         setupNotificationBadge();
+        let blockedUserIds = [];
+
+        async function loadBlockedUsers() {
+
+            const { data, error } = await supabase
+                .from("user_blocks")
+                .select("blocker_id, blocked_id")
+                .or(
+                    `blocker_id.eq.${currentUser.id},
+             blocked_id.eq.${currentUser.id}`
+                );
+
+            if (error) {
+                console.error(error);
+                return;
+            }
+
+            blockedUserIds = (data || []).map(block => {
+
+                return block.blocker_id === currentUser.id
+                    ? block.blocked_id
+                    : block.blocker_id;
+
+            });
+        }
+
+        function filterBlockedWorlds(worlds) {
+
+            return (worlds || []).filter(world =>
+                !blockedUserIds.includes(world.owner_id)
+            );
+        }
 
         let currentFeed = "popular";
         let selectedGenre = "";
@@ -655,6 +687,8 @@
         const feedTitle = document.getElementById("feed-title");
 
         setupFeedControls();
+
+        await loadBlockedUsers();
 
         await Promise.all([
             resetFeed("popular"),
@@ -789,7 +823,7 @@
                 return [];
             }
 
-            return data || [];
+            return filterBlockedWorlds(data);
         }
 
         async function loadGenreWorlds() {
@@ -811,7 +845,7 @@
                 return [];
             }
 
-            return data || [];
+            return filterBlockedWorlds(data);
         }
 
         async function loadFollowingWorlds() {
@@ -849,7 +883,7 @@
                 return [];
             }
 
-            return data || [];
+            return filterBlockedWorlds(data);
         }
 
         async function loadPopularWorlds() {
@@ -891,7 +925,7 @@
                 return [];
             }
 
-            return (worlds || [])
+            return filterBlockedWorlds(worlds || [])
                 .map(world => ({
                     ...world,
                     like_count: likeCounts[world.id] || 0
@@ -936,26 +970,33 @@
 
             const { data, error } = await supabase
                 .from("worlds")
-                .select("id, title, updated_at")
+                .select("id, title, updated_at, owner_id")
                 .eq("visibility", "published")
                 .eq("moderation_status", "visible")
                 .order("updated_at", { ascending: false })
                 .limit(5);
 
-            if (error || !data || !data.length) {
+            const visibleWorlds =
+                filterBlockedWorlds(data);
+
+            if (
+                error ||
+                !visibleWorlds ||
+                !visibleWorlds.length
+            ) {
                 container.innerHTML =
                     `<p class="empty">No recent worlds yet.</p>`;
                 return;
             }
 
-            container.innerHTML = data.map(world => `
-                        <div class="mini-card">
-                            <a href="world.html?id=${encodeURIComponent(world.id)}">
-                                ${escapeHtml(world.title || "Untitled World")}
-                            </a>
-                            <p>Recently updated</p>
-                        </div>
-                    `).join("");
+            container.innerHTML = visibleWorlds.map(world => `
+        <div class="mini-card">
+            <a href="world.html?id=${encodeURIComponent(world.id)}">
+                ${escapeHtml(world.title || "Untitled World")}
+            </a>
+            <p>Recently updated</p>
+        </div>
+    `).join("");
         }
 
         async function loadFollowingMiniList() {
@@ -973,7 +1014,12 @@
                 return;
             }
 
-            const creatorIds = follows.map(follow => follow.following_id);
+            const creatorIds =
+                follows
+                    .map(follow => follow.following_id)
+                    .filter(id =>
+                        !blockedUserIds.includes(id)
+                    );
 
             const { data: profiles } = await supabase
                 .from("profiles")
