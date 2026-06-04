@@ -1337,9 +1337,25 @@ root.style.setProperty(
                         Restore World
                     </button>
 
-                    <button class="button" onclick="setWorldModerationStatus('hidden')">
-                        Hide World
-                    </button>
+                    <div style="width:100%;margin-top:10px;">
+    <label class="empty">Reason for hiding</label>
+    <input id="world-hide-reason"
+           placeholder="Reason shown to creator..."
+           style="
+               width:100%;
+               box-sizing:border-box;
+               margin-top:8px;
+               padding:10px;
+               border-radius:10px;
+               border:1px solid var(--border-color);
+               background:rgba(0,0,0,.28);
+               color:var(--text-primary);
+           ">
+</div>
+
+<button class="button" onclick="setWorldModerationStatus('hidden')">
+    Hide World
+</button>
                 </div>
 
                 <p id="world-moderation-message" class="empty"></p>
@@ -1586,6 +1602,17 @@ root.style.setProperty(
         window.setWorldModerationStatus = async function (status) {
             if (!currentWorld || !canModerateWorlds(currentPermissions)) return;
 
+            const reasonInput = document.getElementById("world-hide-reason");
+            const reason = reasonInput ? reasonInput.value.trim() : "";
+
+            if (status === "hidden" && !reason) {
+                const message = document.getElementById("world-moderation-message");
+                if (message) {
+                    message.textContent = "Enter a reason before hiding this world.";
+                }
+                return;
+            }
+
             const { error } = await supabase
                 .from("worlds")
                 .update({
@@ -1600,15 +1627,42 @@ root.style.setProperty(
                 return;
             }
 
+            const logReason =
+                status === "hidden"
+                    ? reason
+                    : `World "${currentWorld.title || "Untitled World"}" restored to visible.`;
+
             await supabase
                 .from("moderation_logs")
                 .insert({
                     target_user_id: currentWorld.owner_id,
                     moderator_id: currentUser.id,
                     action: `world_${status}`,
-                    reason: `World "${currentWorld.title || "Untitled World"}" set to ${status}.`,
+                    reason: logReason,
                     expires_at: null
                 });
+
+            if (status === "hidden") {
+                await createNotification({
+                    recipientId: currentWorld.owner_id,
+                    actorId: currentUser.id,
+                    worldId: currentWorld.id,
+                    type: "world_hidden",
+                    message: `Your world "${currentWorld.title || "Untitled World"}" was hidden by moderation. Reason: ${reason}`,
+                    link: `dashboard.html`
+                });
+            }
+
+            if (status === "visible") {
+                await createNotification({
+                    recipientId: currentWorld.owner_id,
+                    actorId: currentUser.id,
+                    worldId: currentWorld.id,
+                    type: "world_restored",
+                    message: `Your world "${currentWorld.title || "Untitled World"}" was restored by moderation.`,
+                    link: `world.html?id=${encodeURIComponent(currentWorld.id)}`
+                });
+            }
 
             if (message) {
                 message.textContent = `World set to ${status}.`;
