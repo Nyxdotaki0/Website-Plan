@@ -16,7 +16,7 @@
         );
     </script>
 
-    <link rel="stylesheet" href="theme.css?v=22">
+    <link rel="stylesheet" href="theme.css?v=25">
 
     <style>
         html {
@@ -275,7 +275,7 @@
 </head>
 
 <body>
-
+    <div class="nullverse-stars"></div>
     <header>
         <div class="logo">
             <a href="index.html">
@@ -317,135 +317,135 @@
     </main>
 
     <script type="module">
-import { requireBetaAccess } from "./betaGate.js";
+        import { requireBetaAccess } from "./betaGate.js";
         import { supabase } from "./supabaseClient.js";
         import { setupNotificationBadge } from "./notificationBadge.js";
 
         const currentUser = await requireBetaAccess();
         setupNotificationBadge();
         console.log("Viewing notifications as:", currentUser.id, currentUser.email);
-await loadNotifications();
+        await loadNotifications();
 
-async function loadNotifications() {
-    const container = document.getElementById("notifications-container");
+        async function loadNotifications() {
+            const container = document.getElementById("notifications-container");
 
-    const { data: notifications, error } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("recipient_id", currentUser.id)
-        .order("created_at", { ascending: false });
+            const { data: notifications, error } = await supabase
+                .from("notifications")
+                .select("*")
+                .eq("recipient_id", currentUser.id)
+                .order("created_at", { ascending: false });
 
-    if (error) {
-        container.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
-        return;
-    }
+            if (error) {
+                container.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
+                return;
+            }
 
-    const unreadCount = notifications?.filter(n => !n.is_read).length || 0;
+            const unreadCount = notifications?.filter(n => !n.is_read).length || 0;
 
-    document.getElementById("notification-count").textContent =
-        `${unreadCount} unread`;
+            document.getElementById("notification-count").textContent =
+                `${unreadCount} unread`;
 
-    if (!notifications || notifications.length === 0) {
-        container.innerHTML = `<p class="empty">No notifications yet.</p>`;
-        return;
-    }
+            if (!notifications || notifications.length === 0) {
+                container.innerHTML = `<p class="empty">No notifications yet.</p>`;
+                return;
+            }
 
-    container.innerHTML = notifications.map(notification => `
-        <article class="notification-card ${notification.is_read ? "" : "unread"}">
-            <div class="notification-message">
-                ${escapeHtml(notification.message)}
-            </div>
+            container.innerHTML = notifications.map(notification => `
+            <article class="notification-card ${notification.is_read ? "" : "unread"}">
+                <div class="notification-message">
+                    ${escapeHtml(notification.message)}
+                </div>
 
-            <div class="notification-meta">
-                ${formatDate(notification.created_at)}
-            </div>
+                <div class="notification-meta">
+                    ${formatDate(notification.created_at)}
+                </div>
 
-            <div class="actions">
-                ${notification.link ? `
-                    <a class="button" href="${escapeHtml(notification.link)}" onclick="markReadInline('${notification.id}')">
-                        Open
-                    </a>
-                ` : ""}
+                <div class="actions">
+                    ${notification.link ? `
+                        <a class="button" href="${escapeHtml(notification.link)}" onclick="markReadInline('${notification.id}')">
+                            Open
+                        </a>
+                    ` : ""}
 
-                ${!notification.is_read ? `
-                    <button class="button" onclick="markRead('${notification.id}')">
-                        Mark Read
+                    ${!notification.is_read ? `
+                        <button class="button" onclick="markRead('${notification.id}')">
+                            Mark Read
+                        </button>
+                    ` : ""}
+
+                    <button class="button" onclick="deleteNotification('${notification.id}')">
+                        Delete
                     </button>
-                ` : ""}
+                </div>
+            </article>
+        `).join("");
+        }
 
-                <button class="button" onclick="deleteNotification('${notification.id}')">
-                    Delete
-                </button>
-            </div>
-        </article>
-    `).join("");
-}
+        window.markRead = async function (notificationId) {
+            await supabase
+                .from("notifications")
+                .update({ is_read: true })
+                .eq("id", notificationId)
+                .eq("recipient_id", currentUser.id);
 
-window.markRead = async function(notificationId) {
-    await supabase
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("id", notificationId)
-        .eq("recipient_id", currentUser.id);
+            await loadNotifications();
+        };
 
-    await loadNotifications();
-};
+        window.markReadInline = async function (notificationId) {
+            await supabase
+                .from("notifications")
+                .update({ is_read: true })
+                .eq("id", notificationId)
+                .eq("recipient_id", currentUser.id);
+        };
 
-window.markReadInline = async function(notificationId) {
-    await supabase
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("id", notificationId)
-        .eq("recipient_id", currentUser.id);
-};
+        window.markAllRead = async function () {
+            await supabase
+                .from("notifications")
+                .update({ is_read: true })
+                .eq("recipient_id", currentUser.id);
 
-window.markAllRead = async function() {
-    await supabase
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("recipient_id", currentUser.id);
+            await loadNotifications();
+        };
 
-    await loadNotifications();
-};
+        window.clearRead = async function () {
+            await supabase
+                .from("notifications")
+                .delete()
+                .eq("recipient_id", currentUser.id)
+                .eq("is_read", true);
 
-window.clearRead = async function() {
-    await supabase
-        .from("notifications")
-        .delete()
-        .eq("recipient_id", currentUser.id)
-        .eq("is_read", true);
+            await loadNotifications();
+        };
 
-    await loadNotifications();
-};
+        window.deleteNotification = async function (notificationId) {
+            await supabase
+                .from("notifications")
+                .delete()
+                .eq("id", notificationId)
+                .eq("recipient_id", currentUser.id);
 
-window.deleteNotification = async function(notificationId) {
-    await supabase
-        .from("notifications")
-        .delete()
-        .eq("id", notificationId)
-        .eq("recipient_id", currentUser.id);
+            await loadNotifications();
+        };
 
-    await loadNotifications();
-};
+        function formatDate(value) {
+            if (!value) return "";
+            return new Date(value).toLocaleString();
+        }
 
-function formatDate(value) {
-    if (!value) return "";
-    return new Date(value).toLocaleString();
-}
+        function escapeHtml(value) {
+            return String(value || "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
 
-function escapeHtml(value) {
-    return String(value || "")
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-}
-
-window.logOut = async function () {
-    await supabase.auth.signOut();
-    window.location.href = "login.html";
-};
+        window.logOut = async function () {
+            await supabase.auth.signOut();
+            window.location.href = "login.html";
+        };
     </script>
 
 </body>

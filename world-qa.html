@@ -16,7 +16,7 @@
         );
     </script>
 
-    <link rel="stylesheet" href="theme.css?v=22">
+    <link rel="stylesheet" href="theme.css?v=25">
 
     <style>
         html {
@@ -243,7 +243,7 @@
 </head>
 
 <body>
-
+    <div class="nullverse-stars"></div>
     <header>
         <div class="logo">
             <a href="index.html">
@@ -294,90 +294,90 @@
     </main>
 
     <script type="module">
-    import { requireBetaAccess } from "./betaGate.js";
-    import { supabase } from "./supabaseClient.js";
-    import { setupNotificationBadge } from "./notificationBadge.js";
-    import { createNotification } from "./notifications.js";
+        import { requireBetaAccess } from "./betaGate.js";
+        import { supabase } from "./supabaseClient.js";
+        import { setupNotificationBadge } from "./notificationBadge.js";
+        import { createNotification } from "./notifications.js";
 
         const currentUser = await requireBetaAccess();
         setupNotificationBadge();
 
-    const params = new URLSearchParams(window.location.search);
-    const worldId = params.get("id");
+        const params = new URLSearchParams(window.location.search);
+        const worldId = params.get("id");
 
-    let currentWorld = null;
+        let currentWorld = null;
 
-    if (!worldId) {
-        alert("No world ID provided.");
-        window.location.href = "explore.html";
-    }
-
-    await loadWorld();
-    await loadQuestions();
-
-    async function loadWorld() {
-        const { data, error } = await supabase
-            .from("worlds")
-            .select("*")
-            .eq("id", worldId)
-            .single();
-
-        if (error || !data) {
-            alert("World not found.");
+        if (!worldId) {
+            alert("No world ID provided.");
             window.location.href = "explore.html";
-            return;
         }
 
-        currentWorld = data;
+        await loadWorld();
+        await loadQuestions();
 
-        document.getElementById("page-title").textContent =
-            `${data.title} Q&A`;
+        async function loadWorld() {
+            const { data, error } = await supabase
+                .from("worlds")
+                .select("*")
+                .eq("id", worldId)
+                .single();
 
-        document.getElementById("page-subtitle").textContent =
-            `Ask questions about ${data.title}, or read what the creator has answered.`;
+            if (error || !data) {
+                alert("World not found.");
+                window.location.href = "explore.html";
+                return;
+            }
 
-        document.getElementById("back-to-world").href =
-            `world.html?id=${encodeURIComponent(worldId)}`;
+            currentWorld = data;
 
-        if (currentUser.id === currentWorld.owner_id) {
-            document.getElementById("question-form-section").style.display =
-                "none";
-        }
-    }
+            document.getElementById("page-title").textContent =
+                `${data.title} Q&A`;
 
-    async function loadQuestions() {
-        const container = document.getElementById("questions-container");
+            document.getElementById("page-subtitle").textContent =
+                `Ask questions about ${data.title}, or read what the creator has answered.`;
 
-        const { data: questions, error } = await supabase
-            .from("world_questions")
-            .select("*")
-            .eq("world_id", worldId)
-            .order("created_at", { ascending: false });
+            document.getElementById("back-to-world").href =
+                `world.html?id=${encodeURIComponent(worldId)}`;
 
-        if (error) {
-            container.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
-            return;
-        }
-
-        if (!questions || questions.length === 0) {
-            container.innerHTML = `<p class="empty">No questions yet.</p>`;
-            return;
+            if (currentUser.id === currentWorld.owner_id) {
+                document.getElementById("question-form-section").style.display =
+                    "none";
+            }
         }
 
-        const userIds = [
-            ...new Set(questions.map(question => question.user_id))
-        ];
+        async function loadQuestions() {
+            const container = document.getElementById("questions-container");
 
-        const { data: profiles } = await supabase
-            .from("profiles")
-            .select("id, username, display_name")
-            .in("id", userIds);
+            const { data: questions, error } = await supabase
+                .from("world_questions")
+                .select("*")
+                .eq("world_id", worldId)
+                .order("created_at", { ascending: false });
 
-        container.innerHTML = questions.map(question => {
-            const profile = profiles?.find(profile => profile.id === question.user_id);
-            return renderQuestionCard(question, profile);
-        }).join("");
-    }
+            if (error) {
+                container.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
+                return;
+            }
+
+            if (!questions || questions.length === 0) {
+                container.innerHTML = `<p class="empty">No questions yet.</p>`;
+                return;
+            }
+
+            const userIds = [
+                ...new Set(questions.map(question => question.user_id))
+            ];
+
+            const { data: profiles } = await supabase
+                .from("profiles")
+                .select("id, username, display_name")
+                .in("id", userIds);
+
+            container.innerHTML = questions.map(question => {
+                const profile = profiles?.find(profile => profile.id === question.user_id);
+                return renderQuestionCard(question, profile);
+            }).join("");
+        }
 
         function renderQuestionCard(question, profile) {
             const username = profile?.username || "unknown";
@@ -386,151 +386,151 @@
 
 
             return `
-        ${(
+            ${(
                     currentUser.id === question.user_id ||
                     currentUser.id === currentWorld.owner_id
                 ) ? `
-    <div style="margin-top:18px; display:flex; gap:10px; flex-wrap:wrap;">
+        <div style="margin-top:18px; display:flex; gap:10px; flex-wrap:wrap;">
 
-        ${currentUser.id === question.user_id ? `
+            ${currentUser.id === question.user_id ? `
+                <button
+                    class="button"
+                    onclick="editQuestion('${question.id}', \`${escapeHtml(question.question)}\`)">
+                    Edit Question
+                </button>
+            ` : ""}
+
             <button
                 class="button"
-                onclick="editQuestion('${question.id}', \`${escapeHtml(question.question)}\`)">
-                Edit Question
+                onclick="deleteQuestion('${question.id}')">
+                Delete
             </button>
-        ` : ""}
 
-        <button
-            class="button"
-            onclick="deleteQuestion('${question.id}')">
-            Delete
-        </button>
-
-    </div>
+        </div>
 ` : ""}
-            <article class="question-card">
-                <div class="author">
-                    Asked by <strong>${escapeHtml(displayName)}</strong>
-                    (@${escapeHtml(username)})
-                </div>
-
-                <p>
-                    <strong>Q:</strong>
-                    ${escapeHtml(question.question)}
-                </p>
-
-                ${question.creator_answer ? `
-                    <div class="answer">
-                        <strong>Creator Answer:</strong>
-                        <p>${escapeHtml(question.creator_answer)}</p>
+                <article class="question-card">
+                    <div class="author">
+                        Asked by <strong>${escapeHtml(displayName)}</strong>
+                        (@${escapeHtml(username)})
                     </div>
-                ` : `
-                    <p class="empty">Awaiting creator response.</p>
 
-                    ${isOwner ? `
-                        <textarea
-                            id="answer-${question.id}"
-                            rows="4"
-                            placeholder="Write your answer..."
-                        ></textarea>
+                    <p>
+                        <strong>Q:</strong>
+                        ${escapeHtml(question.question)}
+                    </p>
 
-                        <button
-                            class="button"
-                            onclick="answerQuestion('${question.id}')"
-                        >
-                            Reply
-                        </button>
-                    ` : ""}
-                `}
-            </article>
-        `;
-    }
+                    ${question.creator_answer ? `
+                        <div class="answer">
+                            <strong>Creator Answer:</strong>
+                            <p>${escapeHtml(question.creator_answer)}</p>
+                        </div>
+                    ` : `
+                        <p class="empty">Awaiting creator response.</p>
 
-    window.submitQuestion = async function () {
-        if (!currentWorld) return;
+                        ${isOwner ? `
+                            <textarea
+                                id="answer-${question.id}"
+                                rows="4"
+                                placeholder="Write your answer..."
+                            ></textarea>
 
-        if (currentUser.id === currentWorld.owner_id) {
-            return;
+                            <button
+                                class="button"
+                                onclick="answerQuestion('${question.id}')"
+                            >
+                                Reply
+                            </button>
+                        ` : ""}
+                    `}
+                </article>
+            `;
         }
 
-        const input = document.getElementById("question-input");
-        const question = input.value.trim();
+        window.submitQuestion = async function () {
+            if (!currentWorld) return;
 
-        if (!question) return;
+            if (currentUser.id === currentWorld.owner_id) {
+                return;
+            }
 
-        const { error } = await supabase
-            .from("world_questions")
-            .insert({
-                world_id: worldId,
-                user_id: currentUser.id,
-                question
-            });
+            const input = document.getElementById("question-input");
+            const question = input.value.trim();
 
-        if (!error) {
-            await createNotification({
-                recipientId: currentWorld.owner_id,
-                actorId: currentUser.id,
-                worldId: worldId,
-                type: "world_question",
-                message: `Someone asked a question about ${currentWorld.title}.`,
-                link: `world-qa.html?id=${encodeURIComponent(worldId)}`
-            });
-        }
+            if (!question) return;
 
-        if (error) {
-            alert(error.message);
-            return;
-        }
+            const { error } = await supabase
+                .from("world_questions")
+                .insert({
+                    world_id: worldId,
+                    user_id: currentUser.id,
+                    question
+                });
 
-        input.value = "";
-        await loadQuestions();
-    };
+            if (!error) {
+                await createNotification({
+                    recipientId: currentWorld.owner_id,
+                    actorId: currentUser.id,
+                    worldId: worldId,
+                    type: "world_question",
+                    message: `Someone asked a question about ${currentWorld.title}.`,
+                    link: `world-qa.html?id=${encodeURIComponent(worldId)}`
+                });
+            }
 
-    window.answerQuestion = async function (questionId) {
-        if (!currentWorld) return;
+            if (error) {
+                alert(error.message);
+                return;
+            }
 
-        if (currentUser.id !== currentWorld.owner_id) {
-            return;
-        }
+            input.value = "";
+            await loadQuestions();
+        };
 
-        const input = document.getElementById(`answer-${questionId}`);
-        const answer = input.value.trim();
+        window.answerQuestion = async function (questionId) {
+            if (!currentWorld) return;
 
-        if (!answer) return;
+            if (currentUser.id !== currentWorld.owner_id) {
+                return;
+            }
 
-        const { error } = await supabase
-            .from("world_questions")
-            .update({
-                creator_answer: answer,
-                answered_at: new Date().toISOString()
-            })
-            .eq("id", questionId)
-            .eq("world_id", worldId);
+            const input = document.getElementById(`answer-${questionId}`);
+            const answer = input.value.trim();
 
-        const questionData = await supabase
-            .from("world_questions")
-            .select("user_id")
-            .eq("id", questionId)
-            .single();
+            if (!answer) return;
 
-        if (!error && questionData.data) {
-            await createNotification({
-                recipientId: questionData.data.user_id,
-                actorId: currentUser.id,
-                worldId: worldId,
-                type: "question_answered",
-                message: `Your question about ${currentWorld.title} was answered.`,
-                link: `world-qa.html?id=${encodeURIComponent(worldId)}`
-            });
-        }
+            const { error } = await supabase
+                .from("world_questions")
+                .update({
+                    creator_answer: answer,
+                    answered_at: new Date().toISOString()
+                })
+                .eq("id", questionId)
+                .eq("world_id", worldId);
 
-        if (error) {
-            alert(error.message);
-            return;
-        }
+            const questionData = await supabase
+                .from("world_questions")
+                .select("user_id")
+                .eq("id", questionId)
+                .single();
 
-        await loadQuestions();
-    };
+            if (!error && questionData.data) {
+                await createNotification({
+                    recipientId: questionData.data.user_id,
+                    actorId: currentUser.id,
+                    worldId: worldId,
+                    type: "question_answered",
+                    message: `Your question about ${currentWorld.title} was answered.`,
+                    link: `world-qa.html?id=${encodeURIComponent(worldId)}`
+                });
+            }
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await loadQuestions();
+        };
 
         window.deleteQuestion = async function (questionId) {
 
@@ -574,19 +574,19 @@
             await loadQuestions();
         };
 
-    function escapeHtml(value) {
-        return String(value || "")
-            .replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;")
-            .replaceAll('"', "&quot;")
-            .replaceAll("'", "&#039;");
-    }
+        function escapeHtml(value) {
+            return String(value || "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
 
-    window.logOut = async function () {
-        await supabase.auth.signOut();
-        window.location.href = "login.html";
-    };
+        window.logOut = async function () {
+            await supabase.auth.signOut();
+            window.location.href = "login.html";
+        };
     </script>
 
 </body>

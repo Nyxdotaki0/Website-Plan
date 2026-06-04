@@ -16,7 +16,7 @@
         );
     </script>
 
-    <link rel="stylesheet" href="theme.css?v=22">
+    <link rel="stylesheet" href="theme.css?v=25">
 
     <style>
         html {
@@ -247,6 +247,7 @@
     </style>
 </head>
 <body>
+    <div class="nullverse-stars"></div>
     <header>
         <div class="logo">
             <a href="index.html">
@@ -294,9 +295,9 @@
     </main>
 
     <script type="module">
-import { requireBetaAccess } from "./betaGate.js";
-import { supabase } from "./supabaseClient.js";
-import { setupNotificationBadge } from "./notificationBadge.js";
+        import { requireBetaAccess } from "./betaGate.js";
+        import { supabase } from "./supabaseClient.js";
+        import { setupNotificationBadge } from "./notificationBadge.js";
         import { createNotification } from "./notifications.js";
         import {
             getCurrentUserWithPermissions,
@@ -310,103 +311,103 @@ import { setupNotificationBadge } from "./notificationBadge.js";
             profile: currentProfile,
             permissions: currentPermissions
         } = await getCurrentUserWithPermissions(currentUser.id);
-const params = new URLSearchParams(window.location.search);
-const additionId = params.get("id");
+        const params = new URLSearchParams(window.location.search);
+        const additionId = params.get("id");
 
-let currentAddition = null;
+        let currentAddition = null;
 
-if (!additionId) {
-    alert("No addition ID provided.");
-    window.location.href = "explore.html";
-}
+        if (!additionId) {
+            alert("No addition ID provided.");
+            window.location.href = "explore.html";
+        }
 
-await loadAddition();
-await loadLikes();
-await loadComments();
+        await loadAddition();
+        await loadLikes();
+        await loadComments();
 
-async function loadAddition() {
-    const { data, error } = await supabase
-        .from("world_additions")
-        .select("*")
-        .eq("id", additionId)
-        .single();
+        async function loadAddition() {
+            const { data, error } = await supabase
+                .from("world_additions")
+                .select("*")
+                .eq("id", additionId)
+                .single();
 
-    if (error || !data) {
-        alert("Addition not found.");
-        window.location.href = "explore.html";
-        return;
-    }
+            if (error || !data) {
+                alert("Addition not found.");
+                window.location.href = "explore.html";
+                return;
+            }
 
-    currentAddition = data;
+            currentAddition = data;
 
-    const { data: world } = await supabase
-        .from("worlds")
-        .select("id, title, owner_id")
-        .eq("id", data.world_id)
-        .single();
+            const { data: world } = await supabase
+                .from("worlds")
+                .select("id, title, owner_id")
+                .eq("id", data.world_id)
+                .single();
 
-    const { data: profile } = await supabase
-        .from("profiles")
-        .select("id, username, display_name, role, role_name")
-        .eq("id", data.author_id)
-        .single();
+            const { data: profile } = await supabase
+                .from("profiles")
+                .select("id, username, display_name, role, role_name")
+                .eq("id", data.author_id)
+                .single();
 
-    document.title = `${data.title || "Addition"} - Nullverse`;
-    currentAddition.authorProfile = profile;
-    const ownerAccess = currentUser.id === data.author_id;
-    const staffAccess = canModerateAdditions(currentPermissions);
+            document.title = `${data.title || "Addition"} - Nullverse`;
+            currentAddition.authorProfile = profile;
+            const ownerAccess = currentUser.id === data.author_id;
+            const staffAccess = canModerateAdditions(currentPermissions);
 
-    if (data.moderation_status === "hidden" && !ownerAccess && !staffAccess) {
-        alert("This addition has been hidden by Nullverse staff.");
-        window.location.href = "explore.html";
-        return;
-    }
+            if (data.moderation_status === "hidden" && !ownerAccess && !staffAccess) {
+                alert("This addition has been hidden by Nullverse staff.");
+                window.location.href = "explore.html";
+                return;
+            }
 
-    document.getElementById("back-link").href =
-        `world-additions.html?id=${encodeURIComponent(data.world_id)}`;
+            document.getElementById("back-link").href =
+                `world-additions.html?id=${encodeURIComponent(data.world_id)}`;
 
-    document.getElementById("type-badge").textContent =
-        data.addition_type || "Addition";
+            document.getElementById("type-badge").textContent =
+                data.addition_type || "Addition";
 
-    document.getElementById("addition-title").textContent =
-        data.title || "Untitled Addition";
+            document.getElementById("addition-title").textContent =
+                data.title || "Untitled Addition";
 
-    document.getElementById("addition-summary").textContent =
-        data.summary || "";
+            document.getElementById("addition-summary").textContent =
+                data.summary || "";
 
-    document.getElementById("addition-author").innerHTML =
-        `A community addition to <strong>${escapeHtml(world?.title || "Unknown World")}</strong> by <strong>${escapeHtml(profile?.display_name || profile?.username || "Unknown Creator")}</strong>`;
+            document.getElementById("addition-author").innerHTML =
+                `A community addition to <strong>${escapeHtml(world?.title || "Unknown World")}</strong> by <strong>${escapeHtml(profile?.display_name || profile?.username || "Unknown Creator")}</strong>`;
 
-    document.getElementById("addition-content").innerHTML =
-        `<p style="white-space:pre-wrap;">${escapeHtml(data.content || "No content yet.")}</p>`;
+            document.getElementById("addition-content").innerHTML =
+                `<p style="white-space:pre-wrap;">${escapeHtml(data.content || "No content yet.")}</p>`;
 
-    const cover = data.cover_image_url || data.image_url;
+            const cover = data.cover_image_url || data.image_url;
 
-    if (cover) {
-        document.getElementById("addition-cover").src = cover;
-        document.getElementById("addition-cover").style.display = "block";
-    }
+            if (cover) {
+                document.getElementById("addition-cover").src = cover;
+                document.getElementById("addition-cover").style.display = "block";
+            }
 
-    if (currentUser.id === data.author_id) {
-        document.getElementById("edit-link").style.display = "inline-block";
-        document.getElementById("edit-link").href =
-            `edit-addition.html?id=${encodeURIComponent(data.id)}`;
-    }
-    if (data.moderation_status === "hidden") {
-        document.getElementById("addition-summary").insertAdjacentHTML(
-            "beforebegin",
+            if (currentUser.id === data.author_id) {
+                document.getElementById("edit-link").style.display = "inline-block";
+                document.getElementById("edit-link").href =
+                    `edit-addition.html?id=${encodeURIComponent(data.id)}`;
+            }
+            if (data.moderation_status === "hidden") {
+                document.getElementById("addition-summary").insertAdjacentHTML(
+                    "beforebegin",
+                    `
+            <div style="margin:18px 0;padding:16px;border-radius:14px;border:1px solid rgba(255,160,60,.3);background:rgba(255,160,60,.08);">
+                <strong>Hidden by Moderation</strong>
+                <p style="margin:8px 0 0;">This addition is hidden from public view.</p>
+                <p style="margin:8px 0 0;">Reason: ${escapeHtml(data.moderation_reason || "No reason provided.")}</p>
+            </div>
             `
-        <div style="margin:18px 0;padding:16px;border-radius:14px;border:1px solid rgba(255,160,60,.3);background:rgba(255,160,60,.08);">
-            <strong>Hidden by Moderation</strong>
-            <p style="margin:8px 0 0;">This addition is hidden from public view.</p>
-            <p style="margin:8px 0 0;">Reason: ${escapeHtml(data.moderation_reason || "No reason provided.")}</p>
-        </div>
-        `
-        );
-    }
+                );
+            }
 
-    renderModerationControls(data);
-}
+            renderModerationControls(data);
+        }
 
         function renderModerationControls(addition) {
             const canModerate =
@@ -416,23 +417,23 @@ async function loadAddition() {
             if (!canModerate) return;
 
             document.querySelector(".hero .actions").insertAdjacentHTML("beforeend", `
-        <div style="width:100%;margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
-            <strong>Addition Moderation</strong>
-            <p class="empty">Status: ${escapeHtml(addition.moderation_status || "visible")}</p>
+            <div style="width:100%;margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
+                <strong>Addition Moderation</strong>
+                <p class="empty">Status: ${escapeHtml(addition.moderation_status || "visible")}</p>
 
-            <label class="empty">Reason for hiding</label>
-            <input id="addition-hide-reason"
-                   placeholder="Reason shown to author..."
-                   style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:rgba(0,0,0,.28);color:var(--text-primary);">
+                <label class="empty">Reason for hiding</label>
+                <input id="addition-hide-reason"
+                       placeholder="Reason shown to author..."
+                       style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:rgba(0,0,0,.28);color:var(--text-primary);">
 
-            <div class="actions">
-                <button class="button" onclick="setAdditionModerationStatus('hidden')">Hide Addition</button>
-                <button class="button" onclick="setAdditionModerationStatus('visible')">Restore Addition</button>
+                <div class="actions">
+                    <button class="button" onclick="setAdditionModerationStatus('hidden')">Hide Addition</button>
+                    <button class="button" onclick="setAdditionModerationStatus('visible')">Restore Addition</button>
+                </div>
+
+                <p id="addition-moderation-message" class="empty"></p>
             </div>
-
-            <p id="addition-moderation-message" class="empty"></p>
-        </div>
-    `);
+        `);
         }
 
         window.setAdditionModerationStatus = async function (status) {
@@ -499,168 +500,168 @@ async function loadAddition() {
             }, 700);
         };
 
-async function loadLikes() {
-    const { data: likes } = await supabase
-        .from("world_addition_likes")
-        .select("*")
-        .eq("addition_id", additionId);
+        async function loadLikes() {
+            const { data: likes } = await supabase
+                .from("world_addition_likes")
+                .select("*")
+                .eq("addition_id", additionId);
 
-    const count = likes?.length || 0;
+            const count = likes?.length || 0;
 
-    document.getElementById("like-count").textContent =
-        `${count} ${count === 1 ? "Like" : "Likes"}`;
+            document.getElementById("like-count").textContent =
+                `${count} ${count === 1 ? "Like" : "Likes"}`;
 
-    const userLiked = likes?.some(like => like.user_id === currentUser.id);
-    const button = document.getElementById("like-button");
+            const userLiked = likes?.some(like => like.user_id === currentUser.id);
+            const button = document.getElementById("like-button");
 
-    button.textContent = userLiked ? "♥ Liked" : "♡ Like";
-    button.dataset.liked = userLiked ? "true" : "false";
-}
-
-document.getElementById("like-button").addEventListener("click", async () => {
-    const liked = document.getElementById("like-button").dataset.liked === "true";
-
-    if (liked) {
-        await supabase
-            .from("world_addition_likes")
-            .delete()
-            .eq("addition_id", additionId)
-            .eq("user_id", currentUser.id);
-    } else {
-        const { error: likeError } = await supabase
-            .from("world_addition_likes")
-            .insert({
-                addition_id: additionId,
-                user_id: currentUser.id
-            });
-
-        if (!likeError) {
-            await createNotification({
-                recipientId: currentAddition.author_id,
-                actorId: currentUser.id,
-                additionId: currentAddition.id,
-                type: "addition_liked",
-                message: `Someone liked your addition: ${currentAddition.title}.`,
-                link: `addition.html?id=${encodeURIComponent(currentAddition.id)}`
-            });
+            button.textContent = userLiked ? "♥ Liked" : "♡ Like";
+            button.dataset.liked = userLiked ? "true" : "false";
         }
-    }
 
-    await loadLikes();
-});
+        document.getElementById("like-button").addEventListener("click", async () => {
+            const liked = document.getElementById("like-button").dataset.liked === "true";
 
-async function loadComments() {
-    const container = document.getElementById("comments-container");
+            if (liked) {
+                await supabase
+                    .from("world_addition_likes")
+                    .delete()
+                    .eq("addition_id", additionId)
+                    .eq("user_id", currentUser.id);
+            } else {
+                const { error: likeError } = await supabase
+                    .from("world_addition_likes")
+                    .insert({
+                        addition_id: additionId,
+                        user_id: currentUser.id
+                    });
 
-    const { data: comments, error } = await supabase
-        .from("world_addition_comments")
-        .select("*")
-        .eq("addition_id", additionId)
-        .order("created_at", { ascending:false });
+                if (!likeError) {
+                    await createNotification({
+                        recipientId: currentAddition.author_id,
+                        actorId: currentUser.id,
+                        additionId: currentAddition.id,
+                        type: "addition_liked",
+                        message: `Someone liked your addition: ${currentAddition.title}.`,
+                        link: `addition.html?id=${encodeURIComponent(currentAddition.id)}`
+                    });
+                }
+            }
 
-    if (error) {
-        container.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
-        return;
-    }
-
-    if (!comments || !comments.length) {
-        container.innerHTML = `<p class="empty">No comments yet.</p>`;
-        return;
-    }
-
-    const userIds = [...new Set(comments.map(comment => comment.user_id))];
-
-    const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, username, display_name")
-        .in("id", userIds);
-
-    container.innerHTML = comments.map(comment => {
-        const profile = profiles?.find(profile => profile.id === comment.user_id);
-        const name = profile?.display_name || profile?.username || "Unknown";
-
-        const canDelete =
-            currentUser.id === comment.user_id ||
-            currentUser.id === currentAddition.author_id;
-
-        return `
-            <div class="comment">
-                <p><strong>${escapeHtml(name)}</strong></p>
-                <p>${escapeHtml(comment.content)}</p>
-                ${canDelete ? `
-                    <button class="button" onclick="deleteComment('${comment.id}')">
-                        Delete
-                    </button>
-                ` : ""}
-            </div>
-        `;
-    }).join("");
-}
-
-window.submitComment = async function() {
-    const input = document.getElementById("comment-input");
-    const content = input.value.trim();
-
-    if (!content) return;
-
-    const { error } = await supabase
-        .from("world_addition_comments")
-        .insert({
-            addition_id: additionId,
-            user_id: currentUser.id,
-            content
+            await loadLikes();
         });
 
-    if (!error) {
-        await createNotification({
-            recipientId: currentAddition.author_id,
-            actorId: currentUser.id,
-            additionId: currentAddition.id,
-            type: "addition_commented",
-            message: `Someone commented on your addition: ${currentAddition.title}.`,
-            link: `addition.html?id=${encodeURIComponent(currentAddition.id)}`
-        });
-    }
+        async function loadComments() {
+            const container = document.getElementById("comments-container");
 
-    if (error) {
-        alert(error.message);
-        return;
-    }
+            const { data: comments, error } = await supabase
+                .from("world_addition_comments")
+                .select("*")
+                .eq("addition_id", additionId)
+                .order("created_at", { ascending: false });
 
-    input.value = "";
-    await loadComments();
-};
+            if (error) {
+                container.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
+                return;
+            }
 
-window.deleteComment = async function(commentId) {
-    const confirmed = confirm("Delete this comment?");
-    if (!confirmed) return;
+            if (!comments || !comments.length) {
+                container.innerHTML = `<p class="empty">No comments yet.</p>`;
+                return;
+            }
 
-    const { error } = await supabase
-        .from("world_addition_comments")
-        .delete()
-        .eq("id", commentId);
+            const userIds = [...new Set(comments.map(comment => comment.user_id))];
 
-    if (error) {
-        alert(error.message);
-        return;
-    }
+            const { data: profiles } = await supabase
+                .from("profiles")
+                .select("id, username, display_name")
+                .in("id", userIds);
 
-    await loadComments();
-};
+            container.innerHTML = comments.map(comment => {
+                const profile = profiles?.find(profile => profile.id === comment.user_id);
+                const name = profile?.display_name || profile?.username || "Unknown";
 
-function escapeHtml(value) {
-    return String(value || "")
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-}
+                const canDelete =
+                    currentUser.id === comment.user_id ||
+                    currentUser.id === currentAddition.author_id;
 
-window.logOut = async function () {
-    await supabase.auth.signOut();
-    window.location.href = "login.html";
-};
+                return `
+                <div class="comment">
+                    <p><strong>${escapeHtml(name)}</strong></p>
+                    <p>${escapeHtml(comment.content)}</p>
+                    ${canDelete ? `
+                        <button class="button" onclick="deleteComment('${comment.id}')">
+                            Delete
+                        </button>
+                    ` : ""}
+                </div>
+            `;
+            }).join("");
+        }
+
+        window.submitComment = async function () {
+            const input = document.getElementById("comment-input");
+            const content = input.value.trim();
+
+            if (!content) return;
+
+            const { error } = await supabase
+                .from("world_addition_comments")
+                .insert({
+                    addition_id: additionId,
+                    user_id: currentUser.id,
+                    content
+                });
+
+            if (!error) {
+                await createNotification({
+                    recipientId: currentAddition.author_id,
+                    actorId: currentUser.id,
+                    additionId: currentAddition.id,
+                    type: "addition_commented",
+                    message: `Someone commented on your addition: ${currentAddition.title}.`,
+                    link: `addition.html?id=${encodeURIComponent(currentAddition.id)}`
+                });
+            }
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            input.value = "";
+            await loadComments();
+        };
+
+        window.deleteComment = async function (commentId) {
+            const confirmed = confirm("Delete this comment?");
+            if (!confirmed) return;
+
+            const { error } = await supabase
+                .from("world_addition_comments")
+                .delete()
+                .eq("id", commentId);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await loadComments();
+        };
+
+        function escapeHtml(value) {
+            return String(value || "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        window.logOut = async function () {
+            await supabase.auth.signOut();
+            window.location.href = "login.html";
+        };
     </script>
 </body>
 </html>
