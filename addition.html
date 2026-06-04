@@ -393,6 +393,7 @@
         const additionId = params.get("id");
 
         let currentAddition = null;
+        let pendingCommentReport = null;
         setupReportSystem();
 
         if (!additionId) {
@@ -667,14 +668,67 @@
                     <div class="comment">
                         <p><strong>${escapeHtml(name)}</strong></p>
                         <p>${escapeHtml(comment.content)}</p>
-                        ${canDelete ? `
-                            <button class="button" onclick="deleteComment('${comment.id}')">
-                                Delete
-                            </button>
-                        ` : ""}
+                        <button class="button"
+        onclick="openAdditionCommentReport(
+            '${comment.id}',
+            '${comment.user_id}',
+            \`${escapeHtml(comment.content)}\`
+        )">
+    Report Comment
+</button>
+
+${canDelete ? `
+    <button class="button" onclick="deleteComment('${comment.id}')">
+        Delete
+    </button>
+` : ""}
                     </div>
                 `;
             }).join("");
+        }
+
+        window.openAdditionCommentReport = function (commentId, userId, commentText) {
+            pendingCommentReport = {
+                commentId,
+                userId,
+                commentText
+            };
+
+            document.querySelector("#report-modal h2").textContent =
+                "Report Comment";
+
+            document.getElementById("report-details").value = "";
+            document.getElementById("report-modal").style.display = "flex";
+        };
+
+        async function submitAdditionCommentReport() {
+            if (!pendingCommentReport) return;
+
+            const reason = document.getElementById("report-reason").value;
+            const details = document.getElementById("report-details").value.trim();
+
+            const { error } = await supabase
+                .from("reports")
+                .insert({
+                    reporter_id: currentUser.id,
+                    reported_user_id: pendingCommentReport.userId,
+                    addition_id: currentAddition.id,
+                    comment_id: pendingCommentReport.commentId,
+                    report_type: "addition_comment",
+                    reason,
+                    details,
+                    reported_text: pendingCommentReport.commentText,
+                    status: "open"
+                });
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            pendingCommentReport = null;
+            document.getElementById("report-modal").style.display = "none";
+            alert("Report submitted.");
         }
 
         window.submitComment = async function () {
@@ -752,10 +806,13 @@
                 modal.style.display = "none";
             });
 
-            submitBtn.addEventListener(
-                "click",
-                submitAdditionReport
-            );
+            submitBtn.addEventListener("click", () => {
+                if (pendingCommentReport) {
+                    submitAdditionCommentReport();
+                } else {
+                    submitAdditionReport();
+                }
+            });
         }
 
         async function submitAdditionReport() {
