@@ -954,14 +954,62 @@
         const { data: profile, error } = await query.single();
 
         if (error || !profile) {
-            showProfileNotFound();
-        } else {
-            renderProfile(profile);
 
-            await Promise.all([
-                loadProfileWorlds(profile.id),
-                loadFollowData(profile.id)
-            ]);
+            showProfileNotFound();
+
+        } else {
+
+            if (
+                currentUser &&
+                currentUser.id !== profile.id
+            ) {
+
+                const blocked =
+                    await areUsersBlocked(
+                        currentUser.id,
+                        profile.id
+                    );
+
+                if (blocked) {
+
+                    showBlockedProfile();
+
+                } else {
+
+                    renderProfile(profile);
+
+                    await Promise.all([
+                        loadProfileWorlds(profile.id),
+                        loadFollowData(profile.id)
+                    ]);
+                }
+
+            } else {
+
+                renderProfile(profile);
+
+                await Promise.all([
+                    loadProfileWorlds(profile.id),
+                    loadFollowData(profile.id)
+                ]);
+            }
+        }
+
+        async function areUsersBlocked(userA, userB) {
+
+            const { data, error } = await supabase
+                .from("user_blocks")
+                .select("id, blocker_id, blocked_id")
+                .in("blocker_id", [userA, userB])
+                .in("blocked_id", [userA, userB])
+                .limit(1);
+
+            if (error) {
+                console.error(error);
+                return false;
+            }
+
+            return data && data.length > 0;
         }
 
         function renderProfile(profile) {
@@ -1071,6 +1119,39 @@ ${escapeHtml(
             if (editButton) {
                 editButton.style.display = "none";
             }
+        }
+
+        function showBlockedProfile() {
+
+            document.getElementById("profile-display-name")
+                .textContent =
+                "Profile unavailable";
+
+            document.getElementById("profile-username")
+                .textContent = "";
+
+            document.getElementById("profile-bio")
+                .textContent =
+                "This profile is unavailable.";
+
+            document.getElementById("profile-creator-type")
+                .textContent = "";
+
+            document.getElementById("profile-avatar").src =
+                "https://placehold.co/200x200/1b1b28/ffffff?text=?";
+
+            document.getElementById("profile-banner").style.background =
+                "linear-gradient(135deg,#111,#222)";
+
+            document.getElementById("featured-worlds").innerHTML =
+                `<p class="empty">No worlds available.</p>`;
+
+            document.getElementById("all-worlds").innerHTML =
+                `<p class="empty">No worlds available.</p>`;
+
+            document.getElementById("follow-button-container").innerHTML = "";
+            document.getElementById("block-button-container").innerHTML = "";
+            document.getElementById("report-button-container").innerHTML = "";
         }
 
         async function loadProfileWorlds(profileId) {
