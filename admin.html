@@ -239,6 +239,32 @@
         </nav>
     </header>
 
+    <section id="hidden-worlds-panel"
+             class="panel"
+             style="display:none;">
+
+        <h2>Hidden Worlds</h2>
+
+        <p class="empty">
+            Worlds hidden by moderators or Void Architects.
+        </p>
+
+        <div class="actions">
+            <button id="load-hidden-worlds-button"
+                    class="button">
+                Load Hidden Worlds
+            </button>
+        </div>
+
+        <div id="hidden-worlds-container"
+             style="margin-top:18px;">
+            <p class="empty">
+                Click "Load Hidden Worlds".
+            </p>
+        </div>
+
+    </section>
+
     <main>
         <section class="hero">
             <h1>Role Management</h1>
@@ -285,7 +311,8 @@
             document.getElementById("access-panel").innerHTML =
                 `<span class="badge">Signed in as Void Architect: ${escapeHtml(myProfile.display_name || myProfile.username || currentUser.email)}</span>`;
             document.getElementById("admin-content").style.display = "block";
-            
+            document.getElementById("hidden-worlds-panel").style.display = "block";
+
         }
 
         async function loadUsers() {
@@ -397,11 +424,100 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
 
         document.getElementById("clear-search-button").addEventListener("click", clearSearch);
 
+        document
+            .getElementById(
+                "load-hidden-worlds-button"
+            )
+            .addEventListener(
+                "click",
+                loadHiddenWorlds
+            );
+
         document.getElementById("user-search").addEventListener("keydown", function (event) {
             if (event.key === "Enter") {
                 loadUsers();
             }
         });
+
+        async function loadHiddenWorlds() {
+
+            const container =
+                document.getElementById(
+                    "hidden-worlds-container"
+                );
+
+            container.innerHTML =
+                `<p class="empty">Loading hidden worlds...</p>`;
+
+            const { data, error } = await supabase
+                .from("worlds")
+                .select(`
+            id,
+            title,
+            owner_id,
+            moderation_status
+        `)
+                .eq("moderation_status", "hidden")
+                .order("updated_at", { ascending: false });
+
+            if (error) {
+                container.innerHTML =
+                    `<p class="empty">${escapeHtml(error.message)}</p>`;
+                return;
+            }
+
+            if (!data || !data.length) {
+                container.innerHTML =
+                    `<p class="empty">No hidden worlds.</p>`;
+                return;
+            }
+
+            container.innerHTML =
+                data.map(world => `
+            <article class="card">
+
+                <strong>
+                    ${escapeHtml(world.title || "Untitled World")}
+                </strong>
+
+                <div class="meta">
+                    Status: Hidden
+                </div>
+
+                <div class="actions">
+
+                    <a class="button"
+                       href="world.html?id=${world.id}">
+                        Open World
+                    </a>
+
+                    <button class="button"
+                            onclick="restoreWorld('${world.id}')">
+                        Restore
+                    </button>
+
+                </div>
+
+            </article>
+        `).join("");
+        }
+
+        window.restoreWorld = async function (worldId) {
+
+            const { error } = await supabase
+                .from("worlds")
+                .update({
+                    moderation_status: "visible"
+                })
+                .eq("id", worldId);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await loadHiddenWorlds();
+        };
 
         function escapeHtml(value) {
             return String(value || "")
