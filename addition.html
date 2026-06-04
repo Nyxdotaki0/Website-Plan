@@ -297,10 +297,19 @@
 import { requireBetaAccess } from "./betaGate.js";
 import { supabase } from "./supabaseClient.js";
 import { setupNotificationBadge } from "./notificationBadge.js";
-import { createNotification } from "./notifications.js";
+        import { createNotification } from "./notifications.js";
+        import {
+            getCurrentUserWithPermissions,
+            canModerateAdditions,
+            canModerateContentOwner
+        } from "./permissions.js?v=4";
 
         const currentUser = await requireBetaAccess();
         setupNotificationBadge();
+        const {
+            profile: currentProfile,
+            permissions: currentPermissions
+        } = await getCurrentUserWithPermissions(currentUser.id);
 const params = new URLSearchParams(window.location.search);
 const additionId = params.get("id");
 
@@ -338,11 +347,20 @@ async function loadAddition() {
 
     const { data: profile } = await supabase
         .from("profiles")
-        .select("username, display_name")
+        .select("id, username, display_name, role, role_name")
         .eq("id", data.author_id)
         .single();
 
     document.title = `${data.title || "Addition"} - Nullverse`;
+    currentAddition.authorProfile = profile;
+    const ownerAccess = currentUser.id === data.author_id;
+    const staffAccess = canModerateAdditions(currentPermissions);
+
+    if (data.moderation_status === "hidden" && !ownerAccess && !staffAccess) {
+        alert("This addition has been hidden by Nullverse staff.");
+        window.location.href = "explore.html";
+        return;
+    }
 
     document.getElementById("back-link").href =
         `world-additions.html?id=${encodeURIComponent(data.world_id)}`;
@@ -374,7 +392,112 @@ async function loadAddition() {
         document.getElementById("edit-link").href =
             `edit-addition.html?id=${encodeURIComponent(data.id)}`;
     }
+    if (data.moderation_status === "hidden") {
+        document.getElementById("addition-summary").insertAdjacentHTML(
+            "beforebegin",
+            `
+        <div style="margin:18px 0;padding:16px;border-radius:14px;border:1px solid rgba(255,160,60,.3);background:rgba(255,160,60,.08);">
+            <strong>Hidden by Moderation</strong>
+            <p style="margin:8px 0 0;">This addition is hidden from public view.</p>
+            <p style="margin:8px 0 0;">Reason: ${escapeHtml(data.moderation_reason || "No reason provided.")}</p>
+        </div>
+        `
+        );
+    }
+
+    renderModerationControls(data);
 }
+
+        function renderModerationControls(addition) {
+            const canModerate =
+                canModerateAdditions(currentPermissions) &&
+                canModerateContentOwner(currentProfile, addition.authorProfile);
+
+            if (!canModerate) return;
+
+            document.querySelector(".hero .actions").insertAdjacentHTML("beforeend", `
+        <div style="width:100%;margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
+            <strong>Addition Moderation</strong>
+            <p class="empty">Status: ${escapeHtml(addition.moderation_status || "visible")}</p>
+
+            <label class="empty">Reason for hiding</label>
+            <input id="addition-hide-reason"
+                   placeholder="Reason shown to author..."
+                   style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:rgba(0,0,0,.28);color:var(--text-primary);">
+
+            <div class="actions">
+                <button class="button" onclick="setAdditionModerationStatus('hidden')">Hide Addition</button>
+                <button class="button" onclick="setAdditionModerationStatus('visible')">Restore Addition</button>
+            </div>
+
+            <p id="addition-moderation-message" class="empty"></p>
+        </div>
+    `);
+        }
+
+        window.setAdditionModerationStatus = async function (status) {
+            if (!currentAddition || !canModerateAdditions(currentPermissions)) return;
+
+            const reasonInput = document.getElementById("addition-hide-reason");
+            const reason = reasonInput ? reasonInput.value.trim() : "";
+            const message = document.getElementById("addition-moderation-message");
+
+            if (status === "hidden" && !reason) {
+                if (message) message.textContent = "Enter a reason before hiding this addition.";
+                return;
+            }
+
+            const { error } = await supabase
+                .from("world_additions")
+                .update({
+                    moderation_status: status,
+                    moderation_reason: status === "hidden" ? reason : null
+                })
+                .eq("id", currentAddition.id);
+
+            if (error) {
+                if (message) message.textContent = error.message;
+                return;
+            }
+
+            await supabase.from("moderation_logs").insert({
+                target_user_id: currentAddition.author_id,
+                moderator_id: currentUser.id,
+                action: `addition_${status}`,
+                reason: status === "hidden"
+                    ? reason
+                    : `Addition "${currentAddition.title || "Untitled Addition"}" was restored.`,
+                expires_at: null
+            });
+
+            if (status === "hidden") {
+                await createNotification({
+                    recipientId: currentAddition.author_id,
+                    actorId: currentUser.id,
+                    additionId: currentAddition.id,
+                    type: "addition_hidden",
+                    message: `Your addition "${currentAddition.title || "Untitled Addition"}" was hidden by moderation. Reason: ${reason}`,
+                    link: `edit-addition.html?id=${encodeURIComponent(currentAddition.id)}`
+                });
+            }
+
+            if (status === "visible") {
+                await createNotification({
+                    recipientId: currentAddition.author_id,
+                    actorId: currentUser.id,
+                    additionId: currentAddition.id,
+                    type: "addition_restored",
+                    message: `Your addition "${currentAddition.title || "Untitled Addition"}" was restored by moderation.`,
+                    link: `addition.html?id=${encodeURIComponent(currentAddition.id)}`
+                });
+            }
+
+            if (message) message.textContent = `Addition set to ${status}.`;
+
+            setTimeout(() => {
+                window.location.reload();
+            }, 700);
+        };
 
 async function loadLikes() {
     const { data: likes } = await supabase
