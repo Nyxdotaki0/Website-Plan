@@ -339,6 +339,7 @@
         import { requireBetaAccess } from "./betaGate.js";
         import { supabase } from "./supabaseClient.js";
         import { setupNotificationBadge } from "./notificationBadge.js";
+        import { createNotification } from "./notifications.js";
 
         const currentUser = await requireBetaAccess({ allowRestricted: false });
         setupNotificationBadge();
@@ -496,7 +497,7 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
 
             let query = supabase
                 .from("worlds")
-                .select("id, title, owner_id, summary, moderation_status, updated_at")
+                .select("id, title, owner_id, summary, moderation_status, moderation_reason, updated_at")
                 .eq("moderation_status", "hidden")
                 .order("updated_at", { ascending: false });
 
@@ -525,8 +526,12 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
             </p>
 
             <div class="meta">
-                Status: Hidden
-            </div>
+    Status: Hidden
+</div>
+
+<p class="empty">
+    Reason: ${escapeHtml(world.moderation_reason || "No reason provided.")}
+</p>
 
             <div class="actions">
                 <a class="button" href="world.html?id=${encodeURIComponent(world.id)}">
@@ -542,11 +547,22 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
         }
 
         window.restoreWorld = async function (worldId) {
+            const { data: world, error: worldError } = await supabase
+                .from("worlds")
+                .select("id, title, owner_id")
+                .eq("id", worldId)
+                .single();
+
+            if (worldError || !world) {
+                alert(worldError?.message || "World not found.");
+                return;
+            }
 
             const { error } = await supabase
                 .from("worlds")
                 .update({
-                    moderation_status: "visible"
+                    moderation_status: "visible",
+                    moderation_reason: null
                 })
                 .eq("id", worldId);
 
@@ -554,6 +570,25 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
                 alert(error.message);
                 return;
             }
+
+            await supabase
+                .from("moderation_logs")
+                .insert({
+                    target_user_id: world.owner_id,
+                    moderator_id: currentUser.id,
+                    action: "world_visible",
+                    reason: `World "${world.title || "Untitled World"}" was restored from admin.`,
+                    expires_at: null
+                });
+
+            await createNotification({
+                recipientId: world.owner_id,
+                actorId: currentUser.id,
+                worldId: world.id,
+                type: "world_restored",
+                message: `Your world "${world.title || "Untitled World"}" was restored by moderation.`,
+                link: `world.html?id=${encodeURIComponent(world.id)}`
+            });
 
             await loadHiddenWorlds();
         };
