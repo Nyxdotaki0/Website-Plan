@@ -1,0 +1,756 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat - Nullverse</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+
+    <script>
+        const savedNullverseTheme =
+            localStorage.getItem("nullverse-theme") || "void";
+        document.documentElement.setAttribute("data-theme", savedNullverseTheme);
+    </script>
+
+    <link rel="stylesheet" href="theme.css?v=25">
+
+    <style>
+        html {
+            min-height: 100%;
+            background: #000;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial,sans-serif;
+            background: var(--page-bg);
+            color: var(--text-primary);
+        }
+
+        header {
+            padding: 12px 40px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(12,12,14,.72);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+
+        .logo, .logo a {
+            display: flex;
+            align-items: center;
+        }
+
+        .site-logo {
+            height: 64px;
+            width: auto;
+            display: block;
+        }
+
+        nav {
+            display: flex;
+            gap: 22px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+            nav a, nav button {
+                color: var(--text-secondary);
+                text-decoration: none;
+                background: none;
+                border: none;
+                cursor: pointer;
+                font-family: Arial,sans-serif;
+                font-size: .95rem;
+            }
+
+                nav a:hover, nav button:hover, nav a.active {
+                    color: white;
+                }
+
+        main {
+            max-width: 980px;
+            margin: auto;
+            padding: 34px 40px 120px;
+        }
+
+        .panel, .chat-header, .message {
+            background: linear-gradient(135deg,rgba(255,255,255,.055),rgba(255,255,255,.015)), var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 22px;
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            box-shadow: 0 18px 40px rgba(0,0,0,.24),0 0 24px rgba(255,255,255,.03);
+        }
+
+        .chat-header {
+            padding: 22px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .avatar {
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: #222;
+            border: 1px solid var(--border-color);
+        }
+
+        .chat-header h1 {
+            margin: 0 0 4px;
+            font-size: 1.6rem;
+        }
+
+        .chat-header p {
+            margin: 0;
+            color: var(--text-secondary);
+        }
+
+        .messages-panel {
+            min-height: 420px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .message {
+            padding: 14px 16px;
+            max-width: 72%;
+            width: fit-content;
+        }
+
+            .message.mine {
+                margin-left: auto;
+                background: linear-gradient(135deg,rgba(255,255,255,.08),rgba(255,255,255,.025)), var(--card-bg);
+            }
+
+            .message.other {
+                margin-right: auto;
+            }
+
+        .message-meta {
+            color: var(--text-muted);
+            font-size: .8rem;
+            margin-bottom: 7px;
+        }
+
+        .message-body {
+            white-space: pre-wrap;
+            line-height: 1.55;
+        }
+
+        .message-image {
+            max-width: 280px;
+            max-height: 320px;
+            border-radius: 14px;
+            border: 1px solid var(--border-color);
+            display: block;
+            margin-top: 8px;
+        }
+
+        .message-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .composer {
+            position: fixed;
+            left: 50%;
+            bottom: 0;
+            transform: translateX(-50%);
+            width: min(980px, calc(100% - 32px));
+            background: rgba(12,12,14,.92);
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+            border-radius: 20px 20px 0 0;
+            padding: 14px;
+            box-sizing: border-box;
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            z-index: 80;
+        }
+
+        textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 13px;
+            border-radius: 14px;
+            border: 1px solid var(--border-color);
+            background: rgba(0,0,0,.22);
+            color: var(--text-primary);
+            font-family: Arial,sans-serif;
+            resize: vertical;
+            margin-bottom: 10px;
+        }
+
+        input[type="file"] {
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+
+        .button {
+            display: inline-block;
+            background: linear-gradient(180deg,#2a2a2f,#0d0d10);
+            color: #f5f5f5;
+            border: 1px solid rgba(255,255,255,.12);
+            padding: 10px 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: Arial,sans-serif;
+        }
+
+            .button.danger {
+                background: linear-gradient(180deg,#472328,#2f171a);
+            }
+
+        .empty {
+            color: var(--text-muted);
+            line-height: 1.7;
+        }
+
+        .notification-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .notification-badge {
+            min-width: 18px;
+            height: 18px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background: white;
+            color: black;
+            font-size: .72rem;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        @media(max-width:800px) {
+            header {
+                flex-direction: column;
+                gap: 14px;
+                padding: 20px;
+            }
+
+            nav {
+                justify-content: center;
+            }
+
+            main {
+                padding: 28px 18px 150px;
+            }
+
+            .message {
+                max-width: 90%;
+            }
+
+            .composer {
+                width: 100%;
+                border-radius: 18px 18px 0 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="nullverse-stars"></div>
+
+    <header>
+        <div class="logo">
+            <a href="index.html">
+                <img src="Nullverse-3.png" alt="Nullverse" class="site-logo">
+            </a>
+        </div>
+
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="notifications.html">Notifications</a>
+            <a href="explore.html">Explore</a>
+            <a href="messages.html" class="active">Messages</a>
+            <a href="profile.html">Profile</a>
+            <a href="dashboard.html">Dashboard</a>
+            <button onclick="logOut()">Log Out</button>
+        </nav>
+    </header>
+
+    <main>
+        <a class="button" href="messages.html">← Back to Messages</a>
+
+        <section class="chat-header" style="margin-top:20px;">
+            <img id="other-avatar" class="avatar" src="https://placehold.co/200x200/1b1b28/ffffff?text=NV">
+            <div>
+                <h1 id="chat-title">Loading chat...</h1>
+                <p id="chat-subtitle">Checking message permissions...</p>
+            </div>
+        </section>
+
+        <section id="messages-container" class="messages-panel">
+            <p class="empty">Loading messages...</p>
+        </section>
+    </main>
+
+    <section id="composer" class="composer">
+        <textarea id="message-input" rows="3" placeholder="Write a message..."></textarea>
+        <input id="image-input" type="file" accept="image/*">
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <button id="send-button" class="button" onclick="sendMessage()">Send Message</button>
+            <p id="composer-message" class="empty" style="margin:0;"></p>
+        </div>
+    </section>
+
+    <div id="report-modal"
+         style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;justify-content:center;align-items:center;">
+        <div style="width:500px;max-width:90%;background:var(--panel-bg);border:1px solid var(--border-color);border-radius:18px;padding:24px;">
+            <h2>Report Message</h2>
+
+            <select id="report-reason" style="width:100%;padding:12px;margin-bottom:12px;">
+                <option>Harassment</option>
+                <option>Spam</option>
+                <option>Hate Speech</option>
+                <option>NSFW Content</option>
+                <option>Threats</option>
+                <option>Other</option>
+            </select>
+
+            <textarea id="report-details" placeholder="Additional details..." style="height:120px;"></textarea>
+
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button id="submit-report-btn" class="button">Submit Report</button>
+                <button id="close-report-btn" class="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { requireBetaAccess } from "./betaGate.js";
+        import { supabase } from "./supabaseClient.js";
+        import { createNotification } from "./notifications.js";
+        import { setupNotificationBadge } from "./notificationBadge.js";
+        import { setupMessageBadge } from "./messageBadge.js";
+        import { optimizeImage } from "./imageUtils.js";
+
+        const currentUser = await requireBetaAccess({ allowRestricted: false });
+
+        setupNotificationBadge();
+        setupMessageBadge();
+
+        const params = new URLSearchParams(window.location.search);
+        const conversationId = params.get("id");
+
+        let otherUser = null;
+        let canSendMessages = false;
+        let pendingReport = null;
+
+        if (!conversationId) {
+            alert("No conversation selected.");
+            window.location.href = "messages.html";
+        }
+
+        document.getElementById("close-report-btn").addEventListener("click", () => {
+            document.getElementById("report-modal").style.display = "none";
+            pendingReport = null;
+        });
+
+        document.getElementById("submit-report-btn").addEventListener("click", submitMessageReport);
+
+        await loadConversation();
+        await loadMessages();
+        await markConversationRead();
+
+        const chatChannel = supabase
+            .channel(`chat-${conversationId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "messages",
+                    filter: `conversation_id=eq.${conversationId}`
+                },
+                async () => {
+                    await loadMessages();
+                    await markConversationRead();
+                }
+            )
+            .subscribe();
+
+        window.addEventListener("beforeunload", () => {
+            supabase.removeChannel(chatChannel);
+        });
+
+        async function loadConversation() {
+            const { data: members, error } = await supabase
+                .from("conversation_members")
+                .select("user_id")
+                .eq("conversation_id", conversationId);
+
+            if (error || !members || !members.some(m => m.user_id === currentUser.id)) {
+                alert("Conversation not found.");
+                window.location.href = "messages.html";
+                return;
+            }
+
+            const otherMember =
+                members.find(member => member.user_id !== currentUser.id);
+
+            if (!otherMember) {
+                alert("Conversation member not found.");
+                window.location.href = "messages.html";
+                return;
+            }
+
+            const { data: profile } = await supabase
+                .from("profiles")
+                .select("id, username, display_name, avatar_url")
+                .eq("id", otherMember.user_id)
+                .single();
+
+            otherUser = profile;
+
+            document.getElementById("chat-title").textContent =
+                profile?.display_name || profile?.username || "Unknown User";
+
+            document.getElementById("chat-subtitle").textContent =
+                `@${profile?.username || "unknown"}`;
+
+            if (profile?.avatar_url) {
+                document.getElementById("other-avatar").src = profile.avatar_url;
+            }
+
+            canSendMessages = await canMessageUser(otherMember.user_id);
+
+            if (!canSendMessages) {
+                document.getElementById("composer").style.display = "none";
+                document.getElementById("chat-subtitle").textContent =
+                    "Messaging unavailable. You must be mutual followers and not blocked.";
+            }
+        }
+
+        async function canMessageUser(targetUserId) {
+            const { data: blockRows } = await supabase
+                .from("user_blocks")
+                .select("id")
+                .in("blocker_id", [currentUser.id, targetUserId])
+                .in("blocked_id", [currentUser.id, targetUserId])
+                .limit(1);
+
+            if (blockRows && blockRows.length) return false;
+
+            const { data: myFollow } = await supabase
+                .from("follows")
+                .select("id")
+                .eq("follower_id", currentUser.id)
+                .eq("following_id", targetUserId)
+                .maybeSingle();
+
+            const { data: theirFollow } = await supabase
+                .from("follows")
+                .select("id")
+                .eq("follower_id", targetUserId)
+                .eq("following_id", currentUser.id)
+                .maybeSingle();
+
+            return !!myFollow && !!theirFollow;
+        }
+
+        async function loadMessages() {
+            const container =
+                document.getElementById("messages-container");
+
+            const { data: messages, error } = await supabase
+                .from("messages")
+                .select("*")
+                .eq("conversation_id", conversationId)
+                .eq("moderation_status", "visible")
+                .is("deleted_at", null)
+                .order("created_at", { ascending: true });
+
+            if (error) {
+                container.innerHTML =
+                    `<p class="empty">${escapeHtml(error.message)}</p>`;
+                return;
+            }
+
+            if (!messages || !messages.length) {
+                container.innerHTML =
+                    `<p class="empty">No messages yet.</p>`;
+                return;
+            }
+
+            container.innerHTML =
+                messages.map(renderMessage).join("");
+
+            window.scrollTo({
+                top: document.body.scrollHeight,
+                behavior: "smooth"
+            });
+        }
+
+        function renderMessage(message) {
+            const mine =
+                message.sender_id === currentUser.id;
+
+            const body =
+                message.body
+                    ? `<div class="message-body">${escapeHtml(message.body)}</div>`
+                    : "";
+
+            const image =
+                message.image_url
+                    ? `<img class="message-image" src="${escapeAttribute(message.image_url)}" alt="Message image">`
+                    : "";
+
+            return `
+                <article class="message ${mine ? "mine" : "other"}">
+                    <div class="message-meta">
+                        ${mine ? "You" : escapeHtml(otherUser?.display_name || otherUser?.username || "User")}
+                        · ${escapeHtml(new Date(message.created_at).toLocaleString())}
+                    </div>
+
+                    ${body}
+                    ${image}
+
+                    <div class="message-actions">
+                        <button class="button"
+                                onclick="openMessageReport('${message.id}', '${message.sender_id}', \`${escapeHtml(message.body || "")}\`)">
+                            Report
+                        </button>
+
+                        ${mine ? `
+                            <button class="button danger"
+                                    onclick="deleteMessage('${message.id}')">
+                                Delete
+                            </button>
+                        ` : ""}
+                    </div>
+                </article>
+            `;
+        }
+
+        window.sendMessage = async function () {
+            if (!canSendMessages || !otherUser) {
+                alert("You cannot send messages to this user.");
+                return;
+            }
+
+            canSendMessages = await canMessageUser(otherUser.id);
+
+            if (!canSendMessages) {
+                alert("Messaging is no longer available.");
+                document.getElementById("composer").style.display = "none";
+                return;
+            }
+
+            const input =
+                document.getElementById("message-input");
+
+            const imageInput =
+                document.getElementById("image-input");
+
+            const messageBox =
+                document.getElementById("composer-message");
+
+            const button =
+                document.getElementById("send-button");
+
+            const body =
+                input.value.trim();
+
+            const imageFile =
+                imageInput.files[0];
+
+            if (!body && !imageFile) return;
+
+            button.disabled = true;
+            button.textContent = "Sending...";
+            messageBox.textContent = "";
+
+            let imageUrl = null;
+
+            if (imageFile) {
+                const optimized = await optimizeImage(imageFile, {
+                    maxWidth: 1600,
+                    maxHeight: 1600,
+                    quality: .82
+                });
+
+                const filePath =
+                    `${currentUser.id}/${conversationId}/${Date.now()}-chat.webp`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from("chat-images")
+                    .upload(filePath, optimized, {
+                        upsert: true
+                    });
+
+                if (uploadError) {
+                    resetSendButton();
+                    messageBox.textContent = uploadError.message;
+                    return;
+                }
+
+                const { data } = supabase.storage
+                    .from("chat-images")
+                    .getPublicUrl(filePath);
+
+                imageUrl = data.publicUrl;
+            }
+
+            const { error } = await supabase
+                .from("messages")
+                .insert({
+                    conversation_id: conversationId,
+                    sender_id: currentUser.id,
+                    body: body || null,
+                    image_url: imageUrl,
+                    message_type: imageUrl ? "image" : "text",
+                    moderation_status: "visible"
+                });
+
+            if (error) {
+                resetSendButton();
+                messageBox.textContent = error.message;
+                return;
+            }
+
+            await createNotification({
+                recipientId: otherUser.id,
+                actorId: currentUser.id,
+                type: "message_received",
+                message: "You received a new message.",
+                link: `chat.html?id=${encodeURIComponent(conversationId)}`
+            });
+
+            await supabase
+                .from("conversations")
+                .update({
+                    updated_at: new Date().toISOString()
+                })
+                .eq("id", conversationId);
+
+            input.value = "";
+            imageInput.value = "";
+
+            resetSendButton();
+
+            await loadMessages();
+        };
+
+        function resetSendButton() {
+            const button =
+                document.getElementById("send-button");
+
+            button.disabled = false;
+            button.textContent = "Send Message";
+        }
+
+        async function markConversationRead() {
+            await supabase
+                .from("conversation_members")
+                .update({
+                    last_read_at: new Date().toISOString()
+                })
+                .eq("conversation_id", conversationId)
+                .eq("user_id", currentUser.id);
+        }
+
+        window.deleteMessage = async function (messageId) {
+            const confirmed =
+                confirm("Delete this message?");
+
+            if (!confirmed) return;
+
+            const { error } = await supabase
+                .from("messages")
+                .update({
+                    deleted_at: new Date().toISOString()
+                })
+                .eq("id", messageId)
+                .eq("sender_id", currentUser.id);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await loadMessages();
+        };
+
+        window.openMessageReport = function (messageId, senderId, body) {
+            pendingReport = {
+                messageId,
+                senderId,
+                reportedText: body || "[Image message]"
+            };
+
+            document.getElementById("report-details").value = "";
+            document.getElementById("report-modal").style.display = "flex";
+        };
+
+        async function submitMessageReport() {
+            if (!pendingReport) return;
+
+            const reason =
+                document.getElementById("report-reason").value;
+
+            const details =
+                document.getElementById("report-details").value.trim();
+
+            const { error } = await supabase
+                .from("reports")
+                .insert({
+                    reporter_id: currentUser.id,
+                    reported_user_id: pendingReport.senderId,
+                    report_type: "message",
+                    reason,
+                    details,
+                    reported_text: pendingReport.reportedText,
+                    status: "open"
+                });
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            pendingReport = null;
+            document.getElementById("report-modal").style.display = "none";
+            alert("Report submitted.");
+        }
+
+        function escapeHtml(value) {
+            return String(value || "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        function escapeAttribute(value) {
+            return escapeHtml(value).replaceAll("`", "&#096;");
+        }
+
+        window.logOut = async function () {
+            await supabase.auth.signOut();
+            window.location.href = "login.html";
+        };
+    </script>
+</body>
+</html>

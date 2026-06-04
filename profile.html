@@ -590,6 +590,7 @@
             <a href="explore.html">Explore</a>
             <a href="profile.html" class="active">Profile</a>
             <a href="dashboard.html">Dashboard</a>
+            <a href="messages.html">Messages</a>
             <button onclick="logOut()">Log Out</button>
         </nav>
     </header>
@@ -631,6 +632,8 @@
 
                     <div class="moderation-action-row">
                         <div id="follow-button-container"></div>
+
+                        <div id="message-button-container"></div>
 
                         <div id="block-button-container"></div>
 
@@ -923,6 +926,8 @@
         import { supabase } from "./supabaseClient.js";
         import { createNotification } from "./notifications.js";
         import { setupNotificationBadge } from "./notificationBadge.js";
+        import { setupMessageBadge } from "./messageBadge.js";
+        setupMessageBadge();
 
         import {
             getCurrentUserWithPermissions,
@@ -1059,6 +1064,7 @@ ${escapeHtml(
 
             renderReportButton(profile);
             renderBlockButton(profile);
+            renderMessageButton(profile);
 
 
 
@@ -1353,6 +1359,196 @@ ${escapeHtml(
                     document.getElementById("block-modal")
                         .style.display = "flex";
                 });
+        }
+
+        async function renderMessageButton(profile) {
+
+            if (!currentUser) return;
+
+            if (currentUser.id === profile.id) {
+                return;
+            }
+
+            const canMessage =
+                await canMessageUser(profile.id);
+
+            if (!canMessage) {
+                return;
+            }
+
+            document.getElementById(
+                "message-button-container"
+            ).innerHTML = `
+        <button
+            id="message-user-btn"
+            class="button">
+            Message User
+        </button>
+    `;
+
+            document.getElementById(
+                "message-user-btn"
+            ).addEventListener(
+                "click",
+                () => openConversation(profile.id)
+            );
+        }
+
+        async function canMessageUser(targetUserId) {
+
+            const { data: blockRows } =
+                await supabase
+                    .from("user_blocks")
+                    .select("id")
+                    .in("blocker_id", [
+                        currentUser.id,
+                        targetUserId
+                    ])
+                    .in("blocked_id", [
+                        currentUser.id,
+                        targetUserId
+                    ])
+                    .limit(1);
+
+            if (
+                blockRows &&
+                blockRows.length
+            ) {
+                return false;
+            }
+
+            const { data: myFollow } =
+                await supabase
+                    .from("follows")
+                    .select("id")
+                    .eq(
+                        "follower_id",
+                        currentUser.id
+                    )
+                    .eq(
+                        "following_id",
+                        targetUserId
+                    )
+                    .maybeSingle();
+
+            const { data: theirFollow } =
+                await supabase
+                    .from("follows")
+                    .select("id")
+                    .eq(
+                        "follower_id",
+                        targetUserId
+                    )
+                    .eq(
+                        "following_id",
+                        currentUser.id
+                    )
+                    .maybeSingle();
+
+            return !!myFollow && !!theirFollow;
+        }
+
+        async function openConversation(targetUserId) {
+
+            const canMessage =
+                await canMessageUser(
+                    targetUserId
+                );
+
+            if (!canMessage) {
+
+                alert(
+                    "You must be mutual followers."
+                );
+
+                return;
+            }
+
+            const { data: myMemberships } =
+                await supabase
+                    .from(
+                        "conversation_members"
+                    )
+                    .select(
+                        "conversation_id"
+                    )
+                    .eq(
+                        "user_id",
+                        currentUser.id
+                    );
+
+            if (
+                myMemberships &&
+                myMemberships.length
+            ) {
+
+                const ids =
+                    myMemberships.map(
+                        x => x.conversation_id
+                    );
+
+                const { data: targetMemberships } =
+                    await supabase
+                        .from(
+                            "conversation_members"
+                        )
+                        .select(
+                            "conversation_id"
+                        )
+                        .eq(
+                            "user_id",
+                            targetUserId
+                        )
+                        .in(
+                            "conversation_id",
+                            ids
+                        );
+
+                if (
+                    targetMemberships &&
+                    targetMemberships.length
+                ) {
+
+                    window.location.href =
+                        `chat.html?id=${encodeURIComponent(
+                            targetMemberships[0]
+                                .conversation_id
+                        )}`;
+
+                    return;
+                }
+            }
+
+            const { data: conversation } =
+                await supabase
+                    .from("conversations")
+                    .insert({})
+                    .select()
+                    .single();
+
+            await supabase
+                .from(
+                    "conversation_members"
+                )
+                .insert([
+                    {
+                        conversation_id:
+                            conversation.id,
+                        user_id:
+                            currentUser.id
+                    },
+                    {
+                        conversation_id:
+                            conversation.id,
+                        user_id:
+                            targetUserId
+                    }
+                ]);
+
+            window.location.href =
+                `chat.html?id=${encodeURIComponent(
+                    conversation.id
+                )}`;
         }
 
         function renderReportButton(profile) {
