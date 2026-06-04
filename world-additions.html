@@ -392,6 +392,31 @@
 
             <section>
 
+                <div id="pending-additions-section"
+                     style="display:none; margin-bottom:30px;">
+
+                    <div class="feed-header">
+                        <div>
+                            <h2 style="margin:0;">
+                                Pending Additions
+                            </h2>
+
+                            <p class="empty" style="margin-top:6px;">
+                                Review submissions before they become public.
+                            </p>
+                        </div>
+
+                        <span id="pending-count"
+                              class="count-pill">
+                            0 pending
+                        </span>
+                    </div>
+
+                    <div id="pending-additions-container">
+                    </div>
+
+                </div>
+
                 <div class="feed-header">
                     <div>
                         <h2 style="margin:0;">Browse Additions</h2>
@@ -463,6 +488,7 @@
         await loadBlockedUsers();
         await loadWorld();
         await loadAdditions();
+        await loadPendingAdditions();
 
         async function loadWorld() {
             const { data, error } = await supabase
@@ -499,6 +525,13 @@
         }
 
         function configureCommunityAccess() {
+
+            const createLink =
+                document.getElementById("create-addition-link");
+
+            const message =
+                document.getElementById("addition-mode-message");
+
             if (
                 blockedUserIds.includes(currentWorld.owner_id)
             ) {
@@ -510,11 +543,7 @@
 
                 return;
             }
-            const createLink =
-                document.getElementById("create-addition-link");
-
-            const message =
-                document.getElementById("addition-mode-message");
+           
 
             if (!currentWorld) return;
 
@@ -594,6 +623,38 @@
             }
 
             filterAndRenderAdditions();
+        }
+
+        async function loadPendingAdditions() {
+
+            if (
+                currentUser.id !== currentWorld.owner_id
+            ) {
+                return;
+            }
+
+            const section =
+                document.getElementById(
+                    "pending-additions-section"
+                );
+
+            section.style.display = "block";
+
+            const { data, error } = await supabase
+                .from("world_additions")
+                .select("*")
+                .eq("world_id", worldId)
+                .eq("status", "pending")
+                .order("created_at", {
+                    ascending: false
+                });
+
+            if (error) {
+                console.error(error);
+                return;
+            }
+
+            renderPendingAdditions(data || []);
         }
 
         function filterAndRenderAdditions() {
@@ -734,6 +795,130 @@
             }).join("");
         }
 
+        function renderPendingAdditions(
+            additions
+        ) {
+
+            document.getElementById(
+                "pending-count"
+            ).textContent =
+                `${additions.length} pending`;
+
+            const container =
+                document.getElementById(
+                    "pending-additions-container"
+                );
+
+            if (!additions.length) {
+
+                container.innerHTML =
+                    `<p class="empty">
+                No pending additions.
+             </p>`;
+
+                return;
+            }
+
+            container.innerHTML =
+                additions.map(addition => {
+
+                    return `
+                <article class="addition-card">
+
+                    <span class="badge">
+                        Pending Approval
+                    </span>
+
+                    <h2>
+                        ${escapeHtml(
+                        addition.title
+                    )}
+                    </h2>
+
+                    <p>
+                        ${escapeHtml(
+                        addition.summary || ""
+                    )}
+                    </p>
+
+                    <div class="card-actions">
+
+                        <a
+                            class="button"
+                            href="addition.html?id=${addition.id}">
+                            Preview
+                        </a>
+
+                        <button
+                            class="button"
+                            onclick="approveAddition('${addition.id}')">
+                            Approve
+                        </button>
+
+                        <button
+                            class="button danger"
+                            onclick="rejectAddition('${addition.id}')">
+                            Reject
+                        </button>
+
+                    </div>
+
+                </article>
+            `;
+
+                }).join("");
+        }
+
+        window.approveAddition =
+            async function (additionId) {
+
+                const { error } =
+                    await supabase
+                        .from("world_additions")
+                        .update({
+                            status: "approved"
+                        })
+                        .eq("id", additionId);
+
+                if (error) {
+                    alert(error.message);
+                    return;
+                }
+
+                await loadAdditions();
+                await loadPendingAdditions();
+
+                alert("Addition approved.");
+            };
+
+        window.rejectAddition =
+            async function (additionId) {
+
+                const confirmed =
+                    confirm(
+                        "Reject this addition?"
+                    );
+
+                if (!confirmed) return;
+
+                const { error } =
+                    await supabase
+                        .from("world_additions")
+                        .update({
+                            status: "rejected"
+                        })
+                        .eq("id", additionId);
+
+                if (error) {
+                    alert(error.message);
+                    return;
+                }
+
+                await loadPendingAdditions();
+
+                alert("Addition rejected.");
+            };
+
         window.deleteAddition = async function (additionId) {
             const confirmed =
                 confirm("Delete this addition?");
@@ -751,6 +936,7 @@
             }
 
             await loadAdditions();
+            await loadPendingAdditions();
         };
 
         document
