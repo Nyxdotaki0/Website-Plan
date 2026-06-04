@@ -15,6 +15,25 @@ export async function getCurrentProfile(userId) {
     return data;
 }
 
+export async function getCurrentUserWithPermissions(userId) {
+    const profile = await getCurrentProfile(userId);
+
+    if (!profile) {
+        return {
+            profile: null,
+            permissions: []
+        };
+    }
+
+    const roleName = getRoleName(profile);
+    const permissions = await getPermissions(roleName);
+
+    return {
+        profile,
+        permissions
+    };
+}
+
 export async function getPermissions(roleName) {
     if (roleName === "void_architect") {
         return ["*"];
@@ -33,22 +52,60 @@ export async function getPermissions(roleName) {
     return data.map(row => row.permission);
 }
 
+export function getRoleName(profile) {
+    return profile?.role_name || profile?.role || "creator";
+}
+
 export function can(userPermissions, permission) {
     return userPermissions.includes("*") || userPermissions.includes(permission);
 }
 
+export function canManageRoles(userPermissions) {
+    return can(userPermissions, "manage_roles");
+}
+
+export function canModerateUsers(userPermissions) {
+    return can(userPermissions, "moderate_users");
+}
+
+export function canModerateWorlds(userPermissions) {
+    return can(userPermissions, "moderate_worlds");
+}
+
+export function canModerateAdditions(userPermissions) {
+    return can(userPermissions, "moderate_additions");
+}
+
+export function canViewReports(userPermissions) {
+    return can(userPermissions, "view_reports");
+}
+
+export function canViewLogs(userPermissions) {
+    return can(userPermissions, "view_logs");
+}
+
+export function canDeleteContent(userPermissions) {
+    return can(userPermissions, "delete_content");
+}
+
+export function canReplaceImages(userPermissions) {
+    return can(userPermissions, "replace_images");
+}
+
 export function canModerateTarget(actorProfile, targetProfile) {
     if (!actorProfile || !targetProfile) return false;
-
     if (actorProfile.id === targetProfile.id) return false;
 
-    if (actorProfile.role_name === "void_architect") {
-        return targetProfile.role_name !== "void_architect";
+    const actorRole = getRoleName(actorProfile);
+    const targetRole = getRoleName(targetProfile);
+
+    if (actorRole === "void_architect") {
+        return targetRole !== "void_architect";
     }
 
-    if (actorProfile.role_name === "moderator") {
-        return !["moderator", "void_architect"].includes(targetProfile.role_name);
+    if (actorRole === "moderator") {
+        return targetRole === "creator";
     }
 
     return false;
-}// JavaScript source code
+}

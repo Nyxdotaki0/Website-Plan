@@ -807,13 +807,18 @@
         import { createNotification } from "./notifications.js";
         import { setupNotificationBadge } from "./notificationBadge.js";
 
+        import {
+            getCurrentUserWithPermissions,
+            canModerateUsers,
+            canModerateTarget
+        } from "./permissions.js";
+
         const currentUser = await requireBetaAccess();
         setupNotificationBadge();
-        const { data: currentProfile } = await supabase
-            .from("profiles")
-            .select("username, display_name, role, role_name")
-            .eq("id", currentUser.id)
-            .single();
+        const {
+            profile: currentProfile,
+            permissions: currentPermissions
+        } = await getCurrentUserWithPermissions(currentUser.id);
 
         const params = new URLSearchParams(window.location.search);
         const usernameFromUrl = params.get("user");
@@ -908,28 +913,11 @@ ${escapeHtml(
             if (editButton && currentUser.id !== profile.id) {
                 editButton.style.display = "none";
             }
-            const currentRole =
-                currentProfile?.role_name ||
-                currentProfile?.role ||
-                "creator";
+            const canUseModeration =
+                canModerateUsers(currentPermissions) &&
+                canModerateTarget(currentProfile, profile);
 
-            const targetRole =
-                profile.role_name ||
-                profile.role ||
-                "creator";
-
-            const canModerate =
-                currentUser.id !== profile.id &&
-                (
-                    currentRole === "void_architect" ||
-                    (
-                        currentRole === "moderator" &&
-                        targetRole === "creator"
-                    )
-                ) &&
-                targetRole !== "void_architect";
-
-            if (canModerate) {
+            if (canUseModeration) {
                 document.getElementById("moderation-toggle").style.display = "inline-block";
                 updateModerationStatusDisplay(profile);
                 loadModerationHistory();
