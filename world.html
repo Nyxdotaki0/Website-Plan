@@ -639,9 +639,17 @@
         import { supabase } from "./supabaseClient.js";
         import { setupNotificationBadge } from "./notificationBadge.js";
         import { createNotification } from "./notifications.js";
+        import {
+            getCurrentUserWithPermissions,
+            canModerateWorlds
+        } from "./permissions.js?v=3";
 
         const currentUser = await requireBetaAccess();
         setupNotificationBadge();
+        const {
+            profile: currentProfile,
+            permissions: currentPermissions
+        } = await getCurrentUserWithPermissions(currentUser.id);
 
         const params = new URLSearchParams(window.location.search);
         const worldId = params.get("id");
@@ -1264,15 +1272,38 @@ root.style.setProperty(
         function renderOwnerActions(world) {
             const container = document.getElementById("owner-actions");
 
+            let html = "";
+
             if (currentUser && currentUser.id === world.owner_id) {
-                container.innerHTML = `
-                        <a class="button" href="edit-world.html?id=${encodeURIComponent(world.id)}">
-                            Edit World
-                        </a>
-                    `;
-            } else {
-                container.innerHTML = "";
+                html += `
+            <a class="button" href="edit-world.html?id=${encodeURIComponent(world.id)}">
+                Edit World
+            </a>
+        `;
             }
+
+            if (canModerateWorlds(currentPermissions)) {
+                html += `
+            <div style="margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
+                <strong>World Moderation</strong>
+                <p class="empty">Status: ${escapeHtml(world.moderation_status || "visible")}</p>
+
+                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <button class="button" onclick="setWorldModerationStatus('visible')">
+                        Restore World
+                    </button>
+
+                    <button class="button" onclick="setWorldModerationStatus('hidden')">
+                        Hide World
+                    </button>
+                </div>
+
+                <p id="world-moderation-message" class="empty"></p>
+            </div>
+        `;
+            }
+
+            container.innerHTML = html;
         }
 
         async function loadLikes() {
@@ -1506,6 +1537,42 @@ root.style.setProperty(
             input.value = "";
 
             loadQuestions();
+        };
+
+        window.setWorldModerationStatus = async function (status) {
+            if (!currentWorld || !canModerateWorlds(currentPermissions)) return;
+
+            const { error } = await supabase
+                .from("worlds")
+                .update({
+                    moderation_status: status
+                })
+                .eq("id", currentWorld.id);
+
+            const message = document.getElementById("world-moderation-message");
+
+            if (error) {
+                if (message) message.textContent = error.message;
+                return;
+            }
+
+            await supabase
+                .from("moderation_logs")
+                .insert({
+                    target_user_id: currentWorld.owner_id,
+                    moderator_id: currentUser.id,
+                    action: `world_${status}`,
+                    reason: `World "${currentWorld.title || "Untitled World"}" set to ${status}.`,
+                    expires_at: null
+                });
+
+            if (message) {
+                message.textContent = `World set to ${status}.`;
+            }
+
+            setTimeout(() => {
+                window.location.reload();
+            }, 700);
         };
 
         function showNotFound(message) {
