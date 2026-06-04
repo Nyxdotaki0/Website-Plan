@@ -644,27 +644,29 @@
         let blockedUserIds = [];
 
         async function loadBlockedUsers() {
-
             const { data, error } = await supabase
                 .from("user_blocks")
                 .select("blocker_id, blocked_id")
-                .or(
-                    `blocker_id.eq.${currentUser.id},
-             blocked_id.eq.${currentUser.id}`
-                );
+                .in("blocker_id", [currentUser.id])
+                .limit(1000);
 
-            if (error) {
-                console.error(error);
+            const { data: reverseData, error: reverseError } = await supabase
+                .from("user_blocks")
+                .select("blocker_id, blocked_id")
+                .in("blocked_id", [currentUser.id])
+                .limit(1000);
+
+            if (error || reverseError) {
+                console.error("Block list error:", error || reverseError);
+                blockedUserIds = [];
                 return;
             }
 
-            blockedUserIds = (data || []).map(block => {
-
-                return block.blocker_id === currentUser.id
-                    ? block.blocked_id
-                    : block.blocker_id;
-
-            });
+            blockedUserIds = [
+                ...(data || []).map(block => block.blocked_id),
+                ...(reverseData || []).map(block => block.blocker_id)
+            ];
+            console.log("Blocked User IDs:", blockedUserIds);
         }
 
         function filterBlockedWorlds(worlds) {
