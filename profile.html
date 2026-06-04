@@ -811,7 +811,7 @@
         setupNotificationBadge();
         const { data: currentProfile } = await supabase
             .from("profiles")
-            .select("username, display_name, role")
+            .select("username, display_name, role, role_name")
             .eq("id", currentUser.id)
             .single();
 
@@ -908,11 +908,28 @@ ${escapeHtml(
             if (editButton && currentUser.id !== profile.id) {
                 editButton.style.display = "none";
             }
-            if (
-                currentProfile?.role === "void_architect" &&
+            const currentRole =
+                currentProfile?.role_name ||
+                currentProfile?.role ||
+                "creator";
+
+            const targetRole =
+                profile.role_name ||
+                profile.role ||
+                "creator";
+
+            const canModerate =
                 currentUser.id !== profile.id &&
-                profile.role !== "void_architect"
-            ) {
+                (
+                    currentRole === "void_architect" ||
+                    (
+                        currentRole === "moderator" &&
+                        targetRole === "creator"
+                    )
+                ) &&
+                targetRole !== "void_architect";
+
+            if (canModerate) {
                 document.getElementById("moderation-toggle").style.display = "inline-block";
                 updateModerationStatusDisplay(profile);
                 loadModerationHistory();
