@@ -198,6 +198,52 @@
             font-size: .85rem
         }
 
+        .hidden-worlds-drawer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 430px;
+            max-width: calc(100vw - 32px);
+            height: 100dvh;
+            z-index: 10000;
+            background: rgba(12,12,14,.97);
+            border-left: 1px solid var(--border-color);
+            box-shadow: -20px 0 50px rgba(0,0,0,.45);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 24px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            transform: translateX(110%);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: transform .22s ease,opacity .22s ease,visibility .22s ease;
+        }
+
+            .hidden-worlds-drawer.open {
+                transform: translateX(0);
+                opacity: 1;
+                visibility: visible;
+                pointer-events: auto;
+            }
+
+        .drawer-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .drawer-card {
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+            background: rgba(255,255,255,.035);
+        }
+
         @media(max-width:800px) {
             header {
                 flex-direction: column;
@@ -239,31 +285,7 @@
         </nav>
     </header>
 
-    <section id="hidden-worlds-panel"
-             class="panel"
-             style="display:none;">
 
-        <h2>Hidden Worlds</h2>
-
-        <p class="empty">
-            Worlds hidden by moderators or Void Architects.
-        </p>
-
-        <div class="actions">
-            <button id="load-hidden-worlds-button"
-                    class="button">
-                Load Hidden Worlds
-            </button>
-        </div>
-
-        <div id="hidden-worlds-container"
-             style="margin-top:18px;">
-            <p class="empty">
-                Click "Load Hidden Worlds".
-            </p>
-        </div>
-
-    </section>
 
     <main>
         <section class="hero">
@@ -285,8 +307,33 @@
             <div id="users-container" style="margin-top:18px;">
                 <p class="empty">Search for a user to manage their role.</p>
             </div>
+
+            <hr style="border:none;border-top:1px solid var(--border-color);margin:24px 0;">
+
+            <h2>Hidden Worlds</h2>
+            <p class="empty">
+                Open the recovery panel to review and restore worlds hidden by moderation.
+            </p>
+
+            <button id="open-hidden-worlds-button" class="button">
+                Open Hidden Worlds Panel
+            </button>
         </section>
     </main>
+
+    <div id="hidden-worlds-drawer" class="hidden-worlds-drawer">
+        <div class="drawer-top">
+            <h2 style="margin:0;">Hidden Worlds</h2>
+            <button id="close-hidden-worlds-button" class="button">X</button>
+        </div>
+
+        <input id="hidden-worlds-search"
+               placeholder="Search hidden worlds...">
+
+        <div id="hidden-worlds-container">
+            <p class="empty">Loading hidden worlds...</p>
+        </div>
+    </div>
 
     <script type="module">
         import { requireBetaAccess } from "./betaGate.js";
@@ -424,14 +471,16 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
 
         document.getElementById("clear-search-button").addEventListener("click", clearSearch);
 
-        document
-            .getElementById(
-                "load-hidden-worlds-button"
-            )
-            .addEventListener(
-                "click",
-                loadHiddenWorlds
-            );
+        document.getElementById("open-hidden-worlds-button").addEventListener("click", async () => {
+            document.getElementById("hidden-worlds-drawer").classList.add("open");
+            await loadHiddenWorlds();
+        });
+
+        document.getElementById("close-hidden-worlds-button").addEventListener("click", () => {
+            document.getElementById("hidden-worlds-drawer").classList.remove("open");
+        });
+
+        document.getElementById("hidden-worlds-search").addEventListener("input", loadHiddenWorlds);
 
         document.getElementById("user-search").addEventListener("keydown", function (event) {
             if (event.key === "Enter") {
@@ -440,66 +489,56 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
         });
 
         async function loadHiddenWorlds() {
+            const container = document.getElementById("hidden-worlds-container");
+            const search = document.getElementById("hidden-worlds-search").value.trim();
 
-            const container =
-                document.getElementById(
-                    "hidden-worlds-container"
-                );
+            container.innerHTML = `<p class="empty">Loading hidden worlds...</p>`;
 
-            container.innerHTML =
-                `<p class="empty">Loading hidden worlds...</p>`;
-
-            const { data, error } = await supabase
+            let query = supabase
                 .from("worlds")
-                .select(`
-            id,
-            title,
-            owner_id,
-            moderation_status
-        `)
+                .select("id, title, owner_id, summary, moderation_status, updated_at")
                 .eq("moderation_status", "hidden")
                 .order("updated_at", { ascending: false });
 
+            if (search) {
+                query = query.or(`title.ilike.%${search}%,summary.ilike.%${search}%`);
+            }
+
+            const { data, error } = await query;
+
             if (error) {
-                container.innerHTML =
-                    `<p class="empty">${escapeHtml(error.message)}</p>`;
+                container.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
                 return;
             }
 
             if (!data || !data.length) {
-                container.innerHTML =
-                    `<p class="empty">No hidden worlds.</p>`;
+                container.innerHTML = `<p class="empty">No hidden worlds found.</p>`;
                 return;
             }
 
-            container.innerHTML =
-                data.map(world => `
-            <article class="card">
+            container.innerHTML = data.map(world => `
+        <article class="drawer-card">
+            <strong>${escapeHtml(world.title || "Untitled World")}</strong>
 
-                <strong>
-                    ${escapeHtml(world.title || "Untitled World")}
-                </strong>
+            <p class="empty">
+                ${escapeHtml(world.summary || "No summary.")}
+            </p>
 
-                <div class="meta">
-                    Status: Hidden
-                </div>
+            <div class="meta">
+                Status: Hidden
+            </div>
 
-                <div class="actions">
+            <div class="actions">
+                <a class="button" href="world.html?id=${encodeURIComponent(world.id)}">
+                    Open
+                </a>
 
-                    <a class="button"
-                       href="world.html?id=${world.id}">
-                        Open World
-                    </a>
-
-                    <button class="button"
-                            onclick="restoreWorld('${world.id}')">
-                        Restore
-                    </button>
-
-                </div>
-
-            </article>
-        `).join("");
+                <button class="button" onclick="restoreWorld('${world.id}')">
+                    Restore
+                </button>
+            </div>
+        </article>
+    `).join("");
         }
 
         window.restoreWorld = async function (worldId) {
