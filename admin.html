@@ -490,6 +490,7 @@
                         <option value="under_review">Under Review</option>
                         <option value="resolved">Resolved</option>
                         <option value="dismissed">Dismissed</option>
+                        <option value="archived">Archived</option>
                         <option value="all">All Reports</option>
                     </select>
 
@@ -498,6 +499,14 @@
 
                     <button id="refresh-reports-button" class="button">
                         Refresh Reports
+                    </button>
+                    <h2 style="margin-top:28px;">Report Archive</h2>
+                    <p class="empty">
+                        Older resolved or dismissed reports can be archived here so they stay searchable without cluttering the active queue.
+                    </p>
+
+                    <button id="open-report-archive-button" class="button">
+                        Open Report Archive
                     </button>
                 </aside>
 
@@ -686,6 +695,11 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
         document.getElementById("refresh-reports-button").addEventListener("click", loadReports);
         document.getElementById("reports-status-filter").addEventListener("change", loadReports);
         document.getElementById("reports-search").addEventListener("input", loadReports);
+        document.getElementById("open-report-archive-button").addEventListener("click", async () => {
+            document.getElementById("reports-overlay").classList.add("open");
+            document.getElementById("reports-status-filter").value = "archived";
+            await loadReports();
+        });
 
         async function loadHiddenWorlds() {
             const container = document.getElementById("hidden-worlds-container");
@@ -1061,10 +1075,33 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
         <button class="button" onclick="updateReportStatus('${report.id}', 'dismissed')">
             Dismiss
         </button>
+
+        ${report.status !== "archived" ? `
+    <button class="button" onclick="archiveReport('${report.id}')">
+        Archive
+    </button>
+` : ""}
     </div>
 </article>
 `;
         }
+
+        window.archiveReport = async function (reportId) {
+            const { error } = await supabase
+                .from("reports")
+                .update({
+                    status: "archived",
+                    archived_at: new Date().toISOString()
+                })
+                .eq("id", reportId);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await loadReports();
+        };
 
         window.updateReportStatus = async function (reportId, status) {
             const note = document.getElementById(`report-note-${reportId}`)?.value.trim() || "";
