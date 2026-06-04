@@ -570,15 +570,60 @@
         import { supabase } from "./supabaseClient.js";
         import { setupNotificationBadge } from "./notificationBadge.js";
 
-        await requireBetaAccess();
+        const currentUser = await requireBetaAccess();
         setupNotificationBadge();
+
+        let blockedUserIds = [];
+
+        async function loadBlockedUsers() {
+            const { data, error } = await supabase
+                .from("user_blocks")
+                .select("blocker_id, blocked_id")
+                .in("blocker_id", [currentUser.id])
+                .limit(1000);
+
+            const { data: reverseData, error: reverseError } = await supabase
+                .from("user_blocks")
+                .select("blocker_id, blocked_id")
+                .in("blocked_id", [currentUser.id])
+                .limit(1000);
+
+            if (error || reverseError) {
+                console.error("Block list error:", error || reverseError);
+                blockedUserIds = [];
+                return;
+            }
+
+            blockedUserIds = [
+                ...(data || []).map(block => block.blocked_id),
+                ...(reverseData || []).map(block => block.blocker_id)
+            ];
+        }
+
+        function filterBlockedWorlds(worlds) {
+            return (worlds || []).filter(world =>
+                !blockedUserIds.includes(world.owner_id)
+            );
+        }
+
+        function filterBlockedProfiles(profiles) {
+            return (profiles || []).filter(profile =>
+                !blockedUserIds.includes(profile.id)
+            );
+        }
 
         let allWorlds = [];
         let allProfiles = [];
         let activeTag = "";
 
         async function loadExploreData() {
-            await Promise.all([loadWorlds(), loadProfiles()]);
+            await loadBlockedUsers();
+
+            await Promise.all([
+                loadWorlds(),
+                loadProfiles()
+            ]);
+
             renderExplore();
             renderTagList();
         }
@@ -615,7 +660,7 @@
 
             const { data: likesData } = await supabase.from("world_likes").select("world_id");
 
-            allWorlds = (worldsData || []).map(world => {
+            allWorlds = filterBlockedWorlds(worldsData).map(world => {
                 const profile = profilesData.find(profile => profile.id === world.owner_id);
                 const likeCount = likesData ? likesData.filter(like => like.world_id === world.id).length : 0;
                 return { ...world, profile: profile || null, likeCount };
@@ -633,7 +678,7 @@
                 return;
             }
 
-            allProfiles = data || [];
+            allProfiles = filterBlockedProfiles(data);
         }
 
         function renderExplore() {
