@@ -260,6 +260,93 @@
             background: rgba(255,255,255,.035);
         }
 
+        .reports-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 11000;
+            background: rgba(0,0,0,.82);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transform: translateY(-20px);
+            transition: .22s ease;
+            overflow-y: auto;
+            padding: 28px;
+            box-sizing: border-box;
+        }
+
+            .reports-overlay.open {
+                opacity: 1;
+                visibility: visible;
+                pointer-events: auto;
+                transform: translateY(0);
+            }
+
+        .reports-shell {
+            max-width: 1100px;
+            margin: auto;
+            background: rgba(12,12,14,.96);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 25px 70px rgba(0,0,0,.55);
+        }
+
+        .reports-grid {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 22px;
+        }
+
+        .report-sidebar {
+            border-right: 1px solid var(--border-color);
+            padding-right: 18px;
+        }
+
+        .report-card {
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            padding: 18px;
+            margin-bottom: 16px;
+            background: rgba(255,255,255,.035);
+        }
+
+        .report-status {
+            display: inline-block;
+            padding: 5px 9px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.14);
+            color: var(--text-secondary);
+            font-size: .8rem;
+            margin-bottom: 10px;
+        }
+
+        .report-reason {
+            color: white;
+            font-weight: 700;
+        }
+
+        .report-details {
+            white-space: pre-wrap;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        @media(max-width:800px) {
+            .reports-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .report-sidebar {
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+                padding-right: 0;
+                padding-bottom: 16px;
+            }
+        }
+
         @media(max-width:800px) {
             header {
                 flex-direction: column;
@@ -344,6 +431,14 @@
             <button id="open-hidden-additions-button" class="button">
                 Open Hidden Additions Panel
             </button>
+            <h2 style="margin-top:28px;">Reports</h2>
+            <p class="empty">
+                Review user-submitted reports without cluttering the main admin page.
+            </p>
+
+            <button id="open-reports-button" class="button">
+                Open Reports Panel
+            </button>
         </section>
     </main>
 
@@ -372,6 +467,46 @@
 
         <div id="hidden-additions-container">
             <p class="empty">Loading hidden additions...</p>
+        </div>
+    </div>
+
+    <div id="reports-overlay" class="reports-overlay">
+        <div class="reports-shell">
+            <div class="drawer-top">
+                <div>
+                    <h2 style="margin:0;">Reports</h2>
+                    <p class="empty" style="margin:6px 0 0;">
+                        Review reports, open targets, dismiss false reports, or hide violating content.
+                    </p>
+                </div>
+
+                <button id="close-reports-button" class="button">X</button>
+            </div>
+
+            <div class="reports-grid">
+                <aside class="report-sidebar">
+                    <select id="reports-status-filter">
+                        <option value="open">Open Reports</option>
+                        <option value="under_review">Under Review</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="dismissed">Dismissed</option>
+                        <option value="all">All Reports</option>
+                    </select>
+
+                    <input id="reports-search"
+                           placeholder="Search reports...">
+
+                    <button id="refresh-reports-button" class="button">
+                        Refresh Reports
+                    </button>
+                </aside>
+
+                <section>
+                    <div id="reports-container">
+                        <p class="empty">Open the reports panel to load reports.</p>
+                    </div>
+                </section>
+            </div>
         </div>
     </div>
 
@@ -539,6 +674,18 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
                 loadUsers();
             }
         });
+        document.getElementById("open-reports-button").addEventListener("click", async () => {
+            document.getElementById("reports-overlay").classList.add("open");
+            await loadReports();
+        });
+
+        document.getElementById("close-reports-button").addEventListener("click", () => {
+            document.getElementById("reports-overlay").classList.remove("open");
+        });
+
+        document.getElementById("refresh-reports-button").addEventListener("click", loadReports);
+        document.getElementById("reports-status-filter").addEventListener("change", loadReports);
+        document.getElementById("reports-search").addEventListener("input", loadReports);
 
         async function loadHiddenWorlds() {
             const container = document.getElementById("hidden-worlds-container");
@@ -569,32 +716,32 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
             }
 
             container.innerHTML = data.map(world => `
-                <article class="drawer-card">
-                    <strong>${escapeHtml(world.title || "Untitled World")}</strong>
+                    <article class="drawer-card">
+                        <strong>${escapeHtml(world.title || "Untitled World")}</strong>
 
-                    <p class="empty">
-                        ${escapeHtml(world.summary || "No summary.")}
-                    </p>
+                        <p class="empty">
+                            ${escapeHtml(world.summary || "No summary.")}
+                        </p>
 
-                    <div class="meta">
-            Status: Hidden
+                        <div class="meta">
+                Status: Hidden
 </div>
 
 <p class="empty">
-            Reason: ${escapeHtml(world.moderation_reason || "No reason provided.")}
+                Reason: ${escapeHtml(world.moderation_reason || "No reason provided.")}
 </p>
 
-                    <div class="actions">
-                        <a class="button" href="world.html?id=${encodeURIComponent(world.id)}">
-                            Open
-                        </a>
+                        <div class="actions">
+                            <a class="button" href="world.html?id=${encodeURIComponent(world.id)}">
+                                Open
+                            </a>
 
-                        <button class="button" onclick="restoreWorld('${world.id}')">
-                            Restore
-                        </button>
-                    </div>
-                </article>
-            `).join("");
+                            <button class="button" onclick="restoreWorld('${world.id}')">
+                                Restore
+                            </button>
+                        </div>
+                    </article>
+                `).join("");
         }
 
         async function loadHiddenAdditions() {
@@ -612,13 +759,13 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
             let query = supabase
                 .from("world_additions")
                 .select(`
-                id,
-                title,
-                author_id,
-                summary,
-                moderation_reason,
-                moderation_status
-            `)
+                    id,
+                    title,
+                    author_id,
+                    summary,
+                    moderation_reason,
+                    moderation_status
+                `)
                 .eq("moderation_status", "hidden");
 
             if (search) {
@@ -642,41 +789,41 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
             }
 
             container.innerHTML = data.map(addition => `
-            <article class="drawer-card">
+                <article class="drawer-card">
 
-                <strong>
-                    ${escapeHtml(addition.title || "Untitled Addition")}
-                </strong>
+                    <strong>
+                        ${escapeHtml(addition.title || "Untitled Addition")}
+                    </strong>
 
-                <p class="empty">
-                    ${escapeHtml(addition.summary || "No summary.")}
-                </p>
+                    <p class="empty">
+                        ${escapeHtml(addition.summary || "No summary.")}
+                    </p>
 
-                <div class="meta">
-                    Status: Hidden
-                </div>
+                    <div class="meta">
+                        Status: Hidden
+                    </div>
 
-                <p class="empty">
-                    Reason:
-                    ${escapeHtml(addition.moderation_reason || "No reason provided.")}
-                </p>
+                    <p class="empty">
+                        Reason:
+                        ${escapeHtml(addition.moderation_reason || "No reason provided.")}
+                    </p>
 
-                <div class="actions">
+                    <div class="actions">
 
-                    <a class="button"
-                       href="addition.html?id=${encodeURIComponent(addition.id)}">
-                        Open
-                    </a>
+                        <a class="button"
+                           href="addition.html?id=${encodeURIComponent(addition.id)}">
+                            Open
+                        </a>
 
-                    <button class="button"
-                            onclick="restoreAddition('${addition.id}')">
-                        Restore
-                    </button>
+                        <button class="button"
+                                onclick="restoreAddition('${addition.id}')">
+                            Restore
+                        </button>
 
-                </div>
+                    </div>
 
-            </article>
-        `).join("");
+                </article>
+            `).join("");
         }
 
         window.restoreWorld = async function (worldId) {
@@ -725,6 +872,318 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
 
             await loadHiddenWorlds();
         };
+
+        async function loadReports() {
+            const container = document.getElementById("reports-container");
+            const status = document.getElementById("reports-status-filter").value;
+            const search = document.getElementById("reports-search").value.trim().toLowerCase();
+
+            container.innerHTML = `<p class="empty">Loading reports...</p>`;
+
+            let query = supabase
+                .from("reports")
+                .select("*")
+                .order("created_at", { ascending: false });
+
+            if (status !== "all") {
+                query = query.eq("status", status);
+            }
+
+            const { data: reports, error } = await query;
+
+            if (error) {
+                container.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
+                return;
+            }
+
+            if (!reports?.length) {
+                container.innerHTML = `<p class="empty">No reports found.</p>`;
+                return;
+            }
+
+            const profileIds = [
+                ...new Set(
+                    reports
+                        .flatMap(report => [report.reporter_id, report.reported_user_id])
+                        .filter(Boolean)
+                )
+            ];
+
+            const worldIds = [
+                ...new Set(reports.map(report => report.world_id).filter(Boolean))
+            ];
+
+            const additionIds = [
+                ...new Set(reports.map(report => report.addition_id).filter(Boolean))
+            ];
+
+            const { data: profiles } = await supabase
+                .from("profiles")
+                .select("id, username, display_name")
+                .in("id", profileIds.length ? profileIds : ["00000000-0000-0000-0000-000000000000"]);
+
+            const { data: worlds } = await supabase
+                .from("worlds")
+                .select("id, title, owner_id, summary, moderation_status")
+                .in("id", worldIds.length ? worldIds : ["00000000-0000-0000-0000-000000000000"]);
+
+            const { data: additions } = await supabase
+                .from("world_additions")
+                .select("id, title, author_id, summary, moderation_status")
+                .in("id", additionIds.length ? additionIds : ["00000000-0000-0000-0000-000000000000"]);
+
+            const profileMap = new Map((profiles || []).map(profile => [profile.id, profile]));
+            const worldMap = new Map((worlds || []).map(world => [world.id, world]));
+            const additionMap = new Map((additions || []).map(addition => [addition.id, addition]));
+
+            const filteredReports = reports.filter(report => {
+                const reporter = profileMap.get(report.reporter_id);
+                const reportedUser = profileMap.get(report.reported_user_id);
+                const world = worldMap.get(report.world_id);
+                const addition = additionMap.get(report.addition_id);
+
+                const haystack = [
+                    report.report_type,
+                    report.reason,
+                    report.details,
+                    report.status,
+                    reporter?.username,
+                    reporter?.display_name,
+                    reportedUser?.username,
+                    reportedUser?.display_name,
+                    world?.title,
+                    world?.summary,
+                    addition?.title,
+                    addition?.summary
+                ].join(" ").toLowerCase();
+
+                return haystack.includes(search);
+            });
+
+            if (!filteredReports.length) {
+                container.innerHTML = `<p class="empty">No reports match your search.</p>`;
+                return;
+            }
+
+            container.innerHTML = filteredReports.map(report => {
+                const reporter = profileMap.get(report.reporter_id);
+                const reportedUser = profileMap.get(report.reported_user_id);
+                const world = worldMap.get(report.world_id);
+                const addition = additionMap.get(report.addition_id);
+
+                return renderReportCard(report, reporter, reportedUser, world, addition);
+            }).join("");
+        }
+
+        function renderReportCard(report, reporter, reportedUser, world, addition) {
+            const targetTitle =
+                world?.title ||
+                addition?.title ||
+                reportedUser?.display_name ||
+                reportedUser?.username ||
+                "Unknown Target";
+
+            const targetLink =
+                world
+                    ? `world.html?id=${encodeURIComponent(world.id)}`
+                    : addition
+                        ? `addition.html?id=${encodeURIComponent(addition.id)}`
+                        : reportedUser?.username
+                            ? `profile.html?user=${encodeURIComponent(reportedUser.username)}`
+                            : "#";
+
+            return `
+<article class="report-card">
+    <span class="report-status">${escapeHtml(report.status || "open")}</span>
+
+    <h3 style="margin:0 0 8px;">
+        ${escapeHtml(report.report_type || "Report")} Report
+    </h3>
+
+    <div class="report-reason">
+        Reason: ${escapeHtml(report.reason || "No reason provided")}
+    </div>
+
+    <p class="meta">
+        Target: ${escapeHtml(targetTitle)}
+    </p>
+
+    <p class="meta">
+        Reporter:
+        ${escapeHtml(reporter?.display_name || reporter?.username || "Unknown")}
+    </p>
+
+    <p class="meta">
+        Reported User:
+        ${escapeHtml(reportedUser?.display_name || reportedUser?.username || "Unknown")}
+    </p>
+
+    <p class="report-details">
+        ${escapeHtml(report.details || "No additional details.")}
+    </p>
+
+    <input id="report-note-${report.id}"
+           placeholder="Resolution note or moderation reason...">
+
+    <div class="actions">
+        <a class="button" href="${targetLink}">
+            Open Target
+        </a>
+
+        <button class="button" onclick="updateReportStatus('${report.id}', 'under_review')">
+            Mark Under Review
+        </button>
+
+        ${world ? `
+            <button class="button danger" onclick="hideReportedWorld('${report.id}', '${world.id}', '${world.owner_id}', '${escapeHtmlForAttribute(world.title || "Untitled World")}')">
+                Hide World
+            </button>
+        ` : ""}
+
+        ${addition ? `
+            <button class="button danger" onclick="hideReportedAddition('${report.id}', '${addition.id}', '${addition.author_id}', '${escapeHtmlForAttribute(addition.title || "Untitled Addition")}')">
+                Hide Addition
+            </button>
+        ` : ""}
+
+        <button class="button" onclick="updateReportStatus('${report.id}', 'resolved')">
+            Mark Resolved
+        </button>
+
+        <button class="button" onclick="updateReportStatus('${report.id}', 'dismissed')">
+            Dismiss
+        </button>
+    </div>
+</article>
+`;
+        }
+
+        window.updateReportStatus = async function (reportId, status) {
+            const note = document.getElementById(`report-note-${reportId}`)?.value.trim() || "";
+
+            const payload = {
+                status,
+                resolution: note || null
+            };
+
+            if (status === "resolved" || status === "dismissed") {
+                payload.resolved_by = currentUser.id;
+                payload.resolved_at = new Date().toISOString();
+            }
+
+            if (status === "under_review") {
+                payload.assigned_to = currentUser.id;
+            }
+
+            const { error } = await supabase
+                .from("reports")
+                .update(payload)
+                .eq("id", reportId);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await loadReports();
+        };
+
+        window.hideReportedWorld = async function (reportId, worldId, ownerId, title) {
+            const note = document.getElementById(`report-note-${reportId}`)?.value.trim();
+
+            if (!note) {
+                alert("Enter a reason before hiding this world.");
+                return;
+            }
+
+            const { error } = await supabase
+                .from("worlds")
+                .update({
+                    moderation_status: "hidden",
+                    moderation_reason: note
+                })
+                .eq("id", worldId);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await supabase
+                .from("moderation_logs")
+                .insert({
+                    target_user_id: ownerId,
+                    moderator_id: currentUser.id,
+                    action: "world_hidden",
+                    reason: note,
+                    expires_at: null
+                });
+
+            await createNotification({
+                recipientId: ownerId,
+                actorId: currentUser.id,
+                worldId,
+                type: "world_hidden",
+                message: `Your world "${title}" was hidden by moderation. Reason: ${note}`,
+                link: "dashboard.html"
+            });
+
+            await updateReportStatus(reportId, "resolved");
+            await loadHiddenWorlds();
+        };
+
+        window.hideReportedAddition = async function (reportId, additionId, authorId, title) {
+            const note = document.getElementById(`report-note-${reportId}`)?.value.trim();
+
+            if (!note) {
+                alert("Enter a reason before hiding this addition.");
+                return;
+            }
+
+            const { error } = await supabase
+                .from("world_additions")
+                .update({
+                    moderation_status: "hidden",
+                    moderation_reason: note
+                })
+                .eq("id", additionId);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await supabase
+                .from("moderation_logs")
+                .insert({
+                    target_user_id: authorId,
+                    moderator_id: currentUser.id,
+                    action: "addition_hidden",
+                    reason: note,
+                    expires_at: null
+                });
+
+            await createNotification({
+                recipientId: authorId,
+                actorId: currentUser.id,
+                additionId,
+                type: "addition_hidden",
+                message: `Your addition "${title}" was hidden by moderation. Reason: ${note}`,
+                link: `addition.html?id=${encodeURIComponent(additionId)}`
+            });
+
+            await updateReportStatus(reportId, "resolved");
+            await loadHiddenAdditions();
+        };
+
+        function escapeHtmlForAttribute(value) {
+            return String(value || "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "\\'");
+        }
 
         function escapeHtml(value) {
             return String(value || "")
