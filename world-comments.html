@@ -314,12 +314,36 @@
         let currentWorld = null;
         let allAdditions = [];
         let pendingCommentReport = null;
+        let blockedUserIds = [];
+        async function loadBlockedUsers() {
+            const { data, error } = await supabase
+                .from("user_blocks")
+                .select("blocker_id, blocked_id")
+                .in("blocker_id", [currentUser.id]);
+
+            const { data: reverseData, error: reverseError } = await supabase
+                .from("user_blocks")
+                .select("blocker_id, blocked_id")
+                .in("blocked_id", [currentUser.id]);
+
+            if (error || reverseError) {
+                console.error(error || reverseError);
+                blockedUserIds = [];
+                return;
+            }
+
+            blockedUserIds = [
+                ...(data || []).map(x => x.blocked_id),
+                ...(reverseData || []).map(x => x.blocker_id)
+            ];
+        }
 
         if (!worldId) {
             alert("No world ID provided.");
             window.location.href = "explore.html";
         }
 
+        await loadBlockedUsers();
         await loadWorld();
         await loadComments();
 
@@ -338,6 +362,11 @@
             }
 
             currentWorld = data;
+            if (blockedUserIds.includes(currentWorld.owner_id)) {
+                alert("These comments are unavailable.");
+                window.location.href = "explore.html";
+                return;
+            }
 
             document.getElementById("page-title").textContent =
                 `${data.title} Comments`;
@@ -365,7 +394,6 @@
         }
 
         async function loadComments() {
-
             const container =
                 document.getElementById("comments-container");
 
@@ -377,24 +405,29 @@
 
             if (error) {
                 container.innerHTML = `
-                        <p class="empty">
-                            ${escapeHtml(error.message)}
-                        </p>
-                    `;
+            <p class="empty">
+                ${escapeHtml(error.message)}
+            </p>
+        `;
                 return;
             }
 
-            if (!comments || comments.length === 0) {
+            const visibleComments =
+                (comments || []).filter(comment =>
+                    !blockedUserIds.includes(comment.user_id)
+                );
+
+            if (!visibleComments.length) {
                 container.innerHTML = `
-                        <p class="empty">
-                            No comments yet.
-                        </p>
-                    `;
+            <p class="empty">
+                No comments yet.
+            </p>
+        `;
                 return;
             }
 
             const userIds = [
-                ...new Set(comments.map(comment => comment.user_id))
+                ...new Set(visibleComments.map(comment => comment.user_id))
             ];
 
             const { data: profiles } = await supabase
@@ -402,59 +435,59 @@
                 .select("id, username, display_name")
                 .in("id", userIds);
 
-            container.innerHTML = comments.map(comment => {
+            container.innerHTML = visibleComments.map(comment => {
                 const profile = profiles?.find(profile => profile.id === comment.user_id);
 
                 const username = profile?.username || "unknown";
                 const displayName = profile?.display_name || username;
 
                 return `
-                <article class="comment-card">
-                    <div class="comment-author">
-                        <strong>${escapeHtml(displayName)}</strong>
-                        (@${escapeHtml(username)})
-                    </div>
+            <article class="comment-card">
+                <div class="comment-author">
+                    <strong>${escapeHtml(displayName)}</strong>
+                    (@${escapeHtml(username)})
+                </div>
 
+                <div class="comment-content">
+                    ${escapeHtml(comment.content)}
+                </div>
 
-                    <div class="comment-content">
-            ${escapeHtml(comment.content)}
-</div>
-<div style="margin-top:14px;">
-    <button
-        class="button"
-        onclick="openCommentReport(
-            '${comment.id}',
-            '${comment.user_id}',
-            \`${escapeHtml(comment.content)}\`
-        )">
-        Report Comment
-    </button>
-</div>
+                <div style="margin-top:14px;">
+                    <button
+                        class="button"
+                        onclick="openCommentReport(
+                            '${comment.id}',
+                            '${comment.user_id}',
+                            \`${escapeHtml(comment.content)}\`
+                        )">
+                        Report Comment
+                    </button>
+                </div>
 
-${(
+                ${(
                         currentUser.id === comment.user_id ||
                         currentUser.id === currentWorld.owner_id
                     ) ? `
-            <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+                    <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
 
-                ${currentUser.id === comment.user_id ? `
-                    <button
-                        class="button"
-                        onclick="editComment('${comment.id}', \`${escapeHtml(comment.content)}\`)">
-                        Edit
-                    </button>
+                        ${currentUser.id === comment.user_id ? `
+                            <button
+                                class="button"
+                                onclick="editComment('${comment.id}', \`${escapeHtml(comment.content)}\`)">
+                                Edit
+                            </button>
+                        ` : ""}
+
+                        <button
+                            class="button"
+                            onclick="deleteComment('${comment.id}')">
+                            Delete
+                        </button>
+
+                    </div>
                 ` : ""}
-
-                <button
-                    class="button"
-                    onclick="deleteComment('${comment.id}')">
-                    Delete
-                </button>
-
-            </div>
-` : ""}
-                </article>
-            `;
+            </article>
+        `;
             }).join("");
         }
 
@@ -519,6 +552,11 @@ ${(
         window.submitComment = async function () {
 
             if (!currentWorld) return;
+
+            if (blockedUserIds.includes(currentWorld.owner_id)) {
+                alert("You cannot interact with this creator.");
+                return;
+            }
 
             if (currentUser.id === currentWorld.owner_id) {
                 return;
