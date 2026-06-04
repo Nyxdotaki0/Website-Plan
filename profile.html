@@ -399,6 +399,78 @@
             gap: 6px;
         }
 
+        .moderation-action-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .moderation-drawer {
+            position: fixed;
+            top: 0;
+            right: -430px;
+            width: 390px;
+            max-width: calc(100vw - 32px);
+            height: 100vh;
+            z-index: 9999;
+            background: rgba(12,12,14,0.94);
+            border-left: 1px solid var(--border-color);
+            box-shadow: -20px 0 50px rgba(0,0,0,0.45);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 24px;
+            box-sizing: border-box;
+            transition: right 0.22s ease;
+            overflow-y: auto;
+        }
+
+            .moderation-drawer.open {
+                right: 0;
+            }
+
+        .drawer-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .drawer-card {
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+            background: rgba(255,255,255,0.035);
+        }
+
+            .drawer-card h4 {
+                margin: 0 0 10px;
+            }
+
+            .drawer-card label {
+                display: block;
+                margin-top: 10px;
+                margin-bottom: 6px;
+                color: var(--text-secondary);
+            }
+
+        .drawer-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            background: rgba(0,0,0,0.28);
+            color: var(--text-primary);
+        }
+
+        .drawer-message {
+            margin-top: 12px;
+            color: var(--text-secondary);
+        }
+
         .notification-badge {
             min-width: 18px;
             height: 18px;
@@ -519,59 +591,127 @@
                     <span id="following-count">0 Following</span>
                 </div>
 
-                <div id="follow-button-container"></div>
+                <div class="moderation-action-row">
+                    <div id="follow-button-container"></div>
 
-                <a id="edit-profile-button" class="button" href="account-settings.html">
-                    Edit Profile
-                </a>
-            </div>
-
-            <div id="moderation-panel"
-                 style="
-        display:none;
-        margin-top:16px;
-        padding:16px;
-        border:1px solid var(--border-color);
-        border-radius:12px;
-        background:rgba(255,255,255,0.03);
-     ">
-
-                <h3 style="margin-top:0;">Void Architect Controls</h3>
-
-                <label style="display:block;margin-top:10px;color:var(--text-secondary);">
-                    Moderation Type
-                </label>
-
-                <select id="moderation-duration-mode" style="width:100%;box-sizing:border-box;margin-top:8px;margin-bottom:10px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:rgba(0,0,0,0.25);color:var(--text-primary);">
-                    <option value="timed">Timed</option>
-                    <option value="permanent">Permanent</option>
-                </select>
-
-                <div id="duration-container">
-
-                    <label style="display:block;color:var(--text-secondary);">
-                        Duration in seconds
-                    </label>
-
-                    <input id="moderation-duration-seconds"
-                           type="number"
-                           min="1"
-                           placeholder="Example: 3600"
-                           style="width:100%;box-sizing:border-box;margin-top:8px;margin-bottom:10px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:rgba(0,0,0,0.25);color:var(--text-primary);">
-
+                    <button id="moderation-toggle"
+                            class="button"
+                            style="display:none;"
+                            onclick="toggleModerationDrawer()">
+                        Moderation
+                    </button>
                 </div>
 
-                <input id="moderation-reason" placeholder="Reason for action..." style="width:100%;box-sizing:border-box;margin-top:8px;margin-bottom:12px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:rgba(0,0,0,0.25);color:var(--text-primary);">
-
-                <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <button class="button" onclick="setAccountStatus('active')">Restore</button>
-                    <button class="button" onclick="applyModerationStatus('restricted')">Restrict</button>
-                    <button class="button" onclick="applyModerationStatus('suspended')">Suspend</button>
-                    <button class="button" onclick="applyModerationStatus('banned')">Ban</button>
+            <div id="moderation-drawer" class="moderation-drawer">
+                <div class="drawer-top">
+                    <h3 style="margin:0;">Void Architect Controls</h3>
+                    <button class="button" onclick="toggleModerationDrawer()">X</button>
                 </div>
 
-                <div id="moderation-status-display" style="margin-top:12px; color:var(--text-secondary);"></div>
+                <div id="moderation-status-display" class="drawer-card">
+                    Loading status...
+                </div>
 
+                <div class="drawer-card">
+                    <h4>Restrict Account</h4>
+
+                    <label>Duration Type</label>
+                    <select id="restrict-duration-mode" class="drawer-input">
+                        <option value="timed">Timed</option>
+                        <option value="permanent">Permanent</option>
+                    </select>
+
+                    <div id="restrict-duration-container">
+                        <label>Duration in seconds</label>
+                        <input id="restrict-duration-seconds"
+                               class="drawer-input"
+                               type="number"
+                               min="1"
+                               placeholder="Example: 3600">
+                    </div>
+
+                    <label>Reason shown to user</label>
+                    <input id="restrict-reason"
+                           class="drawer-input"
+                           placeholder="Reason for restriction...">
+
+                    <button class="button" onclick="applyDrawerModeration('restricted')">
+                        Apply Restriction
+                    </button>
+                </div>
+
+                <div class="drawer-card">
+                    <h4>Suspend Account</h4>
+
+                    <label>Duration Type</label>
+                    <select id="suspend-duration-mode" class="drawer-input">
+                        <option value="timed">Timed</option>
+                        <option value="permanent">Permanent</option>
+                    </select>
+
+                    <div id="suspend-duration-container">
+                        <label>Duration in seconds</label>
+                        <input id="suspend-duration-seconds"
+                               class="drawer-input"
+                               type="number"
+                               min="1"
+                               placeholder="Example: 86400">
+                    </div>
+
+                    <label>Reason shown to user</label>
+                    <input id="suspend-reason"
+                           class="drawer-input"
+                           placeholder="Reason for suspension...">
+
+                    <button class="button" onclick="applyDrawerModeration('suspended')">
+                        Apply Suspension
+                    </button>
+                </div>
+
+                <div class="drawer-card">
+                    <h4>Ban Account</h4>
+                    <p style="color:var(--text-secondary);line-height:1.5;">
+                        Ban removes normal access without a timer. Use this for the most serious cases.
+                    </p>
+
+                    <label>Reason shown to user</label>
+                    <input id="ban-reason"
+                           class="drawer-input"
+                           placeholder="Reason for ban...">
+
+                    <button class="button danger-button" onclick="showBanConfirm()">
+                        Ban Account
+                    </button>
+
+                    <div id="ban-confirm-box" style="display:none;margin-top:12px;">
+                        <p style="color:var(--text-secondary);">
+                            Are you sure you want to ban this account?
+                        </p>
+
+                        <div class="moderation-action-row">
+                            <button class="button danger-button" onclick="confirmBanAccount()">
+                                Confirm Ban
+                            </button>
+
+                            <button class="button" onclick="hideBanConfirm()">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="drawer-card">
+                    <h4>Restore Account</h4>
+                    <p style="color:var(--text-secondary);line-height:1.5;">
+                        Clears restriction, suspension, ban reason, and expiration timer.
+                    </p>
+
+                    <button class="button" onclick="setAccountStatus('active')">
+                        Restore Account
+                    </button>
+                </div>
+
+                <p id="moderation-message" class="drawer-message"></p>
             </div>
 </section>
 
@@ -705,16 +845,8 @@ ${escapeHtml(
             currentUser.id !== profile.id &&
             profile.role !== "void_architect"
         ) {
-            document.getElementById("moderation-panel").style.display = "block";
-
-            const expires = profile.moderation_expires_at
-                ? new Date(profile.moderation_expires_at).toLocaleString()
-                : profile.account_status === "active"
-                    ? "None"
-                    : "Permanent";
-
-            document.getElementById("moderation-status-display").textContent =
-                `Status: ${profile.account_status || "active"} | Expires: ${expires}`;
+            document.getElementById("moderation-toggle").style.display = "inline-block";
+            updateModerationStatusDisplay(profile);
         }
     }
 
@@ -994,90 +1126,110 @@ ${escapeHtml(
 
     });
 
-    window.setTimedAccountStatus = async function (status) {
-        const seconds = Number(document.getElementById("moderation-duration-seconds").value);
-        const reason = document.getElementById("moderation-reason").value.trim();
+    function updateModerationStatusDisplay(profile) {
+        const expires = profile.moderation_expires_at
+            ? new Date(profile.moderation_expires_at).toLocaleString()
+            : profile.account_status === "active"
+                ? "None"
+                : "Permanent";
 
-        if (!seconds || seconds < 1) {
-            alert("Enter a valid duration in seconds.");
+        document.getElementById("moderation-status-display").innerHTML = `
+        <strong>Current Status:</strong> ${escapeHtml(profile.account_status || "active")}<br>
+        <strong>Expires:</strong> ${escapeHtml(expires)}<br>
+        <strong>Reason:</strong> ${escapeHtml(profile.moderation_reason || "None")}
+    `;
+    }
+
+    window.toggleModerationDrawer = function () {
+        document.getElementById("moderation-drawer").classList.toggle("open");
+    };
+
+    function setupDrawerDurationToggle(modeId, containerId) {
+        const mode = document.getElementById(modeId);
+        const container = document.getElementById(containerId);
+
+        if (!mode || !container) return;
+
+        function update() {
+            container.style.display =
+                mode.value === "permanent" ? "none" : "block";
+        }
+
+        mode.addEventListener("change", update);
+        update();
+    }
+
+    setupDrawerDurationToggle("restrict-duration-mode", "restrict-duration-container");
+    setupDrawerDurationToggle("suspend-duration-mode", "suspend-duration-container");
+
+    window.applyDrawerModeration = async function (status) {
+        const prefix = status === "restricted" ? "restrict" : "suspend";
+
+        const mode = document.getElementById(`${prefix}-duration-mode`).value;
+        const seconds = Number(document.getElementById(`${prefix}-duration-seconds`).value);
+        const reason = document.getElementById(`${prefix}-reason`).value.trim();
+
+        let expiresAt = null;
+
+        if (mode === "timed") {
+            if (!seconds || seconds < 1) {
+                showModerationMessage("Enter a valid duration in seconds.");
+                return;
+            }
+
+            const expiration = new Date();
+            expiration.setSeconds(expiration.getSeconds() + seconds);
+            expiresAt = expiration.toISOString();
+        }
+
+        await setAccountStatus(status, expiresAt, reason);
+    };
+
+    window.showBanConfirm = function () {
+        document.getElementById("ban-confirm-box").style.display = "block";
+    };
+
+    window.hideBanConfirm = function () {
+        document.getElementById("ban-confirm-box").style.display = "none";
+    };
+
+    window.confirmBanAccount = async function () {
+        const reason = document.getElementById("ban-reason").value.trim();
+
+        await setAccountStatus("banned", null, reason);
+    };
+
+    window.setAccountStatus = async function (status, expiresAt = null, reason = "") {
+        showModerationMessage("Applying moderation action...");
+
+        const { error } = await supabase
+            .from("profiles")
+            .update({
+                account_status: status,
+                moderation_expires_at: status === "active" ? null : expiresAt,
+                moderation_reason: status === "active" ? null : reason
+            })
+            .eq("id", profile.id);
+
+        if (error) {
+            showModerationMessage(error.message);
             return;
         }
 
-        const expiresAt = new Date();
-        expiresAt.setSeconds(expiresAt.getSeconds() + seconds);
+        showModerationMessage(`Account updated to ${status}.`);
 
-        await setAccountStatus(status, expiresAt.toISOString(), reason);
+        setTimeout(() => {
+            window.location.reload();
+        }, 700);
     };
 
-    window.setPermanentAccountStatus = async function () {
-        const status = prompt("Permanent status: restricted, suspended, or banned");
-        if (!["restricted", "suspended", "banned"].includes(status)) {
-            alert("Use restricted, suspended, or banned.");
-            return;
+    function showModerationMessage(message) {
+        const box = document.getElementById("moderation-message");
+
+        if (box) {
+            box.textContent = message;
         }
-
-        const reason = document.getElementById("moderation-reason").value.trim();
-        await setAccountStatus(status, null, reason);
-    };
-
-    window.applyModerationStatus = async function(status) {
-    const mode = document.getElementById("moderation-duration-mode").value;
-    const seconds = Number(document.getElementById("moderation-duration-seconds").value);
-    const reason = document.getElementById("moderation-reason").value.trim();
-
-    let expiresAt = null;
-
-    if (mode === "timed") {
-        if (!seconds || seconds < 1) {
-            alert("Enter a valid duration in seconds.");
-            return;
-        }
-
-        const expiration = new Date();
-        expiration.setSeconds(expiration.getSeconds() + seconds);
-        expiresAt = expiration.toISOString();
     }
-
-    await setAccountStatus(status, expiresAt, reason);
-};
-
-window.setAccountStatus = async function(status, expiresAt = null, reason = "") {
-    if (!confirm(`Set account to ${status}?`)) return;
-
-    const { error } = await supabase
-        .from("profiles")
-        .update({
-            account_status: status,
-            moderation_expires_at: status === "active" ? null : expiresAt,
-            moderation_reason: status === "active" ? null : reason
-        })
-        .eq("id", profile.id);
-
-    if (error) {
-        alert(error.message);
-        return;
-    }
-
-    alert(`Account updated to ${status}.`);
-    window.location.reload();
-    };
-
-    function setupModerationModeToggle() {
-        const moderationMode = document.getElementById("moderation-duration-mode");
-        const durationContainer = document.getElementById("duration-container");
-
-        if (!moderationMode || !durationContainer) return;
-
-        function updateModerationMode() {
-            durationContainer.style.display =
-                moderationMode.value === "permanent" ? "none" : "block";
-        }
-
-        moderationMode.addEventListener("change", updateModerationMode);
-        updateModerationMode();
-    }
-
-    setupModerationModeToggle();
 </script>
 
 </body>
