@@ -255,6 +255,21 @@
             margin-top: 12px;
         }
 
+        .username-help {
+            margin-top: -8px;
+            margin-bottom: 16px;
+            font-size: .9rem;
+            color: var(--text-muted);
+        }
+
+            .username-help.good {
+                color: #9ef0b0;
+            }
+
+            .username-help.bad {
+                color: #ff9f9f;
+            }
+
         .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -481,6 +496,9 @@
                     <label>Username</label>
                     <input id="username" placeholder="Username">
                 </div>
+                <div id="username-help" class="username-help">
+                    Use 3-30 characters: letters, numbers, and underscores only.
+                </div>
 
                 <div>
                     <label>Display Name</label>
@@ -618,6 +636,77 @@
         const SUPABASE_ANON_KEY = "sb_publishable_O0JPmpCSe7TDoUxotIe4aQ_4EBgEBV8";
 
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const usernameInput = document.getElementById("username");
+const usernameHelp = document.getElementById("username-help");
+let usernameCheckTimer = null;
+
+function normalizeUsername(value) {
+    return String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/^@+/, "")
+        .replace(/\s+/g, "_");
+}
+
+function validateUsernameFormat(username) {
+    if (!username) return "Username is required.";
+
+    if (!/^[a-z0-9_]{3,30}$/.test(username)) {
+        return "Username must be 3-30 characters and can only use letters, numbers, and underscores.";
+    }
+
+    return "";
+}
+
+function setUsernameHelp(text, type = "") {
+    usernameHelp.textContent = text || "";
+    usernameHelp.className = "username-help";
+
+    if (type) usernameHelp.classList.add(type);
+}
+
+async function checkUsernameAvailability() {
+    const username = normalizeUsername(usernameInput.value);
+
+    const formatError = validateUsernameFormat(username);
+
+    if (formatError) {
+        setUsernameHelp(formatError, "bad");
+        return false;
+    }
+
+    const { data, error } = await supabaseClient
+        .from("profiles")
+        .select("id")
+        .ilike("username", username)
+        .neq("id", currentUser.id)
+        .maybeSingle();
+
+    if (error) {
+        setUsernameHelp(error.message, "bad");
+        return false;
+    }
+
+    if (data) {
+        setUsernameHelp("That username is already taken.", "bad");
+        return false;
+    }
+
+    setUsernameHelp("Username is available.", "good");
+    return true;
+}
+
+usernameInput.addEventListener("input", () => {
+    const normalized = normalizeUsername(usernameInput.value);
+
+    if (usernameInput.value !== normalized) {
+        usernameInput.value = normalized;
+    }
+
+    clearTimeout(usernameCheckTimer);
+
+    usernameCheckTimer = setTimeout(checkUsernameAvailability, 450);
+});
 
         let currentUser = null;
         let currentAvatarUrl = "";
@@ -889,6 +978,7 @@
 
         async function saveProfile() {
             const profileMessage = document.getElementById("profile-message");
+            const username = normalizeUsername(document.getElementById("username").value);
 
             if (!currentUser) {
                 window.location.href = "login.html";
@@ -937,6 +1027,20 @@
                     profileMessage.textContent = "That username is already taken.";
                     return;
                 }
+                const formatError = validateUsernameFormat(username);
+
+if (formatError) {
+    profileMessage.textContent = formatError;
+    setUsernameHelp(formatError, "bad");
+    return;
+}
+
+const usernameAvailable = await checkUsernameAvailability();
+
+if (!usernameAvailable) {
+    profileMessage.textContent = "Choose a different username before saving.";
+    return;
+}
 
                 const updatedProfile = {
                     id: currentUser.id,
