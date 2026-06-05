@@ -31,11 +31,15 @@ export async function requireBetaAccess(options = {}) {
 
     const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("id, role, account_status, moderation_expires_at, moderation_reason")
+        .select("id, role, account_status, moderation_expires_at, moderation_reason, profile_completed")
         .eq("id", user.id)
         .maybeSingle();
 
     if (profileError || !profile) {
+        window.location.replace("/profile-setup.html");
+        return null;
+    }
+    if (!profile.profile_completed) {
         window.location.replace("/profile-setup.html");
         return null;
     }
