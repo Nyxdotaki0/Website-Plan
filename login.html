@@ -265,7 +265,7 @@
                 email,
                 password,
                 options: {
-                    emailRedirectTo: "https://nullverse.dev/profile-setup.html"
+                    emailRedirectTo: "https://nullverse.dev/login.html"
                 }
             });
 
@@ -298,7 +298,25 @@
 
         async function checkExistingSession() {
             const { data } = await supabaseClient.auth.getSession();
-            if (data.session) window.location.href = "dashboard.html";
+
+            if (!data.session) return;
+
+            const { data: profile, error } = await supabaseClient
+                .from("profiles")
+                .select("id")
+                .eq("id", data.session.user.id)
+                .maybeSingle();
+
+            if (error) {
+                message.textContent = error.message;
+                return;
+            }
+
+            if (profile) {
+                window.location.href = "dashboard.html";
+            } else {
+                window.location.href = "profile-setup.html";
+            }
         }
 
         checkExistingSession();
