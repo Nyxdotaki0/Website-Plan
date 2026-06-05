@@ -322,7 +322,10 @@
 
         function updatePreview() {
             const username =
-                usernameInput.value.trim();
+                usernameInput.value
+                    .trim()
+                    .toLowerCase()
+                    .replace(/^@/, "");
 
             const displayName =
                 displayNameInput.value.trim();
@@ -377,6 +380,34 @@
             if (!username || !displayName) {
                 message.textContent =
                     "Username and display name are required.";
+
+                return;
+            }
+            if (!/^[a-z0-9_]{3,30}$/.test(username)) {
+                message.textContent =
+                    "Username must be 3-30 characters and can only use letters, numbers, and underscores.";
+
+                return;
+            }
+
+            const { data: existingUsername, error: usernameCheckError } =
+                await supabaseClient
+                    .from("profiles")
+                    .select("id")
+                    .eq("username", username)
+                    .neq("id", user.id)
+                    .maybeSingle();
+
+            if (usernameCheckError) {
+                message.textContent =
+                    usernameCheckError.message;
+
+                return;
+            }
+
+            if (existingUsername) {
+                message.textContent =
+                    "That username is already taken.";
 
                 return;
             }

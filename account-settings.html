@@ -899,7 +899,10 @@
                 const avatarUrl = await uploadFileIfSelected("avatar-file", "avatars", currentAvatarUrl, "avatar");
                 const bannerUrl = await uploadFileIfSelected("banner-file", "banners", currentBannerUrl, "banner");
 
-                const username = document.getElementById("username").value.trim();
+                const username = document.getElementById("username").value
+                    .trim()
+                    .toLowerCase()
+                    .replace(/^@/, "");
                 const displayName = document.getElementById("display-name").value.trim();
                 const creatorType = document.getElementById("creator-type").value;
                 const profileColor =
@@ -910,6 +913,28 @@
 
                 if (!username || !displayName) {
                     profileMessage.textContent = "Username and display name are required.";
+                    return;
+                }
+                if (!/^[a-z0-9_]{3,30}$/.test(username)) {
+                    profileMessage.textContent =
+                        "Username must be 3-30 characters and can only use letters, numbers, and underscores.";
+                    return;
+                }
+
+                const { data: existingUsername, error: usernameCheckError } = await supabaseClient
+                    .from("profiles")
+                    .select("id")
+                    .eq("username", username)
+                    .neq("id", currentUser.id)
+                    .maybeSingle();
+
+                if (usernameCheckError) {
+                    profileMessage.textContent = usernameCheckError.message;
+                    return;
+                }
+
+                if (existingUsername) {
+                    profileMessage.textContent = "That username is already taken.";
                     return;
                 }
 
