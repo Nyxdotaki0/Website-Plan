@@ -272,34 +272,105 @@
             left: 50%;
             bottom: 22px;
             transform: translateX(-50%);
-            width: min(900px, calc(100% - 34px));
-            background: rgba(12,12,14,.94);
-            border: 1px solid var(--border-color);
-            border-radius: 22px;
-            padding: 14px;
+            width: min(820px, calc(100% - 34px));
+            background: rgba(12,12,14,.82);
+            border: 1px solid rgba(255,255,255,.10);
+            border-radius: 26px;
+            padding: 10px;
             box-sizing: border-box;
-            backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
             z-index: 80;
             box-shadow: 0 22px 55px rgba(0,0,0,.42), 0 0 22px rgba(255,255,255,.04);
         }
 
-        textarea {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 13px;
-            border-radius: 14px;
+        .composer-bar {
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            background: rgba(0,0,0,.28);
             border: 1px solid var(--border-color);
-            background: rgba(0,0,0,.22);
-            color: var(--text-primary);
-            font-family: Arial,sans-serif;
-            resize: vertical;
-            margin-bottom: 10px;
+            border-radius: 999px;
+            padding: 7px;
         }
 
-        input[type="file"] {
+        #message-input {
+            flex: 1;
+            width: auto;
+            min-height: 22px;
+            max-height: 120px;
+            margin: 0;
+            padding: 9px 6px;
+            border: none;
+            border-radius: 0;
+            background: transparent;
+            color: var(--text-primary);
+            font-family: Arial, sans-serif;
+            resize: none;
+            line-height: 1.4;
+            overflow-y: auto;
+        }
+
+            #message-input:focus {
+                outline: none;
+                box-shadow: none;
+            }
+
+        .hidden-file-input {
+            display: none;
+        }
+
+        .composer-icon-button,
+        .send-icon-button {
+            min-width: 36px;
+            height: 36px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.12);
+            background: linear-gradient(180deg,#2a2a2f,#0d0d10);
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-family: Arial, sans-serif;
+            font-size: .9rem;
+            padding: 0 12px;
+            box-sizing: border-box;
+            transition: .18s ease;
+        }
+
+        .composer-icon-button {
+            padding: 0;
+            font-size: 1.25rem;
+        }
+
+            .composer-icon-button:hover,
+            .send-icon-button:hover {
+                border-color: rgba(255,255,255,.22);
+                transform: translateY(-1px);
+            }
+
+        .send-icon-button {
+            font-weight: 700;
+        }
+
+        .image-preview-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 8px;
+            padding: 8px 10px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            background: rgba(255,255,255,.045);
             color: var(--text-secondary);
-            margin-bottom: 10px;
+            font-size: .88rem;
+        }
+
+        .composer-status {
+            margin: 8px 8px 0;
+            font-size: .85rem;
         }
 
         .button {
@@ -362,8 +433,9 @@
             }
 
             .composer {
-                width: 100%;
-                border-radius: 18px 18px 0 0;
+                width: calc(100% - 20px);
+                bottom: 12px;
+                border-radius: 22px;
             }
         }
     </style>
@@ -407,13 +479,41 @@
     </main>
 
     <section id="composer" class="composer">
-        <textarea id="message-input" rows="3" placeholder="Write a message..."></textarea>
-        <input id="image-input" type="file" accept="image/*">
+        <div id="image-preview-row" class="image-preview-row" style="display:none;">
+            <span id="image-preview-name">Image selected</span>
 
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-            <button id="send-button" class="button" onclick="sendMessage()">Send Message</button>
-            <p id="composer-message" class="empty" style="margin:0;"></p>
+            <button class="composer-icon-button"
+                    type="button"
+                    onclick="clearSelectedImage()">
+                ×
+            </button>
         </div>
+
+        <div class="composer-bar">
+            <label class="composer-icon-button"
+                   for="image-input"
+                   title="Attach image">
+                ＋
+            </label>
+
+            <input id="image-input"
+                   class="hidden-file-input"
+                   type="file"
+                   accept="image/*">
+
+            <textarea id="message-input"
+                      rows="1"
+                      placeholder="Message..."
+                      oninput="resizeComposerInput(this)"></textarea>
+
+            <button id="send-button"
+                    class="send-icon-button"
+                    onclick="sendMessage()">
+                Send
+            </button>
+        </div>
+
+        <p id="composer-message" class="empty composer-status"></p>
     </section>
 
     <div id="report-modal"
@@ -825,6 +925,8 @@ ${readReceipt}
 
             input.value = "";
             imageInput.value = "";
+            clearSelectedImage();
+            resizeComposerInput(input);
 
             resetSendButton();
 
@@ -838,6 +940,48 @@ ${readReceipt}
             button.disabled = false;
             button.textContent = "Send Message";
         }
+
+        window.resizeComposerInput = function (textarea) {
+            textarea.style.height = "auto";
+            textarea.style.height =
+                Math.min(textarea.scrollHeight, 120) + "px";
+        };
+
+        document
+            .getElementById("image-input")
+            .addEventListener("change", function () {
+                const file = this.files[0];
+
+                const row =
+                    document.getElementById("image-preview-row");
+
+                const name =
+                    document.getElementById("image-preview-name");
+
+                if (!file) {
+                    row.style.display = "none";
+                    name.textContent = "Image selected";
+                    return;
+                }
+
+                name.textContent =
+                    file.name || "Image selected";
+
+                row.style.display = "flex";
+            });
+
+        window.clearSelectedImage = function () {
+            const input =
+                document.getElementById("image-input");
+
+            input.value = "";
+
+            document.getElementById("image-preview-row")
+                .style.display = "none";
+
+            document.getElementById("image-preview-name")
+                .textContent = "Image selected";
+        };
 
         async function markConversationRead() {
             await supabase
