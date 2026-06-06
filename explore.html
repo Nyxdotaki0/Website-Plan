@@ -577,6 +577,8 @@
         setupNotificationBadge();
 
         let blockedUserIds = [];
+        let blockedContentWarnings = [];
+        let hideSensitiveContent = true;
 
         async function loadBlockedUsers() {
             const { data, error } = await supabase
@@ -603,10 +605,58 @@
             ];
         }
 
+        async function loadContentPreferences() {
+
+            const { data: profile } = await supabase
+                .from("profiles")
+                .select(`
+            hide_sensitive_content,
+            blocked_content_warnings,
+            age_role
+        `)
+                .eq("id", currentUser.id)
+                .single();
+
+            if (!profile) return;
+
+            hideSensitiveContent =
+                profile.hide_sensitive_content ?? true;
+
+            blockedContentWarnings =
+                profile.blocked_content_warnings || [];
+
+            if (
+                hideSensitiveContent &&
+                blockedContentWarnings.length === 0
+            ) {
+                blockedContentWarnings = [
+                    "gore",
+                    "sexual_content",
+                    "disturbing_imagery"
+                ];
+            }
+        }
+
         function filterBlockedWorlds(worlds) {
             return (worlds || []).filter(world =>
                 !blockedUserIds.includes(world.owner_id)
             );
+        }
+
+        function filterContentFilteredWorlds(worlds) {
+
+            return (worlds || []).filter(world => {
+
+                const warnings =
+                    world.content_warnings || [];
+
+                const blocked =
+                    warnings.some(warning =>
+                        blockedContentWarnings.includes(warning)
+                    );
+
+                return !blocked;
+            });
         }
 
         function filterBlockedProfiles(profiles) {
@@ -620,7 +670,10 @@
         let activeTag = "";
 
         async function loadExploreData() {
-            await loadBlockedUsers();
+            await Promise.all([
+                loadBlockedUsers(),
+                loadContentPreferences()
+            ]);
 
             await Promise.all([
                 loadWorlds(),
@@ -663,7 +716,9 @@
 
             const { data: likesData } = await supabase.from("world_likes").select("world_id");
 
-            allWorlds = filterBlockedWorlds(worldsData).map(world => {
+            allWorlds = filterContentFilteredWorlds(
+                filterBlockedWorlds(worldsData)
+            ).map(world => {
                 const profile = profilesData.find(profile => profile.id === world.owner_id);
                 const likeCount = likesData ? likesData.filter(like => like.world_id === world.id).length : 0;
                 return { ...world, profile: profile || null, likeCount };
