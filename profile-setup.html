@@ -557,7 +557,7 @@
             const { data: existingProfile, error: profileError } =
                 await supabaseClient
                     .from("profiles")
-                    .select("id, username, display_name, creator_type, bio")
+                    .select("id, username, display_name, creator_type, bio, profile_completed, age_verified, birth_date, age_role")
                     .eq("id", currentUser.id)
                     .maybeSingle();
 
@@ -566,9 +566,27 @@
                 return;
             }
 
-            if (existingProfile && existingProfile.profile_completed) {
+            if (
+                existingProfile &&
+                existingProfile.profile_completed &&
+                existingProfile.age_verified &&
+                existingProfile.birth_date &&
+                existingProfile.age_role !== "unknown"
+            ) {
                 window.location.href = "dashboard.html";
                 return;
+            }
+
+            if (existingProfile) {
+                usernameInput.value = existingProfile.username || "";
+                displayNameInput.value = existingProfile.display_name || "";
+                document.getElementById("creator-type").value = existingProfile.creator_type || "";
+                bioInput.value = existingProfile.bio || "";
+
+                if (existingProfile.username) {
+                    usernameInput.disabled = true;
+                    setUsernameHelp("Username already set.", "good");
+                }
             }
 
             setMessage("");
@@ -666,8 +684,11 @@
                 return;
             }
 
-            const usernameAvailable =
-                await checkUsernameAvailability();
+            let usernameAvailable = true;
+
+            if (!usernameInput.disabled) {
+                usernameAvailable = await checkUsernameAvailability();
+            }
 
             if (!usernameAvailable) {
                 setMessage("Choose a different username before continuing.", "error");
