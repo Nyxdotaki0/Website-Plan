@@ -578,7 +578,8 @@
 
         let blockedUserIds = [];
         let blockedContentWarnings = [];
-        let hideSensitiveContent = true;
+        let contentExperience = "balanced";
+        let ageRole = "unknown";
 
         async function loadBlockedUsers() {
             const { data, error } = await supabase
@@ -606,11 +607,10 @@
         }
 
         async function loadContentPreferences() {
-
             const { data: profile } = await supabase
                 .from("profiles")
                 .select(`
-            hide_sensitive_content,
+            content_experience,
             blocked_content_warnings,
             age_role
         `)
@@ -619,22 +619,14 @@
 
             if (!profile) return;
 
-            hideSensitiveContent =
-                profile.hide_sensitive_content ?? true;
+            contentExperience =
+                profile.content_experience || "balanced";
 
             blockedContentWarnings =
                 profile.blocked_content_warnings || [];
 
-            if (
-                hideSensitiveContent &&
-                blockedContentWarnings.length === 0
-            ) {
-                blockedContentWarnings = [
-                    "gore",
-                    "sexual_content",
-                    "disturbing_imagery"
-                ];
-            }
+            ageRole =
+                profile.age_role || "unknown";
         }
 
         function filterBlockedWorlds(worlds) {
@@ -644,18 +636,46 @@
         }
 
         function filterContentFilteredWorlds(worlds) {
+            const safeWarnings = [
+                "gore",
+                "sexual_content",
+                "disturbing_imagery"
+            ];
 
             return (worlds || []).filter(world => {
+                const warnings = world.content_warnings || [];
+                const rating = world.content_rating || "general";
 
-                const warnings =
-                    world.content_warnings || [];
-
-                const blocked =
+                const hasHardBlockedWarning =
                     warnings.some(warning =>
                         blockedContentWarnings.includes(warning)
                     );
 
-                return !blocked;
+                if (hasHardBlockedWarning) {
+                    return false;
+                }
+
+                const hasSafeWarning =
+                    warnings.some(warning =>
+                        safeWarnings.includes(warning)
+                    );
+
+                if (ageRole === "minor") {
+                    if (rating === "adult") return false;
+                    if (hasSafeWarning) return false;
+                }
+
+                if (contentExperience === "safe") {
+                    if (rating === "adult") return false;
+                    if (hasSafeWarning) return false;
+                }
+
+                if (contentExperience === "balanced") {
+                    if (rating === "adult") return false;
+                    if (hasSafeWarning) return false;
+                }
+
+                return true;
             });
         }
 
