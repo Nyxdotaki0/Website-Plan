@@ -318,6 +318,25 @@
             box-shadow: 0 0 18px rgba(255,255,255,.14), 0 14px 34px rgba(0,0,0,.5);
         }
 
+        input,
+        textarea,
+        select {
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 16px;
+            padding: 13px 14px;
+            border-radius: 14px;
+            border: 1px solid var(--border-color);
+            background: rgba(0,0,0,0.28);
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
         @media (hover: hover) {
             .badge-wrap:hover .badge-tooltip {
                 opacity: 1;
@@ -679,7 +698,16 @@
         </section>
 
         <section class="content-section">
-            <h2>Creator Gallery</h2>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                <h2>Creator Gallery</h2>
+
+                <button id="add-gallery-work-btn"
+                        class="button"
+                        style="display:none;"
+                        onclick="openGalleryUploadModal()">
+                    + Add Gallery Work
+                </button>
+            </div>
 
             <div id="creator-gallery" class="grid">
                 <p class="empty">No gallery items yet.</p>
@@ -695,6 +723,71 @@
                 <p class="empty">Loading worlds...</p>
             </div>
         </section>
+
+        <div id="gallery-upload-modal"
+             style="
+        display:none;
+        position:fixed;
+        inset:0;
+        background:rgba(0,0,0,.75);
+        z-index:9999;
+        justify-content:center;
+        align-items:center;
+     ">
+
+            <div style="
+        width:560px;
+        max-width:92%;
+        max-height:90vh;
+        overflow:auto;
+        background:var(--panel-bg);
+        border:1px solid var(--border-color);
+        border-radius:20px;
+        padding:24px;
+    ">
+
+                <h2>Add Gallery Work</h2>
+
+                <label>Gallery Image</label>
+                <input id="profile-gallery-file" type="file" accept="image/*">
+
+                <label>Title</label>
+                <input id="profile-gallery-title" placeholder="Example: Character Concept Sketch">
+
+                <label>Description</label>
+                <textarea id="profile-gallery-description" placeholder="Describe this gallery item..."></textarea>
+
+                <label>Gallery Type</label>
+                <select id="profile-gallery-type">
+                    <option value="process">Process</option>
+                    <option value="sketch">Sketch</option>
+                    <option value="workspace">Workspace</option>
+                    <option value="finished_piece">Finished Piece</option>
+                    <option value="reference">Reference Material</option>
+                    <option value="worldbuilding">Worldbuilding</option>
+                    <option value="writing">Writing</option>
+                    <option value="other">Other</option>
+                </select>
+
+                <label>Visibility</label>
+                <select id="profile-gallery-visibility">
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                </select>
+
+                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <button class="button" onclick="uploadProfileGalleryItem()">
+                        Add To Gallery
+                    </button>
+
+                    <button class="button" onclick="closeGalleryUploadModal()">
+                        Cancel
+                    </button>
+                </div>
+
+                <p id="profile-gallery-message" class="empty"></p>
+            </div>
+        </div>
 
     </main>
 
@@ -953,6 +1046,7 @@
         import { createNotification } from "./notifications.js";
         import { setupNotificationBadge } from "./notificationBadge.js";
         import { setupMessageBadge } from "./messageBadge.js";
+        import { optimizeImage } from "./imageUtils.js";
         setupMessageBadge();
 
         import {
@@ -1056,6 +1150,15 @@
             const badgeWrap = document.getElementById("profile-badge-wrap");
             const badgeTooltip = document.getElementById("profile-badge-tooltip");
             const galleryLink = document.getElementById("creator-gallery-link");
+            const addGalleryButton =
+                document.getElementById("add-gallery-work-btn");
+
+            if (addGalleryButton) {
+                addGalleryButton.style.display =
+                    currentUser.id === profile.id
+                        ? "inline-block"
+                        : "none";
+            }
 
             if (galleryLink) {
                 galleryLink.href =
@@ -1204,6 +1307,97 @@
             document.getElementById("block-button-container").innerHTML = "";
             document.getElementById("report-button-container").innerHTML = "";
         }
+
+        window.openGalleryUploadModal = function () {
+            document.getElementById("gallery-upload-modal").style.display = "flex";
+        };
+
+        window.closeGalleryUploadModal = function () {
+            document.getElementById("gallery-upload-modal").style.display = "none";
+        };
+
+        window.uploadProfileGalleryItem = async function () {
+            const message = document.getElementById("profile-gallery-message");
+            const fileInput = document.getElementById("profile-gallery-file");
+
+            const file = fileInput.files[0];
+            const title = document.getElementById("profile-gallery-title").value.trim();
+            const description = document.getElementById("profile-gallery-description").value.trim();
+            const proofType = document.getElementById("profile-gallery-type").value;
+            const visibility = document.getElementById("profile-gallery-visibility").value;
+
+            if (!currentUser || currentUser.id !== profile.id) {
+                message.textContent = "You can only add gallery work to your own profile.";
+                return;
+            }
+
+            if (!file) {
+                message.textContent = "Choose an image first.";
+                return;
+            }
+
+            message.textContent = "Uploading gallery work...";
+
+            try {
+                const optimized = await optimizeImage(file, {
+                    maxWidth: 1600,
+                    maxHeight: 1600,
+                    quality: .82
+                });
+
+                const filePath =
+                    `${currentUser.id}/${Date.now()}-creator-gallery.webp`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from("creator-proof-gallery")
+                    .upload(filePath, optimized, {
+                        upsert: true
+                    });
+
+                if (uploadError) {
+                    message.textContent = uploadError.message;
+                    return;
+                }
+
+                const { data } = supabase.storage
+                    .from("creator-proof-gallery")
+                    .getPublicUrl(filePath);
+
+                const { error } = await supabase
+                    .from("creator_proof_gallery")
+                    .insert({
+                        owner_id: currentUser.id,
+                        image_url: data.publicUrl,
+                        title,
+                        description,
+                        proof_type: proofType,
+                        visibility
+                    });
+
+                if (error) {
+                    message.textContent = error.message;
+                    return;
+                }
+
+                fileInput.value = "";
+                document.getElementById("profile-gallery-title").value = "";
+                document.getElementById("profile-gallery-description").value = "";
+                document.getElementById("profile-gallery-type").value = "process";
+                document.getElementById("profile-gallery-visibility").value = "public";
+
+                message.textContent = "Gallery work added.";
+
+                await loadCreatorGalleryPreview(profile.id);
+
+                setTimeout(() => {
+                    closeGalleryUploadModal();
+                    message.textContent = "";
+                }, 700);
+
+            } catch (error) {
+                message.textContent = error.message;
+            }
+        };
 
         async function loadCreatorGalleryPreview(profileId) {
             const container = document.getElementById("creator-gallery");
