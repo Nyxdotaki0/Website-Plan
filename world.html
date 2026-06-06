@@ -451,6 +451,35 @@
             line-height: 1.9;
         }
 
+        .content-warning-panel {
+            max-width: 760px;
+            margin: 60px auto;
+            background: var(--panel-bg);
+            border: 1px solid rgba(255,214,102,.28);
+            border-radius: 22px;
+            padding: 32px;
+            box-shadow: 0 18px 40px rgba(0,0,0,0.28);
+        }
+
+            .content-warning-panel h1 {
+                margin-top: 0;
+            }
+
+        .warning-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 18px 0 24px;
+        }
+
+        .warning-pill {
+            border: 1px solid rgba(255,214,102,.32);
+            background: rgba(255,214,102,.10);
+            color: #ffe6a3;
+            border-radius: 999px;
+            padding: 7px 11px;
+        }
+
         .empty {
             color: var(--text-muted);
             line-height: 1.6;
@@ -726,7 +755,13 @@
         const worldId = params.get("id");
 
         let currentWorld = null;
+        let contentExperience = "balanced";
+        let blockedContentWarnings = [];
+        let ageRole = "unknown";
+        let pendingWarningWorld = null;
         setupReportSystem();
+
+        await loadViewerContentPreferences();
 
         if (!worldId) {
             showNotFound("No world ID was provided.");
@@ -750,6 +785,88 @@
             return data && data.length > 0;
         }
 
+        async function loadViewerContentPreferences() {
+            const { data: profile } = await supabase
+                .from("profiles")
+                .select("content_experience, blocked_content_warnings, age_role")
+                .eq("id", currentUser.id)
+                .single();
+
+            if (!profile) return;
+
+            contentExperience = profile.content_experience || "balanced";
+            blockedContentWarnings = profile.blocked_content_warnings || [];
+            ageRole = profile.age_role || "unknown";
+        }
+
+        function getWorldSafetyInfo(world) {
+            const safeWarnings = [
+                "gore",
+                "sexual_content",
+                "disturbing_imagery"
+            ];
+
+            const warnings = world.content_warnings || [];
+            const rating = world.content_rating || "general";
+
+            const hasHardBlockedWarning =
+                warnings.some(warning =>
+                    blockedContentWarnings.includes(warning)
+                );
+
+            const hasSafeWarning =
+                warnings.some(warning =>
+                    safeWarnings.includes(warning)
+                );
+
+            const isAdult =
+                rating === "adult";
+
+            return {
+                warnings,
+                rating,
+                hasHardBlockedWarning,
+                hasSafeWarning,
+                isAdult
+            };
+        }
+
+        function shouldBlockWorld(world) {
+            const info = getWorldSafetyInfo(world);
+
+            if (ageRole === "minor") {
+                return info.isAdult || info.hasSafeWarning;
+            }
+
+            if (info.hasHardBlockedWarning) {
+                return true;
+            }
+
+            if (contentExperience === "safe") {
+                return info.isAdult || info.hasSafeWarning;
+            }
+
+            return false;
+        }
+
+        function shouldWarnWorld(world) {
+            const info = getWorldSafetyInfo(world);
+
+            if (contentExperience !== "balanced") {
+                return false;
+            }
+
+            if (ageRole === "minor") {
+                return false;
+            }
+
+            if (info.hasHardBlockedWarning) {
+                return false;
+            }
+
+            return info.isAdult || info.hasSafeWarning;
+        }
+
         async function loadWorld(id) {
             const { data: world, error } = await supabase
                 .from("worlds")
@@ -764,35 +881,57 @@
             }
 
             currentWorld = world;
+            if (shouldBlockWorld(world)) {
+                showContentBlocked(world);
+                return;
+            }
+
+            if (shouldWarnWorld(world)) {
+                pendingWarningWorld = world;
+                showContentWarning(world);
+                return;
+            }
+
+            currentWorld = world;
+
+            if (shouldBlockWorld(world)) {
+                showContentBlocked(world);
+                return;
+            }
+
+            if (shouldWarnWorld(world)) {
+                pendingWarningWorld = world;
+                showContentWarning(world);
+                return;
+            }
+
+            await renderLoadedWorld(world);
+            
+        }
+
+        async function renderLoadedWorld(world) {
             applyWorldTheme(world);
+
             const blocked = await areUsersBlocked(
                 currentUser.id,
                 world.owner_id
             );
 
             if (blocked) {
-
-                showNotFound(
-                    "This world is unavailable."
-                );
-
+                showNotFound("This world is unavailable.");
                 return;
             }
+
             const ownerAccess =
                 currentUser &&
                 currentUser.id === world.owner_id;
-
-            const staffAccess =
-                canModerateWorlds(currentPermissions);
 
             if (
                 world.moderation_status === "hidden" &&
                 !ownerAccess &&
                 !canModerateWorlds(currentPermissions)
             ) {
-                showNotFound(
-                    "This world has been hidden by Nullverse staff."
-                );
+                showNotFound("This world has been hidden by Nullverse staff.");
                 return;
             }
 
@@ -822,26 +961,6 @@
 
             renderTags(world);
 
-            if (world.moderation_status === "hidden") {
-                document.getElementById("world-summary").insertAdjacentHTML(
-                    "beforebegin",
-                    `
-                <div style="
-                    margin:18px 0;
-                    padding:16px;
-                    border-radius:14px;
-                    border:1px solid rgba(255,160,60,.3);
-                    background:rgba(255,160,60,.08);
-                ">
-                    <strong>Hidden by Moderation</strong>
-                    <p style="margin:8px 0 0;">
-                        This world is hidden from public view.
-                    </p>
-                </div>
-                `
-                );
-            }
-
             renderOwnerActions(world);
             await loadLikes();
             await loadSections(world.id);
@@ -854,8 +973,6 @@
 
             document.getElementById("community-link").href =
                 `world-additions.html?id=${encodeURIComponent(world.id)}`;
-
-
         }
 
         function applyWorldTheme(world) {
@@ -1784,6 +1901,103 @@
             document.getElementById("like-button").style.display = "none";
             document.getElementById("like-count").style.display = "none";
         }
+
+        function formatWarningLabel(value) {
+            return String(value || "")
+                .replaceAll("_", " ")
+                .replace(/\b\w/g, letter => letter.toUpperCase());
+        }
+
+        function showContentBlocked(world) {
+            document.querySelector("main").innerHTML = `
+        <section class="content-warning-panel">
+            <h1>Content Hidden</h1>
+
+            <p class="empty">
+                This world is hidden by your content safety settings.
+            </p>
+
+            <div class="warning-list">
+                ${(world.content_warnings || []).map(warning => `
+                    <span class="warning-pill">
+                        ${escapeHtml(formatWarningLabel(warning))}
+                    </span>
+                `).join("")}
+            </div>
+
+            <a class="button" href="explore.html">Back to Explore</a>
+        </section>
+    `;
+        }
+
+        function showContentWarning(world) {
+            document.querySelector("main").innerHTML = `
+        <section class="content-warning-panel">
+            <h1>Content Warning</h1>
+
+            <p class="empty">
+                This world may contain sensitive or mature content.
+            </p>
+
+            <div class="warning-list">
+                ${world.content_rating === "adult" ? `
+                    <span class="warning-pill">Adult 18+</span>
+                ` : ""}
+
+                ${(world.content_warnings || []).map(warning => `
+                    <span class="warning-pill">
+                        ${escapeHtml(formatWarningLabel(warning))}
+                    </span>
+                `).join("")}
+            </div>
+
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                <button class="button primary-button" onclick="continuePastContentWarning()">
+                    Continue Anyway
+                </button>
+
+                <a class="button" href="explore.html">
+                    Go Back
+                </a>
+            </div>
+        </section>
+    `;
+        }
+
+        window.continuePastContentWarning = async function () {
+            if (!pendingWarningWorld) return;
+
+            const world = pendingWarningWorld;
+            pendingWarningWorld = null;
+
+            currentWorld = world;
+            applyWorldTheme(world);
+
+            const blocked = await areUsersBlocked(
+                currentUser.id,
+                world.owner_id
+            );
+
+            if (blocked) {
+                showNotFound("This world is unavailable.");
+                return;
+            }
+
+            const ownerAccess =
+                currentUser &&
+                currentUser.id === world.owner_id;
+
+            if (
+                world.moderation_status === "hidden" &&
+                !ownerAccess &&
+                !canModerateWorlds(currentPermissions)
+            ) {
+                showNotFound("This world has been hidden by Nullverse staff.");
+                return;
+            }
+
+            await renderLoadedWorld(world);
+        };
 
         function escapeHtml(value) {
             return String(value || "")
