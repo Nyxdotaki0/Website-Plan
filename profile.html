@@ -1011,7 +1011,8 @@
 
                     await Promise.all([
                         loadProfileWorlds(profile.id),
-                        loadFollowData(profile.id)
+                        loadFollowData(profile.id),
+                        loadCreatorGalleryPreview(profile.id)
                     ]);
                 }
 
@@ -1021,7 +1022,8 @@
 
                 await Promise.all([
                     loadProfileWorlds(profile.id),
-                    loadFollowData(profile.id)
+                    loadFollowData(profile.id),
+                    loadCreatorGalleryPreview(profile.id)
                 ]);
             }
         }
@@ -1201,6 +1203,87 @@
             document.getElementById("follow-button-container").innerHTML = "";
             document.getElementById("block-button-container").innerHTML = "";
             document.getElementById("report-button-container").innerHTML = "";
+        }
+
+        async function loadCreatorGalleryPreview(profileId) {
+            const container = document.getElementById("creator-gallery");
+
+            if (!container) return;
+
+            const { data, error } = await supabase
+                .from("creator_proof_gallery")
+                .select(`
+            *,
+            creator_gallery_likes (
+                user_id
+            )
+        `)
+                .eq("owner_id", profileId)
+                .eq("visibility", "public");
+
+            if (error) {
+                container.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
+                return;
+            }
+
+            if (!data || data.length === 0) {
+                container.innerHTML = `<p class="empty">No creator gallery items yet.</p>`;
+                return;
+            }
+
+            const topItems = data
+                .map(item => ({
+                    ...item,
+                    like_count: (item.creator_gallery_likes || []).length
+                }))
+                .sort((a, b) => b.like_count - a.like_count)
+                .slice(0, 3);
+
+            container.innerHTML = topItems.map(item => `
+        <div class="card">
+            <div style="
+                width:100%;
+                height:170px;
+                border-radius:12px;
+                overflow:hidden;
+                margin-bottom:14px;
+                background:#222;
+            ">
+                <img
+                    src="${escapeHtml(item.image_url)}"
+                    alt="${escapeHtml(item.title || "Creator gallery item")}"
+                    style="
+                        width:100%;
+                        height:100%;
+                        object-fit:cover;
+                        display:block;
+                    "
+                >
+            </div>
+
+            <p class="empty">
+                ${escapeHtml(formatGalleryType(item.proof_type))}
+            </p>
+
+            <h3>
+                ${escapeHtml(item.title || "Untitled Gallery Item")}
+            </h3>
+
+            <p>
+                ${escapeHtml(item.description || "No description.")}
+            </p>
+
+            <p class="empty">
+                ❤️ ${item.like_count} ${item.like_count === 1 ? "Like" : "Likes"}
+            </p>
+        </div>
+    `).join("");
+        }
+
+        function formatGalleryType(value) {
+            return String(value || "other")
+                .replaceAll("_", " ")
+                .replace(/\b\w/g, letter => letter.toUpperCase());
         }
 
         async function loadProfileWorlds(profileId) {

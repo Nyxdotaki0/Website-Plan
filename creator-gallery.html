@@ -297,7 +297,12 @@
 
             const { data, error } = await supabase
                 .from("creator_proof_gallery")
-                .select("*")
+                .select(`
+        *,
+        creator_gallery_likes (
+            user_id
+        )
+    `)
                 .eq("owner_id", profile.id)
                 .eq("visibility", "public")
                 .order("created_at", { ascending: false });
@@ -366,6 +371,18 @@
             }
 
             grid.innerHTML = filtered.map(item => `
+            document
+    .querySelectorAll(".gallery-like-button")
+    .forEach(button => {
+
+        button.addEventListener(
+            "click",
+            () => toggleGalleryLike(
+                button.dataset.id
+            )
+        );
+
+    });
                 <article class="gallery-card">
                     <img
                         src="${escapeHtml(item.image_url)}"
@@ -383,6 +400,22 @@
                         <p>
                             ${escapeHtml(item.description || "")}
                         </p>
+                        <div style="
+    margin-top:14px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+">
+    <span>
+        ❤️ ${(item.creator_gallery_likes || []).length}
+    </span>
+
+    <button
+        class="button gallery-like-button"
+        data-id="${item.id}">
+        Like
+    </button>
+</div>
                     </div>
                 </article>
             `).join("");
@@ -418,6 +451,38 @@
             await supabase.auth.signOut();
             window.location.href = "login.html";
         };
+
+        async function toggleGalleryLike(galleryId) {
+
+            const existing =
+                allItems
+                    .find(item => item.id === galleryId)
+                    ?.creator_gallery_likes
+                    ?.find(
+                        like =>
+                            like.user_id === currentUser.id
+                    );
+
+            if (existing) {
+
+                await supabase
+                    .from("creator_gallery_likes")
+                    .delete()
+                    .eq("gallery_item_id", galleryId)
+                    .eq("user_id", currentUser.id);
+
+            } else {
+
+                await supabase
+                    .from("creator_gallery_likes")
+                    .insert({
+                        gallery_item_id: galleryId,
+                        user_id: currentUser.id
+                    });
+            }
+
+            await loadCreatorGallery();
+        }
     </script>
 </body>
 </html>
