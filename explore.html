@@ -635,7 +635,7 @@
             );
         }
 
-        function filterContentFilteredWorlds(worlds) {
+        function filterContentFilteredWorlds(worlds, options = {}) {
             const safeWarnings = [
                 "gore",
                 "sexual_content",
@@ -671,8 +671,10 @@
                 }
 
                 if (contentExperience === "balanced") {
-                    if (rating === "adult") return false;
-                    if (hasSafeWarning) return false;
+                    if (!options.isIntentionalSearch) {
+                        if (rating === "adult") return false;
+                        if (hasSafeWarning) return false;
+                    }
                 }
 
                 return true;
@@ -736,9 +738,7 @@
 
             const { data: likesData } = await supabase.from("world_likes").select("world_id");
 
-            allWorlds = filterContentFilteredWorlds(
-                filterBlockedWorlds(worldsData)
-            ).map(world => {
+            allWorlds = filterBlockedWorlds(worldsData).map(world => {
                 const profile = profilesData.find(profile => profile.id === world.owner_id);
                 const likeCount = likesData ? likesData.filter(like => like.world_id === world.id).length : 0;
                 return { ...world, profile: profile || null, likeCount };
@@ -798,7 +798,9 @@
             const searchValue = getSearchValue();
             const sortValue = document.getElementById("sort-filter").value;
 
-            let filteredWorlds = allWorlds;
+            let filteredWorlds = filterContentFilteredWorlds(allWorlds, {
+                isIntentionalSearch: Boolean(searchValue)
+            });
 
             if (searchValue) {
                 filteredWorlds = filteredWorlds.filter(world => {
