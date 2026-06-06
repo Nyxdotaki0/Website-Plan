@@ -880,17 +880,7 @@
                 return;
             }
 
-            currentWorld = world;
-            if (shouldBlockWorld(world)) {
-                showContentBlocked(world);
-                return;
-            }
-
-            if (shouldWarnWorld(world)) {
-                pendingWarningWorld = world;
-                showContentWarning(world);
-                return;
-            }
+            
 
             currentWorld = world;
 
@@ -899,7 +889,10 @@
                 return;
             }
 
-            if (shouldWarnWorld(world)) {
+            const warningAccepted =
+                sessionStorage.getItem(`nullverse_warning_ok_${world.id}`) === "true";
+
+            if (shouldWarnWorld(world) && !warningAccepted) {
                 pendingWarningWorld = world;
                 showContentWarning(world);
                 return;
@@ -1964,39 +1957,13 @@
     `;
         }
 
-        window.continuePastContentWarning = async function () {
-            if (!pendingWarningWorld) return;
-
-            const world = pendingWarningWorld;
-            pendingWarningWorld = null;
-
-            currentWorld = world;
-            applyWorldTheme(world);
-
-            const blocked = await areUsersBlocked(
-                currentUser.id,
-                world.owner_id
+        window.continuePastContentWarning = function () {
+            sessionStorage.setItem(
+                `nullverse_warning_ok_${pendingWarningWorld.id}`,
+                "true"
             );
 
-            if (blocked) {
-                showNotFound("This world is unavailable.");
-                return;
-            }
-
-            const ownerAccess =
-                currentUser &&
-                currentUser.id === world.owner_id;
-
-            if (
-                world.moderation_status === "hidden" &&
-                !ownerAccess &&
-                !canModerateWorlds(currentPermissions)
-            ) {
-                showNotFound("This world has been hidden by Nullverse staff.");
-                return;
-            }
-
-            await renderLoadedWorld(world);
+            window.location.reload();
         };
 
         function escapeHtml(value) {
