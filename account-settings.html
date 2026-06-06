@@ -262,6 +262,45 @@
             color: var(--text-muted);
         }
 
+        .preference-choice-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit,minmax(160px,1fr));
+            gap: 10px;
+            margin: 18px 0 20px;
+        }
+
+        .preference-choice {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 44px;
+            padding: 10px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.025));
+            color: var(--text-secondary);
+            cursor: pointer;
+            user-select: none;
+            transition: .18s ease;
+        }
+
+            .preference-choice input {
+                display: none;
+            }
+
+            .preference-choice:hover {
+                transform: translateY(-1px);
+                border-color: rgba(255,214,102,.24);
+                color: #fff1bf;
+            }
+
+            .preference-choice:has(input:checked) {
+                border-color: rgba(255,214,102,.42);
+                background: linear-gradient(180deg, rgba(255,214,102,.20), rgba(255,214,102,.075));
+                color: #ffe6a3;
+            }
+
             .username-help.good {
                 color: #9ef0b0;
             }
@@ -499,10 +538,10 @@
                         Use 3-30 characters: letters, numbers, and underscores only.
                     </div>
                 </div>
-                    <label>Display Name</label>
-                    <input id="display-name" placeholder="Display name">
-                </div>
-            
+                <label>Display Name</label>
+                <input id="display-name" placeholder="Display name">
+            </div>
+
 
             <div class="info-wrap">
                 <label>Creator Type</label>
@@ -575,6 +614,54 @@
             <input id="new-password" type="password" placeholder="New password">
             <button onclick="changePassword()">Change Password</button>
             <p id="password-message" class="message"></p>
+        </section>
+
+        <section class="panel">
+            <div class="info-wrap">
+                <h2>Content Preferences</h2>
+                <div class="info-icon">i</div>
+                <div class="tooltip">
+                    Choose what kinds of content should be hidden from your Nullverse experience.
+                </div>
+            </div>
+
+            <p>
+                Selected warnings will be hidden from Explore and other discovery pages.
+            </p>
+
+            <label style="display:flex;align-items:center;gap:10px;margin-top:18px;">
+                <input id="hide-sensitive-content"
+                       type="checkbox"
+                       style="width:auto;margin:0;">
+                Hide sensitive content by default
+            </label>
+
+            <div class="preference-choice-grid">
+                <label class="preference-choice"><input type="checkbox" value="violence"> Violence</label>
+                <label class="preference-choice"><input type="checkbox" value="gore"> Gore</label>
+                <label class="preference-choice"><input type="checkbox" value="horror"> Horror</label>
+                <label class="preference-choice"><input type="checkbox" value="body_horror"> Body Horror</label>
+                <label class="preference-choice"><input type="checkbox" value="sexual_content"> Sexual Content</label>
+                <label class="preference-choice"><input type="checkbox" value="substance_use"> Substance Use</label>
+                <label class="preference-choice"><input type="checkbox" value="abuse"> Abuse</label>
+                <label class="preference-choice"><input type="checkbox" value="self_harm"> Self Harm</label>
+                <label class="preference-choice"><input type="checkbox" value="disturbing_imagery"> Disturbing Imagery</label>
+            </div>
+
+            <div class="info-wrap">
+                <label>Account Age Category</label>
+                <div class="info-icon">i</div>
+                <div class="tooltip">
+                    This will be used later for minor/adult content safety.
+                </div>
+            </div>
+
+            <p id="age-role-message" class="message">
+                Age verification not yet enabled.
+            </p>
+
+            <button onclick="saveContentPreferences()">Save Content Preferences</button>
+            <p id="content-preferences-message" class="message"></p>
         </section>
 
         <section class="panel">
@@ -808,6 +895,24 @@ usernameInput.addEventListener("input", () => {
             document.getElementById("bio").value = profile.bio || "";
             document.getElementById("website").value = profile.website || "";
             document.getElementById("location").value = profile.location || "";
+            document.getElementById("hide-sensitive-content").checked =
+                profile.hide_sensitive_content ?? true;
+
+            const blockedWarnings =
+                profile.blocked_content_warnings || [
+                    "gore",
+                    "sexual_content",
+                    "disturbing_imagery"
+                ];
+
+            document
+                .querySelectorAll(".preference-choice-grid input")
+                .forEach(box => {
+                    box.checked = blockedWarnings.includes(box.value);
+                });
+
+            document.getElementById("age-role-message").textContent =
+                "Current age category: " + (profile.age_role || "unknown");
 
             currentAvatarUrl = profile.avatar_url || "";
             currentBannerUrl = profile.banner_url || "";
@@ -1047,6 +1152,38 @@ if (!usernameAvailable) {
             } catch (error) {
                 profileMessage.textContent = error.message;
             }
+        }
+
+        async function saveContentPreferences() {
+            const message =
+                document.getElementById("content-preferences-message");
+
+            if (!currentUser) {
+                window.location.href = "login.html";
+                return;
+            }
+
+            const hideSensitiveContent =
+                document.getElementById("hide-sensitive-content").checked;
+
+            const blockedWarnings =
+                [...document.querySelectorAll(".preference-choice-grid input:checked")]
+                    .map(box => box.value);
+
+            const { error } = await supabaseClient
+                .from("profiles")
+                .update({
+                    hide_sensitive_content: hideSensitiveContent,
+                    blocked_content_warnings: blockedWarnings
+                })
+                .eq("id", currentUser.id);
+
+            if (error) {
+                message.textContent = error.message;
+                return;
+            }
+
+            message.textContent = "Content preferences saved.";
         }
 
         async function changeEmail() {
