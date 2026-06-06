@@ -145,19 +145,47 @@
         }
 
         .gallery-card {
+            position: relative;
             overflow: hidden;
+            padding: 0;
+            cursor: pointer;
+            aspect-ratio: 1 / 1;
         }
 
-        .gallery-card img {
-            width: 100%;
-            height: 240px;
-            object-fit: cover;
-            display: block;
-            border-bottom: 1px solid var(--border-color);
+            .gallery-card img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                display: block;
+                border: none;
+            }
+
+        .gallery-overlay {
+            position: absolute;
+            inset: 0;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
         }
 
-        .gallery-body {
-            padding: 18px;
+        .gallery-pill {
+            background: rgba(0,0,0,.62);
+            border: 1px solid rgba(255,255,255,.18);
+            color: white;
+            border-radius: 999px;
+            padding: 6px 9px;
+            font-size: .78rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .gallery-like-button {
+            position: absolute;
+            right: 12px;
+            bottom: 12px;
+            z-index: 3;
+            margin: 0;
         }
 
         .gallery-type {
@@ -243,6 +271,52 @@
         <section id="gallery-grid" class="gallery-grid">
             <p class="empty">Loading gallery items...</p>
         </section>
+
+        <div id="gallery-lightbox"
+             style="
+        display:none;
+        position:fixed;
+        inset:0;
+        z-index:10000;
+        background:rgba(0,0,0,.86);
+        justify-content:center;
+        align-items:center;
+        padding:24px;
+     ">
+
+            <div style="width:min(900px, 96vw);">
+                <button class="button"
+                        onclick="closeGalleryLightbox()"
+                        style="margin-bottom:12px;">
+                    Close
+                </button>
+
+                <img id="lightbox-image"
+                     src=""
+                     alt=""
+                     style="
+                width:100%;
+                max-height:72vh;
+                object-fit:contain;
+                display:block;
+                border-radius:18px;
+                background:#050505;
+             ">
+
+                <div style="
+            margin-top:14px;
+            background:var(--panel-bg);
+            border:1px solid var(--border-color);
+            border-radius:18px;
+            padding:18px;
+        ">
+                    <h2 id="lightbox-title" style="margin:0 0 8px;"></h2>
+                    <p id="lightbox-type" class="empty" style="margin:0 0 10px;"></p>
+                    <p id="lightbox-description" style="margin:0;"></p>
+                    <p id="lightbox-likes" class="empty"></p>
+                </div>
+            </div>
+        </div>
     </main>
 
     <script type="module">
@@ -365,61 +439,70 @@
                 `${filtered.length} ${filtered.length === 1 ? "item" : "items"} shown`;
 
             if (!filtered.length) {
-                grid.innerHTML =
-                    `<p class="empty">No gallery items found.</p>`;
+                grid.innerHTML = `<p class="empty">No gallery items found.</p>`;
                 return;
             }
 
-            grid.innerHTML = filtered.map(item => `
-            document
-    .querySelectorAll(".gallery-like-button")
-    .forEach(button => {
+            grid.innerHTML = filtered.map(item => {
+                const likes = item.creator_gallery_likes || [];
+                const likedByMe = likes.some(like => like.user_id === currentUser.id);
 
-        button.addEventListener(
-            "click",
-            () => toggleGalleryLike(
-                button.dataset.id
-            )
-        );
+                return `
+            <article class="gallery-card" onclick="openGalleryLightbox('${item.id}')">
+                <img
+                    src="${escapeHtml(item.image_url)}"
+                    alt="${escapeHtml(item.title || "Creator gallery item")}">
 
-    });
-                <article class="gallery-card">
-                    <img
-                        src="${escapeHtml(item.image_url)}"
-                        alt="${escapeHtml(item.title || "Creator gallery item")}">
+                <div class="gallery-overlay">
+                    <span class="gallery-pill">
+                        ${escapeHtml(item.title || "Untitled")}
+                    </span>
 
-                    <div class="gallery-body">
-                        <span class="gallery-type">
-                            ${escapeHtml(formatGalleryType(item.proof_type))}
-                        </span>
+                    <span class="gallery-pill">
+                        ${escapeHtml(formatGalleryType(item.proof_type))}
+                    </span>
+                </div>
 
-                        <h3>
-                            ${escapeHtml(item.title || "Untitled Gallery Item")}
-                        </h3>
-
-                        <p>
-                            ${escapeHtml(item.description || "")}
-                        </p>
-                        <div style="
-    margin-top:14px;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-">
-    <span>
-        ❤️ ${(item.creator_gallery_likes || []).length}
-    </span>
-
-    <button
-        class="button gallery-like-button"
-        data-id="${item.id}">
-        Like
-    </button>
-</div>
-                    </div>
-                </article>
-            `).join("");
+                <button
+                    class="button gallery-like-button"
+                    data-id="${item.id}"
+                    onclick="event.stopPropagation(); toggleGalleryLike('${item.id}')">
+                    ${likedByMe ? "♥" : "♡"} ${likes.length}
+                </button>
+            </article>
+        `;
+            }).join("");
         }
+
+        window.openGalleryLightbox = function (itemId) {
+            const item = allItems.find(entry => entry.id === itemId);
+
+            if (!item) return;
+
+            const likes = item.creator_gallery_likes || [];
+
+            document.getElementById("lightbox-image").src = item.image_url;
+            document.getElementById("lightbox-image").alt =
+                item.title || "Creator gallery item";
+
+            document.getElementById("lightbox-title").textContent =
+                item.title || "Untitled Gallery Item";
+
+            document.getElementById("lightbox-type").textContent =
+                formatGalleryType(item.proof_type);
+
+            document.getElementById("lightbox-description").textContent =
+                item.description || "No description provided.";
+
+            document.getElementById("lightbox-likes").textContent =
+                `♥ ${likes.length} ${likes.length === 1 ? "Like" : "Likes"}`;
+
+            document.getElementById("gallery-lightbox").style.display = "flex";
+        };
+
+        window.closeGalleryLightbox = function () {
+            document.getElementById("gallery-lightbox").style.display = "none";
+        };
 
         function showError(message) {
             document.getElementById("gallery-title").textContent =
