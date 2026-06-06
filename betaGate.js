@@ -1,5 +1,28 @@
 ﻿import { supabase } from "./supabaseClient.js";
 
+function getAgeRoleFromBirthDate(birthDate) {
+    const today = new Date();
+    const dob = new Date(birthDate + "T00:00:00");
+
+    let age = today.getFullYear() - dob.getFullYear();
+
+    const birthdayPassed =
+        today.getMonth() > dob.getMonth() ||
+        (
+            today.getMonth() === dob.getMonth() &&
+            today.getDate() >= dob.getDate()
+        );
+
+    if (!birthdayPassed) {
+        age--;
+    }
+
+    if (age < 13) return "blocked";
+    if (age < 18) return "minor";
+
+    return "adult";
+}
+
 export async function requireBetaAccess(options = {}) {
     const {
         allowRestricted = true,
@@ -31,7 +54,7 @@ export async function requireBetaAccess(options = {}) {
 
     const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("id, role, account_status, moderation_expires_at, moderation_reason, profile_completed")
+        .select("id, role, account_status, moderation_expires_at, moderation_reason, profile_completed, age_verified, age_role, birth_date")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -39,9 +62,31 @@ export async function requireBetaAccess(options = {}) {
         window.location.replace("/profile-setup.html");
         return null;
     }
-    if (!profile.profile_completed) {
+    if (
+        !profile.profile_completed ||
+        !profile.age_verified ||
+        !profile.birth_date ||
+        profile.age_role === "unknown"
+    ) {
         window.location.replace("/profile-setup.html");
         return null;
+    }
+
+    const currentAgeRole =
+        getAgeRoleFromBirthDate(profile.birth_date);
+
+    if (
+        currentAgeRole !== "blocked" &&
+        currentAgeRole !== profile.age_role
+    ) {
+        await supabase
+            .from("profiles")
+            .update({
+                age_role: currentAgeRole
+            })
+            .eq("id", user.id);
+
+        profile.age_role = currentAgeRole;
     }
 
     let status = profile.account_status || "active";

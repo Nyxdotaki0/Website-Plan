@@ -334,6 +334,39 @@
                     <option value="Mixed Creator">Mixed Creator</option>
                 </select>
 
+                <label>Date of Birth</label>
+
+                <div class="grid">
+                    <div>
+                        <select id="birth-month">
+                            <option value="">Month</option>
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <input id="birth-day" type="number" min="1" max="31" placeholder="Day">
+                    </div>
+                </div>
+
+                <input id="birth-year" type="number" min="1900" max="2026" placeholder="Year">
+
+                <p class="muted">
+                    Your date of birth is private and will never be shown publicly.
+                    It is only used for safety and content access.
+                </p>
+
                 <label>Bio</label>
                 <textarea id="bio"
                           placeholder="Write a short bio about yourself and what you create..."
@@ -542,6 +575,42 @@
             updatePreview();
         }
 
+        function getAgeRoleFromBirthDate(birthDate) {
+            const today = new Date();
+            const dob = new Date(birthDate + "T00:00:00");
+
+            let age = today.getFullYear() - dob.getFullYear();
+
+            const birthdayPassed =
+                today.getMonth() > dob.getMonth() ||
+                (
+                    today.getMonth() === dob.getMonth() &&
+                    today.getDate() >= dob.getDate()
+                );
+
+            if (!birthdayPassed) {
+                age--;
+            }
+
+            if (age < 13) return "blocked";
+            if (age < 18) return "minor";
+
+            return "adult";
+        }
+
+        function getBirthDateValue() {
+            const month = document.getElementById("birth-month").value;
+            const day = document.getElementById("birth-day").value;
+            const year = document.getElementById("birth-year").value;
+
+            if (!month || !day || !year) return null;
+
+            const paddedMonth = String(month).padStart(2, "0");
+            const paddedDay = String(day).padStart(2, "0");
+
+            return `${year}-${paddedMonth}-${paddedDay}`;
+        }
+
         async function saveProfile() {
             if (!currentUser) {
                 window.location.href = "login.html";
@@ -562,6 +631,24 @@
 
             const bio =
                 bioInput.value.trim();
+
+            const birthDate =
+                getBirthDateValue();
+
+            if (!birthDate) {
+                setMessage("Date of birth is required.", "error");
+                saveButton.disabled = false;
+                return;
+            }
+
+            const ageRole =
+                getAgeRoleFromBirthDate(birthDate);
+
+            if (ageRole === "blocked") {
+                setMessage("You must be at least 13 years old to create a Nullverse account.", "error");
+                saveButton.disabled = false;
+                return;
+            }
 
             const formatError =
                 validateUsernameFormat(username);
@@ -600,7 +687,10 @@
                         role: "creator",
                         role_name: "creator",
                         account_status: "active",
-                        profile_completed: true
+                        profile_completed: true,
+                        birth_date: birthDate,
+                        age_role: ageRole,
+                        age_verified: true,
                     }, {
                         onConflict: "id"
                     });
