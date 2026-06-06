@@ -535,6 +535,43 @@
                         <button id="search-button" class="button">Search</button>
                     </div>
 
+                    <div class="side-divider"></div>
+
+                    <h3>Content Filters</h3>
+
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:12px;">
+
+                        <select id="content-type-filter">
+                            <option value="">All Content Types</option>
+                            <option value="world">World</option>
+                            <option value="literature">Literature</option>
+                            <option value="comic">Comic</option>
+                            <option value="manga">Manga</option>
+                        </select>
+
+                        <select id="rating-filter">
+                            <option value="">All Ratings</option>
+                            <option value="general">General</option>
+                            <option value="teen">Teen</option>
+                            <option value="mature">Mature</option>
+                            <option value="adult">Adult</option>
+                        </select>
+
+                        <select id="warning-filter">
+                            <option value="">All Warnings</option>
+                            <option value="violence">Violence</option>
+                            <option value="gore">Gore</option>
+                            <option value="horror">Horror</option>
+                            <option value="body_horror">Body Horror</option>
+                            <option value="sexual_content">Sexual Content</option>
+                            <option value="substance_use">Substance Use</option>
+                            <option value="abuse">Abuse</option>
+                            <option value="self_harm">Self Harm</option>
+                            <option value="disturbing_imagery">Disturbing Imagery</option>
+                        </select>
+
+                    </div>
+
                     <div class="random-box">
                         <p><strong>Not sure where to go?</strong><br>Let us pick for you!</p>
                         <button id="random-world-button" class="button">Open Random World</button>
@@ -690,6 +727,9 @@
         let allWorlds = [];
         let allProfiles = [];
         let activeTag = "";
+        let activeContentType = "";
+        let activeRating = "";
+        let activeWarning = "";
 
         async function loadExploreData() {
             await Promise.all([
@@ -796,10 +836,22 @@
         function renderWorlds() {
             const feed = document.getElementById("works-feed");
             const searchValue = getSearchValue();
+            const contentType =
+                document.getElementById("content-type-filter")?.value || "";
+
+            const ratingFilter =
+                document.getElementById("rating-filter")?.value || "";
+
+            const warningFilter =
+                document.getElementById("warning-filter")?.value || "";
             const sortValue = document.getElementById("sort-filter").value;
 
             let filteredWorlds = filterContentFilteredWorlds(allWorlds, {
-                isIntentionalSearch: Boolean(searchValue)
+                isIntentionalSearch:
+                    Boolean(searchValue) ||
+                    Boolean(contentType) ||
+                    Boolean(ratingFilter) ||
+                    Boolean(warningFilter)
             });
 
             if (searchValue) {
@@ -815,6 +867,25 @@
                         username.toLowerCase().includes(searchValue)
                     );
                 });
+            }
+
+            if (contentType) {
+                filteredWorlds = filteredWorlds.filter(world =>
+                    (world.content_type || "world") === contentType
+                );
+            }
+
+            if (ratingFilter) {
+                filteredWorlds = filteredWorlds.filter(world =>
+                    (world.content_rating || "general") === ratingFilter
+                );
+            }
+
+            if (warningFilter) {
+                filteredWorlds = filteredWorlds.filter(world =>
+                    (world.content_warnings || [])
+                        .includes(warningFilter)
+                );
             }
 
             if (activeTag) {
@@ -1003,6 +1074,14 @@
 
         document.getElementById("sort-filter").addEventListener("change", renderExplore);
         document.getElementById("random-world-button").addEventListener("click", openRandomWorld);
+        document.getElementById("content-type-filter")
+            ?.addEventListener("change", renderExplore);
+
+        document.getElementById("rating-filter")
+            ?.addEventListener("change", renderExplore);
+
+        document.getElementById("warning-filter")
+            ?.addEventListener("change", renderExplore);
 
         window.logOut = async function () {
             await supabase.auth.signOut();
