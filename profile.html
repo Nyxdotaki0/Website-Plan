@@ -1326,7 +1326,16 @@
             const proofType = document.getElementById("profile-gallery-type").value;
             const visibility = document.getElementById("profile-gallery-visibility").value;
 
-            if (!currentUser || currentUser.id !== profile.id) {
+            const { data: authData, error: authError } = await supabase.auth.getUser();
+
+            if (authError || !authData.user) {
+                message.textContent = "Your session expired. Please log in again.";
+                return;
+            }
+
+            const sessionUser = authData.user;
+
+            if (sessionUser.id !== profile.id) {
                 message.textContent = "You can only add gallery work to your own profile.";
                 return;
             }
@@ -1346,7 +1355,7 @@
                 });
 
                 const filePath =
-                    `${currentUser.id}/${Date.now()}-creator-gallery.webp`;
+                    `${sessionUser.id}/${Date.now()}-creator-gallery.webp`;
 
                 const { error: uploadError } = await supabase.storage
                     .from("creator-proof-gallery")
@@ -1366,7 +1375,7 @@
                 const { error } = await supabase
                     .from("creator_proof_gallery")
                     .insert({
-                        owner_id: currentProfile.id,
+                        owner_id: sessionUser.id,
                         image_url: data.publicUrl,
                         title,
                         description,
