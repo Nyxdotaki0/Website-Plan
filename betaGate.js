@@ -13,9 +13,7 @@ function getAgeRoleFromBirthDate(birthDate) {
             today.getDate() >= dob.getDate()
         );
 
-    if (!birthdayPassed) {
-        age--;
-    }
+    if (!birthdayPassed) age--;
 
     if (age < 13) return "blocked";
     if (age < 18) return "minor";
@@ -35,6 +33,12 @@ function clearBrokenSession() {
     });
 }
 
+function redirectTo(path) {
+    if (window.location.pathname !== path) {
+        window.location.replace(path);
+    }
+}
+
 export async function requireBetaAccess(options = {}) {
     const {
         allowRestricted = true,
@@ -45,20 +49,29 @@ export async function requireBetaAccess(options = {}) {
     let user = null;
 
     try {
+        const { data: sessionData, error: sessionError } =
+            await supabase.auth.getSession();
+
+        if (sessionError || !sessionData?.session) {
+            clearBrokenSession();
+            redirectTo("/login.html");
+            return null;
+        }
+
         const result = await supabase.auth.getUser();
 
         user = result.data?.user || null;
 
         if (result.error || !user) {
             clearBrokenSession();
-            window.location.replace("/login.html");
+            redirectTo("/login.html");
             return null;
         }
     } catch (error) {
-        console.warn("Auth check failed. Clearing broken session:", error);
+        console.warn("Auth session failed. Clearing broken session:", error);
 
         clearBrokenSession();
-        window.location.replace("/login.html");
+        redirectTo("/login.html");
         return null;
     }
 
@@ -71,7 +84,7 @@ export async function requireBetaAccess(options = {}) {
     if (betaError || !betaData) {
         await supabase.auth.signOut();
         clearBrokenSession();
-        window.location.replace("/closed-beta.html");
+        redirectTo("/closed-beta.html");
         return null;
     }
 
@@ -82,7 +95,7 @@ export async function requireBetaAccess(options = {}) {
         .maybeSingle();
 
     if (profileError || !profile) {
-        window.location.replace("/profile-setup.html");
+        redirectTo("/profile-setup.html");
         return null;
     }
 
@@ -92,7 +105,7 @@ export async function requireBetaAccess(options = {}) {
         !profile.birth_date ||
         profile.age_role === "unknown"
     ) {
-        window.location.replace("/profile-setup.html");
+        redirectTo("/profile-setup.html");
         return null;
     }
 
@@ -104,9 +117,7 @@ export async function requireBetaAccess(options = {}) {
     ) {
         await supabase
             .from("profiles")
-            .update({
-                age_role: currentAgeRole
-            })
+            .update({ age_role: currentAgeRole })
             .eq("id", user.id);
 
         profile.age_role = currentAgeRole;
@@ -147,17 +158,17 @@ export async function requireBetaAccess(options = {}) {
     localStorage.setItem("nullverse_moderation_expires_at", profile.moderation_expires_at || "");
 
     if (status === "banned" && !allowBanned) {
-        window.location.replace("/banned.html");
+        redirectTo("/banned.html");
         return null;
     }
 
     if (status === "suspended" && !allowSuspended) {
-        window.location.replace("/suspended.html");
+        redirectTo("/suspended.html");
         return null;
     }
 
     if (status === "restricted" && !allowRestricted) {
-        window.location.replace("/restricted.html");
+        redirectTo("/restricted.html");
         return null;
     }
 
