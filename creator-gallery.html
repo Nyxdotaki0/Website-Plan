@@ -387,7 +387,7 @@
                 ×
             </div>
 
-            
+
 
             <div class="lightbox-shell" onclick="event.stopPropagation()">
                 <img id="lightbox-image"
@@ -415,10 +415,74 @@
                         onclick="toggleLightboxLike()">
                     ♡ 0
                 </button>
+
+                <button id="lightbox-edit-button"
+                        class="button"
+                        onclick="event.stopPropagation(); openEditGalleryWorkModal()"
+                        style="display:none; margin:0 0 14px;">
+                    Edit Work
+                </button>
             </div>
         </div>
 
-        
+        <div id="edit-gallery-modal"
+             style="
+        display:none;
+        position:fixed;
+        inset:0;
+        z-index:10002;
+        background:rgba(0,0,0,.78);
+        justify-content:center;
+        align-items:center;
+        padding:24px;
+     ">
+            <div onclick="event.stopPropagation()"
+                 style="
+            width:560px;
+            max-width:94vw;
+            background:var(--panel-bg);
+            border:1px solid var(--border-color);
+            border-radius:20px;
+            padding:24px;
+        ">
+                <h2>Edit Gallery Work</h2>
+
+                <label>Title</label>
+                <input id="edit-gallery-title">
+
+                <label>Description</label>
+                <textarea id="edit-gallery-description"></textarea>
+
+                <label>Gallery Type</label>
+                <select id="edit-gallery-type">
+                    <option value="process">Process</option>
+                    <option value="sketch">Sketch</option>
+                    <option value="workspace">Workspace</option>
+                    <option value="finished_piece">Finished Piece</option>
+                    <option value="reference">Reference Material</option>
+                    <option value="worldbuilding">Worldbuilding</option>
+                    <option value="writing">Writing</option>
+                    <option value="other">Other</option>
+                </select>
+
+                <label>Visibility</label>
+                <select id="edit-gallery-visibility">
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                </select>
+
+                <button class="button" onclick="saveGalleryWorkEdits()">
+                    Save Changes
+                </button>
+
+                <button class="button" onclick="closeEditGalleryWorkModal()">
+                    Cancel
+                </button>
+
+                <p id="edit-gallery-message" class="empty"></p>
+            </div>
+        </div>
+
     </main>
 
     <script type="module">
@@ -615,6 +679,60 @@
                 `${likedByMe ? "♥" : "♡"} ${likes.length}`;
 
             document.getElementById("gallery-lightbox").style.display = "flex";
+
+            const editButton = document.getElementById("lightbox-edit-button");
+
+            if (editButton) {
+                editButton.style.display =
+                    currentUser.id === item.owner_id ? "inline-block" : "none";
+            }
+        };
+
+        window.openEditGalleryWorkModal = function () {
+            const item = allItems.find(entry => entry.id === activeLightboxItemId);
+            if (!item || currentUser.id !== item.owner_id) return;
+
+            document.getElementById("edit-gallery-title").value = item.title || "";
+            document.getElementById("edit-gallery-description").value = item.description || "";
+            document.getElementById("edit-gallery-type").value = item.proof_type || "process";
+            document.getElementById("edit-gallery-visibility").value = item.visibility || "public";
+
+            document.getElementById("edit-gallery-modal").style.display = "flex";
+        };
+
+        window.closeEditGalleryWorkModal = function () {
+            document.getElementById("edit-gallery-modal").style.display = "none";
+        };
+
+        window.saveGalleryWorkEdits = async function () {
+            const message = document.getElementById("edit-gallery-message");
+
+            const item = allItems.find(entry => entry.id === activeLightboxItemId);
+            if (!item || currentUser.id !== item.owner_id) {
+                message.textContent = "You can only edit your own gallery work.";
+                return;
+            }
+
+            const { error } = await supabase
+                .from("creator_proof_gallery")
+                .update({
+                    title: document.getElementById("edit-gallery-title").value.trim(),
+                    description: document.getElementById("edit-gallery-description").value.trim(),
+                    proof_type: document.getElementById("edit-gallery-type").value,
+                    visibility: document.getElementById("edit-gallery-visibility").value,
+                    updated_at: new Date().toISOString()
+                })
+                .eq("id", item.id)
+                .eq("owner_id", currentUser.id);
+
+            if (error) {
+                message.textContent = error.message;
+                return;
+            }
+
+            await loadCreatorGallery();
+            closeEditGalleryWorkModal();
+            openGalleryLightbox(item.id);
         };
 
         window.closeGalleryLightbox = function () {
