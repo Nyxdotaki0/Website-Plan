@@ -226,11 +226,28 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         const SUPABASE_URL = "https://baaygzddafopihtxyyjq.supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_O0JPmpCSe7TDoUxotIe4aQ_4EBgEBV8";
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const message = document.getElementById("message");
+
+        async function withTimeout(promise, ms = 8000) {
+            let timeout;
+
+            const timeoutPromise = new Promise((_, reject) => {
+                timeout = setTimeout(() => {
+                    reject(new Error("Connection timed out"));
+                }, ms);
+            });
+
+            try {
+                return await Promise.race([promise, timeoutPromise]);
+            } finally {
+                clearTimeout(timeout);
+            }
+        }
 
         function showCreateAccount() {
             document.getElementById("login-section").classList.add("hidden");
@@ -264,32 +281,40 @@
                 return;
             }
 
-            const { error } = await supabaseClient.auth.signUp({
-                email,
-                password,
-                options: {
-                    emailRedirectTo: "https://nullverse.dev/login.html"
+            message.textContent = "Creating account...";
+
+            try {
+                const { error } = await withTimeout(
+                    supabaseClient.auth.signUp({
+                        email,
+                        password,
+                        options: {
+                            emailRedirectTo: "https://nullverse.dev/login.html"
+                        }
+                    }),
+                    8000
+                );
+
+                if (error) {
+                    message.textContent = error.message;
+                    return;
                 }
-            });
 
-            if (error) {
-                message.textContent = error.message;
-                return;
+                message.innerHTML = `
+                    Account created successfully.<br><br>
+                    A verification email has been sent to your inbox.<br><br>
+                    Open the verification email and complete the verification process.<br><br>
+                    Once your profile setup is complete, return here and log in.
+                `;
+
+                showLogin();
+                document.getElementById("login-email").value = email;
+
+            } catch (error) {
+                console.warn("Signup connection failed:", error);
+                message.textContent =
+                    "Nullverse could not connect to its account servers. Please refresh, try again later, or switch networks.";
             }
-
-            message.innerHTML = `
-     Account created successfully.<br><br>
-
-    A verification email has been sent to your inbox.<br><br>
-
-    Open the verification email and complete the verification process.<br><br>
-
-    Once your profile setup is complete, return here and log in.
-`;
-
-            showLogin();
-
-            document.getElementById("login-email").value = email;
         }
 
         async function logIn() {
@@ -301,36 +326,26 @@
                 return;
             }
 
-            const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            message.textContent = "Logging in...";
 
-            if (error) {
-                message.textContent = error.message;
-                return;
-            }
+            try {
+                const { error } = await withTimeout(
+                    supabaseClient.auth.signInWithPassword({ email, password }),
+                    8000
+                );
 
-            window.location.href = "dashboard.html";
-        }
+                if (error) {
+                    message.textContent = error.message;
+                    return;
+                }
 
-        async function checkExistingSession() {
-            const { data } = await supabaseClient.auth.getSession();
-
-            if (!data.session) return;
-
-            const { data: profile, error } = await supabaseClient
-                .from("profiles")
-                .select("id, profile_completed")
-                .eq("id", data.session.user.id)
-                .maybeSingle();
-
-            if (error) {
-                message.textContent = error.message;
-                return;
-            }
-
-            if (profile && profile.profile_completed) {
+                message.textContent = "Login successful. Redirecting...";
                 window.location.href = "dashboard.html";
-            } else {
-                window.location.href = "profile-setup.html";
+
+            } catch (error) {
+                console.warn("Login connection failed:", error);
+                message.textContent =
+                    "Nullverse could not connect to its login servers. Please refresh, try again later, or switch networks.";
             }
         }
 
@@ -342,22 +357,35 @@
                 return;
             }
 
-            const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-                redirectTo: "https://nullverse.dev/reset-password.html"
-            });
+            message.textContent = "Sending reset email...";
 
-            if (error) {
-                message.textContent = error.message;
-                return;
+            try {
+                const { error } = await withTimeout(
+                    supabaseClient.auth.resetPasswordForEmail(email, {
+                        redirectTo: "https://nullverse.dev/reset-password.html"
+                    }),
+                    8000
+                );
+
+                if (error) {
+                    message.textContent = error.message;
+                    return;
+                }
+
+                message.innerHTML = `
+                    Password reset email sent.<br><br>
+                    Check your inbox and follow the reset link to create a new password.
+                `;
+
+            } catch (error) {
+                console.warn("Password reset connection failed:", error);
+                message.textContent =
+                    "Nullverse could not connect to its password reset servers. Please refresh, try again later, or switch networks.";
             }
-
-            message.innerHTML = `
-        Password reset email sent.<br><br>
-        Check your inbox and follow the reset link to create a new password.
-    `;
         }
 
-        checkExistingSession();
+        // Disabled on purpose so login page cannot get stuck checking an old session.
+        // checkExistingSession();
     </script>
 </body>
 </html>
