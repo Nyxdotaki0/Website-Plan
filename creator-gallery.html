@@ -140,8 +140,8 @@
 
         .gallery-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(185px, 185px));
-            gap: 16px;
+            grid-template-columns: repeat(auto-fill, minmax(215px, 215px));
+            gap: 18px;
             justify-content: start;
         }
 
@@ -150,9 +150,9 @@
             overflow: hidden;
             padding: 0;
             cursor: pointer;
-            width: 185px;
-            height: 185px;
-            border-radius: 16px;
+            width: 215px;
+            height: 215px;
+            border-radius: 18px;
         }
 
             .gallery-card img {
@@ -216,6 +216,57 @@
             line-height: 1.7;
         }
 
+        .lightbox-close,
+        .lightbox-like {
+            position: fixed;
+            z-index: 10001;
+            width: 46px;
+            height: 46px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.16);
+            background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.04)), rgba(8,8,10,.78);
+            color: white;
+            cursor: pointer;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 0 18px rgba(255,255,255,.08), inset 0 1px 0 rgba(255,255,255,.14);
+        }
+
+        .lightbox-close {
+            top: 22px;
+            right: 22px;
+            font-size: 1.5rem;
+        }
+
+        .lightbox-like {
+            top: 22px;
+            right: 78px;
+            font-size: 1rem;
+            width: auto;
+            padding: 0 16px;
+        }
+
+        .lightbox-shell {
+            width: min(900px, 96vw);
+            max-height: 92vh;
+            overflow-y: auto;
+        }
+
+        .lightbox-image {
+            width: 100%;
+            max-height: 70vh;
+            object-fit: contain;
+            display: block;
+            border-radius: 18px;
+        }
+
+        .lightbox-details {
+            margin-top: 14px;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            padding: 18px;
+        }
+
         @media (max-width: 800px) {
             header {
                 flex-direction: column;
@@ -243,6 +294,17 @@
                 height: auto;
                 aspect-ratio: 1 / 1;
             }
+
+            .lightbox-close {
+                top: 16px;
+                right: 16px;
+            }
+
+            .lightbox-like {
+                top: 16px;
+                right: 72px;
+            }
+
         }
     </style>
 </head>
@@ -290,50 +352,29 @@
         position:fixed;
         inset:0;
         z-index:10000;
-        background:rgba(0,0,0,.86);
+        background:rgba(0,0,0,.88);
         justify-content:center;
         align-items:center;
         padding:24px;
      ">
 
-            <div style="width:min(900px, 96vw);">
-                <button onclick="closeGalleryLightbox()"
-                        style="
-            position:fixed;
-            top:22px;
-            right:22px;
-            z-index:10001;
-            width:42px;
-            height:42px;
-            border-radius:50%;
-            border:1px solid rgba(255,255,255,.18);
-            background:rgba(0,0,0,.72);
-            color:white;
-            font-size:1.4rem;
-            cursor:pointer;
-        ">
-                    ×
-                </button>
+            <button class="lightbox-close" onclick="closeGalleryLightbox()">
+                ×
+            </button>
 
+            <button id="lightbox-like-button"
+                    class="lightbox-like"
+                    onclick="toggleLightboxLike()">
+                ♡ 0
+            </button>
+
+            <div class="lightbox-shell">
                 <img id="lightbox-image"
+                     class="lightbox-image"
                      src=""
-                     alt=""
-                     style="
-                width:100%;
-                max-height:72vh;
-                object-fit:contain;
-                display:block;
-                border-radius:18px;
-                background:#050505;
-             ">
+                     alt="">
 
-                <div style="
-            margin-top:14px;
-            background:var(--panel-bg);
-            border:1px solid var(--border-color);
-            border-radius:18px;
-            padding:18px;
-        ">
+                <div class="lightbox-details">
                     <h2 id="lightbox-title" style="margin:0 0 8px;"></h2>
                     <p id="lightbox-type" class="empty" style="margin:0 0 10px;"></p>
                     <p id="lightbox-description" style="margin:0;"></p>
@@ -360,6 +401,7 @@
         let profile = null;
         let allItems = [];
         let activeType = "all";
+        let activeLightboxItemId = null;
 
         if (!usernameFromUrl) {
             window.location.href = "profile.html";
@@ -503,7 +545,10 @@
 
             if (!item) return;
 
+            activeLightboxItemId = itemId;
+
             const likes = item.creator_gallery_likes || [];
+            const likedByMe = likes.some(like => like.user_id === currentUser.id);
 
             document.getElementById("lightbox-image").src = item.image_url;
             document.getElementById("lightbox-image").alt =
@@ -519,13 +564,28 @@
                 item.description || "No description provided.";
 
             document.getElementById("lightbox-likes").textContent =
-                `♥ ${likes.length} ${likes.length === 1 ? "Like" : "Likes"}`;
+                `${likes.length} ${likes.length === 1 ? "Like" : "Likes"}`;
+
+            document.getElementById("lightbox-like-button").textContent =
+                `${likedByMe ? "♥" : "♡"} ${likes.length}`;
 
             document.getElementById("gallery-lightbox").style.display = "flex";
         };
 
         window.closeGalleryLightbox = function () {
+            activeLightboxItemId = null;
             document.getElementById("gallery-lightbox").style.display = "none";
+        };
+
+        window.toggleLightboxLike = async function () {
+            if (!activeLightboxItemId) return;
+
+            await toggleGalleryLike(activeLightboxItemId);
+
+            const item = allItems.find(entry => entry.id === activeLightboxItemId);
+            if (item) {
+                openGalleryLightbox(activeLightboxItemId);
+            }
         };
 
         function showError(message) {
