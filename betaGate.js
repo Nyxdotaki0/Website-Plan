@@ -23,6 +23,18 @@ function getAgeRoleFromBirthDate(birthDate) {
     return "adult";
 }
 
+function clearBrokenSession() {
+    Object.keys(localStorage).forEach(key => {
+        if (
+            key.startsWith("sb-") ||
+            key.startsWith("supabase") ||
+            key.startsWith("nullverse_")
+        ) {
+            localStorage.removeItem(key);
+        }
+    });
+}
+
 export async function requireBetaAccess(options = {}) {
     const {
         allowRestricted = true,
@@ -30,12 +42,22 @@ export async function requireBetaAccess(options = {}) {
         allowBanned = false
     } = options;
 
-    const {
-        data: { user },
-        error: userError
-    } = await supabase.auth.getUser();
+    let user = null;
 
-    if (userError || !user) {
+    try {
+        const result = await supabase.auth.getUser();
+
+        user = result.data?.user || null;
+
+        if (result.error || !user) {
+            clearBrokenSession();
+            window.location.replace("/login.html");
+            return null;
+        }
+    } catch (error) {
+        console.warn("Auth check failed. Clearing broken session:", error);
+
+        clearBrokenSession();
         window.location.replace("/login.html");
         return null;
     }
@@ -48,6 +70,7 @@ export async function requireBetaAccess(options = {}) {
 
     if (betaError || !betaData) {
         await supabase.auth.signOut();
+        clearBrokenSession();
         window.location.replace("/closed-beta.html");
         return null;
     }
@@ -62,6 +85,7 @@ export async function requireBetaAccess(options = {}) {
         window.location.replace("/profile-setup.html");
         return null;
     }
+
     if (
         !profile.profile_completed ||
         !profile.age_verified ||
@@ -72,8 +96,7 @@ export async function requireBetaAccess(options = {}) {
         return null;
     }
 
-    const currentAgeRole =
-        getAgeRoleFromBirthDate(profile.birth_date);
+    const currentAgeRole = getAgeRoleFromBirthDate(profile.birth_date);
 
     if (
         currentAgeRole !== "blocked" &&
