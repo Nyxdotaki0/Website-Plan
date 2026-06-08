@@ -1178,6 +1178,7 @@ background:#15151f;
         import { requireBetaAccess } from "./betaGate.js";
         import { supabase } from "./supabaseClient.js";
         import { optimizeImage } from "./imageUtils.js";
+        import { createNotification } from "./notifications.js";
         const user = await requireBetaAccess({ allowRestricted: false });
 
         const params = new URLSearchParams(window.location.search);
@@ -4204,6 +4205,39 @@ margin-bottom:20px;
             }
 
             currentSection = null;
+
+            const previousCreditUsername =
+                (currentSection.image_credit_nullverse_username || "")
+                    .toLowerCase();
+
+            const newCreditUsername =
+                (imageCreditNullverseUsername || "")
+                    .toLowerCase();
+
+            if (
+                newCreditUsername &&
+                newCreditUsername !== previousCreditUsername
+            ) {
+                const { data: creditedProfile } = await supabase
+                    .from("profiles")
+                    .select("id, username")
+                    .eq("username", newCreditUsername)
+                    .single();
+
+                if (
+                    creditedProfile &&
+                    creditedProfile.id !== user.id
+                ) {
+                    await createNotification({
+                        recipientId: creditedProfile.id,
+                        actorId: user.id,
+                        worldId: currentWorld.id,
+                        type: "image_credit",
+                        message: `You were credited for artwork in "${currentWorld.title || "a world"}".`,
+                        link: `world.html?id=${encodeURIComponent(currentWorld.id)}`
+                    });
+                }
+            }
 
             await loadSections();
 
