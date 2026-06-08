@@ -3273,30 +3273,47 @@ margin-bottom:20px;
     <option value="no_credit_needed">No credit needed</option>
 </select>
 
-<label>Artist / Creator Name</label>
-<input id="image-credit-name" placeholder="Name, username, or source">
-
-<label>Nullverse Username</label>
-<input id="image-credit-nullverse-username"
-       placeholder="Example: alandotexe">
-       <div class="actions" style="margin-top:-10px;margin-bottom:14px;">
-    <button type="button" class="button" onclick="searchCreditUsers()">
-        Search Creator
-    </button>
+<div id="credit-own-work" style="display:none;">
+    <p class="message">
+        This image will automatically credit your own Nullverse profile.
+    </p>
 </div>
 
-<div id="credit-user-results"></div>
+<div id="credit-nullverse-user" style="display:none;">
+    <label>Nullverse Username</label>
+    <input id="image-credit-nullverse-username"
+           placeholder="Example: alandotexe">
 
-<label>Credit Link</label>
-<input id="image-credit-url" placeholder="Profile link, social link, or source URL">
+    <div class="actions" style="margin-top:-10px;margin-bottom:14px;">
+        <button type="button" class="button" onclick="searchCreditUsers()">
+            Search Creator
+        </button>
+    </div>
 
-<label>Permission / Source Note</label>
-<textarea id="image-credit-note" rows="3" placeholder="Example: Used with permission, public domain, my own artwork, etc."></textarea>
+    <div id="credit-user-results"></div>
+</div>
 
-<label style="display:flex;align-items:center;gap:10px;">
-    <input id="image-credit-no-ai" type="checkbox" style="width:auto;">
-    I confirm this image is not AI-generated artwork
-</label>
+<div id="credit-name-field" style="display:none;">
+    <label>Artist / Creator Name</label>
+    <input id="image-credit-name" placeholder="Name, username, or source">
+</div>
+
+<div id="credit-url-field" style="display:none;">
+    <label>Credit Link</label>
+    <input id="image-credit-url" placeholder="Profile link, social link, or source URL">
+</div>
+
+<div id="credit-note-field" style="display:none;">
+    <label>Permission / Source Note</label>
+    <textarea id="image-credit-note" rows="3" placeholder="Example: Used with permission, public domain, my own artwork, etc."></textarea>
+</div>
+
+<div id="credit-no-ai-field" style="display:none;">
+    <label style="display:flex;align-items:center;gap:10px;">
+        <input id="image-credit-no-ai" type="checkbox" style="width:auto;">
+        I confirm this image is not AI-generated artwork
+    </label>
+</div>
 
 
 
@@ -3416,8 +3433,80 @@ margin-bottom:20px;
             document.getElementById("image-credit-nullverse-username").value =
                 section.image_credit_nullverse_username || "";
 
+            document
+                .getElementById("image-credit-type")
+                .addEventListener("change", updateCreditFields);
+
+            updateCreditFields();
+
             initializeSectionAppearanceControls();
         };
+
+        function updateCreditFields() {
+            const type =
+                document.getElementById("image-credit-type")?.value;
+
+            const ownWork =
+                document.getElementById("credit-own-work");
+
+            const nullverseUser =
+                document.getElementById("credit-nullverse-user");
+
+            const nameField =
+                document.getElementById("credit-name-field");
+
+            const urlField =
+                document.getElementById("credit-url-field");
+
+            const noteField =
+                document.getElementById("credit-note-field");
+
+            const noAiField =
+                document.getElementById("credit-no-ai-field");
+
+            [
+                ownWork,
+                nullverseUser,
+                nameField,
+                urlField,
+                noteField,
+                noAiField
+            ].forEach(field => {
+                if (field) field.style.display = "none";
+            });
+
+            if (type === "own_work") {
+                ownWork.style.display = "block";
+                noteField.style.display = "block";
+                noAiField.style.display = "block";
+            }
+
+            if (type === "nullverse_creator") {
+                nullverseUser.style.display = "block";
+                noteField.style.display = "block";
+                noAiField.style.display = "block";
+            }
+
+            if (
+                type === "external_artist" ||
+                type === "photographer"
+            ) {
+                nameField.style.display = "block";
+                urlField.style.display = "block";
+                noteField.style.display = "block";
+                noAiField.style.display = "block";
+            }
+
+            if (type === "stock_public_domain") {
+                nameField.style.display = "block";
+                urlField.style.display = "block";
+                noteField.style.display = "block";
+            }
+
+            if (type === "no_credit_needed") {
+                noteField.style.display = "block";
+            }
+        }
 
         window.openNewSectionModal = async function () {
             const title =
@@ -3565,6 +3654,8 @@ margin-bottom:20px;
 
             document.getElementById("credit-user-results").innerHTML =
                 `<p class="message">Selected @${escapeHtml(username)}</p>`;
+
+            updateCreditFields();
         };
 
         window.saveOverviewOnly = async function () {
