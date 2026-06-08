@@ -632,6 +632,7 @@
                 <p id="world-creator" class="creator"></p>
 
                 <div id="world-summary" class="summary"></div>
+                <div id="world-image-credits"></div>
 
                 <div class="like-row">
                     <button id="like-button" class="like-button">
@@ -944,6 +945,8 @@
             document.getElementById("world-summary").textContent =
                 world.summary || "No summary provided.";
 
+            renderWorldImageCredits(world);
+
             if (profile) {
                 document.getElementById("world-creator").innerHTML =
                     `by <a href="profile.html?user=${encodeURIComponent(profile.username)}">${escapeHtml(profile.display_name || profile.username)} (@${escapeHtml(profile.username)})</a>`;
@@ -966,6 +969,86 @@
 
             document.getElementById("community-link").href =
                 `world-additions.html?id=${encodeURIComponent(world.id)}`;
+        }
+
+        function renderWorldImageCredits(world) {
+
+            const container =
+                document.getElementById("world-image-credits");
+
+            if (!container) return;
+
+            const credits = [];
+
+            if (
+                world.theme_overview_credit_type &&
+                world.theme_overview_credit_type !== "no_credit_needed"
+            ) {
+                credits.push(`
+            <div>
+                <strong>Overview Image:</strong>
+                ${buildWorldCreditLine(
+                    world.theme_overview_credit_type,
+                    world.theme_overview_credit_name,
+                    world.theme_overview_credit_nullverse_username,
+                    world.theme_overview_credit_url
+                )}
+            </div>
+        `);
+            }
+
+            if (
+                world.theme_index_credit_type &&
+                world.theme_index_credit_type !== "no_credit_needed"
+            ) {
+                credits.push(`
+            <div>
+                <strong>Index Image:</strong>
+                ${buildWorldCreditLine(
+                    world.theme_index_credit_type,
+                    world.theme_index_credit_name,
+                    world.theme_index_credit_nullverse_username,
+                    world.theme_index_credit_url
+                )}
+            </div>
+        `);
+            }
+
+            if (
+                world.theme_background_credit_type &&
+                world.theme_background_credit_type !== "no_credit_needed"
+            ) {
+                credits.push(`
+            <div>
+                <strong>Background Image:</strong>
+                ${buildWorldCreditLine(
+                    world.theme_background_credit_type,
+                    world.theme_background_credit_name,
+                    world.theme_background_credit_nullverse_username,
+                    world.theme_background_credit_url
+                )}
+            </div>
+        `);
+            }
+
+            if (!credits.length) {
+                container.innerHTML = "";
+                return;
+            }
+
+            container.innerHTML = `
+        <div style="
+            margin-top:18px;
+            padding:14px;
+            border-radius:14px;
+            background:rgba(0,0,0,.18);
+            font-size:.85rem;
+            line-height:1.7;
+        ">
+            <strong>Image Credits</strong>
+            ${credits.join("")}
+        </div>
+    `;
         }
 
         function applyWorldTheme(world) {
@@ -2006,6 +2089,49 @@
             return String(value || "")
                 .replaceAll("_", " ")
                 .replace(/\b\w/g, letter => letter.toUpperCase());
+        }
+
+        function buildWorldCreditLine(
+            type,
+            creditName,
+            nullverseUsername,
+            creditUrl
+        ) {
+
+            if (type === "own_work") {
+                return "Artwork by creator";
+            }
+
+            if (
+                type === "nullverse_creator" &&
+                nullverseUsername
+            ) {
+                return `
+            Artwork by
+            <a href="profile.html?user=${encodeURIComponent(nullverseUsername)}"
+               style="color:inherit;text-decoration:underline;">
+                @${escapeHtml(nullverseUsername)}
+            </a>
+        `;
+            }
+
+            if (creditUrl) {
+                return `
+            <a href="${escapeHtml(creditUrl)}"
+               target="_blank"
+               style="color:inherit;text-decoration:underline;">
+                ${escapeHtml(
+                    creditName ||
+                    formatCreditType(type)
+                )}
+            </a>
+        `;
+            }
+
+            return escapeHtml(
+                creditName ||
+                formatCreditType(type)
+            );
         }
 
         function buildImageCreditLine(section) {
