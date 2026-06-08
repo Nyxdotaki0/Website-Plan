@@ -3278,6 +3278,13 @@ margin-bottom:20px;
 <label>Nullverse Username</label>
 <input id="image-credit-nullverse-username"
        placeholder="Example: alandotexe">
+       <div class="actions" style="margin-top:-10px;margin-bottom:14px;">
+    <button type="button" class="button" onclick="searchCreditUsers()">
+        Search Creator
+    </button>
+</div>
+
+<div id="credit-user-results"></div>
 
 <label>Credit Link</label>
 <input id="image-credit-url" placeholder="Profile link, social link, or source URL">
@@ -3489,6 +3496,74 @@ margin-bottom:20px;
             }
 
             initializeOverviewAppearanceControls();
+        };
+
+        window.searchCreditUsers = async function () {
+            const input = document.getElementById("image-credit-nullverse-username");
+            const results = document.getElementById("credit-user-results");
+            const search = input.value.trim().replace("@", "");
+
+            if (!search) {
+                results.innerHTML = `<p class="message">Type a username or display name first.</p>`;
+                return;
+            }
+
+            results.innerHTML = `<p class="message">Searching creators...</p>`;
+
+            const { data, error } = await supabase
+                .from("profiles")
+                .select("id, username, display_name, role, role_name")
+                .or(`username.ilike.%${search}%,display_name.ilike.%${search}%`)
+                .order("username", { ascending: true })
+                .limit(8);
+
+            if (error) {
+                results.innerHTML = `<p class="message">${escapeHtml(error.message)}</p>`;
+                return;
+            }
+
+            if (!data || data.length === 0) {
+                results.innerHTML = `<p class="message">No Nullverse creators found.</p>`;
+                return;
+            }
+
+            results.innerHTML = data.map(profile => `
+        <div style="
+            border:1px solid var(--border-color);
+            border-radius:14px;
+            padding:12px;
+            margin-bottom:10px;
+            background:rgba(255,255,255,.035);
+        ">
+            <strong>${escapeHtml(profile.display_name || "Unnamed Creator")}</strong>
+
+            <div class="message" style="margin:4px 0 10px;">
+                @${escapeHtml(profile.username || "no-username")}
+            </div>
+
+            <button type="button"
+                    class="button"
+                    onclick="selectCreditUser('${escapeHtml(profile.username || "")}', '${escapeHtml(profile.display_name || "")}')">
+                Use This Creator
+            </button>
+        </div>
+    `).join("");
+        };
+
+        window.selectCreditUser = function (username, displayName) {
+            document.getElementById("image-credit-nullverse-username").value =
+                username || "";
+
+            if (displayName) {
+                document.getElementById("image-credit-name").value =
+                    displayName;
+            }
+
+            document.getElementById("image-credit-type").value =
+                "nullverse_creator";
+
+            document.getElementById("credit-user-results").innerHTML =
+                `<p class="message">Selected @${escapeHtml(username)}</p>`;
         };
 
         window.saveOverviewOnly = async function () {
