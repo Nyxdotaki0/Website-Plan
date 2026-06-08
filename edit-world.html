@@ -1721,6 +1721,8 @@ background:#15151f;
                 <div class="tooltip">This image appears as the main visual for your world on cards, previews, and the world page.</div>
             </div>
 
+
+
             <div style="display:flex; gap:10px; align-items:center; margin-bottom:18px;">
         <input id="cover-image-input" type="file" accept="image/*" style="margin-bottom:0;">
         <button type="button" class="button danger-button" onclick="removeCoverImage()">
@@ -1739,8 +1741,42 @@ background:#15151f;
                 `}
             </div>
 
-            <div class="info-wrap">
-                <label>Short Summary</label>
+            <div id="cover-credit-panel">
+    <h3>Cover Image Credit</h3>
+    ...
+</div>
+
+<div class="info-wrap">
+    <label>Short Summary</label>
+    <h3>Cover Image Credit</h3>
+
+    <label>Credit Type</label>
+    <select id="cover-credit-type">
+        <option value="own_work">My own work</option>
+        <option value="nullverse_creator">Another Nullverse creator</option>
+        <option value="external_artist">External artist</option>
+        <option value="photographer">Photographer</option>
+        <option value="stock_public_domain">Stock / public domain</option>
+        <option value="no_credit_needed">No credit needed</option>
+    </select>
+
+    <label>Artist / Creator Name</label>
+    <input id="cover-credit-name" placeholder="Name, username, or source">
+
+    <label>Nullverse Username</label>
+    <input id="cover-credit-nullverse-username" placeholder="Example: alandotexe">
+
+    <label>Credit Link</label>
+    <input id="cover-credit-url" placeholder="Profile link, social link, or source URL">
+
+    <label>Permission / Source Note</label>
+    <textarea id="cover-credit-note" rows="3"></textarea>
+
+    <label style="display:flex;align-items:center;gap:10px;">
+        <input id="cover-credit-no-ai" type="checkbox" style="width:auto;">
+        I confirm this image is not AI-generated artwork
+    </label>
+</div>
                 <div class="info-icon">i</div>
                 <div class="tooltip">Give readers a quick overview of your world. Keep it clear enough for someone new to understand the premise.</div>
             </div>
@@ -2169,6 +2205,24 @@ background:#15151f;
             );
 
             renderWarningTags();
+
+            document.getElementById("cover-credit-type").value =
+                currentWorld.cover_credit_type || "no_credit_needed";
+
+            document.getElementById("cover-credit-name").value =
+                currentWorld.cover_credit_name || "";
+
+            document.getElementById("cover-credit-url").value =
+                currentWorld.cover_credit_url || "";
+
+            document.getElementById("cover-credit-note").value =
+                currentWorld.cover_credit_note || "";
+
+            document.getElementById("cover-credit-no-ai").checked =
+                !!currentWorld.cover_credit_no_ai;
+
+            document.getElementById("cover-credit-nullverse-username").value =
+                currentWorld.cover_credit_nullverse_username || "";
 
 
         };
@@ -3508,6 +3562,55 @@ margin-bottom:20px;
             }
         }
 
+        function getCreditData(prefix) {
+            return {
+                type: document.getElementById(`${prefix}-credit-type`)?.value || "no_credit_needed",
+                name: document.getElementById(`${prefix}-credit-name`)?.value.trim() || "",
+                url: document.getElementById(`${prefix}-credit-url`)?.value.trim() || "",
+                note: document.getElementById(`${prefix}-credit-note`)?.value.trim() || "",
+                no_ai: document.getElementById(`${prefix}-credit-no-ai`)?.checked || false,
+                nullverse_username:
+                    document.getElementById(`${prefix}-credit-nullverse-username`)
+                        ?.value
+                        .trim()
+                        .replace("@", "") || ""
+            };
+        }
+
+        function validateImageCredit(prefix, label, imageExists) {
+            if (!imageExists) return true;
+
+            const credit = getCreditData(prefix);
+
+            if (credit.type === "nullverse_creator" && !credit.nullverse_username) {
+                alert(`${label} needs a Nullverse creator username.`);
+                return false;
+            }
+
+            if (
+                (credit.type === "external_artist" || credit.type === "photographer") &&
+                (!credit.name || !credit.url)
+            ) {
+                alert(`${label} needs an artist/photographer name and credit link.`);
+                return false;
+            }
+
+            if (
+                credit.type === "stock_public_domain" &&
+                (!credit.url && !credit.note)
+            ) {
+                alert(`${label} needs a source link or source note.`);
+                return false;
+            }
+
+            if (credit.type === "no_credit_needed" && !credit.note) {
+                alert(`${label} needs a short reason for why no credit is needed.`);
+                return false;
+            }
+
+            return true;
+        }
+
         window.openNewSectionModal = async function () {
             const title =
                 prompt("Section title:");
@@ -3772,6 +3875,12 @@ margin-bottom:20px;
                 overviewCardImageUrl = data.publicUrl;
             }
 
+            const coverCredit = getCreditData("cover");
+
+            if (!validateImageCredit("cover", "Cover image", !!coverImageUrl)) {
+                return;
+            }
+
             if (indexImageFile) {
                 const optimizedIndexImage = await optimizeImage(indexImageFile, {
                     maxWidth: 1600,
@@ -3841,6 +3950,12 @@ margin-bottom:20px;
                     theme_index_button_color_1: indexButtonColor1,
                     theme_index_button_color_2: indexButtonColor2,
                     theme_index_button_text_color: indexButtonTextColor,
+                    cover_credit_type: coverCredit.type,
+                    cover_credit_name: coverCredit.name,
+                    cover_credit_url: coverCredit.url,
+                    cover_credit_note: coverCredit.note,
+                    cover_credit_no_ai: coverCredit.no_ai,
+                    cover_credit_nullverse_username: coverCredit.nullverse_username,
                     updated_at: new Date().toISOString()
                 })
                 .eq("id", currentWorld.id);
