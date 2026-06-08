@@ -1398,25 +1398,29 @@
 
                 ${section.image_url && section.image_credit_type !== "no_credit_needed" ? `
     <div style="
-        margin:-10px 0 20px;
-        padding:12px 14px;
-        border:1px solid var(--border-color);
-        border-radius:14px;
-        background:rgba(0,0,0,.22);
+        margin:-12px 0 8px;
         color:var(--section-card-text, var(--text-secondary));
-        font-size:.9rem;
-        line-height:1.6;
+        font-size:.78rem;
+        opacity:.72;
+        line-height:1.5;
     ">
-        <strong>Image Credit:</strong>
-        ${escapeHtml(section.image_credit_name || formatCreditType(section.image_credit_type))}
+        ${buildImageCreditLine(section)}
+    </div>
 
-        ${section.image_credit_url ? `
-            • <a href="${escapeHtml(section.image_credit_url)}"
-                 target="_blank"
-                 style="color:inherit;text-decoration:underline;">
-                 Source
-              </a>
-        ` : ""}
+    ${section.image_credit_note ? `
+        <div style="
+            margin:0 0 20px;
+            padding:10px 12px;
+            border-radius:12px;
+            background:rgba(0,0,0,.16);
+            color:var(--section-card-text, var(--text-secondary));
+            font-size:.84rem;
+            opacity:.82;
+            line-height:1.55;
+        ">
+            ${escapeHtml(section.image_credit_note)}
+        </div>
+    ` : ""}
 
         ${section.image_credit_nullverse_username ? `
     <a href="profile.html?user=${encodeURIComponent(section.image_credit_nullverse_username)}"
@@ -2020,6 +2024,49 @@
             return String(value || "")
                 .replaceAll("_", " ")
                 .replace(/\b\w/g, letter => letter.toUpperCase());
+        }
+
+        function buildImageCreditLine(section) {
+            const type = section.image_credit_type || "no_credit_needed";
+
+            if (type === "own_work") {
+                const username = currentWorld?.ownerProfile?.username;
+
+                if (username) {
+                    return `
+                Artwork by
+                <a href="profile.html?user=${encodeURIComponent(username)}"
+                   style="color:inherit;text-decoration:underline;">
+                    @${escapeHtml(username)}
+                </a>
+            `;
+                }
+
+                return "Artwork by creator";
+            }
+
+            if (type === "nullverse_creator" && section.image_credit_nullverse_username) {
+                return `
+            Artwork by
+            <a href="profile.html?user=${encodeURIComponent(section.image_credit_nullverse_username)}"
+               style="color:inherit;text-decoration:underline;">
+                @${escapeHtml(section.image_credit_nullverse_username)}
+            </a>
+        `;
+            }
+
+            if (section.image_credit_url) {
+                return `
+            Credit:
+            <a href="${escapeHtml(section.image_credit_url)}"
+               target="_blank"
+               style="color:inherit;text-decoration:underline;">
+                ${escapeHtml(section.image_credit_name || formatCreditType(type))}
+            </a>
+        `;
+            }
+
+            return `Credit: ${escapeHtml(section.image_credit_name || formatCreditType(type))}`;
         }
 
         window.logOut = async function () {
