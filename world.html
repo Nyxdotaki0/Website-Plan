@@ -41,6 +41,17 @@
             pointer-events: none;
         }
 
+            .world-background-layer .credit-pill {
+                position: fixed;
+                pointer-events: auto;
+            }
+
+        .section-image-credit-under .credit-pill {
+            position: relative;
+            left: auto;
+            bottom: auto;
+        }
+
         header,
         main {
             position: relative;
@@ -508,6 +519,59 @@
             line-height: 1;
         }
 
+        .credit-pill {
+            position: absolute;
+            left: 14px;
+            bottom: 14px;
+            z-index: 6;
+            display: inline-flex;
+            align-items: center;
+            max-width: calc(100% - 28px);
+            padding: 7px 11px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.16);
+            background: rgba(0,0,0,.58);
+            color: white;
+            font-size: .78rem;
+            text-decoration: none;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+
+            .credit-pill:hover {
+                background: rgba(0,0,0,.75);
+            }
+
+        .credit-tooltip {
+            position: absolute;
+            left: 0;
+            bottom: calc(100% + 8px);
+            width: 240px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(0,0,0,.9);
+            border: 1px solid rgba(255,255,255,.16);
+            color: var(--text-secondary);
+            font-size: .78rem;
+            line-height: 1.45;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            white-space: normal;
+            box-shadow: 0 12px 28px rgba(0,0,0,.35);
+        }
+
+        .credit-pill:hover .credit-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .section-image-credit-under {
+            position: relative;
+            display: inline-block;
+            margin: -12px 0 20px;
+        }
+
         @media (max-width: 800px) {
             header {
                 flex-direction: column;
@@ -632,7 +696,7 @@
                 <p id="world-creator" class="creator"></p>
 
                 <div id="world-summary" class="summary"></div>
-                <div id="world-image-credits"></div>
+
 
                 <div class="like-row">
                     <button id="like-button" class="like-button">
@@ -660,6 +724,8 @@
                 </div>
 
                 <div id="owner-actions" class="owner-actions"></div>
+
+                
             </section>
 
             <section id="sections-container">
@@ -937,6 +1003,20 @@
 
             currentWorld.ownerProfile = profile;
 
+            document
+                .getElementById("world-background-layer")
+                .insertAdjacentHTML(
+                    "beforeend",
+                    buildCreditPill({
+                        type: world.background_credit_type,
+                        name: world.background_credit_name,
+                        username: world.background_credit_nullverse_username,
+                        url: world.background_credit_url,
+                        note: world.background_credit_note,
+                        ownerUsername: world.ownerProfile?.username
+                    })
+                );
+
             document.title = `${world.title || "World"} - Nullverse`;
 
             document.getElementById("world-title").textContent =
@@ -945,7 +1025,7 @@
             document.getElementById("world-summary").textContent =
                 world.summary || "No summary provided.";
 
-            renderWorldImageCredits(world);
+            
 
             if (profile) {
                 document.getElementById("world-creator").innerHTML =
@@ -956,6 +1036,18 @@
             }
 
             renderTags(world);
+
+            document.querySelector(".hero").insertAdjacentHTML(
+                "beforeend",
+                buildCreditPill({
+                    type: world.overview_card_credit_type,
+                    name: world.overview_card_credit_name,
+                    username: world.overview_card_credit_nullverse_username,
+                    url: world.overview_card_credit_url,
+                    note: world.overview_card_credit_note,
+                    ownerUsername: profile?.username
+                })
+            );
 
             renderOwnerActions(world);
             await loadLikes();
@@ -971,85 +1063,7 @@
                 `world-additions.html?id=${encodeURIComponent(world.id)}`;
         }
 
-        function renderWorldImageCredits(world) {
-
-            const container =
-                document.getElementById("world-image-credits");
-
-            if (!container) return;
-
-            const credits = [];
-
-            if (
-                world.theme_overview_credit_type &&
-                world.theme_overview_credit_type !== "no_credit_needed"
-            ) {
-                credits.push(`
-            <div>
-                <strong>Overview Image:</strong>
-                ${buildWorldCreditLine(
-                    world.theme_overview_credit_type,
-                    world.theme_overview_credit_name,
-                    world.theme_overview_credit_nullverse_username,
-                    world.theme_overview_credit_url
-                )}
-            </div>
-        `);
-            }
-
-            if (
-                world.theme_index_credit_type &&
-                world.theme_index_credit_type !== "no_credit_needed"
-            ) {
-                credits.push(`
-            <div>
-                <strong>Index Image:</strong>
-                ${buildWorldCreditLine(
-                    world.theme_index_credit_type,
-                    world.theme_index_credit_name,
-                    world.theme_index_credit_nullverse_username,
-                    world.theme_index_credit_url
-                )}
-            </div>
-        `);
-            }
-
-            if (
-                world.theme_background_credit_type &&
-                world.theme_background_credit_type !== "no_credit_needed"
-            ) {
-                credits.push(`
-            <div>
-                <strong>Background Image:</strong>
-                ${buildWorldCreditLine(
-                    world.theme_background_credit_type,
-                    world.theme_background_credit_name,
-                    world.theme_background_credit_nullverse_username,
-                    world.theme_background_credit_url
-                )}
-            </div>
-        `);
-            }
-
-            if (!credits.length) {
-                container.innerHTML = "";
-                return;
-            }
-
-            container.innerHTML = `
-        <div style="
-            margin-top:18px;
-            padding:14px;
-            border-radius:14px;
-            background:rgba(0,0,0,.18);
-            font-size:.85rem;
-            line-height:1.7;
-        ">
-            <strong>Image Credits</strong>
-            ${credits.join("")}
-        </div>
-    `;
-        }
+        
 
         function applyWorldTheme(world) {
 
@@ -1479,36 +1493,31 @@
                     >
                 ` : ""}
 
-                ${section.image_url && section.image_credit_type !== "no_credit_needed" ? `
-    <div style="
-        margin:-12px 0 8px;
-        color:var(--section-card-text, var(--text-secondary));
-        font-size:.78rem;
-        opacity:.72;
-        line-height:1.5;
-    ">
-        ${buildImageCreditLine(section)}
+                ${section.image_url ? `
+    <div class="section-image-credit-under">
+        ${buildCreditPill({
+            type: section.image_credit_type,
+            name: section.image_credit_name,
+            username: section.image_credit_nullverse_username,
+            url: section.image_credit_url,
+            note: section.image_credit_note,
+            ownerUsername: currentWorld.ownerProfile?.username
+        })}
     </div>
-
-    ${section.image_credit_note ? `
-        <div style="
-            margin:0 0 20px;
-            padding:10px 12px;
-            border-radius:12px;
-            background:rgba(0,0,0,.16);
-            color:var(--section-card-text, var(--text-secondary));
-            font-size:.84rem;
-            opacity:.82;
-            line-height:1.55;
-        ">
-            ${escapeHtml(section.image_credit_note)}
-        </div>
-    ` : ""}
 ` : ""}
 
                 <div class="section-content">
                     ${escapeHtml(section.content || "No content yet.")}
                 </div>
+
+                ${buildCreditPill({
+                    type: section.card_credit_type,
+                    name: section.card_credit_name,
+                    username: section.card_credit_nullverse_username,
+                    url: section.card_credit_url,
+                    note: section.card_credit_note,
+                    ownerUsername: currentWorld.ownerProfile?.username
+                })}
 
 </article>
 `;
@@ -1528,6 +1537,25 @@
             }
 
             nav.style.display = "block";
+
+            const oldIndexCredit =
+                nav.querySelector(".credit-pill");
+
+            if (oldIndexCredit) {
+                oldIndexCredit.remove();
+            }
+
+            nav.insertAdjacentHTML(
+                "beforeend",
+                buildCreditPill({
+                    type: currentWorld.index_credit_type,
+                    name: currentWorld.index_credit_name,
+                    username: currentWorld.index_credit_nullverse_username,
+                    url: currentWorld.index_credit_url,
+                    note: currentWorld.index_credit_note,
+                    ownerUsername: currentWorld.ownerProfile?.username
+                })
+            );
 
             const types = [...new Set(
                 sections
@@ -2132,6 +2160,63 @@
                 creditName ||
                 formatCreditType(type)
             );
+        }
+
+        function buildCreditPill({
+            type,
+            name,
+            username,
+            url,
+            note,
+            ownerUsername,
+            labelPrefix = "Artwork by"
+        }) {
+            type = type || "no_credit_needed";
+
+            if (type === "no_credit_needed") {
+                return "";
+            }
+
+            let label = "";
+            let href = "";
+
+            if (type === "own_work") {
+                label = `${labelPrefix} @${ownerUsername || "creator"}`;
+
+                if (ownerUsername) {
+                    href = `profile.html?user=${encodeURIComponent(ownerUsername)}`;
+                }
+            } else if (type === "nullverse_creator" && username) {
+                label = `${labelPrefix} @${username}`;
+                href = `profile.html?user=${encodeURIComponent(username)}`;
+            } else {
+                label = name || formatCreditType(type);
+                href = url || "";
+            }
+
+            const tooltip = note
+                ? `<span class="credit-tooltip">${escapeHtml(note)}</span>`
+                : "";
+
+            const safeLabel = escapeHtml(label);
+
+            if (href) {
+                return `
+            <a class="credit-pill"
+               href="${escapeHtml(href)}"
+               ${href.startsWith("http") ? 'target="_blank"' : ""}>
+                ${safeLabel}
+                ${tooltip}
+            </a>
+        `;
+            }
+
+            return `
+        <span class="credit-pill">
+            ${safeLabel}
+            ${tooltip}
+        </span>
+    `;
         }
 
         function buildImageCreditLine(section) {
