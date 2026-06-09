@@ -249,7 +249,7 @@
             background: var(--card-bg);
             border: 1px solid var(--border-color);
             border-radius: 18px;
-            overflow: hidden;
+            overflow: visible;
             display: grid;
             grid-template-columns: 180px 1fr;
             min-height: 150px;
@@ -280,6 +280,75 @@
                 object-fit: cover;
                 display: block;
             }
+
+        .world-cover-wrap {
+            position: relative;
+            width: 180px;
+            min-height: 150px;
+            max-height: 190px;
+            overflow: visible;
+            background: #111;
+        }
+
+        .world-cover {
+            overflow: hidden;
+            border-radius: 18px 0 0 18px;
+        }
+
+        .world-card-credit-pill {
+            position: absolute;
+            left: 10px;
+            bottom: 10px;
+            z-index: 8;
+            display: inline-flex;
+            align-items: center;
+            max-width: calc(100% - 20px);
+            padding: 6px 9px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.16);
+            background: rgba(0,0,0,.62);
+            color: white;
+            font-size: .68rem;
+            text-decoration: none;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            white-space: nowrap;
+        }
+
+            .world-card-credit-pill:hover {
+                background: rgba(0,0,0,.78);
+            }
+
+        .world-card-credit-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .world-card-credit-tooltip {
+            position: absolute;
+            left: 0;
+            bottom: calc(100% + 8px);
+            width: 220px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(0,0,0,.92);
+            border: 1px solid rgba(255,255,255,.16);
+            color: var(--text-secondary);
+            font-size: .76rem;
+            line-height: 1.45;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            white-space: normal;
+            box-shadow: 0 12px 28px rgba(0,0,0,.35);
+        }
+
+        .world-card-credit-pill:hover .world-card-credit-tooltip,
+        .world-card-credit-pill.show-tooltip .world-card-credit-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
 
         .world-body {
             padding: 18px;
@@ -487,6 +556,17 @@
                     min-height: 150px;
                     max-height: 150px;
                 }
+
+            .world-cover-wrap {
+                width: 100%;
+                height: 150px;
+                min-height: 150px;
+                max-height: 150px;
+            }
+
+            .world-cover {
+                border-radius: 18px 18px 0 0;
+            }
         }
     </style>
 </head>
@@ -601,6 +681,35 @@
 
         const currentUser = await requireBetaAccess();
         setupNotificationBadge();
+
+        document.addEventListener("click", (e) => {
+            const pill = e.target.closest(".world-card-credit-pill");
+
+            document.querySelectorAll(".world-card-credit-pill").forEach(p => {
+                if (p !== pill) {
+                    p.classList.remove("show-tooltip");
+                }
+            });
+
+            if (pill) {
+                e.preventDefault();
+
+                if (pill.classList.contains("show-tooltip")) {
+                    const href = pill.getAttribute("href");
+
+                    if (href && href !== "#") {
+                        window.open(
+                            href,
+                            href.startsWith("http") ? "_blank" : "_self"
+                        );
+                    }
+
+                    return;
+                }
+
+                pill.classList.add("show-tooltip");
+            }
+        });
 
         let blockedUserIds = [];
         let blockedContentWarnings = [];
@@ -920,30 +1029,120 @@
         }
 
         function renderWorldCard(world) {
-            const coverImage = world.cover_image_url || "https://placehold.co/1000x500/1b1b28/ffffff?text=World";
-            const creatorName = world.profile?.display_name || world.profile?.username || "Unknown Creator";
-            const username = world.profile?.username || "";
+            const coverImage =
+                world.theme_overview_card_image_url ||
+                world.cover_image_url ||
+                "https://placehold.co/1000x500/1b1b28/ffffff?text=World";
+
+            const creatorName =
+                world.profile?.display_name ||
+                world.profile?.username ||
+                "Unknown Creator";
+
+            const username =
+                world.profile?.username || "";
 
             return `
-                <article class="world-card">
-                    <a class="world-cover" href="world.html?id=${encodeURIComponent(world.id)}">
-                        <img src="${escapeAttribute(coverImage)}" alt="${escapeAttribute(world.title || "World cover")}">
-                    </a>
-                    <div class="world-body">
-                        <div class="world-meta">
-                            By ${username
+        <article class="world-card">
+            <div class="world-cover-wrap">
+                <a class="world-cover"
+                   href="world.html?id=${encodeURIComponent(world.id)}">
+                    <img
+                        src="${escapeAttribute(coverImage)}"
+                        alt="${escapeAttribute(world.title || "World cover")}">
+                </a>
+
+                ${buildWorldCardCreditPill(world)}
+            </div>
+
+            <div class="world-body">
+                <div class="world-meta">
+                    By ${username
                     ? `<a style="color:#bdbdca;" href="profile.html?user=${encodeURIComponent(username)}">${escapeHtml(creatorName)}</a>`
                     : escapeHtml(creatorName)}
-                            · ♥ ${world.likeCount || 0}
-                        </div>
-                        <h3>
-                            <a href="world.html?id=${encodeURIComponent(world.id)}">${escapeHtml(world.title || "Untitled World")}</a>
-                        </h3>
-                        <p>${escapeHtml(world.summary || "No summary yet.")}</p>
-                        <div>${renderTags(world)}</div>
-                    </div>
-                </article>
-            `;
+                    · ♥ ${world.likeCount || 0}
+                </div>
+
+                <h3>
+                    <a href="world.html?id=${encodeURIComponent(world.id)}">
+                        ${escapeHtml(world.title || "Untitled World")}
+                    </a>
+                </h3>
+
+                <p>${escapeHtml(world.summary || "No summary yet.")}</p>
+
+                <div>${renderTags(world)}</div>
+            </div>
+        </article>
+    `;
+        }
+
+        function buildWorldCardCreditPill(world) {
+            const type = world.overview_card_credit_type || "no_credit_needed";
+
+            if (type === "no_credit_needed") {
+                return "";
+            }
+
+            let source = "";
+            let href = "";
+
+            if (type === "own_work") {
+                const username = world.profile?.username || "";
+                source = `@${username || "creator"}`;
+
+                if (username) {
+                    href = `profile.html?user=${encodeURIComponent(username)}`;
+                }
+            } else if (
+                type === "nullverse_creator" &&
+                world.overview_card_credit_nullverse_username
+            ) {
+                const username = world.overview_card_credit_nullverse_username;
+                source = `@${username}`;
+                href = `profile.html?user=${encodeURIComponent(username)}`;
+            } else {
+                source =
+                    world.overview_card_credit_name ||
+                    formatCreditType(type);
+
+                href = world.overview_card_credit_url || "";
+            }
+
+            const shortLabel = `Image Credit: ${source}`;
+
+            const tooltip = `
+        <span class="world-card-credit-tooltip">
+            <strong>Overview Image Credit</strong>
+            <br>
+            Source: ${escapeHtml(source)}
+            ${world.overview_card_credit_note
+                    ? `<br><br>${escapeHtml(world.overview_card_credit_note)}`
+                    : ""}
+        </span>
+    `;
+
+            if (!href) {
+                return `
+            <span class="world-card-credit-pill">
+                <span class="world-card-credit-label">
+                    ${escapeHtml(shortLabel)}
+                </span>
+                ${tooltip}
+            </span>
+        `;
+            }
+
+            return `
+        <a class="world-card-credit-pill"
+           href="${escapeHtml(href)}"
+           ${href.startsWith("http") ? 'target="_blank"' : ""}>
+            <span class="world-card-credit-label">
+                ${escapeHtml(shortLabel)}
+            </span>
+            ${tooltip}
+        </a>
+    `;
         }
 
         function renderTags(world) {
@@ -1030,6 +1229,12 @@
 
             const randomWorld = pool[Math.floor(Math.random() * pool.length)];
             window.location.href = `world.html?id=${encodeURIComponent(randomWorld.id)}`;
+        }
+
+        function formatCreditType(value) {
+            return String(value || "")
+                .replaceAll("_", " ")
+                .replace(/\b\w/g, letter => letter.toUpperCase());
         }
 
         function escapeHtml(value) {
