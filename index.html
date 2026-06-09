@@ -331,6 +331,39 @@
                 display: block;
             }
 
+        .world-cover-wrap {
+            position: relative;
+            width: 180px;
+            min-height: 150px;
+            max-height: 190px;
+            overflow: hidden;
+            background: var(--bg-primary);
+        }
+
+        .world-card-credit-pill {
+            position: absolute;
+            left: 10px;
+            bottom: 10px;
+            z-index: 5;
+            max-width: calc(100% - 20px);
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.16);
+            background: rgba(0,0,0,.58);
+            color: white;
+            font-size: .72rem;
+            text-decoration: none;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+            .world-card-credit-pill:hover {
+                background: rgba(0,0,0,.75);
+            }
+
         .world-body {
             padding: 18px;
             min-width: 0;
@@ -497,6 +530,13 @@
                     min-height: 150px;
                     max-height: 150px;
                 }
+
+            .world-cover-wrap {
+                width: 100%;
+                height: 150px;
+                min-height: 150px;
+                max-height: 150px;
+            }
         }
     </style>
 </head>
@@ -1049,6 +1089,7 @@
 
         function renderWorldCard(world) {
             const coverImage =
+                world.theme_overview_card_image_url ||
                 world.cover_image_url ||
                 "https://placehold.co/1000x500/1b1b28/ffffff?text=World";
 
@@ -1061,37 +1102,91 @@
                 world.creator?.username || "";
 
             return `
-                        <article class="world-card">
-                            <a href="world.html?id=${encodeURIComponent(world.id)}"
-                               class="world-cover">
-                                <img
-                                    src="${escapeHtml(coverImage)}"
-                                    alt="${escapeHtml(world.title || "World cover")}"
-                                >
-                            </a>
+        <article class="world-card">
+            <div class="world-cover-wrap">
+                <a href="world.html?id=${encodeURIComponent(world.id)}"
+                   class="world-cover">
+                    <img
+                        src="${escapeHtml(coverImage)}"
+                        alt="${escapeHtml(world.title || "World cover")}"
+                    >
+                </a>
 
-                            <div class="world-body">
-                                <div class="world-meta">
-                                    By ${username
+                ${buildWorldCardCreditPill(world)}
+            </div>
+
+            <div class="world-body">
+                <div class="world-meta">
+                    By ${username
                     ? `<a style="color:#bdbdca;" href="profile.html?user=${encodeURIComponent(username)}">${escapeHtml(creatorName)}</a>`
                     : escapeHtml(creatorName)}
-                                    ${world.like_count ? ` • ${world.like_count} likes` : ""}
-                                </div>
+                    ${world.like_count ? ` • ${world.like_count} likes` : ""}
+                </div>
 
-                                <h3>
-                                    <a href="world.html?id=${encodeURIComponent(world.id)}">
-                                        ${escapeHtml(world.title || "Untitled World")}
-                                    </a>
-                                </h3>
+                <h3>
+                    <a href="world.html?id=${encodeURIComponent(world.id)}">
+                        ${escapeHtml(world.title || "Untitled World")}
+                    </a>
+                </h3>
 
-                                <p>${escapeHtml(world.summary || "No summary yet.")}</p>
+                <p>${escapeHtml(world.summary || "No summary yet.")}</p>
 
-                                <div>
-                                    ${renderTags(world)}
-                                </div>
-                            </div>
-                        </article>
-                    `;
+                <div>
+                    ${renderTags(world)}
+                </div>
+            </div>
+        </article>
+    `;
+        }
+        
+
+        function buildWorldCardCreditPill(world) {
+            const type = world.overview_card_credit_type || "no_credit_needed";
+
+            if (type === "no_credit_needed") {
+                return "";
+            }
+
+            let label = "";
+            let href = "";
+
+            if (type === "own_work") {
+                const username = world.creator?.username || "";
+                label = `Overview Image Credit: @${username || "creator"}`;
+
+                if (username) {
+                    href = `profile.html?user=${encodeURIComponent(username)}`;
+                }
+            } else if (
+                type === "nullverse_creator" &&
+                world.overview_card_credit_nullverse_username
+            ) {
+                const username = world.overview_card_credit_nullverse_username;
+                label = `Overview Image Credit: @${username}`;
+                href = `profile.html?user=${encodeURIComponent(username)}`;
+            } else {
+                label = `Overview Image Credit: ${world.overview_card_credit_name ||
+                    formatCreditType(type)
+                    }`;
+
+                href = world.overview_card_credit_url || "";
+            }
+
+            if (!href) {
+                return `
+            <span class="world-card-credit-pill">
+                ${escapeHtml(label)}
+            </span>
+        `;
+            }
+
+            return `
+        <a class="world-card-credit-pill"
+           href="${escapeHtml(href)}"
+           ${href.startsWith("http") ? 'target="_blank"' : ""}>
+            ${escapeHtml(label)}
+        </a>
+    `;
         }
 
         function renderTags(world) {
@@ -1106,6 +1201,12 @@
             return tags.map(tag =>
                 `<span class="tag">${escapeHtml(tag)}</span>`
             ).join("");
+        }
+
+        function formatCreditType(value) {
+            return String(value || "")
+                .replaceAll("_", " ")
+                .replace(/\b\w/g, letter => letter.toUpperCase());
         }
 
         function escapeHtml(value) {
