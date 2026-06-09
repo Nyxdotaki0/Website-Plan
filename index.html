@@ -344,25 +344,56 @@
             position: absolute;
             left: 10px;
             bottom: 10px;
-            z-index: 5;
+            z-index: 8;
+            display: inline-flex;
+            align-items: center;
             max-width: calc(100% - 20px);
-            padding: 6px 10px;
+            padding: 6px 9px;
             border-radius: 999px;
             border: 1px solid rgba(255,255,255,.16);
-            background: rgba(0,0,0,.58);
+            background: rgba(0,0,0,.62);
             color: white;
-            font-size: .72rem;
+            font-size: .68rem;
             text-decoration: none;
             backdrop-filter: blur(14px);
             -webkit-backdrop-filter: blur(14px);
             white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
 
             .world-card-credit-pill:hover {
-                background: rgba(0,0,0,.75);
+                background: rgba(0,0,0,.78);
             }
+
+        .world-card-credit-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .world-card-credit-tooltip {
+            position: absolute;
+            left: 0;
+            bottom: calc(100% + 8px);
+            width: 220px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(0,0,0,.92);
+            border: 1px solid rgba(255,255,255,.16);
+            color: var(--text-secondary);
+            font-size: .76rem;
+            line-height: 1.45;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            white-space: normal;
+            box-shadow: 0 12px 28px rgba(0,0,0,.35);
+        }
+
+        .world-card-credit-pill:hover .world-card-credit-tooltip,
+        .world-card-credit-pill.show-tooltip .world-card-credit-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
 
         .world-body {
             padding: 18px;
@@ -739,6 +770,35 @@
             resetFeed("popular"),
             loadMiniLists()
         ]);
+
+        document.addEventListener("click", (e) => {
+            const pill = e.target.closest(".world-card-credit-pill");
+
+            document.querySelectorAll(".world-card-credit-pill").forEach(p => {
+                if (p !== pill) {
+                    p.classList.remove("show-tooltip");
+                }
+            });
+
+            if (pill) {
+                e.preventDefault();
+
+                if (pill.classList.contains("show-tooltip")) {
+                    const href = pill.getAttribute("href");
+
+                    if (href && href !== "#") {
+                        window.open(
+                            href,
+                            href.startsWith("http") ? "_blank" : "_self"
+                        );
+                    }
+
+                    return;
+                }
+
+                pill.classList.add("show-tooltip");
+            }
+        });
 
         window.addEventListener("scroll", async () => {
             if (loadingFeed || feedFinished) return;
@@ -1147,12 +1207,12 @@
                 return "";
             }
 
-            let label = "";
+            let source = "";
             let href = "";
 
             if (type === "own_work") {
                 const username = world.creator?.username || "";
-                label = `Overview Image Credit: @${username || "creator"}`;
+                source = `@${username || "creator"}`;
 
                 if (username) {
                     href = `profile.html?user=${encodeURIComponent(username)}`;
@@ -1162,20 +1222,36 @@
                 world.overview_card_credit_nullverse_username
             ) {
                 const username = world.overview_card_credit_nullverse_username;
-                label = `Overview Image Credit: @${username}`;
+                source = `@${username}`;
                 href = `profile.html?user=${encodeURIComponent(username)}`;
             } else {
-                label = `Overview Image Credit: ${world.overview_card_credit_name ||
-                    formatCreditType(type)
-                    }`;
+                source =
+                    world.overview_card_credit_name ||
+                    formatCreditType(type);
 
                 href = world.overview_card_credit_url || "";
             }
 
+            const shortLabel = `Image Credit: ${source}`;
+
+            const tooltip = `
+        <span class="world-card-credit-tooltip">
+            <strong>Overview Image Credit</strong>
+            <br>
+            Source: ${escapeHtml(source)}
+            ${world.overview_card_credit_note
+                    ? `<br><br>${escapeHtml(world.overview_card_credit_note)}`
+                    : ""}
+        </span>
+    `;
+
             if (!href) {
                 return `
             <span class="world-card-credit-pill">
-                ${escapeHtml(label)}
+                <span class="world-card-credit-label">
+                    ${escapeHtml(shortLabel)}
+                </span>
+                ${tooltip}
             </span>
         `;
             }
@@ -1184,7 +1260,10 @@
         <a class="world-card-credit-pill"
            href="${escapeHtml(href)}"
            ${href.startsWith("http") ? 'target="_blank"' : ""}>
-            ${escapeHtml(label)}
+            <span class="world-card-credit-label">
+                ${escapeHtml(shortLabel)}
+            </span>
+            ${tooltip}
         </a>
     `;
         }
