@@ -237,6 +237,67 @@
             box-shadow: 0 12px 28px rgba(0,0,0,0.22);
         }
 
+        .addition-image-wrap {
+            position: relative;
+            overflow: visible;
+            margin: 14px 0 18px;
+        }
+
+            .addition-image-wrap .addition-image {
+                margin: 0;
+            }
+
+        .addition-credit-pill {
+            position: absolute;
+            left: 10px;
+            bottom: 10px;
+            z-index: 8;
+            display: inline-flex;
+            align-items: center;
+            max-width: calc(100% - 20px);
+            padding: 6px 9px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.16);
+            background: rgba(0,0,0,.62);
+            color: white;
+            font-size: .68rem;
+            text-decoration: none;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            white-space: nowrap;
+        }
+
+        .addition-credit-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .addition-credit-tooltip {
+            position: absolute;
+            left: 0;
+            bottom: calc(100% + 8px);
+            width: 220px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(0,0,0,.92);
+            border: 1px solid rgba(255,255,255,.16);
+            color: var(--text-secondary);
+            font-size: .76rem;
+            line-height: 1.45;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            white-space: normal;
+            box-shadow: 0 12px 28px rgba(0,0,0,.35);
+        }
+
+        .addition-credit-pill:hover .addition-credit-tooltip,
+        .addition-credit-pill.show-tooltip .addition-credit-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+
         .author {
             color: var(--text-muted);
             margin-bottom: 12px;
@@ -758,13 +819,17 @@
                                 (@${escapeHtml(username)})
                             </div>
 
-                            ${addition.image_url ? `
-                                <img
-                                    class="addition-image"
-                                    src="${escapeHtml(addition.image_url)}"
-                                    alt="${escapeHtml(addition.title || "Addition image")}"
-                                >
-                            ` : ""}
+                            ${getAdditionCoverUrl(addition) ? `
+    <div class="addition-image-wrap">
+        <img
+            class="addition-image"
+            src="${escapeHtml(getAdditionCoverUrl(addition))}"
+            alt="${escapeHtml(addition.title || "Addition image")}"
+        >
+
+        ${buildAdditionCreditPill(addition, username)}
+    </div>
+` : ""}
 
                             <p style="white-space:pre-wrap;">
                                 ${escapeHtml(addition.content || "")}
@@ -953,6 +1018,112 @@
         document
             .getElementById("addition-type-filter")
             .addEventListener("change", filterAndRenderAdditions);
+
+        document.addEventListener("click", (e) => {
+            const pill = e.target.closest(".addition-credit-pill");
+
+            document.querySelectorAll(".addition-credit-pill").forEach(p => {
+                if (p !== pill) {
+                    p.classList.remove("show-tooltip");
+                }
+            });
+
+            if (!pill) return;
+
+            e.preventDefault();
+
+            if (pill.classList.contains("show-tooltip")) {
+                const href = pill.getAttribute("href");
+
+                if (href && href !== "#") {
+                    window.open(
+                        href,
+                        href.startsWith("http") ? "_blank" : "_self"
+                    );
+                }
+
+                return;
+            }
+
+            pill.classList.add("show-tooltip");
+        });
+
+        function getAdditionCoverUrl(addition) {
+            return addition.cover_image_url || addition.image_url || "";
+        }
+
+        function buildAdditionCreditPill(addition, ownerUsername) {
+            const type = addition.cover_credit_type || "no_credit_needed";
+
+            if (type === "no_credit_needed") {
+                return "";
+            }
+
+            let source = "";
+            let href = "";
+
+            if (type === "own_work") {
+                source = `@${ownerUsername || "creator"}`;
+
+                if (ownerUsername) {
+                    href = `profile.html?user=${encodeURIComponent(ownerUsername)}`;
+                }
+            } else if (
+                type === "nullverse_creator" &&
+                addition.cover_credit_nullverse_username
+            ) {
+                const username = addition.cover_credit_nullverse_username;
+                source = `@${username}`;
+                href = `profile.html?user=${encodeURIComponent(username)}`;
+            } else {
+                source =
+                    addition.cover_credit_name ||
+                    formatCreditType(type);
+
+                href = addition.cover_credit_url || "";
+            }
+
+            const label = `Image Credit: ${source}`;
+
+            const tooltip = `
+        <span class="addition-credit-tooltip">
+            <strong>Cover Image Credit</strong>
+            <br>
+            Source: ${escapeHtml(source)}
+            ${addition.cover_credit_note
+                    ? `<br><br>${escapeHtml(addition.cover_credit_note)}`
+                    : ""}
+        </span>
+    `;
+
+            if (!href) {
+                return `
+            <span class="addition-credit-pill">
+                <span class="addition-credit-label">
+                    ${escapeHtml(label)}
+                </span>
+                ${tooltip}
+            </span>
+        `;
+            }
+
+            return `
+        <a class="addition-credit-pill"
+           href="${escapeHtml(href)}"
+           ${href.startsWith("http") ? 'target="_blank"' : ""}>
+            <span class="addition-credit-label">
+                ${escapeHtml(label)}
+            </span>
+            ${tooltip}
+        </a>
+    `;
+        }
+
+        function formatCreditType(value) {
+            return String(value || "")
+                .replaceAll("_", " ")
+                .replace(/\b\w/g, letter => letter.toUpperCase());
+        }
 
         function escapeHtml(value) {
             return String(value || "")
