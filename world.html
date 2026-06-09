@@ -139,7 +139,7 @@
 
         .hero {
             position: relative;
-            overflow: hidden;
+            overflow: visible;
             background: var( --hero-background, linear-gradient( 135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02) ) ), var(--panel-bg);
             border: 1px solid var(--border-color);
             border-radius: 22px;
@@ -252,7 +252,7 @@
 
         .section-nav {
             position: relative;
-            overflow: hidden;
+            overflow: visible;
             background: var(--world-index-background, var(--panel-bg));
             color: var(--world-index-text, var(--text-primary));
             border: 1px solid var(--border-color);
@@ -567,12 +567,17 @@
             visibility: visible;
         }
 
+        .credit-pill.show-tooltip .credit-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+
         .hero {
             padding-bottom: 70px;
         }
 
         .section-nav {
-            padding-bottom: 64px;
+            padding-bottom: 85px;
         }
 
         .world-section {
@@ -618,11 +623,15 @@
 
             .hero {
                 padding: 24px;
+                padding-bottom: 90px;
             }
 
             .like-row {
                 align-items: flex-start;
                 flex-wrap: wrap;
+            }
+            .section-nav {
+                padding-bottom: 95px;
             }
         }
     </style>
@@ -855,6 +864,21 @@
             await loadWorld(worldId);
         }
 
+        document.addEventListener("click", (e) => {
+            const pill = e.target.closest(".credit-pill");
+
+            document.querySelectorAll(".credit-pill").forEach(p => {
+                if (p !== pill) {
+                    p.classList.remove("show-tooltip");
+                }
+            });
+
+            if (pill) {
+                e.preventDefault();
+                pill.classList.toggle("show-tooltip");
+            }
+        });
+
         async function areUsersBlocked(userA, userB) {
             const { data, error } = await supabase
                 .from("user_blocks")
@@ -1032,7 +1056,8 @@
                         username: world.background_credit_nullverse_username,
                         url: world.background_credit_url,
                         note: world.background_credit_note,
-                        ownerUsername: world.ownerProfile?.username
+                        ownerUsername: world.ownerProfile?.username,
+                        context: "Background Image"
                     })
                 );
 
@@ -1064,7 +1089,8 @@
                     username: world.overview_card_credit_nullverse_username,
                     url: world.overview_card_credit_url,
                     note: world.overview_card_credit_note,
-                    ownerUsername: profile?.username
+                    ownerUsername: profile?.username,
+                    context: "Overview Image"
                 })
             );
 
@@ -1520,8 +1546,9 @@
             username: section.image_credit_nullverse_username,
             url: section.image_credit_url,
             note: section.image_credit_note,
-            ownerUsername: currentWorld.ownerProfile?.username
-        })}
+            ownerUsername: currentWorld.ownerProfile?.username,
+            context: "Section Image"
+        }) }
     </div>
 ` : ""}
 
@@ -1535,8 +1562,9 @@
                     username: section.card_credit_nullverse_username,
                     url: section.card_credit_url,
                     note: section.card_credit_note,
-                    ownerUsername: currentWorld.ownerProfile?.username
-                })}
+                    ownerUsername: currentWorld.ownerProfile?.username,
+                    context: "Section Card Image"
+                }) }
 
 </article>
 `;
@@ -1572,7 +1600,8 @@
                     username: currentWorld.index_credit_nullverse_username,
                     url: currentWorld.index_credit_url,
                     note: currentWorld.index_credit_note,
-                    ownerUsername: currentWorld.ownerProfile?.username
+                    ownerUsername: currentWorld.ownerProfile?.username,
+                    context: "Index Image"
                 })
             );
 
@@ -2187,7 +2216,8 @@
             username,
             url,
             note,
-            ownerUsername
+            ownerUsername,
+            context = "Image"
         }) {
             type = type || "no_credit_needed";
 
@@ -2199,22 +2229,31 @@
             let href = "";
 
             if (type === "own_work") {
-                label = `Credit: @${ownerUsername || "creator"}`;
+                label = `${context} Credit: @${ownerUsername || "creator"}`;
 
                 if (ownerUsername) {
                     href = `profile.html?user=${encodeURIComponent(ownerUsername)}`;
                 }
             } else if (type === "nullverse_creator" && username) {
-                label = `Credit: @${username}`;
+                label = `${context} Credit: @${username}`;
                 href = `profile.html?user=${encodeURIComponent(username)}`;
             } else {
-                label = `Credit: ${name || formatCreditType(type)}`;
+                label = `${context} Credit: ${name || formatCreditType(type)}`;
                 href = url || "";
             }
 
-            const tooltip = note
-                ? `<span class="credit-tooltip">${escapeHtml(note)}</span>`
-                : "";
+            const tooltipContent = `
+        <strong>${escapeHtml(context)} Credit</strong>
+        <br>
+        Source: ${escapeHtml(name || username || ownerUsername || formatCreditType(type))}
+        ${note ? `<br><br>${escapeHtml(note)}` : ""}
+    `;
+
+            const tooltip = `
+        <span class="credit-tooltip">
+            ${tooltipContent}
+        </span>
+    `;
 
             if (href) {
                 return `
