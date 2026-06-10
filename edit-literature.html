@@ -583,7 +583,35 @@
             if (!filtered.length) { container.innerHTML = `<p class="muted">No chapters yet.</p>`; return; }
             container.innerHTML = filtered.map(chapter => {
                 const realIndex = allChapters.findIndex(c => c.id === chapter.id);
-                return `<div class="chapter-card" id="chapter-${chapter.id}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:start;"><div style="flex:1;" onclick="openChapter('${chapter.id}')"><strong>Chapter ${realIndex + 1}: ${escapeHtml(chapter.title || "Untitled")}</strong><p>${escapeHtml(chapter.visibility || "draft")}${chapter.subtitle ? ` · ${escapeHtml(chapter.subtitle)}` : ""}</p></div><div style="display:flex;flex-direction:column;gap:6px;"><button class="move-button" onclick="event.stopPropagation();moveChapter(${realIndex},-1)">↑</button><button class="move-button" onclick="event.stopPropagation();moveChapter(${realIndex},1)">↓</button></div></div></div>`;
+                return `
+<div class="chapter-card"
+         id="chapter-${chapter.id}"
+         onclick="openChapter('${chapter.id}')">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:start;">
+            <div style="flex:1;">
+                <strong>
+                    Chapter ${realIndex + 1}: ${escapeHtml(chapter.title || "Untitled")}
+                </strong>
+                <p>
+                    ${escapeHtml(chapter.visibility || "draft")}
+                    ${chapter.subtitle ? ` · ${escapeHtml(chapter.subtitle)}` : ""}
+                </p>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:6px;">
+                <button class="move-button"
+                        onclick="event.stopPropagation();moveChapter(${realIndex},-1)">
+                    ↑
+                </button>
+
+                <button class="move-button"
+                        onclick="event.stopPropagation();moveChapter(${realIndex},1)">
+                    ↓
+                </button>
+            </div>
+        </div>
+</div>
+`;
             }).join("");
         }
         window.filterChapters = function () { renderChapters(); };
@@ -636,27 +664,174 @@ ${buildCreditFields("index", "Index Image Credit")}
         };
         window.openAppearanceSettings = function () {
             currentChapter = null;
-            document.querySelectorAll(".chapter-card").forEach(card => card.classList.remove("active"));
+
+            document.querySelectorAll(".chapter-card")
+                .forEach(card => card.classList.remove("active"));
+
             document.getElementById("appearance-card").classList.add("active");
+
             document.getElementById("editor-content").innerHTML = `
-<div class="panel"><h2>Reader Appearance</h2><p class="muted">Customize the overall literature reader background and mood.</p>
-<label>Theme Name</label><input id="theme-name" value="${escapeHtml(currentLiterature.theme_name || "")}" placeholder="Example: Candlelit Archive">
-<label style="display:flex;align-items:center;gap:10px;"><input id="theme-gradient-enabled" type="checkbox" style="width:auto;" ${currentLiterature.theme_gradient_enabled ? "checked" : ""}>Enable Gradient Background</label>
-<label>Gradient Colors</label><div class="connected-color-picker"><input id="theme-gradient-color-1" type="color" value="${currentLiterature.theme_gradient_color_1 || "#000000"}"><div id="gradient-preview" class="connected-gradient"></div><input id="theme-gradient-color-2" type="color" value="${currentLiterature.theme_gradient_color_2 || "#1a1a1a"}"></div>
-<label>Background Artwork</label>
-<div id="background-art-preview" class="background-art-preview"><div id="background-art-preview-image" class="background-art-preview-image"></div><div id="background-art-preview-overlay" class="background-art-preview-overlay"></div><div class="preview-reader-content"><div class="preview-reader-card"><h2>${escapeHtml(currentLiterature.title || "Literature Title")}</h2><p>This is how the reader background will feel behind your chapters.</p></div></div>${buildCreditPill("background")}</div>
-<div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;"><input id="literature-background-input" type="file" accept="image/*" style="margin-bottom:0;"><button type="button" class="button danger-button" onclick="removeBackgroundImage()">Remove Image</button></div>
-${buildCreditFields("background", "Reader Background Credit")}
-<label>Artwork Horizontal Position</label><input id="theme-background-position-x" type="range" min="0" max="100" step="1" value="${currentLiterature.theme_background_position_x ?? 50}">
-<label>Artwork Vertical Position</label><input id="theme-background-position-y" type="range" min="0" max="100" step="1" value="${currentLiterature.theme_background_position_y ?? 50}">
-<label>Artwork Zoom</label><input id="theme-background-zoom" type="range" min="50" max="250" step="5" value="${currentLiterature.theme_background_zoom ?? 100}">
-<label>Artwork Opacity</label><input id="theme-background-image-opacity" type="range" min="0" max="1" step=".05" value="${currentLiterature.theme_background_image_opacity ?? .35}">
-<label>Artwork Blur</label><input id="theme-background-image-blur" type="range" min="0" max="12" step="1" value="${currentLiterature.theme_background_image_blur ?? 0}">
-<label>Dark Overlay Strength</label><input id="theme-background-overlay-strength" type="range" min="0" max=".85" step=".05" value="${currentLiterature.theme_background_overlay_strength ?? .35}">
-<label>Artwork Size</label><select id="theme-background-image-size"><option value="cover" ${currentLiterature.theme_background_image_size === "cover" ? "selected" : ""}>Cover</option><option value="contain" ${currentLiterature.theme_background_image_size === "contain" ? "selected" : ""}>Contain</option><option value="auto" ${currentLiterature.theme_background_image_size === "auto" ? "selected" : ""}>Original Size</option></select>
-<label>Repeat Artwork</label><select id="theme-background-image-repeat"><option value="no-repeat" ${currentLiterature.theme_background_image_repeat === "no-repeat" ? "selected" : ""}>No Repeat</option><option value="repeat" ${currentLiterature.theme_background_image_repeat === "repeat" ? "selected" : ""}>Repeat</option><option value="repeat-y" ${currentLiterature.theme_background_image_repeat === "repeat-y" ? "selected" : ""}>Repeat Down Page</option></select>
-<button class="button" onclick="saveAppearanceSettings()">Save Appearance</button><p id="message" class="message"></p></div>`;
-            initializeAppearanceControls(); setCreditValues("background", currentLiterature, "background"); setImageCreditVisible("background", !!currentLiterature.theme_background_image_url);
+<div class="panel">
+        <h2>Reader Appearance</h2>
+        <p class="muted">
+            Customize the overall literature reader background and mood.
+            This can use the default Nullverse theme, a solid color, a gradient, or background artwork.
+        </p>
+
+        <label>Theme Name</label>
+        <input id="theme-name"
+               value="${escapeHtml(currentLiterature.theme_name || "")}"
+               placeholder="Example: Candlelit Archive">
+
+        <label>Reader Background Style</label>
+        <div class="style-choice-grid">
+            <button type="button" class="style-choice" data-reader-bg-style="default">Default</button>
+            <button type="button" class="style-choice" data-reader-bg-style="solid">Solid</button>
+            <button type="button" class="style-choice" data-reader-bg-style="gradient">Gradient</button>
+            <button type="button" class="style-choice" data-reader-bg-style="image">Image</button>
+        </div>
+
+        <input id="theme-background-style"
+               type="hidden"
+               value="${currentLiterature.theme_background_style || "default"}">
+
+        <label>Reader Background Colors</label>
+        <div class="connected-color-picker">
+            <input id="theme-background-color-1"
+                   type="color"
+                   value="${currentLiterature.theme_background_color_1 || currentLiterature.theme_gradient_color_1 || "#050505"}">
+
+            <div id="reader-bg-color-preview" class="connected-gradient"></div>
+
+            <input id="theme-background-color-2"
+                   type="color"
+                   value="${currentLiterature.theme_background_color_2 || currentLiterature.theme_gradient_color_2 || "#000000"}">
+        </div>
+
+        <label style="display:flex;align-items:center;gap:10px;">
+            <input id="theme-gradient-enabled"
+                   type="checkbox"
+                   style="width:auto;"
+                   ${currentLiterature.theme_gradient_enabled ? "checked" : ""}>
+            Enable Gradient Background
+        </label>
+
+        <label>Legacy Gradient Colors</label>
+        <div class="connected-color-picker">
+            <input id="theme-gradient-color-1"
+                   type="color"
+                   value="${currentLiterature.theme_gradient_color_1 || "#000000"}">
+
+            <div id="gradient-preview" class="connected-gradient"></div>
+
+            <input id="theme-gradient-color-2"
+                   type="color"
+                   value="${currentLiterature.theme_gradient_color_2 || "#1a1a1a"}">
+        </div>
+
+        <label>Background Artwork</label>
+        <div id="background-art-preview" class="background-art-preview">
+            <div id="background-art-preview-image" class="background-art-preview-image"></div>
+            <div id="background-art-preview-overlay" class="background-art-preview-overlay"></div>
+
+            <div class="preview-reader-content">
+                <div class="preview-reader-card">
+                    <h2>${escapeHtml(currentLiterature.title || "Literature Title")}</h2>
+                    <p>This is how the reader background will feel behind your chapters.</p>
+                </div>
+            </div>
+
+            ${buildCreditPill("background")}
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;">
+            <input id="literature-background-input"
+                   type="file"
+                   accept="image/*"
+                   style="margin-bottom:0;">
+
+            <button type="button"
+                    class="button danger-button"
+                    onclick="removeBackgroundImage()">
+                Remove Image
+            </button>
+        </div>
+
+        ${buildCreditFields("background", "Reader Background Credit")}
+
+        <label>Artwork Horizontal Position</label>
+        <input id="theme-background-position-x"
+               type="range"
+               min="0"
+               max="100"
+               step="1"
+               value="${currentLiterature.theme_background_position_x ?? 50}">
+
+        <label>Artwork Vertical Position</label>
+        <input id="theme-background-position-y"
+               type="range"
+               min="0"
+               max="100"
+               step="1"
+               value="${currentLiterature.theme_background_position_y ?? 50}">
+
+        <label>Artwork Zoom</label>
+        <input id="theme-background-zoom"
+               type="range"
+               min="50"
+               max="250"
+               step="5"
+               value="${currentLiterature.theme_background_zoom ?? 100}">
+
+        <label>Artwork Opacity</label>
+        <input id="theme-background-image-opacity"
+               type="range"
+               min="0"
+               max="1"
+               step=".05"
+               value="${currentLiterature.theme_background_image_opacity ?? .35}">
+
+        <label>Artwork Blur</label>
+        <input id="theme-background-image-blur"
+               type="range"
+               min="0"
+               max="12"
+               step="1"
+               value="${currentLiterature.theme_background_image_blur ?? 0}">
+
+        <label>Dark Overlay Strength</label>
+        <input id="theme-background-overlay-strength"
+               type="range"
+               min="0"
+               max=".85"
+               step=".05"
+               value="${currentLiterature.theme_background_overlay_strength ?? .35}">
+
+        <label>Artwork Size</label>
+        <select id="theme-background-image-size">
+            <option value="cover" ${currentLiterature.theme_background_image_size === "cover" ? "selected" : ""}>Cover</option>
+            <option value="contain" ${currentLiterature.theme_background_image_size === "contain" ? "selected" : ""}>Contain</option>
+            <option value="auto" ${currentLiterature.theme_background_image_size === "auto" ? "selected" : ""}>Original Size</option>
+        </select>
+
+        <label>Repeat Artwork</label>
+        <select id="theme-background-image-repeat">
+            <option value="no-repeat" ${currentLiterature.theme_background_image_repeat === "no-repeat" ? "selected" : ""}>No Repeat</option>
+            <option value="repeat" ${currentLiterature.theme_background_image_repeat === "repeat" ? "selected" : ""}>Repeat</option>
+            <option value="repeat-y" ${currentLiterature.theme_background_image_repeat === "repeat-y" ? "selected" : ""}>Repeat Down Page</option>
+        </select>
+
+        <button class="button" onclick="saveAppearanceSettings()">Save Appearance</button>
+        <p id="message" class="message"></p>
+</div>`;
+
+            initializeAppearanceControls();
+            setCreditValues("background", currentLiterature, "background");
+            setImageCreditVisible(
+                "background",
+                currentLiterature.theme_background_style === "image" &&
+                !!currentLiterature.theme_background_image_url
+            );
         };
         window.openChapter = function (chapterId) {
             const chapter = allChapters.find(c => c.id === chapterId); if (!chapter) return; currentChapter = chapter;
@@ -668,10 +843,62 @@ ${buildCreditFields("background", "Reader Background Credit")}
 <label>Chapter Name</label><input id="chapter-title" value="${escapeHtml(chapter.title || "")}">
 <label>Subtitle</label><input id="chapter-subtitle" value="${escapeHtml(chapter.subtitle || "")}">
 <label>Visibility</label><select id="chapter-visibility"><option value="draft" ${chapter.visibility === "draft" ? "selected" : ""}>Draft</option><option value="published" ${chapter.visibility === "published" ? "selected" : ""}>Published</option></select>
-<div class="overview-section"><h2>Chapter Image</h2>
-<div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;"><input id="chapter-image-input" type="file" accept="image/*" style="margin-bottom:0;"><button type="button" class="button danger-button" onclick="removeChapterImage()">Remove Image</button></div>
+<div class="overview-section">
+<h2>Chapter Image / Visual Block</h2>
+
+<label>Chapter Image Area Style</label>
+<div class="style-choice-grid">
+        <button type="button" class="style-choice" data-chapter-image-style="default">Default</button>
+        <button type="button" class="style-choice" data-chapter-image-style="solid">Solid</button>
+        <button type="button" class="style-choice" data-chapter-image-style="gradient">Gradient</button>
+        <button type="button" class="style-choice" data-chapter-image-style="image">Image</button>
+</div>
+
+<input id="chapter-image-style"
+           type="hidden"
+           value="${chapter.image_style || "default"}">
+
+<label>Chapter Image Area Colors</label>
+<div class="connected-color-picker">
+        <input id="chapter-image-color-1"
+               type="color"
+               value="${chapter.image_color_1 || "#141416"}">
+
+        <div id="chapter-image-color-preview" class="connected-gradient"></div>
+
+        <input id="chapter-image-color-2"
+               type="color"
+               value="${chapter.image_color_2 || "#0b0b0d"}">
+</div>
+
+<div class="compact-color-row">
+        <label>Image Area Text Color</label>
+        <input id="chapter-image-text-color"
+               type="color"
+               value="${chapter.image_text_color || "#f5f5f5"}">
+</div>
+
+<div id="chapter-image-style-preview" class="mini-live-card">
+        <span>Preview</span>
+        <h3>Chapter ${num} Visual</h3>
+        <p>This area can be default, solid, gradient, or image-based.</p>
+        ${buildCreditPill("image")}
+</div>
+
+<div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;">
+        <input id="chapter-image-input"
+               type="file"
+               accept="image/*"
+               style="margin-bottom:0;">
+
+        <button type="button"
+                class="button danger-button"
+                onclick="removeChapterImage()">
+            Remove Image
+        </button>
+</div>
 <label>Image Position</label><select id="chapter-image-position"><option value="top" ${chapter.image_position === "top" ? "selected" : ""}>Top</option><option value="left" ${chapter.image_position === "left" ? "selected" : ""}>Left</option><option value="right" ${chapter.image_position === "right" ? "selected" : ""}>Right</option><option value="bottom" ${chapter.image_position === "bottom" ? "selected" : ""}>Bottom</option><option value="full" ${chapter.image_position === "full" ? "selected" : ""}>Full Width</option></select>
-<div class="image-credit-preview-wrap">${chapter.image_url ? `<img src="${escapeHtml(chapter.image_url)}" class="chapter-main-preview-img">${buildCreditPill("image")}` : `<div style="height:180px;border:1px dashed #333344;border-radius:14px;display:flex;align-items:center;justify-content:center;color:#777;">No chapter image yet</div>`}</div>
+<div class="image-credit-preview-wrap">${chapter.image_url ? `<img src="${escapeHtml(chapter.image_url)}" class="chapter-main-preview-img">` : `<div style="height:180px;border:1px dashed #333344;border-radius:14px;display:flex;align-items:center;justify-content:center;color:#777;">No chapter image yet</div>`}</div>
 ${buildCreditFields("image", "Chapter Image Credit")}</div>
 <div class="overview-section"><h2>Writing</h2>
 <label>Spacing Type</label><select id="chapter-spacing-type"><option value="compact" ${chapter.spacing_type === "compact" ? "selected" : ""}>Compact</option><option value="comfortable" ${chapter.spacing_type === "comfortable" ? "selected" : ""}>Comfortable</option><option value="airy" ${chapter.spacing_type === "airy" ? "selected" : ""}>Airy</option><option value="manuscript" ${chapter.spacing_type === "manuscript" ? "selected" : ""}>Manuscript</option></select>
@@ -691,8 +918,45 @@ ${buildCreditFields("image", "Chapter Image Credit")}</div>
 ${buildCreditFields("chapter-card", "Chapter Card Image Credit")}
 <label>Card Opacity</label><input id="chapter-card-opacity" type="range" min=".2" max="1" step=".05" value="${chapter.theme_card_opacity ?? .85}">
 <label>Card Overlay</label><input id="chapter-card-overlay" type="range" min="0" max=".85" step=".05" value="${chapter.theme_card_overlay ?? .35}"></div>
-<div class="overview-section"><h2>Chapter Background Image</h2>
-<div id="chapter-background-preview" class="background-art-preview"><div id="chapter-background-preview-image" class="background-art-preview-image"></div><div id="chapter-background-preview-overlay" class="background-art-preview-overlay"></div><div class="preview-reader-content"><div class="preview-reader-card"><h2>Chapter ${num}</h2><p>This background sits behind this specific chapter.</p></div></div>${buildCreditPill("chapter-background")}</div>
+<div class="overview-section">
+<h2>Chapter Background</h2>
+
+<label>Chapter Background Style</label>
+<div class="style-choice-grid">
+        <button type="button" class="style-choice" data-chapter-bg-style="default">Default</button>
+        <button type="button" class="style-choice" data-chapter-bg-style="solid">Solid</button>
+        <button type="button" class="style-choice" data-chapter-bg-style="gradient">Gradient</button>
+        <button type="button" class="style-choice" data-chapter-bg-style="image">Image</button>
+</div>
+
+<input id="chapter-background-style"
+           type="hidden"
+           value="${chapter.theme_background_style || "default"}">
+
+<label>Chapter Background Colors</label>
+<div class="connected-color-picker">
+        <input id="chapter-background-color-1"
+               type="color"
+               value="${chapter.theme_background_color_1 || "#050505"}">
+
+        <div id="chapter-background-color-preview" class="connected-gradient"></div>
+
+        <input id="chapter-background-color-2"
+               type="color"
+               value="${chapter.theme_background_color_2 || "#000000"}">
+</div>
+
+<div id="chapter-background-preview" class="background-art-preview">
+        <div id="chapter-background-preview-image" class="background-art-preview-image"></div>
+        <div id="chapter-background-preview-overlay" class="background-art-preview-overlay"></div>
+        <div class="preview-reader-content">
+            <div class="preview-reader-card">
+                <h2>Chapter ${num}</h2>
+                <p>This background sits behind this specific chapter.</p>
+            </div>
+        </div>
+        ${buildCreditPill("chapter-background")}
+</div>
 <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;"><input id="chapter-background-input" type="file" accept="image/*" style="margin-bottom:0;"><button type="button" class="button danger-button" onclick="removeChapterBackgroundImage()">Remove Image</button></div>
 ${buildCreditFields("chapter-background", "Chapter Background Credit")}
 <label>Background Opacity</label><input id="chapter-background-opacity" type="range" min="0" max="1" step=".05" value="${chapter.theme_background_image_opacity ?? .35}">
@@ -703,13 +967,25 @@ ${buildCreditFields("chapter-background", "Chapter Background Credit")}
 <label>Zoom</label><input id="chapter-background-zoom" type="range" min="50" max="250" step="5" value="${chapter.theme_background_zoom ?? 100}"></div>
 <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:22px;"><button class="button danger-button" onclick="deleteCurrentChapter()">Delete Chapter</button><button class="button" onclick="saveCurrentChapter()">Save Chapter</button></div><p id="message" class="message"></p></div>`;
             setCreditValues("image", chapter, "image"); setCreditValues("chapter-card", chapter, "card"); setCreditValues("chapter-background", chapter, "background");
-            setImageCreditVisible("image", !!chapter.image_url);
+            setImageCreditVisible("image", chapter.image_style === "image" && !!chapter.image_url);
             setImageCreditVisible("chapter-card", chapter.theme_card_style === "image" && !!chapter.theme_card_image_url);
-            setImageCreditVisible("chapter-background", !!chapter.theme_background_image_url);
-            initializeChapterTextPreview(); initializeChapterCardPreview(); initializeChapterBackgroundPreview();
-            document.getElementById("chapter-image-input")?.addEventListener("change", function () { setImageCreditVisible("image", !!this.files[0] || !!currentChapter.image_url); });
+            setImageCreditVisible("chapter-background", chapter.theme_background_style === "image" && !!chapter.theme_background_image_url);
+            initializeChapterTextPreview(); initializeChapterImagePreview(); initializeChapterCardPreview(); initializeChapterBackgroundPreview();
+            document.getElementById("chapter-image-input")?.addEventListener("change", function () {
+                if (this.files[0]) {
+                    document.getElementById("chapter-image-style").value = "image";
+                    setImageCreditVisible("image", true);
+                    initializeChapterImagePreview();
+                }
+            });
             document.getElementById("chapter-card-image-input")?.addEventListener("change", function () { setImageCreditVisible("chapter-card", !!this.files[0] || !!currentChapter.theme_card_image_url); });
-            document.getElementById("chapter-background-input")?.addEventListener("change", function () { setImageCreditVisible("chapter-background", !!this.files[0] || !!currentChapter.theme_background_image_url); });
+            document.getElementById("chapter-background-input")?.addEventListener("change", function () {
+                if (this.files[0]) {
+                    document.getElementById("chapter-background-style").value = "image";
+                    setImageCreditVisible("chapter-background", true);
+                    initializeChapterBackgroundPreview();
+                }
+            });
         };
         function getCreditData(prefix) { return { type: document.getElementById(`${prefix}-credit-type`)?.value || "no_credit_needed", name: document.getElementById(`${prefix}-credit-name`)?.value.trim() || "", url: document.getElementById(`${prefix}-credit-url`)?.value.trim() || "", note: document.getElementById(`${prefix}-credit-note`)?.value.trim() || "", no_ai: document.getElementById(`${prefix}-credit-no-ai`)?.checked || false, nullverse_username: document.getElementById(`${prefix}-credit-nullverse-username`)?.value.trim().replace("@", "") || "" }; }
         function buildCreditFields(prefix, title) { return `<div id="${prefix}-credit-panel" class="image-credit-panel"><h2>${title}</h2><label>Credit Type</label><select id="${prefix}-credit-type" onchange="updateCreditFieldsForPrefix('${prefix}');updateCreditPreview('${prefix}')"><option value="own_work">My own work</option><option value="nullverse_creator">Another Nullverse creator</option><option value="external_artist">External artist</option><option value="photographer">Photographer</option><option value="stock_public_domain">Stock / public domain</option><option value="no_credit_needed">No credit needed</option></select><div id="${prefix}-credit-own-work" style="display:none;"><p class="message">This image will automatically credit your own Nullverse profile.</p></div><div id="${prefix}-credit-nullverse-user" style="display:none;"><label>Nullverse Username</label><input id="${prefix}-credit-nullverse-username" placeholder="Example: alandotexe" oninput="updateCreditPreview('${prefix}')"><div style="margin-top:-10px;margin-bottom:14px;"><button type="button" class="button" onclick="searchCreditUsers('${prefix}')">Search Creator</button></div><div id="${prefix}-credit-user-results"></div></div><div id="${prefix}-credit-name-field" style="display:none;"><label>Artist / Creator Name</label><input id="${prefix}-credit-name" placeholder="Name, username, or source" oninput="updateCreditPreview('${prefix}')"></div><div id="${prefix}-credit-url-field" style="display:none;"><label>Credit Link</label><input id="${prefix}-credit-url" placeholder="Profile link, social link, or source URL" oninput="updateCreditPreview('${prefix}')"></div><div id="${prefix}-credit-note-field" style="display:none;"><label>Permission / Source Note</label><textarea id="${prefix}-credit-note" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPreview('${prefix}')"></textarea></div><div id="${prefix}-credit-no-ai-field" style="display:none;"><label style="display:flex;align-items:center;gap:10px;"><input id="${prefix}-credit-no-ai" type="checkbox" style="width:auto;">I confirm this image is not AI-generated artwork</label></div></div>`; }
@@ -738,15 +1014,291 @@ ${buildCreditFields("chapter-background", "Chapter Background Credit")}
         async function uploadImage(file, bucket, suffix, maxWidth = 1600, maxHeight = 1000) { const optimized = await optimizeImage(file, { maxWidth, maxHeight, quality: .82 }); const path = `${user.id}/${Date.now()}-${suffix}.webp`; const { error } = await supabase.storage.from(bucket).upload(path, optimized, { upsert: true }); if (error) throw error; const { data } = supabase.storage.from(bucket).getPublicUrl(path); return data.publicUrl; }
         window.removeCoverImage = function () { currentLiterature.cover_image_url = null; currentLiterature.remove_cover_image = true; document.getElementById("cover-image-input").value = ""; setImageCreditVisible("cover", false); };
         window.removeIndexImage = function () { currentLiterature.theme_index_image_url = null; currentLiterature.remove_index_image = true; document.getElementById("theme-index-image-input").value = ""; document.getElementById("theme-index-style").value = "gradient"; setImageCreditVisible("index", false); initializeIndexAppearanceControls(); };
-        window.removeBackgroundImage = function () { currentLiterature.theme_background_image_url = null; currentLiterature.remove_background_image = true; document.getElementById("literature-background-input").value = ""; setImageCreditVisible("background", false); initializeAppearanceControls(); };
-        window.removeChapterImage = function () { currentChapter.image_url = null; currentChapter.remove_image = true; document.getElementById("chapter-image-input").value = ""; setImageCreditVisible("image", false); };
+        window.removeBackgroundImage = function () {
+            currentLiterature.theme_background_image_url = null;
+            currentLiterature.remove_background_image = true;
+            document.getElementById("literature-background-input").value = "";
+            document.getElementById("theme-background-style").value = "gradient";
+            setImageCreditVisible("background", false);
+            initializeAppearanceControls();
+        };
+        window.removeChapterImage = function () {
+            currentChapter.image_url = null;
+            currentChapter.remove_image = true;
+            document.getElementById("chapter-image-input").value = "";
+            document.getElementById("chapter-image-style").value = "gradient";
+            setImageCreditVisible("image", false);
+            initializeChapterImagePreview();
+        };
         window.removeChapterCardImage = function () { currentChapter.theme_card_image_url = null; currentChapter.remove_card_image = true; document.getElementById("chapter-card-image-input").value = ""; document.getElementById("chapter-card-style").value = "gradient"; setImageCreditVisible("chapter-card", false); initializeChapterCardPreview(); };
-        window.removeChapterBackgroundImage = function () { currentChapter.theme_background_image_url = null; currentChapter.remove_background_image = true; document.getElementById("chapter-background-input").value = ""; setImageCreditVisible("chapter-background", false); initializeChapterBackgroundPreview(); };
+        window.removeChapterBackgroundImage = function () {
+            currentChapter.theme_background_image_url = null;
+            currentChapter.remove_background_image = true;
+            document.getElementById("chapter-background-input").value = "";
+            document.getElementById("chapter-background-style").value = "gradient";
+            setImageCreditVisible("chapter-background", false);
+            initializeChapterBackgroundPreview();
+        };
         function initializeIndexAppearanceControls() { const preview = document.getElementById("index-preview"); if (!preview) return; const links = document.getElementById("index-preview-links"), style = document.getElementById("theme-index-style"), c1 = document.getElementById("theme-index-color-1"), c2 = document.getElementById("theme-index-color-2"), cp = document.getElementById("index-color-preview"), text = document.getElementById("theme-index-text-color"), img = document.getElementById("theme-index-image-input"), op = document.getElementById("theme-index-opacity"), ov = document.getElementById("theme-index-overlay"); let url = currentLiterature.theme_index_image_url || ""; links.innerHTML = allChapters.slice(0, 3).map((c, i) => `<div style="padding:12px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);">Chapter ${i + 1}: ${escapeHtml(c.title || "Untitled")}</div>`).join("") || `<div style="opacity:.75;">No chapters yet</div>`; function update() { cp.style.setProperty("--left-color", c1.value); cp.style.setProperty("--right-color", c2.value); preview.style.setProperty("--mini-card-text", text.value); preview.style.setProperty("--mini-card-opacity", op.value); preview.style.setProperty("--mini-card-overlay", ov.value); if (style.value === "solid") { preview.style.setProperty("--mini-card-bg", c1.value); preview.style.setProperty("--mini-card-image", "none"); } else if (style.value === "gradient") { preview.style.setProperty("--mini-card-bg", `linear-gradient(135deg,${c1.value},${c2.value})`); preview.style.setProperty("--mini-card-image", "none"); } else if (style.value === "image" && url) { preview.style.setProperty("--mini-card-bg", `linear-gradient(135deg,${c1.value},${c2.value})`); preview.style.setProperty("--mini-card-image", `url("${url}")`); } else { preview.style.setProperty("--mini-card-bg", "linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.025)),rgba(12,12,14,.72)"); preview.style.setProperty("--mini-card-image", "none"); } document.querySelectorAll("[data-index-style]").forEach(b => b.classList.toggle("active", b.dataset.indexStyle === style.value)); } document.querySelectorAll("[data-index-style]").forEach(b => b.addEventListener("click", () => { style.value = b.dataset.indexStyle; update(); })); img.addEventListener("change", function () { if (!this.files[0]) return; url = URL.createObjectURL(this.files[0]); style.value = "image"; update(); });[c1, c2, text, op, ov].forEach(x => { x.addEventListener("input", update); x.addEventListener("change", update); }); update(); }
-        function initializeAppearanceControls() { const bg = document.getElementById("background-art-preview-image"); if (!bg) return; const input = document.getElementById("literature-background-input"), c1 = document.getElementById("theme-gradient-color-1"), c2 = document.getElementById("theme-gradient-color-2"), gp = document.getElementById("gradient-preview"), op = document.getElementById("theme-background-image-opacity"), blur = document.getElementById("theme-background-image-blur"), overlay = document.getElementById("theme-background-overlay-strength"), x = document.getElementById("theme-background-position-x"), y = document.getElementById("theme-background-position-y"), zoom = document.getElementById("theme-background-zoom"), size = document.getElementById("theme-background-image-size"), repeat = document.getElementById("theme-background-image-repeat"), wrap = document.getElementById("background-art-preview"); let url = currentLiterature.theme_background_image_url || ""; function update() { gp.style.background = `linear-gradient(90deg,${c1.value},${c2.value})`; bg.style.setProperty("--preview-bg-image", url ? `url("${url}")` : "none"); bg.style.setProperty("--preview-bg-opacity", op.value); bg.style.setProperty("--preview-bg-blur", `${blur.value}px`); bg.style.setProperty("--preview-bg-position", `${x.value}% ${y.value}%`); bg.style.setProperty("--preview-bg-size", size.value === "auto" ? `${zoom.value}%` : size.value); bg.style.setProperty("--preview-bg-repeat", repeat.value); wrap.style.setProperty("--preview-overlay-strength", overlay.value); } input.addEventListener("change", function () { if (!this.files[0]) return; url = URL.createObjectURL(this.files[0]); setImageCreditVisible("background", true); update(); });[c1, c2, op, blur, overlay, x, y, zoom, size, repeat].forEach(el => { el.addEventListener("input", update); el.addEventListener("change", update); }); update(); }
+        function initializeAppearanceControls() {
+            const preview = document.getElementById("background-art-preview");
+            const bg = document.getElementById("background-art-preview-image");
+
+            if (!preview || !bg) return;
+
+            const input = document.getElementById("literature-background-input");
+            const styleInput = document.getElementById("theme-background-style");
+
+            const bgColor1 = document.getElementById("theme-background-color-1");
+            const bgColor2 = document.getElementById("theme-background-color-2");
+            const bgColorPreview = document.getElementById("reader-bg-color-preview");
+
+            const gradientColor1 = document.getElementById("theme-gradient-color-1");
+            const gradientColor2 = document.getElementById("theme-gradient-color-2");
+            const gradientPreview = document.getElementById("gradient-preview");
+
+            const opacity = document.getElementById("theme-background-image-opacity");
+            const blur = document.getElementById("theme-background-image-blur");
+            const overlay = document.getElementById("theme-background-overlay-strength");
+            const x = document.getElementById("theme-background-position-x");
+            const y = document.getElementById("theme-background-position-y");
+            const zoom = document.getElementById("theme-background-zoom");
+            const size = document.getElementById("theme-background-image-size");
+            const repeat = document.getElementById("theme-background-image-repeat");
+
+            let url = currentLiterature.theme_background_image_url || "";
+
+            function updateReaderBackgroundPreview() {
+                bgColorPreview.style.setProperty("--left-color", bgColor1.value);
+                bgColorPreview.style.setProperty("--right-color", bgColor2.value);
+                gradientPreview.style.background =
+                    `linear-gradient(90deg, ${gradientColor1.value}, ${gradientColor2.value})`;
+
+                const style = styleInput.value;
+
+                if (style === "solid") {
+                    preview.style.background = bgColor1.value;
+                    bg.style.setProperty("--preview-bg-image", "none");
+                } else if (style === "gradient") {
+                    preview.style.background =
+                        `linear-gradient(135deg, ${bgColor1.value}, ${bgColor2.value})`;
+                    bg.style.setProperty("--preview-bg-image", "none");
+                } else if (style === "image" && url) {
+                    preview.style.background =
+                        `linear-gradient(135deg, ${bgColor1.value}, ${bgColor2.value})`;
+                    bg.style.setProperty("--preview-bg-image", `url("${url}")`);
+                } else {
+                    preview.style.background = "#050505";
+                    bg.style.setProperty("--preview-bg-image", "none");
+                }
+
+                bg.style.setProperty("--preview-bg-opacity", opacity.value);
+                bg.style.setProperty("--preview-bg-blur", `${blur.value}px`);
+                bg.style.setProperty("--preview-bg-position", `${x.value}% ${y.value}%`);
+                bg.style.setProperty(
+                    "--preview-bg-size",
+                    size.value === "auto" ? `${zoom.value}%` : size.value
+                );
+                bg.style.setProperty("--preview-bg-repeat", repeat.value);
+                preview.style.setProperty("--preview-overlay-strength", overlay.value);
+
+                document.querySelectorAll("[data-reader-bg-style]").forEach(button => {
+                    button.classList.toggle(
+                        "active",
+                        button.dataset.readerBgStyle === styleInput.value
+                    );
+                });
+
+                setImageCreditVisible(
+                    "background",
+                    styleInput.value === "image" && !!url
+                );
+            }
+
+            document.querySelectorAll("[data-reader-bg-style]").forEach(button => {
+                button.addEventListener("click", () => {
+                    styleInput.value = button.dataset.readerBgStyle;
+                    updateReaderBackgroundPreview();
+                });
+            });
+
+            input.addEventListener("change", function () {
+                if (!this.files[0]) return;
+
+                url = URL.createObjectURL(this.files[0]);
+                styleInput.value = "image";
+                updateReaderBackgroundPreview();
+            });
+
+            [
+                bgColor1,
+                bgColor2,
+                gradientColor1,
+                gradientColor2,
+                opacity,
+                blur,
+                overlay,
+                x,
+                y,
+                zoom,
+                size,
+                repeat
+            ].forEach(control => {
+                control.addEventListener("input", updateReaderBackgroundPreview);
+                control.addEventListener("change", updateReaderBackgroundPreview);
+            });
+
+            updateReaderBackgroundPreview();
+        }
         function initializeChapterTextPreview() { const p = document.getElementById("chapter-text-preview"); if (!p) return; const spacing = document.getElementById("chapter-spacing-type"), text = document.getElementById("chapter-text-color"), bg = document.getElementById("chapter-background-color"), panel = document.getElementById("chapter-panel-color"); function update() { const map = { compact: ["1.45", "0px"], comfortable: ["1.8", "0px"], airy: ["2.15", ".02em"], manuscript: ["2", ".01em"] }; p.style.setProperty("--chapter-line-height", map[spacing.value]?.[0] || "1.8"); p.style.setProperty("--chapter-letter-spacing", map[spacing.value]?.[1] || "0"); p.style.setProperty("--chapter-text", text.value); p.style.setProperty("--chapter-bg", bg.value); p.style.setProperty("--chapter-panel", panel.value); } [spacing, text, bg, panel].forEach(el => { el.addEventListener("input", update); el.addEventListener("change", update); }); update(); }
+
+        function initializeChapterImagePreview() {
+            const preview = document.getElementById("chapter-image-style-preview");
+            if (!preview) return;
+
+            const styleInput = document.getElementById("chapter-image-style");
+            const color1 = document.getElementById("chapter-image-color-1");
+            const color2 = document.getElementById("chapter-image-color-2");
+            const colorPreview = document.getElementById("chapter-image-color-preview");
+            const textColor = document.getElementById("chapter-image-text-color");
+            const imageInput = document.getElementById("chapter-image-input");
+
+            let imageUrl = currentChapter.image_url || "";
+
+            function updateChapterImagePreview() {
+                colorPreview.style.setProperty("--left-color", color1.value);
+                colorPreview.style.setProperty("--right-color", color2.value);
+
+                applyStylePreview({
+                    preview,
+                    style: styleInput.value,
+                    color1: color1.value,
+                    color2: color2.value,
+                    textColor: textColor.value,
+                    imageUrl,
+                    opacity: .85,
+                    overlay: .35
+                });
+
+                document.querySelectorAll("[data-chapter-image-style]").forEach(button => {
+                    button.classList.toggle(
+                        "active",
+                        button.dataset.chapterImageStyle === styleInput.value
+                    );
+                });
+
+                setImageCreditVisible(
+                    "image",
+                    styleInput.value === "image" && !!imageUrl
+                );
+            }
+
+            document.querySelectorAll("[data-chapter-image-style]").forEach(button => {
+                button.addEventListener("click", () => {
+                    styleInput.value = button.dataset.chapterImageStyle;
+                    updateChapterImagePreview();
+                });
+            });
+
+            imageInput.addEventListener("change", function () {
+                if (!this.files[0]) return;
+                imageUrl = URL.createObjectURL(this.files[0]);
+                styleInput.value = "image";
+                updateChapterImagePreview();
+            });
+
+            [color1, color2, textColor].forEach(control => {
+                control.addEventListener("input", updateChapterImagePreview);
+                control.addEventListener("change", updateChapterImagePreview);
+            });
+
+            updateChapterImagePreview();
+        }
+
         function initializeChapterCardPreview() { const preview = document.getElementById("chapter-card-preview"); if (!preview) return; const style = document.getElementById("chapter-card-style"), c1 = document.getElementById("chapter-card-color-1"), c2 = document.getElementById("chapter-card-color-2"), cp = document.getElementById("chapter-card-color-preview"), text = document.getElementById("chapter-card-text-color"), img = document.getElementById("chapter-card-image-input"), op = document.getElementById("chapter-card-opacity"), ov = document.getElementById("chapter-card-overlay"); let url = currentChapter.theme_card_image_url || ""; function update() { cp.style.setProperty("--left-color", c1.value); cp.style.setProperty("--right-color", c2.value); preview.style.setProperty("--mini-card-text", text.value); preview.style.setProperty("--mini-card-opacity", op.value); preview.style.setProperty("--mini-card-overlay", ov.value); if (style.value === "solid") { preview.style.setProperty("--mini-card-bg", c1.value); preview.style.setProperty("--mini-card-image", "none"); } else if (style.value === "gradient") { preview.style.setProperty("--mini-card-bg", `linear-gradient(135deg,${c1.value},${c2.value})`); preview.style.setProperty("--mini-card-image", "none"); } else if (style.value === "image" && url) { preview.style.setProperty("--mini-card-bg", `linear-gradient(135deg,${c1.value},${c2.value})`); preview.style.setProperty("--mini-card-image", `url("${url}")`); } else { preview.style.setProperty("--mini-card-bg", "linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.025)),rgba(12,12,14,.72)"); preview.style.setProperty("--mini-card-image", "none"); } document.querySelectorAll("[data-chapter-card-style]").forEach(b => b.classList.toggle("active", b.dataset.chapterCardStyle === style.value)); } document.querySelectorAll("[data-chapter-card-style]").forEach(b => b.addEventListener("click", () => { style.value = b.dataset.chapterCardStyle; update(); })); img.addEventListener("change", function () { if (!this.files[0]) return; url = URL.createObjectURL(this.files[0]); style.value = "image"; update(); });[c1, c2, text, op, ov].forEach(el => { el.addEventListener("input", update); el.addEventListener("change", update); }); update(); }
-        function initializeChapterBackgroundPreview() { const bg = document.getElementById("chapter-background-preview-image"); if (!bg) return; const input = document.getElementById("chapter-background-input"), op = document.getElementById("chapter-background-opacity"), blur = document.getElementById("chapter-background-blur"), overlay = document.getElementById("chapter-background-overlay"), x = document.getElementById("chapter-background-position-x"), y = document.getElementById("chapter-background-position-y"), zoom = document.getElementById("chapter-background-zoom"), wrap = document.getElementById("chapter-background-preview"); let url = currentChapter.theme_background_image_url || ""; function update() { bg.style.setProperty("--preview-bg-image", url ? `url("${url}")` : "none"); bg.style.setProperty("--preview-bg-opacity", op.value); bg.style.setProperty("--preview-bg-blur", `${blur.value}px`); bg.style.setProperty("--preview-bg-position", `${x.value}% ${y.value}%`); bg.style.setProperty("--preview-bg-size", `${zoom.value}%`); bg.style.setProperty("--preview-bg-repeat", "no-repeat"); wrap.style.setProperty("--preview-overlay-strength", overlay.value); } input.addEventListener("change", function () { if (!this.files[0]) return; url = URL.createObjectURL(this.files[0]); setImageCreditVisible("chapter-background", true); update(); });[op, blur, overlay, x, y, zoom].forEach(el => { el.addEventListener("input", update); el.addEventListener("change", update); }); update(); }
+        function initializeChapterBackgroundPreview() {
+            const preview = document.getElementById("chapter-background-preview");
+            const bg = document.getElementById("chapter-background-preview-image");
+
+            if (!preview || !bg) return;
+
+            const input = document.getElementById("chapter-background-input");
+            const styleInput = document.getElementById("chapter-background-style");
+            const color1 = document.getElementById("chapter-background-color-1");
+            const color2 = document.getElementById("chapter-background-color-2");
+            const colorPreview = document.getElementById("chapter-background-color-preview");
+
+            const opacity = document.getElementById("chapter-background-opacity");
+            const blur = document.getElementById("chapter-background-blur");
+            const overlay = document.getElementById("chapter-background-overlay");
+            const x = document.getElementById("chapter-background-position-x");
+            const y = document.getElementById("chapter-background-position-y");
+            const zoom = document.getElementById("chapter-background-zoom");
+
+            let url = currentChapter.theme_background_image_url || "";
+
+            function updateChapterBackgroundPreview() {
+                colorPreview.style.setProperty("--left-color", color1.value);
+                colorPreview.style.setProperty("--right-color", color2.value);
+
+                if (styleInput.value === "solid") {
+                    preview.style.background = color1.value;
+                    bg.style.setProperty("--preview-bg-image", "none");
+                } else if (styleInput.value === "gradient") {
+                    preview.style.background =
+                        `linear-gradient(135deg, ${color1.value}, ${color2.value})`;
+                    bg.style.setProperty("--preview-bg-image", "none");
+                } else if (styleInput.value === "image" && url) {
+                    preview.style.background =
+                        `linear-gradient(135deg, ${color1.value}, ${color2.value})`;
+                    bg.style.setProperty("--preview-bg-image", `url("${url}")`);
+                } else {
+                    preview.style.background = "#050505";
+                    bg.style.setProperty("--preview-bg-image", "none");
+                }
+
+                bg.style.setProperty("--preview-bg-opacity", opacity.value);
+                bg.style.setProperty("--preview-bg-blur", `${blur.value}px`);
+                bg.style.setProperty("--preview-bg-position", `${x.value}% ${y.value}%`);
+                bg.style.setProperty("--preview-bg-size", `${zoom.value}%`);
+                bg.style.setProperty("--preview-bg-repeat", "no-repeat");
+                preview.style.setProperty("--preview-overlay-strength", overlay.value);
+
+                document.querySelectorAll("[data-chapter-bg-style]").forEach(button => {
+                    button.classList.toggle(
+                        "active",
+                        button.dataset.chapterBgStyle === styleInput.value
+                    );
+                });
+
+                setImageCreditVisible(
+                    "chapter-background",
+                    styleInput.value === "image" && !!url
+                );
+            }
+
+            document.querySelectorAll("[data-chapter-bg-style]").forEach(button => {
+                button.addEventListener("click", () => {
+                    styleInput.value = button.dataset.chapterBgStyle;
+                    updateChapterBackgroundPreview();
+                });
+            });
+
+            input.addEventListener("change", function () {
+                if (!this.files[0]) return;
+
+                url = URL.createObjectURL(this.files[0]);
+                styleInput.value = "image";
+                updateChapterBackgroundPreview();
+            });
+
+            [color1, color2, opacity, blur, overlay, x, y, zoom].forEach(control => {
+                control.addEventListener("input", updateChapterBackgroundPreview);
+                control.addEventListener("change", updateChapterBackgroundPreview);
+            });
+
+            updateChapterBackgroundPreview();
+        }
         window.saveBookSettings = async function () {
             const title = document.getElementById("book-title").value.trim(), summary = document.getElementById("book-summary").value.trim(), genres = genreTags.join(", "), themes = themeTags.join(", "), visibility = document.getElementById("book-visibility").value, featured = document.getElementById("book-featured").checked, contentRating = document.getElementById("book-content-rating").value;
             const standard = [...document.querySelectorAll(".warning-choice-grid input:checked")].map(b => b.value), contentWarnings = [...new Set([...standard, ...warningTags])];
@@ -763,10 +1315,125 @@ ${buildCreditFields("chapter-background", "Chapter Background Credit")}
             if (error) { document.getElementById("message").textContent = error.message; return; }
             currentLiterature = { ...currentLiterature, ...update }; document.getElementById("literature-name").textContent = title; document.getElementById("editor-title").textContent = title; document.getElementById("message").textContent = "Book settings saved.";
         };
+
+        function applyStylePreview({
+            preview,
+            style,
+            color1,
+            color2,
+            textColor,
+            imageUrl,
+            opacity = .85,
+            overlay = .35
+        }) {
+            if (!preview) return;
+
+            preview.style.setProperty("--mini-card-text", textColor || "#f5f5f5");
+            preview.style.setProperty("--mini-card-opacity", opacity);
+            preview.style.setProperty("--mini-card-overlay", overlay);
+
+            if (style === "solid") {
+                preview.style.setProperty("--mini-card-bg", color1);
+                preview.style.setProperty("--mini-card-image", "none");
+                return;
+            }
+
+            if (style === "gradient") {
+                preview.style.setProperty(
+                    "--mini-card-bg",
+                    `linear-gradient(135deg, ${color1}, ${color2})`
+                );
+                preview.style.setProperty("--mini-card-image", "none");
+                return;
+            }
+
+            if (style === "image" && imageUrl) {
+                preview.style.setProperty(
+                    "--mini-card-bg",
+                    `linear-gradient(135deg, ${color1}, ${color2})`
+                );
+                preview.style.setProperty("--mini-card-image", `url("${imageUrl}")`);
+                return;
+            }
+
+            preview.style.setProperty(
+                "--mini-card-bg",
+                "linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.025)), rgba(12,12,14,.72)"
+            );
+            preview.style.setProperty("--mini-card-image", "none");
+        }
+
         window.saveAppearanceSettings = async function () {
-            const file = document.getElementById("literature-background-input")?.files[0]; let bgUrl = currentLiterature.remove_background_image ? null : (currentLiterature.theme_background_image_url || null); const credit = getCreditData("background"); if (file) bgUrl = await uploadImage(file, "world-backgrounds", "literature-background", 2200, 2200); if (!validateImageCredit("background", "Reader background", !!bgUrl)) return;
-            const update = { theme_name: document.getElementById("theme-name").value.trim(), theme_gradient_enabled: document.getElementById("theme-gradient-enabled").checked, theme_gradient_color_1: document.getElementById("theme-gradient-color-1").value, theme_gradient_color_2: document.getElementById("theme-gradient-color-2").value, theme_background_image_url: bgUrl, theme_background_image_opacity: Number(document.getElementById("theme-background-image-opacity").value), theme_background_image_blur: Number(document.getElementById("theme-background-image-blur").value), theme_background_overlay_strength: Number(document.getElementById("theme-background-overlay-strength").value), theme_background_position_x: Number(document.getElementById("theme-background-position-x").value), theme_background_position_y: Number(document.getElementById("theme-background-position-y").value), theme_background_zoom: Number(document.getElementById("theme-background-zoom").value), theme_background_image_size: document.getElementById("theme-background-image-size").value, theme_background_image_repeat: document.getElementById("theme-background-image-repeat").value, background_credit_type: credit.type, background_credit_name: credit.name, background_credit_url: credit.url, background_credit_note: credit.note, background_credit_no_ai: credit.no_ai, background_credit_nullverse_username: credit.nullverse_username, updated_at: new Date().toISOString() };
-            const { error } = await supabase.from("worlds").update(update).eq("id", literatureId).eq("owner_id", user.id); if (error) { document.getElementById("message").textContent = error.message; return; } currentLiterature = { ...currentLiterature, ...update }; document.getElementById("message").textContent = "Reader appearance saved.";
+            const style = document.getElementById("theme-background-style").value;
+            const file = document.getElementById("literature-background-input")?.files[0];
+
+            let bgUrl = currentLiterature.remove_background_image
+                ? null
+                : (currentLiterature.theme_background_image_url || null);
+
+            if (file) {
+                bgUrl = await uploadImage(
+                    file,
+                    "world-backgrounds",
+                    "literature-background",
+                    2200,
+                    2200
+                );
+            }
+
+            const credit = getCreditData("background");
+
+            if (!validateImageCredit("background", "Reader background", style === "image" && !!bgUrl)) {
+                return;
+            }
+
+            const update = {
+                theme_name: document.getElementById("theme-name").value.trim(),
+                theme_background_style: style,
+                theme_background_color_1: document.getElementById("theme-background-color-1").value,
+                theme_background_color_2: document.getElementById("theme-background-color-2").value,
+
+                theme_gradient_enabled: document.getElementById("theme-gradient-enabled").checked,
+                theme_gradient_color_1: document.getElementById("theme-gradient-color-1").value,
+                theme_gradient_color_2: document.getElementById("theme-gradient-color-2").value,
+
+                theme_background_image_url: style === "image" ? bgUrl : null,
+                theme_background_image_opacity: Number(document.getElementById("theme-background-image-opacity").value),
+                theme_background_image_blur: Number(document.getElementById("theme-background-image-blur").value),
+                theme_background_overlay_strength: Number(document.getElementById("theme-background-overlay-strength").value),
+                theme_background_position_x: Number(document.getElementById("theme-background-position-x").value),
+                theme_background_position_y: Number(document.getElementById("theme-background-position-y").value),
+                theme_background_zoom: Number(document.getElementById("theme-background-zoom").value),
+                theme_background_image_size: document.getElementById("theme-background-image-size").value,
+                theme_background_image_repeat: document.getElementById("theme-background-image-repeat").value,
+
+                background_credit_type: credit.type,
+                background_credit_name: credit.name,
+                background_credit_url: credit.url,
+                background_credit_note: credit.note,
+                background_credit_no_ai: credit.no_ai,
+                background_credit_nullverse_username: credit.nullverse_username,
+
+                updated_at: new Date().toISOString()
+            };
+
+            const { error } = await supabase
+                .from("worlds")
+                .update(update)
+                .eq("id", literatureId)
+                .eq("owner_id", user.id);
+
+            if (error) {
+                document.getElementById("message").textContent = error.message;
+                return;
+            }
+
+            currentLiterature = {
+                ...currentLiterature,
+                ...update
+            };
+
+            document.getElementById("message").textContent = "Reader appearance saved.";
         };
         window.createChapter = async function () {
             const next = allChapters.length ? Math.max(...allChapters.map(c => Number(c.display_order) || 0)) + 1 : 1;
@@ -777,14 +1444,20 @@ ${buildCreditFields("chapter-background", "Chapter Background Credit")}
             if (!currentChapter) return;
             let imageUrl = currentChapter.remove_image ? null : (currentChapter.image_url || null), cardUrl = currentChapter.remove_card_image ? null : (currentChapter.theme_card_image_url || null), bgUrl = currentChapter.remove_background_image ? null : (currentChapter.theme_background_image_url || null);
             const imageFile = document.getElementById("chapter-image-input")?.files[0], cardFile = document.getElementById("chapter-card-image-input")?.files[0], bgFile = document.getElementById("chapter-background-input")?.files[0];
-            const cardStyle = document.getElementById("chapter-card-style").value, imageCredit = getCreditData("image"), cardCredit = getCreditData("chapter-card"), bgCredit = getCreditData("chapter-background");
+            const imageStyle = document.getElementById("chapter-image-style").value;
+            const cardStyle = document.getElementById("chapter-card-style").value;
+            const backgroundStyle = document.getElementById("chapter-background-style").value;
+
+            const imageCredit = getCreditData("image");
+            const cardCredit = getCreditData("chapter-card");
+            const bgCredit = getCreditData("chapter-background");
             if (imageFile) imageUrl = await uploadImage(imageFile, "world-images", "literature-chapter", 1400, 1400);
             if (cardFile) cardUrl = await uploadImage(cardFile, "world-section-card-images", "literature-chapter-card", 1600, 1000);
             if (bgFile) bgUrl = await uploadImage(bgFile, "world-backgrounds", "literature-chapter-background", 2200, 2200);
-            if (!validateImageCredit("image", "Chapter image", !!imageUrl)) return;
+            if (!validateImageCredit("image", "Chapter image", imageStyle === "image" && !!imageUrl)) return;
             if (!validateImageCredit("chapter-card", "Chapter card image", cardStyle === "image" && !!cardUrl)) return;
-            if (!validateImageCredit("chapter-background", "Chapter background", !!bgUrl)) return;
-            const update = { title: document.getElementById("chapter-title").value.trim() || "Untitled", subtitle: document.getElementById("chapter-subtitle").value.trim(), visibility: document.getElementById("chapter-visibility").value, body: document.getElementById("chapter-body").value, author_note: document.getElementById("chapter-note").value, image_url: imageUrl, image_position: document.getElementById("chapter-image-position").value, spacing_type: document.getElementById("chapter-spacing-type").value, text_color: document.getElementById("chapter-text-color").value, background_color: document.getElementById("chapter-background-color").value, chapter_panel_color: document.getElementById("chapter-panel-color").value, theme_card_style: cardStyle, theme_card_color_1: document.getElementById("chapter-card-color-1").value, theme_card_color_2: document.getElementById("chapter-card-color-2").value, theme_card_text_color: document.getElementById("chapter-card-text-color").value, theme_card_image_url: cardStyle === "image" ? cardUrl : null, theme_card_opacity: Number(document.getElementById("chapter-card-opacity").value), theme_card_overlay: Number(document.getElementById("chapter-card-overlay").value), theme_background_image_url: bgUrl, theme_background_image_opacity: Number(document.getElementById("chapter-background-opacity").value), theme_background_image_blur: Number(document.getElementById("chapter-background-blur").value), theme_background_overlay_strength: Number(document.getElementById("chapter-background-overlay").value), theme_background_position_x: Number(document.getElementById("chapter-background-position-x").value), theme_background_position_y: Number(document.getElementById("chapter-background-position-y").value), theme_background_zoom: Number(document.getElementById("chapter-background-zoom").value), image_credit_type: imageCredit.type, image_credit_name: imageCredit.name, image_credit_url: imageCredit.url, image_credit_note: imageCredit.note, image_credit_no_ai: imageCredit.no_ai, image_credit_nullverse_username: imageCredit.nullverse_username, card_credit_type: cardCredit.type, card_credit_name: cardCredit.name, card_credit_url: cardCredit.url, card_credit_note: cardCredit.note, card_credit_no_ai: cardCredit.no_ai, card_credit_nullverse_username: cardCredit.nullverse_username, background_credit_type: bgCredit.type, background_credit_name: bgCredit.name, background_credit_url: bgCredit.url, background_credit_note: bgCredit.note, background_credit_no_ai: bgCredit.no_ai, background_credit_nullverse_username: bgCredit.nullverse_username, updated_at: new Date().toISOString() };
+            if (!validateImageCredit("chapter-background", "Chapter background", backgroundStyle === "image" && !!bgUrl)) return;
+            const update = { title: document.getElementById("chapter-title").value.trim() || "Untitled", subtitle: document.getElementById("chapter-subtitle").value.trim(), visibility: document.getElementById("chapter-visibility").value, body: document.getElementById("chapter-body").value, author_note: document.getElementById("chapter-note").value, image_url: imageStyle === "image" ? imageUrl : null, image_style: imageStyle, image_color_1: document.getElementById("chapter-image-color-1").value, image_color_2: document.getElementById("chapter-image-color-2").value, image_text_color: document.getElementById("chapter-image-text-color").value, image_position: document.getElementById("chapter-image-position").value, spacing_type: document.getElementById("chapter-spacing-type").value, text_color: document.getElementById("chapter-text-color").value, background_color: document.getElementById("chapter-background-color").value, chapter_panel_color: document.getElementById("chapter-panel-color").value, theme_card_style: cardStyle, theme_card_color_1: document.getElementById("chapter-card-color-1").value, theme_card_color_2: document.getElementById("chapter-card-color-2").value, theme_card_text_color: document.getElementById("chapter-card-text-color").value, theme_card_image_url: cardStyle === "image" ? cardUrl : null, theme_card_opacity: Number(document.getElementById("chapter-card-opacity").value), theme_card_overlay: Number(document.getElementById("chapter-card-overlay").value), theme_background_style: backgroundStyle, theme_background_color_1: document.getElementById("chapter-background-color-1").value, theme_background_color_2: document.getElementById("chapter-background-color-2").value, theme_background_image_url: backgroundStyle === "image" ? bgUrl : null, theme_background_image_opacity: Number(document.getElementById("chapter-background-opacity").value), theme_background_image_blur: Number(document.getElementById("chapter-background-blur").value), theme_background_overlay_strength: Number(document.getElementById("chapter-background-overlay").value), theme_background_position_x: Number(document.getElementById("chapter-background-position-x").value), theme_background_position_y: Number(document.getElementById("chapter-background-position-y").value), theme_background_zoom: Number(document.getElementById("chapter-background-zoom").value), image_credit_type: imageCredit.type, image_credit_name: imageCredit.name, image_credit_url: imageCredit.url, image_credit_note: imageCredit.note, image_credit_no_ai: imageCredit.no_ai, image_credit_nullverse_username: imageCredit.nullverse_username, card_credit_type: cardCredit.type, card_credit_name: cardCredit.name, card_credit_url: cardCredit.url, card_credit_note: cardCredit.note, card_credit_no_ai: cardCredit.no_ai, card_credit_nullverse_username: cardCredit.nullverse_username, background_credit_type: bgCredit.type, background_credit_name: bgCredit.name, background_credit_url: bgCredit.url, background_credit_note: bgCredit.note, background_credit_no_ai: bgCredit.no_ai, background_credit_nullverse_username: bgCredit.nullverse_username, updated_at: new Date().toISOString() };
             const { error } = await supabase.from("literature_chapters").update(update).eq("id", currentChapter.id).eq("owner_id", user.id);
             if (error) { document.getElementById("message").textContent = error.message; return; }
             await notifyCredit(imageCredit, currentLiterature.id, `You were credited for artwork in "${currentLiterature.title || "a literature project"}".`);
