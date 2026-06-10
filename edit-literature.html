@@ -1,0 +1,644 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <title>Edit Literature - Nullverse</title>
+    <script>
+const savedNullverseTheme=localStorage.getItem("nullverse-theme")||"void";
+document.documentElement.setAttribute("data-theme",savedNullverseTheme);
+    </script>
+    <link rel="stylesheet" href="theme.css?v=25">
+    <style>
+        html {
+            min-height: 100%;
+            background: #000
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial,sans-serif;
+            background: var(--page-bg);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            display: flex;
+            height: 100vh;
+            overflow: hidden
+        }
+
+        .sidebar {
+            width: 320px;
+            background: linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015)),rgba(10,10,12,.82);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(22px);
+            box-shadow: 10px 0 40px rgba(0,0,0,.32)
+        }
+
+        .sidebar-header {
+            padding: 28px;
+            border-bottom: 1px solid var(--border-soft)
+        }
+
+            .sidebar-header h1 {
+                margin: 0 0 10px;
+                font-size: 1.65rem
+            }
+
+            .sidebar-header p, .muted {
+                color: var(--text-secondary);
+                line-height: 1.6
+            }
+
+        .chapter-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px
+        }
+
+        .chapter-card, .reorder-panel, .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            box-shadow: 0 12px 30px rgba(0,0,0,.18)
+        }
+
+        .chapter-card {
+            padding: 16px;
+            margin-bottom: 14px;
+            cursor: pointer;
+            transition: .18s ease
+        }
+
+            .chapter-card:hover, .chapter-card.active {
+                transform: translateY(-2px);
+                border-color: rgba(255,255,255,.18);
+                box-shadow: 0 0 22px rgba(255,255,255,.08)
+            }
+
+            .chapter-card p {
+                margin: 8px 0 0;
+                color: var(--text-muted);
+                font-size: .9rem
+            }
+
+        .reorder-panel {
+            padding: 16px;
+            margin-bottom: 16px
+        }
+
+        .reorder-row {
+            display: flex;
+            gap: 8px
+        }
+
+        .sidebar-footer {
+            padding: 20px;
+            border-top: 1px solid var(--border-soft)
+        }
+
+        .main {
+            flex: 1;
+            overflow-y: auto;
+            padding: 44px
+        }
+
+        .editor-panel {
+            max-width: 950px;
+            margin: auto
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            flex-wrap: wrap;
+            margin-bottom: 30px
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap
+        }
+
+        .panel {
+            padding: 30px;
+            margin-bottom: 26px;
+            backdrop-filter: blur(18px)
+        }
+
+        input, textarea, select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 13px 14px;
+            margin-bottom: 18px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background: rgba(0,0,0,.22);
+            color: var(--text-primary);
+            font-family: Arial,sans-serif
+        }
+
+        textarea {
+            resize: vertical
+        }
+
+        label {
+            display: block;
+            margin-bottom: 9px
+        }
+
+        .button {
+            background: linear-gradient(180deg,#2a2a2f 0%,#16161a 45%,#0d0d10 100%);
+            color: #f5f5f5;
+            border: 1px solid rgba(255,255,255,.12);
+            padding: 12px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: Arial,sans-serif;
+            transition: .18s ease;
+            box-shadow: 0 0 16px rgba(255,255,255,.08),inset 0 1px 0 rgba(255,255,255,.06)
+        }
+
+            .button:hover {
+                background: linear-gradient(180deg,#3a3a40 0%,#202026 45%,#111116 100%);
+                border-color: rgba(255,255,255,.18);
+                transform: translateY(-1px)
+            }
+
+        .danger-button {
+            background: linear-gradient(180deg,#472328 0%,#2f171a 100%)
+        }
+
+        .move-button {
+            width: 32px;
+            height: 32px;
+            background: #18181d;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            color: white;
+            cursor: pointer
+        }
+
+        .message {
+            margin-top: 14px;
+            color: var(--text-secondary)
+        }
+
+        @media(max-width:900px) {
+            body {
+                flex-direction: column;
+                height: auto;
+                min-height: 100vh;
+                overflow: auto
+            }
+
+            .sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color)
+            }
+
+            .chapter-list {
+                max-height: 260px
+            }
+
+            .main {
+                padding: 26px
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="nullverse-stars"></div>
+
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1 id="literature-name">Loading...</h1>
+            <p>Write chapters, reorder your story, and shape the reading experience.</p>
+        </div>
+
+        <div class="chapter-list">
+            <div class="reorder-panel">
+                <p class="muted" style="margin-top:0;">Quick Reorder</p>
+                <div class="reorder-row">
+                    <input id="move-from" type="number" min="1" placeholder="#">
+                    <input id="move-to" type="number" min="1" placeholder="#">
+                </div>
+                <div class="reorder-row">
+                    <button class="button" onclick="moveChapterToPosition()">Move</button>
+                    <button class="button" onclick="swapChapterPositions()">Swap</button>
+                </div>
+            </div>
+
+            <input id="chapter-search" placeholder="Search chapters..." oninput="filterChapters()">
+            <div class="chapter-card active" id="book-card" onclick="openBookSettings()">
+                <strong>Book Settings</strong>
+                <p>Title, summary, visibility</p>
+            </div>
+            <div id="chapter-list"></div>
+        </div>
+
+        <div class="sidebar-footer">
+            <button class="button" onclick="createChapter()">+ Add Chapter</button>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="editor-panel">
+            <div class="topbar">
+                <div>
+                    <h1 id="editor-title" style="margin:0;">Literature Editor</h1>
+                    <p class="muted" style="margin-top:8px;">A dedicated writing space for novels, short stories, and serialized fiction.</p>
+                </div>
+                <div class="topbar-actions">
+                    <a class="button" href="dashboard.html">← Dashboard</a>
+                    <a class="button" id="view-public-literature" target="_blank">View Public Page</a>
+                    <button class="button" onclick="saveActiveEditor()">Save Changes</button>
+                </div>
+            </div>
+            <div id="editor-content"></div>
+        </div>
+    </div>
+
+    <script type="module">
+import { requireBetaAccess } from "./betaGate.js";
+import { supabase } from "./supabaseClient.js";
+
+const user=await requireBetaAccess({allowRestricted:false});
+const params=new URLSearchParams(window.location.search);
+const literatureId=params.get("id");
+
+let currentLiterature=null;
+let currentChapter=null;
+let allChapters=[];
+
+if(!literatureId){
+alert("No literature ID provided.");
+window.location.href="dashboard.html";
+}
+
+async function loadLiterature(){
+const {data,error}=await supabase.from("worlds").select("*").eq("id",literatureId).single();
+
+if(error||!data){
+alert("Literature not found.");
+window.location.href="dashboard.html";
+return;
+}
+
+if(data.owner_id!==user.id){
+alert("You can only edit your own literature.");
+window.location.href="dashboard.html";
+return;
+}
+
+currentLiterature=data;
+
+if(currentLiterature.content_type!=="literature"){
+await supabase.from("worlds").update({content_type:"literature"}).eq("id",literatureId).eq("owner_id",user.id);
+currentLiterature.content_type="literature";
+}
+
+document.getElementById("literature-name").textContent=currentLiterature.title||"Untitled Literature";
+document.getElementById("editor-title").textContent=currentLiterature.title||"Literature Editor";
+document.getElementById("view-public-literature").href=`literature.html?id=${encodeURIComponent(currentLiterature.id)}`;
+}
+
+async function loadChapters(){
+const {data,error}=await supabase
+.from("literature_chapters")
+.select("*")
+.eq("literature_id",literatureId)
+.order("display_order",{ascending:true});
+
+if(error){
+document.getElementById("chapter-list").innerHTML=`<p class="muted">${escapeHtml(error.message)}</p>`;
+return;
+}
+
+allChapters=data||[];
+renderChapters();
+}
+
+function renderChapters(){
+const container=document.getElementById("chapter-list");
+const search=(document.getElementById("chapter-search")?.value||"").toLowerCase();
+
+const filtered=allChapters.filter(chapter=>{
+return (chapter.title||"").toLowerCase().includes(search)||(chapter.subtitle||"").toLowerCase().includes(search);
+});
+
+if(!filtered.length){
+container.innerHTML=`<p class="muted">No chapters yet.</p>`;
+return;
+}
+
+container.innerHTML=filtered.map(chapter=>{
+const realIndex=allChapters.findIndex(c=>c.id===chapter.id);
+return `
+<div class="chapter-card" id="chapter-${chapter.id}">
+<div style="display:flex;justify-content:space-between;gap:8px;align-items:start;">
+<div style="flex:1;" onclick="openChapter('${chapter.id}')">
+<strong>${realIndex+1}. ${escapeHtml(chapter.title||"Untitled Chapter")}</strong>
+<p>${escapeHtml(chapter.visibility||"draft")}${chapter.subtitle?` · ${escapeHtml(chapter.subtitle)}`:""}</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px;">
+<button class="move-button" onclick="event.stopPropagation();moveChapter(${realIndex},-1)">↑</button>
+<button class="move-button" onclick="event.stopPropagation();moveChapter(${realIndex},1)">↓</button>
+</div>
+</div>
+</div>
+`;
+}).join("");
+}
+
+window.filterChapters=function(){renderChapters();};
+
+window.openBookSettings=function(){
+currentChapter=null;
+document.querySelectorAll(".chapter-card").forEach(card=>card.classList.remove("active"));
+document.getElementById("book-card").classList.add("active");
+
+document.getElementById("editor-content").innerHTML=`
+<div class="panel">
+<h2>Book Settings</h2>
+
+<label>Title</label>
+<input id="book-title" value="${escapeHtml(currentLiterature.title||"")}">
+
+<label>Description</label>
+<textarea id="book-summary" rows="7">${escapeHtml(currentLiterature.summary||"")}</textarea>
+
+<label>Genres</label>
+<input id="book-genres" value="${escapeHtml(currentLiterature.genres||"")}" placeholder="Fantasy, Romance, Horror">
+
+<label>Themes</label>
+<input id="book-themes" value="${escapeHtml(currentLiterature.themes||"")}" placeholder="Identity, Survival, Hope">
+
+<label>Visibility</label>
+<select id="book-visibility">
+<option value="draft" ${currentLiterature.visibility==="draft"?"selected":""}>Draft</option>
+<option value="published" ${currentLiterature.visibility==="published"?"selected":""}>Published</option>
+</select>
+
+<label style="display:flex;align-items:center;gap:10px;">
+<input id="book-featured" type="checkbox" style="width:auto;" ${currentLiterature.featured?"checked":""}>
+Feature on profile
+</label>
+
+<button class="button" onclick="saveBookSettings()">Save Book Settings</button>
+<p id="message" class="message"></p>
+</div>
+`;
+};
+
+window.saveBookSettings=async function(){
+const title=document.getElementById("book-title").value.trim();
+const summary=document.getElementById("book-summary").value.trim();
+const genres=document.getElementById("book-genres").value.trim();
+const themes=document.getElementById("book-themes").value.trim();
+const visibility=document.getElementById("book-visibility").value;
+const featured=document.getElementById("book-featured").checked;
+
+if(!title){
+document.getElementById("message").textContent="Title is required.";
+return;
+}
+
+const {error}=await supabase
+.from("worlds")
+.update({
+title,
+summary,
+genres,
+themes,
+visibility,
+featured,
+content_type:"literature",
+updated_at:new Date().toISOString()
+})
+.eq("id",literatureId)
+.eq("owner_id",user.id);
+
+if(error){
+document.getElementById("message").textContent=error.message;
+return;
+}
+
+currentLiterature={...currentLiterature,title,summary,genres,themes,visibility,featured,content_type:"literature"};
+document.getElementById("literature-name").textContent=title;
+document.getElementById("editor-title").textContent=title;
+document.getElementById("message").textContent="Book settings saved.";
+};
+
+window.createChapter=async function(){
+const title=prompt("Chapter title:");
+if(!title)return;
+
+const nextOrder=allChapters.length?Math.max(...allChapters.map(c=>Number(c.display_order)||0))+1:1;
+
+const {data,error}=await supabase
+.from("literature_chapters")
+.insert({
+literature_id:literatureId,
+owner_id:user.id,
+title,
+display_order:nextOrder,
+visibility:"draft"
+})
+.select()
+.single();
+
+if(error||!data){
+alert(error?.message||"Failed to create chapter.");
+return;
+}
+
+await loadChapters();
+openChapter(data.id);
+};
+
+window.openChapter=function(chapterId){
+const chapter=allChapters.find(c=>c.id===chapterId);
+if(!chapter)return;
+
+currentChapter=chapter;
+
+document.querySelectorAll(".chapter-card").forEach(card=>card.classList.remove("active"));
+document.getElementById(`chapter-${chapterId}`)?.classList.add("active");
+
+document.getElementById("editor-content").innerHTML=`
+<div class="panel">
+<h2>Chapter Editor</h2>
+
+<label>Chapter Title</label>
+<input id="chapter-title" value="${escapeHtml(chapter.title||"")}">
+
+<label>Subtitle</label>
+<input id="chapter-subtitle" value="${escapeHtml(chapter.subtitle||"")}">
+
+<label>Visibility</label>
+<select id="chapter-visibility">
+<option value="draft" ${chapter.visibility==="draft"?"selected":""}>Draft</option>
+<option value="published" ${chapter.visibility==="published"?"selected":""}>Published</option>
+</select>
+
+<label>Chapter Body</label>
+<textarea id="chapter-body" rows="24" placeholder="Write the chapter here...">${escapeHtml(chapter.body||"")}</textarea>
+
+<label>Author Note</label>
+<textarea id="chapter-note" rows="5" placeholder="Optional note for readers...">${escapeHtml(chapter.author_note||"")}</textarea>
+
+<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+<button class="button danger-button" onclick="deleteCurrentChapter()">Delete Chapter</button>
+<button class="button" onclick="saveCurrentChapter()">Save Chapter</button>
+</div>
+
+<p id="message" class="message"></p>
+</div>
+`;
+};
+
+window.saveCurrentChapter=async function(){
+if(!currentChapter)return;
+
+const title=document.getElementById("chapter-title").value.trim();
+const subtitle=document.getElementById("chapter-subtitle").value.trim();
+const visibility=document.getElementById("chapter-visibility").value;
+const body=document.getElementById("chapter-body").value;
+const authorNote=document.getElementById("chapter-note").value;
+
+if(!title){
+document.getElementById("message").textContent="Chapter title is required.";
+return;
+}
+
+const {error}=await supabase
+.from("literature_chapters")
+.update({
+title,
+subtitle,
+visibility,
+body,
+author_note:authorNote,
+updated_at:new Date().toISOString()
+})
+.eq("id",currentChapter.id)
+.eq("owner_id",user.id);
+
+if(error){
+document.getElementById("message").textContent=error.message;
+return;
+}
+
+currentChapter={...currentChapter,title,subtitle,visibility,body,author_note:authorNote};
+allChapters=allChapters.map(chapter=>chapter.id===currentChapter.id?currentChapter:chapter);
+renderChapters();
+document.getElementById(`chapter-${currentChapter.id}`)?.classList.add("active");
+document.getElementById("message").textContent="Chapter saved.";
+};
+
+window.deleteCurrentChapter=async function(){
+if(!currentChapter)return;
+if(!confirm("Delete this chapter? This cannot be undone."))return;
+
+const {error}=await supabase
+.from("literature_chapters")
+.delete()
+.eq("id",currentChapter.id)
+.eq("owner_id",user.id);
+
+if(error){
+alert(error.message);
+return;
+}
+
+currentChapter=null;
+await loadChapters();
+openBookSettings();
+};
+
+window.moveChapter=async function(index,direction){
+const newIndex=index+direction;
+if(newIndex<0||newIndex>=allChapters.length)return;
+
+[allChapters[index],allChapters[newIndex]]=[allChapters[newIndex],allChapters[index]];
+await saveChapterOrder();
+renderChapters();
+};
+
+async function saveChapterOrder(){
+for(let i=0;i<allChapters.length;i++){
+await supabase
+.from("literature_chapters")
+.update({display_order:i+1})
+.eq("id",allChapters[i].id)
+.eq("owner_id",user.id);
+allChapters[i].display_order=i+1;
+}
+}
+
+window.moveChapterToPosition=async function(){
+const from=Number(document.getElementById("move-from").value)-1;
+const to=Number(document.getElementById("move-to").value)-1;
+
+if(from<0||to<0||from>=allChapters.length||to>=allChapters.length){
+alert("Invalid positions.");
+return;
+}
+
+const moved=allChapters.splice(from,1)[0];
+allChapters.splice(to,0,moved);
+await saveChapterOrder();
+renderChapters();
+};
+
+window.swapChapterPositions=async function(){
+const first=Number(document.getElementById("move-from").value)-1;
+const second=Number(document.getElementById("move-to").value)-1;
+
+if(first<0||second<0||first>=allChapters.length||second>=allChapters.length){
+alert("Invalid positions.");
+return;
+}
+
+[allChapters[first],allChapters[second]]=[allChapters[second],allChapters[first]];
+await saveChapterOrder();
+renderChapters();
+};
+
+window.saveActiveEditor=function(){
+if(currentChapter){
+saveCurrentChapter();
+return;
+}
+if(document.getElementById("book-title")){
+saveBookSettings();
+}
+};
+
+async function initEditor(){
+await loadLiterature();
+await loadChapters();
+openBookSettings();
+}
+
+initEditor();
+
+function escapeHtml(value){
+return String(value||"")
+.replaceAll("&","&amp;")
+.replaceAll("<","&lt;")
+.replaceAll(">","&gt;")
+.replaceAll('"',"&quot;")
+.replaceAll("'","&#039;");
+}
+    </script>
+</body>
+</html>
