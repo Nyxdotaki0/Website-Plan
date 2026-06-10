@@ -892,11 +892,10 @@
                 .from("worlds")
                 .select("*")
                 .eq("id", id)
-                .eq("visibility", "published")
                 .single();
 
             if (error || !literature) {
-                showNotFound("This literature does not exist or is not published.");
+                showNotFound("This literature does not exist.");
                 return;
             }
 
@@ -907,14 +906,36 @@
 
             currentLiterature = literature;
 
-            if (shouldBlockContent(literature)) {
+            const ownerAccess =
+                currentUser &&
+                currentUser.id === literature.owner_id;
+
+            const staffAccess =
+                canModerateWorlds(currentPermissions);
+
+            if (literature.visibility !== "published" && !ownerAccess && !staffAccess) {
+                showNotFound("This literature does not exist or is not published.");
+                return;
+            }
+
+            if (literature.moderation_status === "hidden" && ownerAccess) {
+                showHiddenNotice(literature);
+                return;
+            }
+
+            if (literature.moderation_status === "hidden" && !staffAccess) {
+                showNotFound("This literature has been hidden by Nullverse staff.");
+                return;
+            }
+
+            if (!ownerAccess && !staffAccess && shouldBlockContent(literature)) {
                 showContentBlocked(literature);
                 return;
             }
 
             const warningAccepted = params.get("contentOk") === literature.id;
 
-            if (shouldWarnContent(literature) && !warningAccepted) {
+            if (!ownerAccess && !staffAccess && shouldWarnContent(literature) && !warningAccepted) {
                 showContentWarning(literature);
                 return;
             }
@@ -1497,6 +1518,31 @@
 
             document.getElementById("report-modal").style.display = "none";
             alert("Report submitted.");
+        }
+
+        function showHiddenNotice(literature) {
+            document.querySelector("main").innerHTML = `
+        <section class="content-warning-panel">
+            <h1>Literature Hidden by Moderation</h1>
+
+            <p class="empty">
+                This literature is currently hidden from the public by Nullverse moderation.
+            </p>
+
+            <p class="empty">
+                <strong>Reason:</strong>
+                ${escapeHtml(literature.moderation_reason || "No reason provided.")}
+            </p>
+
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                <a class="button" href="dashboard.html">Back to Dashboard</a>
+
+                <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
+                    Edit Literature
+                </a>
+            </div>
+        </section>
+    `;
         }
 
         function showNotFound(message) {

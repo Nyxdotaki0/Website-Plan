@@ -1015,6 +1015,16 @@ ${escapeHtml(
             return `world.html?id=${encodeURIComponent(world.id)}`;
         }
 
+        function getContentLabel(world) {
+            const type = world?.content_type || "world";
+
+            if (type === "literature") return "literature";
+            if (type === "comic") return "comic";
+            if (type === "manga") return "manga";
+
+            return "world";
+        }
+
         function renderReportCard(report, reporter, reportedUser, world, addition) {
             const targetTitle =
                 world?.title ||
@@ -1087,7 +1097,7 @@ ${escapeHtml(
         </button>
 
         ${world ? `
-            <button class="button danger" onclick="hideReportedWorld('${report.id}', '${world.id}', '${world.owner_id}', '${escapeHtmlForAttribute(world.title || "Untitled World")}')">
+            <button class="button danger" onclick="hideReportedWorld('${report.id}', '${world.id}', '${world.owner_id}', '${escapeHtmlForAttribute(world.title || "Untitled")}', '${escapeHtmlForAttribute(world.content_type || "world")}')"
                 Hide World
             </button>
         ` : ""}
@@ -1163,8 +1173,9 @@ ${escapeHtml(
             await loadReports();
         };
 
-        window.hideReportedWorld = async function (reportId, worldId, ownerId, title) {
+        window.hideReportedWorld = async function (reportId, worldId, ownerId, title, contentType = "world") {
             const note = document.getElementById(`report-note-${reportId}`)?.value.trim();
+            const label = getContentLabel({ content_type: contentType });
 
             if (!note) {
                 alert("Enter a reason before hiding this world.");
@@ -1189,7 +1200,7 @@ ${escapeHtml(
                 .insert({
                     target_user_id: ownerId,
                     moderator_id: currentUser.id,
-                    action: "world_hidden",
+                    action: `${label}_hidden`,
                     reason: note,
                     expires_at: null
                 });
@@ -1199,7 +1210,7 @@ ${escapeHtml(
                 actorId: currentUser.id,
                 worldId,
                 type: "world_hidden",
-                message: `Your world "${title}" was hidden by moderation. Reason: ${note}`,
+                message: `Your ${label} "${title}" was hidden by moderation. Reason: ${note}`,
                 link: "dashboard.html"
             });
 
