@@ -747,6 +747,22 @@
             justify-content: center;
             transition: .18s ease
         }
+        .reader-stage.webtoon .reader-arrow,
+        .reader-stage.webtoon .tap-zone {
+            display: none;
+        }
+
+        .reader-stage.webtoon .reader-credit-desktop {
+            position: fixed;
+            left: 18px;
+            bottom: 18px;
+        }
+
+        .reader-stage.webtoon .reader-credit-mobile-btn {
+            position: fixed;
+            right: 14px;
+            bottom: 68px;
+        }
 
             .reader-arrow:hover {
                 background: rgba(255,255,255,.16)
@@ -1543,6 +1559,7 @@ ${hasCredit(page) ? `<span class="credit-dot">?</span>` : ""}
 
         window.setFullscreenMode = function (mode) {
             fullscreenMode = mode;
+            document.getElementById("reader-credit-sheet").classList.remove("open");
             renderFullscreenReader();
         };
 
@@ -1558,21 +1575,32 @@ ${hasCredit(page) ? `<span class="credit-dot">?</span>` : ""}
             document.getElementById("reader-subtitle").textContent = `Chapter ${readerChapterIndex + 1}: ${chapter.title || "Untitled"}`;
 
             stage.classList.toggle("webtoon", fullscreenMode === "webtoon");
+            stage.onscroll = null;
 
             if (!pages.length) {
                 content.innerHTML = `<p>No pages in this chapter.</p>`;
+                updateReaderCredit(null);
                 return;
             }
 
             if (fullscreenMode === "webtoon") {
                 content.innerHTML = `
 <div class="reader-webtoon-stack">
-${pages.map(page => `<img src="${escapeHtml(page.image_url || "")}" alt="">`).join("")}
+${pages.map((page, index) => `
+<img 
+src="${escapeHtml(page.image_url || "")}" 
+alt="Page ${index + 1}" 
+data-page-index="${index}">
+`).join("")}
 </div>
 `;
                 document.getElementById("reader-bottombar").textContent = `Chapter ${readerChapterIndex + 1} / ${allChapters.length} · Webtoon Mode`;
-                updateReaderCredit(pages[0]);
-                setTimeout(() => stage.scrollTop = 0, 0);
+                setTimeout(() => {
+                    stage.scrollTop = 0;
+                    readerPageIndex = 0;
+                    updateReaderCredit(pages[0]);
+                    stage.onscroll = updateWebtoonVisiblePageCredit;
+                }, 0);
                 return;
             }
 
@@ -1580,6 +1608,41 @@ ${pages.map(page => `<img src="${escapeHtml(page.image_url || "")}" alt="">`).jo
             content.innerHTML = `<img class="reader-page" src="${escapeHtml(page.image_url || "")}" alt="Page ${readerPageIndex + 1}">`;
             document.getElementById("reader-bottombar").textContent = `Chapter ${readerChapterIndex + 1} · Page ${readerPageIndex + 1} / ${pages.length}`;
             updateReaderCredit(page);
+        }
+
+        function updateWebtoonVisiblePageCredit() {
+            if (fullscreenMode !== "webtoon") return;
+
+            const chapter = allChapters[readerChapterIndex];
+            const pages = allPagesByChapter[chapter.id] || [];
+            const stage = document.getElementById("reader-stage");
+            const images = [...stage.querySelectorAll(".reader-webtoon-stack img")];
+
+            if (!images.length || !pages.length) return;
+
+            const stageRect = stage.getBoundingClientRect();
+            const viewportMiddle = stageRect.top + stageRect.height * 0.45;
+
+            let closestIndex = 0;
+            let closestDistance = Infinity;
+
+            images.forEach(img => {
+                const rect = img.getBoundingClientRect();
+                const imageMiddle = rect.top + rect.height / 2;
+                const distance = Math.abs(imageMiddle - viewportMiddle);
+
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestIndex = Number(img.dataset.pageIndex) || 0;
+                }
+            });
+
+            if (closestIndex !== readerPageIndex) {
+                readerPageIndex = closestIndex;
+                updateReaderCredit(pages[readerPageIndex]);
+                document.getElementById("reader-bottombar").textContent =
+                    `Chapter ${readerChapterIndex + 1} · Page ${readerPageIndex + 1} / ${pages.length} · Webtoon Mode`;
+            }
         }
 
         window.readerForward = function () {
