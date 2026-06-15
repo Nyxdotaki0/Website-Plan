@@ -114,7 +114,7 @@
         }
 
         .editor-panel {
-            max-width: 950px;
+            max-width: 1050px;
             margin: auto
         }
 
@@ -630,6 +630,135 @@
                 font-size: .78rem
             }
 
+        .comic-preview-shell {
+            border: 1px solid var(--border-color);
+            border-radius: 22px;
+            background: linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.018)),rgba(8,8,10,.72);
+            overflow: hidden;
+            margin: 18px 0 24px;
+            box-shadow: 0 18px 38px rgba(0,0,0,.28)
+        }
+
+        .comic-preview-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(0,0,0,.22)
+        }
+
+            .comic-preview-top h3 {
+                margin: 0
+            }
+
+        .comic-preview-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap
+        }
+
+            .comic-preview-controls button {
+                padding: 9px 11px;
+                border-radius: 10px
+            }
+
+        .comic-reader-stage {
+            position: relative;
+            min-height: 520px;
+            padding: 22px;
+            background: var(--comic-preview-bg,var(--page-bg));
+            box-sizing: border-box
+        }
+
+        .comic-reader-bg-image {
+            position: absolute;
+            inset: 0;
+            background-image: var(--preview-bg-image);
+            background-size: var(--preview-bg-size,cover);
+            background-position: var(--preview-bg-position,center);
+            background-repeat: var(--preview-bg-repeat,no-repeat);
+            opacity: var(--preview-bg-opacity,.35);
+            filter: blur(var(--preview-bg-blur,0px));
+            transform: scale(1.03)
+        }
+
+        .comic-reader-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,var(--preview-overlay-strength,.35))
+        }
+
+        .comic-reader-content {
+            position: relative;
+            z-index: 2;
+            max-width: 820px;
+            margin: auto
+        }
+
+        .comic-preview-page-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 430px
+        }
+
+        .comic-preview-page {
+            max-width: 100%;
+            max-height: 720px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,.14);
+            box-shadow: 0 18px 45px rgba(0,0,0,.45);
+            background: #050505
+        }
+
+        .comic-preview-page-info {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-top: 14px
+        }
+
+        .comic-preview-webtoon {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px
+        }
+
+            .comic-preview-webtoon img {
+                width: min(100%,760px);
+                border-radius: 10px;
+                border: 1px solid rgba(255,255,255,.12);
+                box-shadow: 0 14px 36px rgba(0,0,0,.38);
+                background: #050505
+            }
+
+        .comic-empty-preview {
+            min-height: 260px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: var(--text-muted);
+            border: 1px dashed rgba(255,255,255,.16);
+            border-radius: 18px;
+            background: rgba(0,0,0,.18)
+        }
+
+        .comic-mode-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid rgba(255,255,255,.12);
+            background: rgba(255,255,255,.05);
+            border-radius: 999px;
+            padding: 6px 10px;
+            color: var(--text-secondary);
+            font-size: .82rem
+        }
+
         @media(max-width:900px) {
             body {
                 flex-direction: column;
@@ -666,6 +795,15 @@
                     visibility: visible;
                     pointer-events: auto
                 }
+
+            .comic-reader-stage {
+                padding: 14px;
+                min-height: 420px
+            }
+
+            .comic-preview-page-wrap {
+                min-height: 330px
+            }
         }
     </style>
 </head>
@@ -678,7 +816,7 @@
                 <div class="info-icon">i</div>
                 <div class="tooltip">This is your Comic/Manga editor. Build chapters, upload ordered pages, choose page-by-page or webtoon reading, and keep credits attached to every image.</div>
             </div>
-            <p>Create comic chapters, upload pages, reorder art, and shape the visual reader.</p>
+            <p>Create comic chapters, upload pages, reorder art, and preview the reader while editing.</p>
         </div>
         <div class="chapter-list">
             <div class="reorder-panel">
@@ -763,13 +901,26 @@
         let genreTags = [];
         let themeTags = [];
         let warningTags = [];
+        let previewMode = "auto";
+        let previewPageIndex = 0;
 
-        if (!comicId) { alert("No comic ID provided."); window.location.href = "dashboard.html"; }
+        if (!comicId) {
+            alert("No comic ID provided.");
+            window.location.href = "dashboard.html";
+        }
 
         async function loadComic() {
             const { data, error } = await supabase.from("worlds").select("*").eq("id", comicId).single();
-            if (error || !data) { alert("Comic not found."); window.location.href = "dashboard.html"; return; }
-            if (data.owner_id !== user.id) { alert("You can only edit your own comic."); window.location.href = "dashboard.html"; return; }
+            if (error || !data) {
+                alert("Comic not found.");
+                window.location.href = "dashboard.html";
+                return;
+            }
+            if (data.owner_id !== user.id) {
+                alert("You can only edit your own comic.");
+                window.location.href = "dashboard.html";
+                return;
+            }
             currentComic = data;
             if (!["comic", "manga"].includes(currentComic.content_type)) {
                 await supabase.from("worlds").update({ content_type: "comic" }).eq("id", comicId).eq("owner_id", user.id);
@@ -781,10 +932,15 @@
         }
 
         async function loadChapters() {
-            const { data, error } = await supabase.from("comic_chapters")
+            const { data, error } = await supabase
+                .from("comic_chapters")
                 .select("*")
-                .eq("world_id", comicId).order("display_order", { ascending: true });
-            if (error) { document.getElementById("chapter-list").innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`; return; }
+                .eq("world_id", comicId)
+                .order("display_order", { ascending: true });
+            if (error) {
+                document.getElementById("chapter-list").innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`;
+                return;
+            }
             allChapters = data || [];
             renderChapters();
         }
@@ -793,7 +949,10 @@
             const container = document.getElementById("chapter-list");
             const search = (document.getElementById("chapter-search")?.value || "").toLowerCase();
             const filtered = allChapters.filter(chapter => (chapter.title || "").toLowerCase().includes(search) || (chapter.subtitle || "").toLowerCase().includes(search));
-            if (!filtered.length) { container.innerHTML = `<p class="muted">No chapters yet.</p>`; return; }
+            if (!filtered.length) {
+                container.innerHTML = `<p class="muted">No chapters yet.</p>`;
+                return;
+            }
             container.innerHTML = filtered.map(chapter => {
                 const realIndex = allChapters.findIndex(c => c.id === chapter.id);
                 return `
@@ -812,8 +971,13 @@
             }).join("");
         }
 
-        window.filterChapters = function () { renderChapters(); };
-        function chapterNumber(chapter) { return allChapters.findIndex(c => c.id === chapter.id) + 1; }
+        window.filterChapters = function () {
+            renderChapters();
+        };
+
+        function chapterNumber(chapter) {
+            return allChapters.findIndex(c => c.id === chapter.id) + 1;
+        }
 
         function buildInfoLabel(labelText, tooltipText) {
             return `
@@ -881,7 +1045,7 @@ ${buildInfoLabel("Content Type", "Choose Comic or Manga. Dashboard, Admin, Profi
 </select>
 
 ${buildInfoLabel("Reading Mode", "Comic/Manga displays one page at a time. Webtoon displays pages vertically for scrolling.")}
-<select id="comic-reading-mode">
+<select id="comic-reading-mode" onchange="syncComicPreviewFromSettings()">
 <option value="paged" ${(currentComic.comic_reading_mode || "paged") === "paged" ? "selected" : ""}>Comic / Manga Page Reader</option>
 <option value="webtoon" ${currentComic.comic_reading_mode === "webtoon" ? "selected" : ""}>Webtoon Vertical Scroll</option>
 </select>
@@ -994,8 +1158,12 @@ ${buildCreditFields("index", "Index Image Credit")}
             setImageCreditVisible("cover", !!currentComic.cover_image_url);
             setImageCreditVisible("index", currentComic.theme_index_style === "image" && !!currentComic.theme_index_image_url);
 
-            document.getElementById("cover-image-input")?.addEventListener("change", function () { setImageCreditVisible("cover", !!this.files[0] || !!currentComic.cover_image_url); });
-            document.getElementById("theme-index-image-input")?.addEventListener("change", function () { setImageCreditVisible("index", !!this.files[0] || !!currentComic.theme_index_image_url); });
+            document.getElementById("cover-image-input")?.addEventListener("change", function () {
+                setImageCreditVisible("cover", !!this.files[0] || !!currentComic.cover_image_url);
+            });
+            document.getElementById("theme-index-image-input")?.addEventListener("change", function () {
+                setImageCreditVisible("index", !!this.files[0] || !!currentComic.theme_index_image_url);
+            });
         };
 
         window.openAppearanceSettings = function () {
@@ -1091,6 +1259,7 @@ ${buildCreditFields("background", "Reader Background Credit")}
             const chapter = allChapters.find(c => c.id === chapterId);
             if (!chapter) return;
             currentChapter = chapter;
+            previewPageIndex = 0;
             await loadPages(chapter.id);
             const num = chapterNumber(chapter);
 
@@ -1102,10 +1271,10 @@ ${buildCreditFields("background", "Reader Background Credit")}
 <h2>Chapter ${num}</h2>
 
 ${buildInfoLabel("Chapter Name", "This is the chapter title readers will see after the automatic chapter number.")}
-<input id="chapter-title" value="${escapeHtml(chapter.title || "")}">
+<input id="chapter-title" value="${escapeHtml(chapter.title || "")}" oninput="renderComicReaderPreview()">
 
 ${buildInfoLabel("Subtitle", "Optional smaller subtitle shown under the chapter title.")}
-<input id="chapter-subtitle" value="${escapeHtml(chapter.subtitle || "")}">
+<input id="chapter-subtitle" value="${escapeHtml(chapter.subtitle || "")}" oninput="renderComicReaderPreview()">
 
 ${buildInfoLabel("Visibility", "Published chapters can appear on the public comic reader. Draft chapters stay private.")}
 <select id="chapter-visibility">
@@ -1114,7 +1283,13 @@ ${buildInfoLabel("Visibility", "Published chapters can appear on the public comi
 </select>
 
 ${buildInfoLabel("Author Note", "Optional note shown before the pages in the public reader.")}
-<textarea id="chapter-note" rows="5" placeholder="Optional note for readers...">${escapeHtml(chapter.author_note || "")}</textarea>
+<textarea id="chapter-note" rows="5" placeholder="Optional note for readers..." oninput="renderComicReaderPreview()">${escapeHtml(chapter.author_note || "")}</textarea>
+
+<div class="overview-section">
+<h2>Live Comic Reader Preview</h2>
+<p class="muted">This uses the actual uploaded pages in this chapter, so you can check the reader without opening the public page.</p>
+<div id="comic-reader-preview"></div>
+</div>
 
 <div class="overview-section">
 <h2>Comic Pages</h2>
@@ -1159,26 +1334,167 @@ ${buildInfoLabel("Upload Pages", "Select one or many image files. They will be c
 <p id="message" class="message"></p>
 </div>`;
 
+            renderComicReaderPreview();
             renderPages();
         };
 
         async function loadPages(chapterId) {
-            const { data, error } = await supabase.from("comic_pages").select("*").eq("chapter_id", chapterId).order("display_order", { ascending: true });
-            if (error) { allPages = []; console.error(error); return; }
+            const { data, error } = await supabase
+                .from("comic_pages")
+                .select("*")
+                .eq("world_id", comicId)
+                .eq("chapter_id", chapterId)
+                .order("display_order", { ascending: true });
+            if (error) {
+                allPages = [];
+                console.error(error);
+                return;
+            }
             allPages = data || [];
         }
+
+        function renderComicReaderPreview() {
+            const container = document.getElementById("comic-reader-preview");
+            if (!container) return;
+
+            const mode = previewMode === "auto" ? (currentComic.comic_reading_mode || "paged") : previewMode;
+            const chapterTitle = document.getElementById("chapter-title")?.value.trim() || currentChapter?.title || "Untitled";
+            const chapterSubtitle = document.getElementById("chapter-subtitle")?.value.trim() || currentChapter?.subtitle || "";
+            const chapterNote = document.getElementById("chapter-note")?.value.trim() || "";
+            const currentPage = allPages[previewPageIndex] || allPages[0];
+
+            container.innerHTML = `
+<div class="comic-preview-shell">
+<div class="comic-preview-top">
+<div>
+<h3>${escapeHtml(currentComic.title || "Comic Preview")}</h3>
+<div class="comic-mode-pill">${escapeHtml(mode === "webtoon" ? "Webtoon scroll preview" : "Paged reader preview")}</div>
+</div>
+<div class="comic-preview-controls">
+<button class="button" onclick="setPreviewMode('auto')">Auto</button>
+<button class="button" onclick="setPreviewMode('paged')">Paged</button>
+<button class="button" onclick="setPreviewMode('webtoon')">Webtoon</button>
+${mode === "paged" ? `
+<button class="button" onclick="previewPreviousPage()">← Prev</button>
+<button class="button" onclick="previewNextPage()">Next →</button>
+`: ""}
+</div>
+</div>
+
+<div id="comic-preview-stage" class="comic-reader-stage">
+<div id="comic-preview-bg-image" class="comic-reader-bg-image"></div>
+<div id="comic-preview-overlay" class="comic-reader-overlay"></div>
+<div class="comic-reader-content">
+<div class="preview-reader-card" style="margin-bottom:18px;">
+<h2 style="margin:0 0 8px;">Chapter ${chapterNumber(currentChapter)}: ${escapeHtml(chapterTitle)}</h2>
+${chapterSubtitle ? `<p style="margin:0 0 8px;color:var(--text-secondary);">${escapeHtml(chapterSubtitle)}</p>` : ""}
+${chapterNote ? `<p style="margin:0;color:var(--text-secondary);">${escapeHtml(chapterNote)}</p>` : ""}
+</div>
+
+${!allPages.length ? `
+<div class="comic-empty-preview">
+<div>
+<strong>No pages uploaded yet.</strong>
+<p>Upload comic pages below and they will appear here instantly.</p>
+</div>
+</div>
+`: mode === "webtoon" ? `
+<div class="comic-preview-webtoon">
+${allPages.map((page, index) => `
+<img src="${escapeHtml(page.image_url || "")}" alt="Preview page ${index + 1}">
+`).join("")}
+</div>
+`: `
+<div class="comic-preview-page-wrap">
+<img class="comic-preview-page" src="${escapeHtml(currentPage?.image_url || "")}" alt="Preview page ${previewPageIndex + 1}">
+</div>
+<div class="comic-preview-page-info">
+Page ${previewPageIndex + 1} / ${allPages.length}
+</div>
+`}
+</div>
+</div>
+</div>`;
+
+            applyComicPreviewBackground();
+        }
+
+        function applyComicPreviewBackground() {
+            const stage = document.getElementById("comic-preview-stage");
+            const bg = document.getElementById("comic-preview-bg-image");
+            if (!stage || !bg || !currentComic) return;
+
+            const style = currentComic.theme_background_style || "default";
+            const color1 = currentComic.theme_background_color_1 || "#050505";
+            const color2 = currentComic.theme_background_color_2 || "#000000";
+            const imageUrl = currentComic.theme_background_image_url || "";
+
+            if (style === "solid") {
+                stage.style.setProperty("--comic-preview-bg", color1);
+                bg.style.setProperty("--preview-bg-image", "none");
+            } else if (style === "gradient") {
+                stage.style.setProperty("--comic-preview-bg", `linear-gradient(135deg, ${color1}, ${color2})`);
+                bg.style.setProperty("--preview-bg-image", "none");
+            } else if (style === "image" && imageUrl) {
+                stage.style.setProperty("--comic-preview-bg", `linear-gradient(135deg, ${color1}, ${color2})`);
+                bg.style.setProperty("--preview-bg-image", `url("${imageUrl}")`);
+            } else {
+                stage.style.setProperty("--comic-preview-bg", "var(--page-bg)");
+                bg.style.setProperty("--preview-bg-image", "none");
+            }
+
+            bg.style.setProperty("--preview-bg-opacity", currentComic.theme_background_image_opacity ?? 0.35);
+            bg.style.setProperty("--preview-bg-blur", `${currentComic.theme_background_image_blur ?? 0}px`);
+            bg.style.setProperty("--preview-bg-position", `${currentComic.theme_background_position_x ?? 50}% ${currentComic.theme_background_position_y ?? 50}%`);
+            bg.style.setProperty("--preview-bg-repeat", currentComic.theme_background_image_repeat || "no-repeat");
+
+            const size = currentComic.theme_background_image_size || "cover";
+            const zoom = currentComic.theme_background_zoom ?? 100;
+            const zoomSize = size === "cover" || size === "contain" ? size : `${zoom}%`;
+            bg.style.setProperty("--preview-bg-size", zoomSize);
+            stage.style.setProperty("--preview-overlay-strength", currentComic.theme_background_overlay_strength ?? 0.35);
+        }
+
+        window.setPreviewMode = function (mode) {
+            previewMode = mode;
+            previewPageIndex = 0;
+            renderComicReaderPreview();
+        };
+
+        window.syncComicPreviewFromSettings = function () {
+            if (previewMode === "auto") {
+                currentComic.comic_reading_mode = document.getElementById("comic-reading-mode")?.value || currentComic.comic_reading_mode || "paged";
+            }
+        };
+
+        window.previewNextPage = function () {
+            if (!allPages.length) return;
+            previewPageIndex = Math.min(previewPageIndex + 1, allPages.length - 1);
+            renderComicReaderPreview();
+        };
+
+        window.previewPreviousPage = function () {
+            if (!allPages.length) return;
+            previewPageIndex = Math.max(previewPageIndex - 1, 0);
+            renderComicReaderPreview();
+        };
 
         function renderPages() {
             const grid = document.getElementById("page-grid");
             if (!grid) return;
-            if (!allPages.length) { grid.innerHTML = `<p class="muted">No pages uploaded yet.</p>`; return; }
+            if (!allPages.length) {
+                grid.innerHTML = `<p class="muted">No pages uploaded yet.</p>`;
+                renderComicReaderPreview();
+                return;
+            }
             grid.innerHTML = allPages.map((page, index) => `
 <div class="page-card" id="page-${page.id}">
 <strong>Page ${index + 1}</strong>
-<img src="${escapeHtml(page.image_url || "")}" alt="Page ${index + 1}">
+<img src="${escapeHtml(page.image_url || "")}" alt="Page ${index + 1}" onclick="setPreviewPage(${index})">
 <div class="page-actions">
 <button class="button" onclick="movePage(${index},-1)">↑</button>
 <button class="button" onclick="movePage(${index},1)">↓</button>
+<button class="button" onclick="setPreviewPage(${index})">Preview</button>
 <button class="button danger-button" onclick="deletePage('${page.id}')">Delete</button>
 </div>
 <div style="margin-top:8px;">
@@ -1202,7 +1518,16 @@ Not AI-generated
 </div>
 </div>`).join("");
             allPages.forEach(page => updatePageCreditFields(page.id));
+            renderComicReaderPreview();
         }
+
+        window.setPreviewPage = function (index) {
+            previewMode = "paged";
+            previewPageIndex = index;
+            renderComicReaderPreview();
+            const preview = document.getElementById("comic-reader-preview");
+            if (preview) preview.scrollIntoView({ behavior: "smooth", block: "start" });
+        };
 
         window.updatePageCreditFields = function (pageId) {
             const type = document.getElementById(`page-credit-type-${pageId}`)?.value;
@@ -1219,6 +1544,7 @@ Not AI-generated
         window.refreshPages = async function () {
             if (!currentChapter) return;
             await loadPages(currentChapter.id);
+            if (previewPageIndex >= allPages.length) previewPageIndex = Math.max(allPages.length - 1, 0);
             renderPages();
         };
 
@@ -1226,7 +1552,10 @@ Not AI-generated
             if (!currentChapter) return;
             const input = document.getElementById("page-upload-input");
             const files = [...(input?.files || [])];
-            if (!files.length) { alert("Choose at least one page image first."); return; }
+            if (!files.length) {
+                alert("Choose at least one page image first.");
+                return;
+            }
             const message = document.getElementById("message");
             message.textContent = "Uploading pages...";
             let nextOrder = allPages.length ? Math.max(...allPages.map(page => Number(page.display_order) || 0)) + 1 : 1;
@@ -1234,8 +1563,9 @@ Not AI-generated
             for (const file of files) {
                 const imageUrl = await uploadImage(file, "world-images", "comic-page", 1800, 2600);
                 const { error } = await supabase.from("comic_pages").insert({
-                    chapter_id: currentChapter.id,
+                    world_id: comicId,
                     comic_id: comicId,
+                    chapter_id: currentChapter.id,
                     owner_id: user.id,
                     image_url: imageUrl,
                     display_order: nextOrder,
@@ -1244,11 +1574,15 @@ Not AI-generated
                     image_credit_note: "Uploaded by comic owner.",
                     image_credit_no_ai: true
                 });
-                if (error) { message.textContent = error.message; return; }
+                if (error) {
+                    message.textContent = error.message;
+                    return;
+                }
                 nextOrder++;
             }
             input.value = "";
             await loadPages(currentChapter.id);
+            previewPageIndex = Math.max(allPages.length - files.length, 0);
             renderPages();
             message.textContent = "Pages uploaded.";
         };
@@ -1262,10 +1596,22 @@ Not AI-generated
                 note: document.getElementById(`page-credit-note-${pageId}`)?.value.trim() || "",
                 no_ai: document.getElementById(`page-credit-no-ai-${pageId}`)?.checked || false
             };
-            if (credit.type === "nullverse_creator" && !credit.nullverse_username) { alert("Page credit needs a Nullverse username."); return; }
-            if ((credit.type === "external_artist" || credit.type === "photographer") && (!credit.name || !credit.url)) { alert("Page credit needs a name and URL."); return; }
-            if (credit.type === "stock_public_domain" && (!credit.url && !credit.note)) { alert("Stock/public domain credit needs a source URL or note."); return; }
-            if (credit.type === "no_credit_needed" && !credit.note) { alert("No credit needed requires a short reason."); return; }
+            if (credit.type === "nullverse_creator" && !credit.nullverse_username) {
+                alert("Page credit needs a Nullverse username.");
+                return;
+            }
+            if ((credit.type === "external_artist" || credit.type === "photographer") && (!credit.name || !credit.url)) {
+                alert("Page credit needs a name and URL.");
+                return;
+            }
+            if (credit.type === "stock_public_domain" && (!credit.url && !credit.note)) {
+                alert("Stock/public domain credit needs a source URL or note.");
+                return;
+            }
+            if (credit.type === "no_credit_needed" && !credit.note) {
+                alert("No credit needed requires a short reason.");
+                return;
+            }
 
             const { error } = await supabase.from("comic_pages").update({
                 image_credit_type: credit.type,
@@ -1275,17 +1621,30 @@ Not AI-generated
                 image_credit_note: credit.note,
                 image_credit_no_ai: credit.no_ai,
                 updated_at: new Date().toISOString()
-            }).eq("id", pageId).eq("owner_id", user.id);
+            })
+                .eq("id", pageId)
+                .eq("world_id", comicId)
+                .eq("owner_id", user.id);
 
-            if (error) { alert(error.message); return; }
+            if (error) {
+                alert(error.message);
+                return;
+            }
             await notifyCredit(credit, currentComic.id, `You were credited for comic page artwork in "${currentComic.title || "a comic"}".`);
             await refreshPages();
         };
 
         window.deletePage = async function (pageId) {
             if (!confirm("Delete this page?")) return;
-            const { error } = await supabase.from("comic_pages").delete().eq("id", pageId).eq("owner_id", user.id);
-            if (error) { alert(error.message); return; }
+            const { error } = await supabase.from("comic_pages")
+                .delete()
+                .eq("id", pageId)
+                .eq("world_id", comicId)
+                .eq("owner_id", user.id);
+            if (error) {
+                alert(error.message);
+                return;
+            }
             await refreshPages();
             await savePageOrder();
             renderPages();
@@ -1295,13 +1654,18 @@ Not AI-generated
             const newIndex = index + direction;
             if (newIndex < 0 || newIndex >= allPages.length) return;
             [allPages[index], allPages[newIndex]] = [allPages[newIndex], allPages[index]];
+            previewPageIndex = newIndex;
             await savePageOrder();
             renderPages();
         };
 
         async function savePageOrder() {
             for (let i = 0; i < allPages.length; i++) {
-                await supabase.from("comic_pages").update({ display_order: i + 1 }).eq("id", allPages[i].id).eq("owner_id", user.id);
+                await supabase.from("comic_pages")
+                    .update({ display_order: i + 1 })
+                    .eq("id", allPages[i].id)
+                    .eq("world_id", comicId)
+                    .eq("owner_id", user.id);
                 allPages[i].display_order = i + 1;
             }
         }
@@ -1309,9 +1673,13 @@ Not AI-generated
         window.movePageToPosition = async function () {
             const from = Number(document.getElementById("page-move-from").value) - 1;
             const to = Number(document.getElementById("page-move-to").value) - 1;
-            if (from < 0 || to < 0 || from >= allPages.length || to >= allPages.length) { alert("Invalid page positions."); return; }
+            if (from < 0 || to < 0 || from >= allPages.length || to >= allPages.length) {
+                alert("Invalid page positions.");
+                return;
+            }
             const moved = allPages.splice(from, 1)[0];
             allPages.splice(to, 0, moved);
+            previewPageIndex = to;
             await savePageOrder();
             renderPages();
         };
@@ -1319,8 +1687,12 @@ Not AI-generated
         window.swapPagePositions = async function () {
             const first = Number(document.getElementById("page-move-from").value) - 1;
             const second = Number(document.getElementById("page-move-to").value) - 1;
-            if (first < 0 || second < 0 || first >= allPages.length || second >= allPages.length) { alert("Invalid page positions."); return; }
+            if (first < 0 || second < 0 || first >= allPages.length || second >= allPages.length) {
+                alert("Invalid page positions.");
+                return;
+            }
             [allPages[first], allPages[second]] = [allPages[second], allPages[first]];
+            previewPageIndex = second;
             await savePageOrder();
             renderPages();
         };
@@ -1414,7 +1786,6 @@ Chapter ${index + 1}: ${escapeHtml(chapter.title || "Untitled")}
                 preview.style.setProperty("--preview-overlay-strength", overlay.value);
                 document.querySelectorAll("[data-reader-style]").forEach(button => button.classList.toggle("active", button.dataset.readerStyle === style));
             }
-
             document.querySelectorAll("[data-reader-style]").forEach(button => button.addEventListener("click", () => {
                 styleInput.value = button.dataset.readerStyle;
                 updatePreview();
@@ -1547,12 +1918,33 @@ Credit
                 document.getElementById(`${prefix}-credit-note-field`),
                 document.getElementById(`${prefix}-credit-no-ai-field`)
             ];
-            fields.forEach(field => { if (field) field.style.display = "none"; });
-            if (type === "own_work") { showCreditField(prefix, "own-work"); showCreditField(prefix, "note-field"); showCreditField(prefix, "no-ai-field"); }
-            if (type === "nullverse_creator") { showCreditField(prefix, "nullverse-user"); showCreditField(prefix, "note-field"); showCreditField(prefix, "no-ai-field"); }
-            if (type === "external_artist" || type === "photographer") { showCreditField(prefix, "name-field"); showCreditField(prefix, "url-field"); showCreditField(prefix, "note-field"); showCreditField(prefix, "no-ai-field"); }
-            if (type === "stock_public_domain") { showCreditField(prefix, "name-field"); showCreditField(prefix, "url-field"); showCreditField(prefix, "note-field"); }
-            if (type === "no_credit_needed") { showCreditField(prefix, "note-field"); }
+            fields.forEach(field => {
+                if (field) field.style.display = "none";
+            });
+            if (type === "own_work") {
+                showCreditField(prefix, "own-work");
+                showCreditField(prefix, "note-field");
+                showCreditField(prefix, "no-ai-field");
+            }
+            if (type === "nullverse_creator") {
+                showCreditField(prefix, "nullverse-user");
+                showCreditField(prefix, "note-field");
+                showCreditField(prefix, "no-ai-field");
+            }
+            if (type === "external_artist" || type === "photographer") {
+                showCreditField(prefix, "name-field");
+                showCreditField(prefix, "url-field");
+                showCreditField(prefix, "note-field");
+                showCreditField(prefix, "no-ai-field");
+            }
+            if (type === "stock_public_domain") {
+                showCreditField(prefix, "name-field");
+                showCreditField(prefix, "url-field");
+                showCreditField(prefix, "note-field");
+            }
+            if (type === "no_credit_needed") {
+                showCreditField(prefix, "note-field");
+            }
         }
 
         function showCreditField(prefix, suffix) {
@@ -1583,7 +1975,10 @@ Credit
                 window.open(`profile.html?user=${encodeURIComponent(credit.nullverse_username)}`, "_blank");
                 return false;
             }
-            if (credit.url) { window.open(credit.url, "_blank"); return false; }
+            if (credit.url) {
+                window.open(credit.url, "_blank");
+                return false;
+            }
             return false;
         }
 
@@ -1597,10 +1992,22 @@ Credit
         function validateImageCredit(prefix, label, imageExists) {
             if (!imageExists) return true;
             const credit = getCreditData(prefix);
-            if (credit.type === "nullverse_creator" && !credit.nullverse_username) { alert(`${label} needs a Nullverse creator username.`); return false; }
-            if ((credit.type === "external_artist" || credit.type === "photographer") && (!credit.name || !credit.url)) { alert(`${label} needs an artist/photographer name and credit link.`); return false; }
-            if (credit.type === "stock_public_domain" && (!credit.url && !credit.note)) { alert(`${label} needs a source link or source note.`); return false; }
-            if (credit.type === "no_credit_needed" && !credit.note) { alert(`${label} needs a short reason for why no credit is needed.`); return false; }
+            if (credit.type === "nullverse_creator" && !credit.nullverse_username) {
+                alert(`${label} needs a Nullverse creator username.`);
+                return false;
+            }
+            if ((credit.type === "external_artist" || credit.type === "photographer") && (!credit.name || !credit.url)) {
+                alert(`${label} needs an artist/photographer name and credit link.`);
+                return false;
+            }
+            if (credit.type === "stock_public_domain" && (!credit.url && !credit.note)) {
+                alert(`${label} needs a source link or source note.`);
+                return false;
+            }
+            if (credit.type === "no_credit_needed" && !credit.note) {
+                alert(`${label} needs a short reason for why no credit is needed.`);
+                return false;
+            }
             return true;
         }
 
@@ -1612,11 +2019,24 @@ Credit
             const input = document.getElementById(`${prefix}-credit-nullverse-username`);
             const results = document.getElementById(`${prefix}-credit-user-results`);
             const search = input.value.trim().replace("@", "");
-            if (!search) { results.innerHTML = `<p class="message">Type a username or display name first.</p>`; return; }
+            if (!search) {
+                results.innerHTML = `<p class="message">Type a username or display name first.</p>`;
+                return;
+            }
             results.innerHTML = `<p class="message">Searching creators...</p>`;
-            const { data, error } = await supabase.from("profiles").select("id,username,display_name,role,role_name").or(`username.ilike.%${search}%,display_name.ilike.%${search}%`).order("username", { ascending: true }).limit(8);
-            if (error) { results.innerHTML = `<p class="message">${escapeHtml(error.message)}</p>`; return; }
-            if (!data || data.length === 0) { results.innerHTML = `<p class="message">No Nullverse creators found.</p>`; return; }
+            const { data, error } = await supabase.from("profiles")
+                .select("id,username,display_name,role,role_name")
+                .or(`username.ilike.%${search}%,display_name.ilike.%${search}%`)
+                .order("username", { ascending: true })
+                .limit(8);
+            if (error) {
+                results.innerHTML = `<p class="message">${escapeHtml(error.message)}</p>`;
+                return;
+            }
+            if (!data || data.length === 0) {
+                results.innerHTML = `<p class="message">No Nullverse creators found.</p>`;
+                return;
+            }
             results.innerHTML = data.map(profile => `
 <div style="border:1px solid var(--border-color);border-radius:14px;padding:12px;margin-bottom:10px;background:rgba(255,255,255,.035);">
 <strong>${escapeHtml(profile.display_name || "Unnamed Creator")}</strong>
@@ -1667,13 +2087,22 @@ Credit
             renderThemeTags();
         };
 
-        window.removeGenreTag = function (index) { genreTags.splice(index, 1); renderGenreTags(); };
-        window.removeThemeTag = function (index) { themeTags.splice(index, 1); renderThemeTags(); };
+        window.removeGenreTag = function (index) {
+            genreTags.splice(index, 1);
+            renderGenreTags();
+        };
+
+        window.removeThemeTag = function (index) {
+            themeTags.splice(index, 1);
+            renderThemeTags();
+        };
 
         function renderWarningSetup() {
             const saved = currentComic.content_warnings || [];
             const standard = ["violence", "gore", "horror", "body_horror", "sexual_content", "substance_use", "abuse", "self_harm", "disturbing_imagery"];
-            document.querySelectorAll(".warning-choice-grid input").forEach(box => { box.checked = saved.includes(box.value); });
+            document.querySelectorAll(".warning-choice-grid input").forEach(box => {
+                box.checked = saved.includes(box.value);
+            });
             warningTags = saved.filter(tag => !standard.includes(tag));
             renderWarningTags();
         }
@@ -1694,7 +2123,10 @@ Credit
             renderWarningTags();
         };
 
-        window.removeWarningTag = function (index) { warningTags.splice(index, 1); renderWarningTags(); };
+        window.removeWarningTag = function (index) {
+            warningTags.splice(index, 1);
+            renderWarningTags();
+        };
 
         async function uploadImage(file, bucket, suffix, maxWidth = 1600, maxHeight = 1000) {
             const optimized = await optimizeImage(file, { maxWidth, maxHeight, quality: .82 });
@@ -1769,7 +2201,10 @@ Credit
             const standardWarnings = [...document.querySelectorAll(".warning-choice-grid input:checked")].map(box => box.value);
             const contentWarnings = [...new Set([...standardWarnings, ...warningTags])];
 
-            if (!title) { document.getElementById("message").textContent = "Title is required."; return; }
+            if (!title) {
+                document.getElementById("message").textContent = "Title is required.";
+                return;
+            }
 
             const coverInput = document.getElementById("cover-image-input");
             const coverFile = coverInput ? coverInput.files[0] : null;
@@ -1821,7 +2256,10 @@ Credit
             };
 
             const { error } = await supabase.from("worlds").update(update).eq("id", comicId).eq("owner_id", user.id);
-            if (error) { document.getElementById("message").textContent = error.message; return; }
+            if (error) {
+                document.getElementById("message").textContent = error.message;
+                return;
+            }
 
             await notifyCredit(coverCredit, currentComic.id, `You were credited for cover artwork in "${title}".`);
             await notifyCredit(indexCredit, currentComic.id, `You were credited for index artwork in "${title}".`);
@@ -1867,7 +2305,10 @@ Credit
             };
 
             const { error } = await supabase.from("worlds").update(update).eq("id", comicId).eq("owner_id", user.id);
-            if (error) { document.getElementById("message").textContent = error.message; return; }
+            if (error) {
+                document.getElementById("message").textContent = error.message;
+                return;
+            }
 
             await notifyCredit(backgroundCredit, currentComic.id, `You were credited for background artwork in "${currentComic.title || "a comic"}".`);
             currentComic = { ...currentComic, ...update };
@@ -1884,7 +2325,10 @@ Credit
                 display_order: nextOrder,
                 visibility: "draft"
             }).select().single();
-            if (error || !data) { alert(error?.message || "Failed to create chapter."); return; }
+            if (error || !data) {
+                alert(error?.message || "Failed to create chapter.");
+                return;
+            }
             await loadChapters();
             openChapter(data.id);
         };
@@ -1899,14 +2343,23 @@ Credit
                 updated_at: new Date().toISOString()
             };
 
-            const { error } = await supabase.from("comic_chapters").update(update).eq("id", currentChapter.id).eq("owner_id", user.id);
-            if (error) { document.getElementById("message").textContent = error.message; return; }
+            const { error } = await supabase.from("comic_chapters")
+                .update(update)
+                .eq("id", currentChapter.id)
+                .eq("world_id", comicId)
+                .eq("owner_id", user.id);
+
+            if (error) {
+                document.getElementById("message").textContent = error.message;
+                return;
+            }
 
             currentChapter = { ...currentChapter, ...update };
             allChapters = allChapters.map(chapter => chapter.id === currentChapter.id ? currentChapter : chapter);
             renderChapters();
             document.getElementById(`chapter-${currentChapter.id}`)?.classList.add("active");
             document.getElementById("message").textContent = "Chapter saved.";
+            renderComicReaderPreview();
         };
 
         async function notifyCredit(credit, worldId, message) {
@@ -1927,9 +2380,22 @@ Credit
         window.deleteCurrentChapter = async function () {
             if (!currentChapter) return;
             if (!confirm("Delete this chapter and its pages? This cannot be undone.")) return;
-            await supabase.from("comic_pages").delete().eq("chapter_id", currentChapter.id).eq("owner_id", user.id);
-            const { error } = await supabase.from("comic_chapters").delete().eq("id", currentChapter.id).eq("owner_id", user.id);
-            if (error) { alert(error.message); return; }
+            await supabase.from("comic_pages")
+                .delete()
+                .eq("chapter_id", currentChapter.id)
+                .eq("world_id", comicId)
+                .eq("owner_id", user.id);
+
+            const { error } = await supabase.from("comic_chapters")
+                .delete()
+                .eq("id", currentChapter.id)
+                .eq("world_id", comicId)
+                .eq("owner_id", user.id);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
             currentChapter = null;
             await loadChapters();
             openComicSettings();
@@ -1945,7 +2411,11 @@ Credit
 
         async function saveChapterOrder() {
             for (let i = 0; i < allChapters.length; i++) {
-                await supabase.from("comic_chapters").update({ display_order: i + 1 }).eq("id", allChapters[i].id).eq("owner_id", user.id);
+                await supabase.from("comic_chapters")
+                    .update({ display_order: i + 1 })
+                    .eq("id", allChapters[i].id)
+                    .eq("world_id", comicId)
+                    .eq("owner_id", user.id);
                 allChapters[i].display_order = i + 1;
             }
         }
@@ -1953,7 +2423,10 @@ Credit
         window.moveChapterToPosition = async function () {
             const from = Number(document.getElementById("move-from").value) - 1;
             const to = Number(document.getElementById("move-to").value) - 1;
-            if (from < 0 || to < 0 || from >= allChapters.length || to >= allChapters.length) { alert("Invalid positions."); return; }
+            if (from < 0 || to < 0 || from >= allChapters.length || to >= allChapters.length) {
+                alert("Invalid positions.");
+                return;
+            }
             const moved = allChapters.splice(from, 1)[0];
             allChapters.splice(to, 0, moved);
             await saveChapterOrder();
@@ -1963,15 +2436,24 @@ Credit
         window.swapChapterPositions = async function () {
             const first = Number(document.getElementById("move-from").value) - 1;
             const second = Number(document.getElementById("move-to").value) - 1;
-            if (first < 0 || second < 0 || first >= allChapters.length || second >= allChapters.length) { alert("Invalid positions."); return; }
+            if (first < 0 || second < 0 || first >= allChapters.length || second >= allChapters.length) {
+                alert("Invalid positions.");
+                return;
+            }
             [allChapters[first], allChapters[second]] = [allChapters[second], allChapters[first]];
             await saveChapterOrder();
             renderChapters();
         };
 
         window.saveActiveEditor = function () {
-            if (currentChapter) { saveCurrentChapter(); return; }
-            if (document.getElementById("theme-name")) { saveAppearanceSettings(); return; }
+            if (currentChapter) {
+                saveCurrentChapter();
+                return;
+            }
+            if (document.getElementById("theme-name")) {
+                saveAppearanceSettings();
+                return;
+            }
             if (document.getElementById("comic-title")) saveComicSettings();
         };
 
@@ -1994,7 +2476,9 @@ Credit
                 event.preventDefault();
                 event.stopPropagation();
                 const tip = icon.nextElementSibling;
-                document.querySelectorAll(".tooltip.open").forEach(openTip => { if (openTip !== tip) openTip.classList.remove("open"); });
+                document.querySelectorAll(".tooltip.open").forEach(openTip => {
+                    if (openTip !== tip) openTip.classList.remove("open");
+                });
                 if (tip) tip.classList.toggle("open");
                 return;
             }
