@@ -1008,13 +1008,8 @@ ${buildInfoLabel("Cover Image", "This is the main Comic/Manga cover shown across
 <button type="button" class="button danger-button" onclick="removeCoverImage()">Remove Image</button>
 </div>
 
-<div class="image-credit-preview-wrap">
-${currentComic.cover_image_url ? `
-<img src="${escapeHtml(currentComic.cover_image_url)}" class="cover-preview-img">
-${buildCreditPill("cover")}
-`: `
-<div class="empty-preview-box">No cover image yet</div>
-`}
+<div id="cover-preview-wrap" class="image-credit-preview-wrap">
+${buildCoverPreviewMarkup(currentComic.cover_image_url)}
 </div>
 ${buildCreditFields("cover", "Cover Image Credit")}
 
@@ -1159,7 +1154,11 @@ ${buildCreditFields("index", "Index Image Credit")}
             setImageCreditVisible("index", currentComic.theme_index_style === "image" && !!currentComic.theme_index_image_url);
 
             document.getElementById("cover-image-input")?.addEventListener("change", function () {
-                setImageCreditVisible("cover", !!this.files[0] || !!currentComic.cover_image_url);
+                const file = this.files[0];
+                if (!file) return;
+                const previewUrl = URL.createObjectURL(file);
+                currentComic.remove_cover_image = false;
+                updateCoverPreview(previewUrl);
             });
             document.getElementById("theme-index-image-input")?.addEventListener("change", function () {
                 setImageCreditVisible("index", !!this.files[0] || !!currentComic.theme_index_image_url);
@@ -1507,6 +1506,10 @@ Page ${previewPageIndex + 1} / ${allPages.length}
 <option value="no_credit_needed" ${!page.image_credit_type || page.image_credit_type === "no_credit_needed" ? "selected" : ""}>No credit needed</option>
 </select>
 <input id="page-credit-username-${page.id}" placeholder="Nullverse username" value="${escapeHtml(page.image_credit_nullverse_username || "")}">
+<div id="page-credit-search-wrap-${page.id}" style="display:none;margin-top:-10px;margin-bottom:12px;">
+<button type="button" class="button" onclick="searchPageCreditUsers('${page.id}')">Search Creator</button>
+<div id="page-credit-results-${page.id}" style="margin-top:10px;"></div>
+</div>
 <input id="page-credit-name-${page.id}" placeholder="Artist/source name" value="${escapeHtml(page.image_credit_name || "")}">
 <input id="page-credit-url-${page.id}" placeholder="Credit URL" value="${escapeHtml(page.image_credit_url || "")}">
 <textarea id="page-credit-note-${page.id}" rows="2" placeholder="Permission/source note">${escapeHtml(page.image_credit_note || "")}</textarea>
@@ -1535,7 +1538,9 @@ Not AI-generated
             const name = document.getElementById(`page-credit-name-${pageId}`);
             const url = document.getElementById(`page-credit-url-${pageId}`);
             const noAi = document.getElementById(`page-credit-no-ai-${pageId}`)?.parentElement;
+            const searchWrap = document.getElementById(`page-credit-search-wrap-${pageId}`);
             if (username) username.style.display = type === "nullverse_creator" ? "block" : "none";
+            if (searchWrap) searchWrap.style.display = type === "nullverse_creator" ? "block" : "none";
             if (name) name.style.display = ["external_artist", "photographer", "stock_public_domain"].includes(type) ? "block" : "none";
             if (url) url.style.display = ["external_artist", "photographer", "stock_public_domain"].includes(type) ? "block" : "none";
             if (noAi) noAi.style.display = type === "stock_public_domain" || type === "no_credit_needed" ? "none" : "flex";
@@ -1891,6 +1896,24 @@ Credit
 </a>`;
         }
 
+        function buildCoverPreviewMarkup(imageUrl) {
+            return imageUrl ? `
+<img id="cover-preview-img" src="${escapeHtml(imageUrl)}" class="cover-preview-img">
+${buildCreditPill("cover")}
+`: `
+<div id="cover-empty-preview" class="empty-preview-box">No cover image yet</div>
+${buildCreditPill("cover")}
+`;
+        }
+
+        function updateCoverPreview(imageUrl) {
+            const wrap = document.getElementById("cover-preview-wrap");
+            if (!wrap) return;
+            wrap.innerHTML = buildCoverPreviewMarkup(imageUrl);
+            setCreditValues("cover", currentComic, "cover");
+            setImageCreditVisible("cover", !!imageUrl);
+        }
+
         function setCreditValues(prefix, source, dbPrefix) {
             const type = document.getElementById(`${prefix}-credit-type`);
             const name = document.getElementById(`${prefix}-credit-name`);
@@ -2045,6 +2068,49 @@ Credit
 </div>`).join("");
         };
 
+
+        window.searchPageCreditUsers = async function (pageId) {
+            const input = document.getElementById(`page-credit-username-${pageId}`);
+            const results = document.getElementById(`page-credit-results-${pageId}`);
+            const search = input.value.trim().replace("@", "");
+            if (!search) {
+                results.innerHTML = `<p class="message">Type a username or display name first.</p>`;
+                return;
+            }
+            results.innerHTML = `<p class="message">Searching creators...</p>`;
+            const { data, error } = await supabase
+                .from("profiles")
+                .select("id,username,display_name,role,role_name")
+                .or(`username.ilike.%${search}%,display_name.ilike.%${search}%`)
+                .order("username", { ascending: true })
+                .limit(8);
+            if (error) {
+                results.innerHTML = `<p class="message">${escapeHtml(error.message)}</p>`;
+                return;
+            }
+            if (!data || data.length === 0) {
+                results.innerHTML = `<p class="message">No Nullverse creators found.</p>`;
+                return;
+            }
+            results.innerHTML = data.map(profile => `
+<div style="border:1px solid var(--border-color);border-radius:14px;padding:12px;margin-bottom:10px;background:rgba(255,255,255,.035);">
+<strong>${escapeHtml(profile.display_name || "Unnamed Creator")}</strong>
+<div class="message" style="margin:4px 0 10px;">@${escapeHtml(profile.username || "no-username")}</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;">
+<button type="button" class="button" onclick="selectPageCreditUser('${pageId}','${escapeHtml(profile.username || "")}')">Use This Creator</button>
+<a class="button" href="profile.html?user=${encodeURIComponent(profile.username || "")}" target="_blank">View Profile</a>
+</div>
+</div>
+`).join("");
+        };
+
+        window.selectPageCreditUser = function (pageId, username) {
+            document.getElementById(`page-credit-username-${pageId}`).value = username || "";
+            document.getElementById(`page-credit-type-${pageId}`).value = "nullverse_creator";
+            document.getElementById(`page-credit-results-${pageId}`).innerHTML = `<p class="message">Selected @${escapeHtml(username)}</p>`;
+            updatePageCreditFields(pageId);
+        };
+
         window.selectCreditUser = function (prefix, username, displayName) {
             document.getElementById(`${prefix}-credit-nullverse-username`).value = username || "";
             const nameInput = document.getElementById(`${prefix}-credit-name`);
@@ -2142,7 +2208,7 @@ Credit
             currentComic.remove_cover_image = true;
             const input = document.getElementById("cover-image-input");
             if (input) input.value = "";
-            setImageCreditVisible("cover", false);
+            updateCoverPreview("");
         };
 
         window.removeIndexImage = function () {
