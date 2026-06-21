@@ -1363,6 +1363,7 @@
         /* Literature Tutorial System */
         body.tutorial-active {
             overflow: hidden !important;
+            touch-action: none;
         }
 
             body.tutorial-active .main,
@@ -1370,6 +1371,10 @@
             body.tutorial-active .writing-studio-overlay .nv-doc-page-wrap,
             body.tutorial-active .writing-studio-overlay .nv-doc-toolbar {
                 overflow: hidden !important;
+            }
+
+            body.tutorial-active *:not(.tutorial-card):not(.tutorial-card *):not(.tutorial-welcome-card):not(.tutorial-welcome-card *) {
+                user-select: none;
             }
 
         .tutorial-button {
@@ -1399,45 +1404,50 @@
 
         .tutorial-shade {
             position: fixed;
-            z-index: 2147483000;
-            background: rgba(0,0,0,.58);
+            z-index: 2147483001;
+            background: rgba(0,0,0,.50);
             backdrop-filter: blur(5px);
             -webkit-backdrop-filter: blur(5px);
-            transition: top .28s ease, left .28s ease, width .28s ease, height .28s ease, opacity .2s ease;
+            transition: top .24s ease, left .24s ease, width .24s ease, height .24s ease, opacity .18s ease;
             pointer-events: auto;
         }
 
         .tutorial-spotlight {
             position: fixed;
-            z-index: 2147483002;
-            border: 2px solid rgba(255,255,255,.94);
+            z-index: 2147483003;
+            border: 2px solid rgba(255,255,255,.96);
             border-radius: 20px;
             box-shadow: 0 0 34px rgba(255,255,255,.45), inset 0 0 0 1px rgba(255,255,255,.16);
             pointer-events: none;
-            transition: all .28s ease;
+            transition: all .24s ease;
         }
 
         .tutorial-target-lift {
             position: relative !important;
-            z-index: 2147483001 !important;
+            z-index: 2147483002 !important;
             filter: none !important;
             transform: translateZ(0);
             isolation: isolate;
+            pointer-events: none !important;
+        }
+
+        .writing-studio-overlay.tutorial-studio-open {
+            z-index: 2147482990 !important;
         }
 
         .tutorial-card {
             position: fixed;
-            z-index: 2147483004;
+            z-index: 2147483005;
             width: min(390px, calc(100vw - 34px));
-            border: 1px solid rgba(255,255,255,.16);
+            border: 1px solid rgba(255,255,255,.18);
             border-radius: 22px;
-            background: radial-gradient(circle at 18% 8%, rgba(255,255,255,.12), transparent 30%), linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.025)), rgba(8,8,12,.96);
+            background: radial-gradient(circle at 18% 8%, rgba(255,255,255,.12), transparent 30%), linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.025)), rgba(8,8,12,.98);
             color: var(--text-primary);
             padding: 20px;
-            box-shadow: 0 22px 60px rgba(0,0,0,.62), inset 0 1px 0 rgba(255,255,255,.05);
-            backdrop-filter: blur(22px);
-            -webkit-backdrop-filter: blur(22px);
-            transition: top .28s ease, left .28s ease;
+            box-shadow: 0 28px 80px rgba(0,0,0,.72), inset 0 1px 0 rgba(255,255,255,.06);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            transition: top .24s ease, left .24s ease;
             pointer-events: auto;
         }
 
@@ -1506,23 +1516,23 @@
 
         .tutorial-arrow {
             position: fixed;
-            z-index: 2147483003;
+            z-index: 2147483004;
             width: 0;
             height: 0;
-            transition: top .28s ease, left .28s ease;
+            transition: top .24s ease, left .24s ease;
             pointer-events: none;
         }
 
             .tutorial-arrow.down {
                 border-left: 12px solid transparent;
                 border-right: 12px solid transparent;
-                border-bottom: 14px solid rgba(255,255,255,.92);
+                border-bottom: 14px solid rgba(255,255,255,.94);
             }
 
             .tutorial-arrow.up {
                 border-left: 12px solid transparent;
                 border-right: 12px solid transparent;
-                border-top: 14px solid rgba(255,255,255,.92);
+                border-top: 14px solid rgba(255,255,255,.94);
             }
 
         .tutorial-welcome-card {
@@ -3974,13 +3984,15 @@
         };
 
 
-        const literatureTutorialStorageKey = "nullverse-literature-editor-tutorial-complete-v1";
+        const literatureTutorialStorageKey = "nullverse-literature-editor-tutorial-complete-v2";
+
         let literatureTutorialActive = false;
         let literatureTutorialIndex = 0;
         let literatureTutorialSteps = [];
         let literatureTutorialCurrentTarget = null;
         let literatureTutorialResizeFrame = null;
-        let literatureTutorialScrollLock = null;
+        let literatureTutorialSavedState = null;
+        let literatureTutorialScrollGuardActive = false;
 
         function markLiteratureTutorialComplete() {
             localStorage.setItem(literatureTutorialStorageKey, "true");
@@ -3999,44 +4011,50 @@
                     target: "#tutorial-sidebar",
                     title: "Your Literature Studio Sidebar",
                     text: "This sidebar is your main navigation. It holds book settings, reader appearance, chapter search, reorder tools, and every chapter in the project.",
-                    padding: 6
+                    padding: 6,
+                    resetScroll: true
                 },
                 {
                     view: "overview",
                     target: "#book-card",
                     title: "Book Settings",
-                    text: "Start here when you need to edit the title, cover, description, genres, warnings, publishing state, and chapter index."
+                    text: "Start here when you need to edit the title, cover, description, genres, warnings, publishing state, and chapter index.",
+                    resetScroll: true
                 },
                 {
                     view: "overview",
                     target: "#appearance-card",
                     title: "Reader Appearance",
-                    text: "This controls the public reading atmosphere. You can keep the default Nullverse space-glass look or customize colors, gradients, artwork, opacity, blur, and overlay strength."
+                    text: "This controls the public reading atmosphere. You can keep the default Nullverse space-glass look or customize colors, gradients, artwork, opacity, blur, and overlay strength.",
+                    resetScroll: true
                 },
                 {
                     view: "overview",
                     target: "#tutorial-add-chapter-area",
                     title: "Add Chapter",
-                    text: "Use this button to create a new numbered chapter. Literature is built around chapters, so this is where the writing workflow begins."
+                    text: "Use this button to create a new numbered chapter. Literature is built around chapters, so this is where the writing workflow begins.",
+                    resetScroll: true
                 },
                 {
                     view: "overview",
                     target: "#tutorial-button",
                     title: "Replay This Tutorial",
-                    text: "The tutorial only asks once, but this button lets writers replay the guide any time they need a refresher."
+                    text: "The tutorial only asks once, but this button lets writers replay the guide any time they need a refresher.",
+                    resetScroll: true
                 },
                 {
                     view: "overview",
                     target: "#tutorial-literature-identity-area",
                     title: "Literature Identity",
                     text: "This card is where you name the book, add a cover, write the description, and add genre or theme tags so readers understand what kind of story it is.",
-                    padding: 8
+                    padding: 8,
+                    resetScroll: true
                 },
                 {
                     view: "overview",
                     target: "#tutorial-publishing-area",
                     title: "Publishing Controls",
-                    text: "Draft keeps the work private while you build. Published makes the Literature visible to readers, depending on your content filters and moderation status.",
+                    text: "Draft keeps the work private while you build. Published makes the Literature visible to readers, depending on content filters and moderation status.",
                     padding: 8
                 },
                 {
@@ -4058,7 +4076,8 @@
                     target: "#tutorial-reader-appearance-area",
                     title: "Reader Appearance",
                     text: "This page controls the background behind the public reading experience. It is separate from chapter card styling, so the whole book can have its own atmosphere.",
-                    padding: 8
+                    padding: 8,
+                    resetScroll: true
                 },
                 {
                     view: "appearance",
@@ -4076,7 +4095,8 @@
                         target: "#tutorial-chapter-workspace-area",
                         title: "Chapter Workspace",
                         text: "Each chapter has its own workspace. You can see visibility, word count, estimated reading time, and jump into the full Writing Studio.",
-                        padding: 8
+                        padding: 8,
+                        resetScroll: true
                     },
                     {
                         view: "chapter",
@@ -4088,8 +4108,8 @@
                     {
                         view: "chapter",
                         target: "#tutorial-writing-studio-card-area",
-                        title: "Writing Studio",
-                        text: "This is the main Literature feature. Open the full-screen Writing Studio to write, format, track stats, and work without the rest of the editor getting in the way.",
+                        title: "Writing Studio Card",
+                        text: "This card opens the full writing space. It also gives you a quick preview, word count, and estimated reading time before you enter the studio.",
                         padding: 8
                     },
                     {
@@ -4101,9 +4121,13 @@
                         before: async function () {
                             openWritingStudio();
                             await waitForLiteratureTutorialPaint();
+                            markWritingStudioTutorialOpen();
+                            setElementScroll(document.querySelector(".writing-studio-overlay .nv-doc-page-wrap"), 0);
+                            setElementScroll(document.querySelector(".writing-studio-overlay .nv-doc-toolbar"), 0);
                         },
                         afterLeave: function () {
                             closeWritingStudio();
+                            clearWritingStudioTutorialOpen();
                         }
                     },
                     {
@@ -4115,9 +4139,13 @@
                         before: async function () {
                             openWritingStudio();
                             await waitForLiteratureTutorialPaint();
+                            markWritingStudioTutorialOpen();
+                            setElementScroll(document.querySelector(".writing-studio-overlay .nv-doc-page-wrap"), 0);
+                            setElementScroll(document.querySelector(".writing-studio-overlay .nv-doc-toolbar"), 0);
                         },
                         afterLeave: function () {
                             closeWritingStudio();
+                            clearWritingStudioTutorialOpen();
                         }
                     },
                     {
@@ -4129,9 +4157,12 @@
                         before: async function () {
                             openWritingStudio();
                             await waitForLiteratureTutorialPaint();
+                            markWritingStudioTutorialOpen();
+                            setElementScroll(document.querySelector(".writing-studio-overlay .nv-doc-page-wrap"), 0);
                         },
                         afterLeave: function () {
                             closeWritingStudio();
+                            clearWritingStudioTutorialOpen();
                         }
                     },
                     {
@@ -4143,9 +4174,13 @@
                         before: async function () {
                             openWritingStudio();
                             await waitForLiteratureTutorialPaint();
+                            markWritingStudioTutorialOpen();
+                            const pageWrap = document.querySelector(".writing-studio-overlay .nv-doc-page-wrap");
+                            if (pageWrap) pageWrap.scrollTop = pageWrap.scrollHeight;
                         },
                         afterLeave: function () {
                             closeWritingStudio();
+                            clearWritingStudioTutorialOpen();
                         }
                     },
                     {
@@ -4175,7 +4210,8 @@
                     view: "overview",
                     target: "#tutorial-add-chapter-area",
                     title: "Create a Chapter First",
-                    text: "Once you create your first chapter, the tutorial can show the Chapter Workspace, full Writing Studio, formatting toolbar, chapter images, notes, and card styling."
+                    text: "Once you create your first chapter, the tutorial can show the Chapter Workspace, full Writing Studio, formatting toolbar, chapter images, notes, and card styling.",
+                    resetScroll: true
                 });
             }
 
@@ -4184,13 +4220,15 @@
                     view: "overview",
                     target: "#view-public-literature",
                     title: "View Public Page",
-                    text: "Open the public Literature reader from here to see what readers will experience after you save."
+                    text: "Open the public Literature reader from here to see what readers will experience after you save.",
+                    resetScroll: true
                 },
                 {
                     view: "overview",
                     target: "#tutorial-save-area",
                     title: "Save Changes",
-                    text: "Save regularly. Book settings, reader appearance, chapter details, and Writing Studio content save depending on where you are in the editor."
+                    text: "Save regularly. Book settings, reader appearance, chapter details, and Writing Studio content save depending on where you are in the editor.",
+                    resetScroll: true
                 }
             );
 
@@ -4207,6 +4245,7 @@
 
         window.acceptLiteratureTutorialPrompt = function () {
             const welcome = document.getElementById("tutorial-welcome-overlay");
+
             if (welcome) {
                 welcome.classList.remove("open");
                 welcome.setAttribute("aria-hidden", "true");
@@ -4217,6 +4256,7 @@
 
         window.skipLiteratureTutorialPrompt = function () {
             const welcome = document.getElementById("tutorial-welcome-overlay");
+
             if (welcome) {
                 welcome.classList.remove("open");
                 welcome.setAttribute("aria-hidden", "true");
@@ -4225,64 +4265,129 @@
             markLiteratureTutorialComplete();
         };
 
-        window.startLiteratureTutorial = async function () {
+        window.startLiteratureTutorial = async function (manualReplay = false) {
             const welcome = document.getElementById("tutorial-welcome-overlay");
+
             if (welcome) {
                 welcome.classList.remove("open");
                 welcome.setAttribute("aria-hidden", "true");
             }
 
+            saveLiteratureTutorialState();
             clearLiteratureTutorialTargetLift();
+            clearWritingStudioTutorialOpen();
+
             closeWritingStudio();
+            openBookSettings();
+            await waitForLiteratureTutorialPaint();
+
+            resetLiteratureTutorialScrollPositions();
 
             literatureTutorialSteps = buildLiteratureTutorialSteps();
             literatureTutorialIndex = 0;
             literatureTutorialActive = true;
 
             document.body.classList.add("tutorial-active");
+            enableLiteratureTutorialScrollGuard();
 
             const overlay = document.getElementById("tutorial-overlay");
+
             if (overlay) {
                 overlay.classList.add("open");
                 overlay.setAttribute("aria-hidden", "false");
             }
 
-            lockLiteratureTutorialPage();
             await showLiteratureTutorialStep();
         };
 
-        function lockLiteratureTutorialPage() {
-            literatureTutorialScrollLock = {
-                windowX: window.scrollX || 0,
-                windowY: window.scrollY || 0,
-                mainTop: document.querySelector(".main")?.scrollTop || 0,
-                chapterTop: document.querySelector(".chapter-list")?.scrollTop || 0,
-                studioTop: document.querySelector(".writing-studio-overlay .nv-doc-page-wrap")?.scrollTop || 0
+        function saveLiteratureTutorialState() {
+            literatureTutorialSavedState = {
+                wasWritingStudioOpen: !!document.querySelector("#writing-studio-overlay.open"),
+                currentChapterId: currentChapter?.id || null,
+                mainScroll: getElementScroll(document.querySelector(".main")),
+                chapterListScroll: getElementScroll(document.querySelector(".chapter-list")),
+                studioPageScroll: getElementScroll(document.querySelector(".writing-studio-overlay .nv-doc-page-wrap")),
+                studioToolbarScroll: getElementScroll(document.querySelector(".writing-studio-overlay .nv-doc-toolbar"))
             };
-
-            document.addEventListener("wheel", blockLiteratureTutorialInput, { passive: false, capture: true });
-            document.addEventListener("touchmove", blockLiteratureTutorialInput, { passive: false, capture: true });
-            document.addEventListener("pointerdown", blockLiteratureTutorialPointer, true);
         }
 
-        function unlockLiteratureTutorialPage() {
-            document.removeEventListener("wheel", blockLiteratureTutorialInput, { capture: true });
-            document.removeEventListener("touchmove", blockLiteratureTutorialInput, { capture: true });
-            document.removeEventListener("pointerdown", blockLiteratureTutorialPointer, true);
+        function restoreLiteratureTutorialState() {
+            if (!literatureTutorialSavedState) return;
 
-            literatureTutorialScrollLock = null;
+            setElementScroll(document.querySelector(".main"), literatureTutorialSavedState.mainScroll);
+            setElementScroll(document.querySelector(".chapter-list"), literatureTutorialSavedState.chapterListScroll);
+
+            if (literatureTutorialSavedState.wasWritingStudioOpen) {
+                openWritingStudio();
+
+                setTimeout(() => {
+                    setElementScroll(document.querySelector(".writing-studio-overlay .nv-doc-page-wrap"), literatureTutorialSavedState.studioPageScroll);
+                    setElementScroll(document.querySelector(".writing-studio-overlay .nv-doc-toolbar"), literatureTutorialSavedState.studioToolbarScroll);
+                }, 0);
+            }
+
+            literatureTutorialSavedState = null;
         }
 
-        function blockLiteratureTutorialInput(event) {
+        function resetLiteratureTutorialScrollPositions() {
+            setElementScroll(document.querySelector(".main"), 0);
+            setElementScroll(document.querySelector(".chapter-list"), 0);
+            setElementScroll(document.querySelector(".writing-studio-overlay .nv-doc-page-wrap"), 0);
+            setElementScroll(document.querySelector(".writing-studio-overlay .nv-doc-toolbar"), 0);
+            window.scrollTo(0, 0);
+        }
+
+        function getElementScroll(element) {
+            return element ? element.scrollTop : 0;
+        }
+
+        function setElementScroll(element, value) {
+            if (element) element.scrollTop = Number(value) || 0;
+        }
+
+        function markWritingStudioTutorialOpen() {
+            document.getElementById("writing-studio-overlay")?.classList.add("tutorial-studio-open");
+        }
+
+        function clearWritingStudioTutorialOpen() {
+            document.getElementById("writing-studio-overlay")?.classList.remove("tutorial-studio-open");
+        }
+
+        function enableLiteratureTutorialScrollGuard() {
+            if (literatureTutorialScrollGuardActive) return;
+
+            literatureTutorialScrollGuardActive = true;
+
+            document.addEventListener("wheel", stopLiteratureTutorialUserMovement, { capture: true, passive: false });
+            document.addEventListener("touchmove", stopLiteratureTutorialUserMovement, { capture: true, passive: false });
+            document.addEventListener("pointerdown", stopLiteratureTutorialOutsideInteraction, { capture: true });
+        }
+
+        function disableLiteratureTutorialScrollGuard() {
+            if (!literatureTutorialScrollGuardActive) return;
+
+            literatureTutorialScrollGuardActive = false;
+
+            document.removeEventListener("wheel", stopLiteratureTutorialUserMovement, { capture: true, passive: false });
+            document.removeEventListener("touchmove", stopLiteratureTutorialUserMovement, { capture: true, passive: false });
+            document.removeEventListener("pointerdown", stopLiteratureTutorialOutsideInteraction, { capture: true });
+        }
+
+        function stopLiteratureTutorialUserMovement(event) {
             if (!literatureTutorialActive) return;
+
+            if (event.target.closest(".tutorial-card") || event.target.closest(".tutorial-welcome-card")) {
+                return;
+            }
+
             event.preventDefault();
             event.stopPropagation();
         }
 
-        function blockLiteratureTutorialPointer(event) {
+        function stopLiteratureTutorialOutsideInteraction(event) {
             if (!literatureTutorialActive) return;
 
-            if (event.target.closest("#tutorial-card") || event.target.closest("#tutorial-welcome-overlay")) {
+            if (event.target.closest(".tutorial-card") || event.target.closest(".tutorial-welcome-card")) {
                 return;
             }
 
@@ -4293,23 +4398,34 @@
         async function prepareLiteratureTutorialView(step) {
             if (step.view === "overview") {
                 closeWritingStudio();
+                clearWritingStudioTutorialOpen();
                 openBookSettings();
                 await waitForLiteratureTutorialPaint();
-                setLiteratureTutorialScroll(".main", 0);
-                setLiteratureTutorialScroll(".chapter-list", 0);
+
+                if (step.resetScroll) {
+                    resetLiteratureTutorialScrollPositions();
+                }
+
                 return;
             }
 
             if (step.view === "appearance") {
                 closeWritingStudio();
+                clearWritingStudioTutorialOpen();
                 openAppearanceSettings();
                 await waitForLiteratureTutorialPaint();
-                setLiteratureTutorialScroll(".main", 0);
-                setLiteratureTutorialScroll(".chapter-list", 0);
+
+                if (step.resetScroll) {
+                    resetLiteratureTutorialScrollPositions();
+                }
+
                 return;
             }
 
             if (step.view === "chapter") {
+                closeWritingStudio();
+                clearWritingStudioTutorialOpen();
+
                 if (!currentChapter && allChapters.length) {
                     openChapter(allChapters[0].id);
                 }
@@ -4319,12 +4435,11 @@
                 }
 
                 await waitForLiteratureTutorialPaint();
-            }
-        }
 
-        function setLiteratureTutorialScroll(selector, top) {
-            const element = document.querySelector(selector);
-            if (element) element.scrollTop = top;
+                if (step.resetScroll) {
+                    resetLiteratureTutorialScrollPositions();
+                }
+            }
         }
 
         function waitForLiteratureTutorialPaint() {
@@ -4341,14 +4456,14 @@
             clearLiteratureTutorialTargetLift();
 
             const previousStep = literatureTutorialSteps[literatureTutorialIndex - 1];
-            const currentStepBeforeMove = literatureTutorialSteps[literatureTutorialIndex];
 
-            if (previousStep?.afterLeave && previousStep !== currentStepBeforeMove) {
+            if (previousStep?.afterLeave) {
                 previousStep.afterLeave();
                 await waitForLiteratureTutorialPaint();
             }
 
             const step = literatureTutorialSteps[literatureTutorialIndex];
+
             if (!step) {
                 endLiteratureTutorial(false);
                 return;
@@ -4363,52 +4478,25 @@
             await waitForLiteratureTutorialPaint();
 
             let target = findLiteratureTutorialTarget(step);
-            if (!target) target = document.querySelector(".topbar") || document.body;
 
-            moveLiteratureTutorialViewportToTarget(target);
-
-            setTimeout(() => {
-                const freshTarget = findLiteratureTutorialTarget(step) || target;
-                setLiteratureTutorialTargetLift(freshTarget);
-                positionLiteratureTutorialStep(freshTarget, step);
-            }, 330);
-        }
-
-        function moveLiteratureTutorialViewportToTarget(target) {
-            const studioWrap = document.querySelector(".writing-studio-overlay.open .nv-doc-page-wrap");
-            const main = document.querySelector(".main");
-            const chapterList = document.querySelector(".chapter-list");
-
-            if (studioWrap && studioWrap.contains(target)) {
-                scrollElementToShowTarget(studioWrap, target);
-                return;
+            if (!target) {
+                target = document.querySelector(".topbar") || document.body;
             }
 
-            if (chapterList && chapterList.contains(target)) {
-                scrollElementToShowTarget(chapterList, target);
-                return;
-            }
+            scrollLiteratureTutorialTargetIntoView(target);
+            await waitForLiteratureTutorialPaint();
 
-            if (main && main.contains(target)) {
-                scrollElementToShowTarget(main, target);
-                return;
-            }
+            const freshTarget = findLiteratureTutorialTarget(step) || target;
 
-            window.scrollTo(0, 0);
-        }
-
-        function scrollElementToShowTarget(scroller, target) {
-            const scrollerRect = scroller.getBoundingClientRect();
-            const targetRect = target.getBoundingClientRect();
-
-            const targetCenter = targetRect.top - scrollerRect.top + scroller.scrollTop - (scroller.clientHeight / 2) + (targetRect.height / 2);
-            scroller.scrollTop = Math.max(0, targetCenter);
+            setLiteratureTutorialTargetLift(freshTarget);
+            positionLiteratureTutorialStep(freshTarget, step);
         }
 
         function findLiteratureTutorialTarget(step) {
             if (!step?.target) return null;
 
             const targets = document.querySelectorAll(step.target);
+
             for (const target of targets) {
                 if (isLiteratureTutorialTargetVisible(target)) {
                     return target;
@@ -4430,10 +4518,68 @@
                 rect.height > 0;
         }
 
+        function scrollLiteratureTutorialTargetIntoView(target) {
+            if (!target) return;
+
+            const main = document.querySelector(".main");
+            const chapterList = document.querySelector(".chapter-list");
+            const studioPageWrap = document.querySelector(".writing-studio-overlay .nv-doc-page-wrap");
+            const studioToolbar = document.querySelector(".writing-studio-overlay .nv-doc-toolbar");
+
+            if (target.closest(".writing-studio-overlay")) {
+                if (studioToolbar && target.closest(".nv-doc-toolbar")) {
+                    centerTargetHorizontallyInScroller(target, studioToolbar);
+                    return;
+                }
+
+                if (studioPageWrap && target.closest(".nv-doc-page-wrap")) {
+                    centerTargetInScroller(target, studioPageWrap);
+                    return;
+                }
+
+                return;
+            }
+
+            if (main && target.closest(".main")) {
+                centerTargetInScroller(target, main);
+            }
+
+            if (chapterList && target.closest(".chapter-list")) {
+                centerTargetInScroller(target, chapterList);
+            }
+
+            window.scrollTo(0, 0);
+        }
+
+        function centerTargetInScroller(target, scroller) {
+            if (!target || !scroller) return;
+
+            const targetRect = target.getBoundingClientRect();
+            const scrollerRect = scroller.getBoundingClientRect();
+            const targetCenter = targetRect.top + targetRect.height / 2;
+            const scrollerCenter = scrollerRect.top + scrollerRect.height / 2;
+            const delta = targetCenter - scrollerCenter;
+
+            scroller.scrollTop += delta;
+        }
+
+        function centerTargetHorizontallyInScroller(target, scroller) {
+            if (!target || !scroller) return;
+
+            const targetRect = target.getBoundingClientRect();
+            const scrollerRect = scroller.getBoundingClientRect();
+            const targetCenter = targetRect.left + targetRect.width / 2;
+            const scrollerCenter = scrollerRect.left + scrollerRect.width / 2;
+            const delta = targetCenter - scrollerCenter;
+
+            scroller.scrollLeft += delta;
+        }
+
         function setLiteratureTutorialTargetLift(target) {
             clearLiteratureTutorialTargetLift();
 
             literatureTutorialCurrentTarget = target;
+
             if (literatureTutorialCurrentTarget) {
                 literatureTutorialCurrentTarget.classList.add("tutorial-target-lift");
             }
@@ -4477,31 +4623,61 @@
                 return `<span class="tutorial-dot ${index === literatureTutorialIndex ? "active" : ""}"></span>`;
             }).join("");
 
+            positionLiteratureTutorialCard(card, arrow, hole);
+        }
+
+        function positionLiteratureTutorialCard(card, arrow, hole) {
             const cardWidth = Math.min(390, window.innerWidth - 34);
-            let cardLeft = hole.left + (hole.width / 2) - (cardWidth / 2);
-            cardLeft = Math.max(17, Math.min(cardLeft, window.innerWidth - cardWidth - 17));
-
             const cardHeight = card.offsetHeight || 280;
-            const spaceBelow = window.innerHeight - hole.bottom;
-            let cardTop;
-            let arrowTop;
-            let arrowClass;
+            const safeGap = 36;
 
-            if (spaceBelow > cardHeight + 48) {
+            const spaces = {
+                below: window.innerHeight - hole.bottom,
+                above: hole.top,
+                right: window.innerWidth - hole.right,
+                left: hole.left
+            };
+
+            let cardLeft = hole.left + (hole.width / 2) - (cardWidth / 2);
+            let cardTop;
+            let arrowClass;
+            let arrowLeft;
+            let arrowTop;
+
+            if (spaces.below >= cardHeight + safeGap) {
                 cardTop = hole.bottom + 30;
-                arrowTop = hole.bottom + 10;
                 arrowClass = "down";
-            } else {
-                cardTop = Math.max(17, hole.top - cardHeight - 30);
-                arrowTop = Math.max(17, hole.top - 24);
+                arrowTop = hole.bottom + 10;
+            } else if (spaces.above >= cardHeight + safeGap) {
+                cardTop = hole.top - cardHeight - 30;
                 arrowClass = "up";
+                arrowTop = hole.top - 24;
+            } else {
+                cardTop = Math.max(17, Math.min(window.innerHeight - cardHeight - 17, 17));
+                cardLeft = hole.right + 24;
+
+                if (cardLeft + cardWidth > window.innerWidth - 17) {
+                    cardLeft = hole.left - cardWidth - 24;
+                }
+
+                if (cardLeft < 17) {
+                    cardLeft = 17;
+                    cardTop = window.innerHeight - cardHeight - 17;
+                }
+
+                arrowClass = spaces.above > spaces.below ? "up" : "down";
+                arrowTop = arrowClass === "up" ? Math.max(17, hole.top - 24) : Math.min(window.innerHeight - 24, hole.bottom + 10);
             }
+
+            cardLeft = Math.max(17, Math.min(cardLeft, window.innerWidth - cardWidth - 17));
+            cardTop = Math.max(17, Math.min(cardTop, window.innerHeight - cardHeight - 17));
+            arrowLeft = Math.max(18, Math.min(hole.left + hole.width / 2 - 12, window.innerWidth - 30));
 
             card.style.left = `${cardLeft}px`;
             card.style.top = `${cardTop}px`;
 
             arrow.className = `tutorial-arrow ${arrowClass}`;
-            arrow.style.left = `${Math.max(18, Math.min(hole.left + hole.width / 2 - 12, window.innerWidth - 30))}px`;
+            arrow.style.left = `${arrowLeft}px`;
             arrow.style.top = `${arrowTop}px`;
         }
 
@@ -4556,6 +4732,7 @@
             if (literatureTutorialIndex <= 0) return;
 
             const currentStep = literatureTutorialSteps[literatureTutorialIndex];
+
             if (currentStep?.afterLeave) {
                 currentStep.afterLeave();
             }
@@ -4564,23 +4741,27 @@
             showLiteratureTutorialStep();
         };
 
-        window.endLiteratureTutorial = function () {
+        window.endLiteratureTutorial = function (skipped = false) {
             const currentStep = literatureTutorialSteps[literatureTutorialIndex];
+
             if (currentStep?.afterLeave) {
                 currentStep.afterLeave();
             }
 
+            clearWritingStudioTutorialOpen();
             clearLiteratureTutorialTargetLift();
             literatureTutorialActive = false;
             document.body.classList.remove("tutorial-active");
+            disableLiteratureTutorialScrollGuard();
 
             const overlay = document.getElementById("tutorial-overlay");
+
             if (overlay) {
                 overlay.classList.remove("open");
                 overlay.setAttribute("aria-hidden", "true");
             }
 
-            unlockLiteratureTutorialPage();
+            restoreLiteratureTutorialState();
             markLiteratureTutorialComplete();
         };
 
@@ -4588,6 +4769,7 @@
             if (!literatureTutorialActive) return;
 
             cancelAnimationFrame(literatureTutorialResizeFrame);
+
             literatureTutorialResizeFrame = requestAnimationFrame(() => {
                 const step = literatureTutorialSteps[literatureTutorialIndex];
                 const target = findLiteratureTutorialTarget(step);
