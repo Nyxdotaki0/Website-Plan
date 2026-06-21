@@ -1168,6 +1168,73 @@
             background: radial-gradient(circle at top, rgba(255,255,255,.075), transparent 32%), linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.01)), #0b0b0e;
         }
 
+        .writing-studio-overlay.studio-light {
+            background: #f2f2f4;
+            color: #111;
+        }
+
+            .writing-studio-overlay.studio-light .writing-studio-topbar,
+            .writing-studio-overlay.studio-light .nv-doc-toolbar,
+            .writing-studio-overlay.studio-light .nv-doc-footer {
+                background: rgba(245,245,247,.96);
+                color: #111;
+                border-color: rgba(0,0,0,.12);
+            }
+
+            .writing-studio-overlay.studio-light .nv-doc-page-wrap {
+                background: #e8e8eb;
+            }
+
+            .writing-studio-overlay.studio-light .nv-doc-editor {
+                background: #ffffff;
+                color: #121217;
+                border-color: rgba(0,0,0,.12);
+                box-shadow: 0 22px 60px rgba(0,0,0,.18);
+            }
+
+        .writing-studio-overlay.studio-dark .nv-doc-editor {
+            background: #111114;
+            color: #f5f5f5;
+            border-color: rgba(255,255,255,.12);
+        }
+
+        .writing-studio-overlay.studio-dark .nv-doc-page-wrap {
+            background: radial-gradient(circle at top, rgba(255,255,255,.075), transparent 32%), #050506;
+        }
+
+        .writing-studio-overlay.studio-dark .nv-doc-editor:empty::before {
+            color: rgba(255,255,255,.38);
+        }
+
+        .writing-studio-overlay.studio-dark .nv-doc-editor blockquote {
+            background: rgba(255,255,255,.06);
+            color: #f5f5f5;
+            border-left-color: rgba(255,255,255,.28);
+        }
+
+        .writing-studio-overlay.studio-dark .nv-doc-editor hr {
+            border-top-color: rgba(255,255,255,.18);
+        }
+
+            .writing-studio-overlay.studio-light .writing-studio-topbar,
+            .writing-studio-overlay.studio-light .nv-doc-toolbar,
+            .writing-studio-overlay.studio-light .nv-doc-footer {
+                background: rgba(245,245,247,.96);
+                color: #111;
+                border-color: rgba(0,0,0,.12);
+            }
+
+            .writing-studio-overlay.studio-light .nv-doc-page-wrap {
+                background: #e8e8eb;
+            }
+
+            .writing-studio-overlay.studio-light .nv-doc-toolbar button,
+            .writing-studio-overlay.studio-light .nv-doc-toolbar select,
+            .writing-studio-overlay.studio-light .nv-doc-toolbar input[type="color"] {
+                background: #111;
+                color: #fff;
+            }
+
         .writing-studio-overlay .nv-doc-editor {
             width: min(960px, calc(100vw - 44px));
             max-width: none;
@@ -1969,6 +2036,7 @@
                                             <div class="writing-studio-inline-stats" id="chapter-doc-studio-summary">${wordCount.toLocaleString()} words · ${readMinutes} min read</div>
                                         </div>
                                         <div class="writing-studio-actions">
+                                        <button type="button" class="button" id="writing-studio-theme-toggle" onclick="toggleWritingStudioTheme()">🌙 Dark</button>
                                             <button type="button" class="button" onclick="closeWritingStudio()">Exit</button>
                                             <button type="button" class="button primary-button" onclick="saveAndCloseWritingStudio()">Save & Exit</button>
                                         </div>
@@ -2240,6 +2308,24 @@
             markDocDirty();
         };
 
+        window.toggleWritingStudioTheme = function () {
+            const overlay = document.getElementById("writing-studio-overlay");
+            if (!overlay) return;
+
+            const goingLight = !overlay.classList.contains("studio-light");
+
+            overlay.classList.toggle("studio-light", goingLight);
+            overlay.classList.toggle("studio-dark", !goingLight);
+
+            localStorage.setItem(
+                "nullverse-writing-studio-theme",
+                goingLight ? "light" : "dark"
+            );
+
+            const toggle = document.getElementById("writing-studio-theme-toggle");
+            if (toggle) toggle.textContent = goingLight ? "☀️ Light" : "🌙 Dark";
+        };
+
         window.docInsertQuote = function () {
             focusDocEditor();
             document.execCommand("formatBlock", false, "blockquote");
@@ -2302,6 +2388,13 @@
             overlay.classList.add("open");
             overlay.setAttribute("aria-hidden", "false");
             document.body.classList.add("writing-studio-active");
+            const savedStudioTheme = localStorage.getItem("nullverse-writing-studio-theme") || "dark";
+
+            overlay.classList.toggle("studio-light", savedStudioTheme === "light");
+            overlay.classList.toggle("studio-dark", savedStudioTheme !== "light");
+
+            const toggle = document.getElementById("writing-studio-theme-toggle");
+            if (toggle) toggle.textContent = savedStudioTheme === "light" ? "☀️ Light" : "🌙 Dark";
             updateDocStats();
 
             setTimeout(() => {
@@ -2408,10 +2501,46 @@
             });
 
             editor.addEventListener("keydown", event => {
-                if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+                const shortcut = event.ctrlKey || event.metaKey;
+                if (!shortcut) return;
+
+                const key = event.key.toLowerCase();
+
+                if (key === "s") {
                     event.preventDefault();
                     saveCurrentChapter();
                 }
+
+                if (key === "b") {
+                    event.preventDefault();
+                    docCommand("bold");
+                }
+
+                if (key === "i") {
+                    event.preventDefault();
+                    docCommand("italic");
+                }
+
+                if (key === "u") {
+                    event.preventDefault();
+                    docCommand("underline");
+                }
+
+                if (key === "z" && !event.shiftKey) {
+                    event.preventDefault();
+                    docCommand("undo");
+                }
+
+                if ((key === "z" && event.shiftKey) || key === "y") {
+                    event.preventDefault();
+                    docCommand("redo");
+                }
+
+                if (key === "k") {
+                    event.preventDefault();
+                    docCreateLink();
+                }
+           
             });
 
             updateDocStats();
