@@ -701,6 +701,33 @@
                 color: var(--text-secondary);
             }
 
+
+
+        .display-name-object,
+        .username-object {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+            line-height: 1.05;
+            white-space: normal;
+            overflow: hidden;
+        }
+
+        .username-object {
+            color: rgba(255, 255, 255, .72);
+        }
+
+        .text-object,
+        .bio-object,
+        .section-object,
+        .featured-object {
+            height: 100%;
+            overflow: auto;
+            align-content: start;
+        }
+
         @media (max-width: 860px) {
             header {
                 flex-direction: column;
@@ -1123,8 +1150,8 @@
             }
 
             parsed.canvas = {
-                width: 1600,
-                height: 2200,
+                width: Math.max(2400, window.innerWidth * 2),
+                height: 2400,
                 backgroundMode: "gradient",
                 backgroundColor: "#09090b",
                 backgroundGradient: "radial-gradient(circle at 20% 10%, rgba(255,255,255,.10), transparent 30%), linear-gradient(135deg, #050506, #14141b)",
@@ -1300,17 +1327,42 @@
             return "";
         }
 
-        function buildCustomActions(profile) {
+        function buildCustomActions(profile, object = {}) {
+            const inlineStyle = getActionButtonInlineStyle(object);
+            const gap = Number(object.styles?.actionButtonGap ?? 10);
+
             if (currentUser.id === profile.id) {
-                return `<a class="custom-action-button" href="account-settings.html">Edit Profile</a>`;
+                return `
+                        <div class="actions-object" style="gap:${gap}px;">
+                            <a class="custom-action-button" style="${inlineStyle}" href="account-settings.html">Edit Profile</a>
+                        </div>
+                    `;
             }
 
             return `
-                    <button class="custom-action-button" data-custom-action="follow">Follow</button>
-                    <button class="custom-action-button" data-custom-action="message">Message</button>
-                    <button class="custom-action-button" data-custom-action="block">Block</button>
-                    <button class="custom-action-button" data-custom-action="report">Report</button>
+                    <div class="actions-object" style="gap:${gap}px;">
+                        <button class="custom-action-button" style="${inlineStyle}" data-custom-action="follow">Follow</button>
+                        <button class="custom-action-button" style="${inlineStyle}" data-custom-action="message">Message</button>
+                        <button class="custom-action-button" style="${inlineStyle}" data-custom-action="block">Block</button>
+                        <button class="custom-action-button" style="${inlineStyle}" data-custom-action="report">Report</button>
+                    </div>
                 `;
+        }
+
+        function getActionButtonInlineStyle(object) {
+            const styles = object.styles || {};
+            const variant = styles.actionButtonVariant || "filled";
+            const bg = variant === "ghost" ? "transparent" : styles.actionButtonBg || "rgba(0,0,0,.28)";
+            const border = variant === "none" ? "transparent" : styles.actionButtonBorder || "rgba(255,255,255,.14)";
+
+            return [
+                `background:${bg}`,
+                `color:${styles.actionButtonText || "#ffffff"}`,
+                `border-color:${border}`,
+                `border-radius:${Number(styles.actionButtonRadius ?? 12)}px`,
+                `padding:${Number(styles.actionButtonPaddingY ?? 10)}px ${Number(styles.actionButtonPaddingX ?? 13)}px`,
+                `font-size:${Number(styles.actionButtonFontSize ?? 15)}px`
+            ].join(";");
         }
 
         document.addEventListener("click", event => {

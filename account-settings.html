@@ -1204,6 +1204,116 @@
             line-height: 1.5;
         }
 
+
+
+        .studio-preview-nav {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            height: 88px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 22px;
+            padding: 12px 40px;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(12, 12, 14, .72);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            box-shadow: 0 10px 35px rgba(0, 0, 0, .28);
+            pointer-events: none;
+        }
+
+            .studio-preview-nav img {
+                height: 64px;
+                width: auto;
+                display: block;
+            }
+
+        .studio-preview-nav-links {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 22px;
+            color: var(--text-secondary);
+            font-size: .95rem;
+        }
+
+            .studio-preview-nav-links span.active {
+                color: #fff;
+                background: linear-gradient(180deg, #35353b 0%, #1d1d22 45%, #101014 100%);
+                border: 1px solid rgba(255, 255, 255, .12);
+                padding: 8px 14px;
+                border-radius: 999px;
+                box-shadow: 0 0 18px rgba(255, 255, 255, .10), inset 0 1px 0 rgba(255, 255, 255, .07);
+            }
+
+        .studio-page-guide {
+            position: absolute;
+            top: 88px;
+            left: 50%;
+            width: min(1180px, calc(100vw - 64px));
+            height: calc(100% - 88px);
+            transform: translateX(-50%);
+            border-left: 1px dashed rgba(255, 255, 255, .14);
+            border-right: 1px dashed rgba(255, 255, 255, .14);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+            .studio-page-guide::before {
+                content: "public profile safe area";
+                position: absolute;
+                top: 16px;
+                left: 16px;
+                padding: 6px 9px;
+                border-radius: 999px;
+                border: 1px solid rgba(255, 255, 255, .12);
+                background: rgba(0, 0, 0, .38);
+                color: rgba(255, 255, 255, .54);
+                font-size: .75rem;
+                letter-spacing: .05em;
+                text-transform: uppercase;
+            }
+
+        .studio-workspace.panning {
+            cursor: grabbing;
+        }
+
+            .studio-workspace.panning .canvas-object {
+                pointer-events: none;
+            }
+
+        .display-name-object,
+        .username-object {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+            padding: 0;
+            line-height: 1.05;
+            white-space: normal;
+            overflow: hidden;
+        }
+
+        .username-object {
+            color: rgba(255, 255, 255, .72);
+        }
+
+        .text-object,
+        .bio-object,
+        .section-object,
+        .featured-object {
+            height: 100%;
+            overflow: auto;
+            align-content: start;
+        }
+
+        .text-object {
+            align-self: flex-start;
+        }
+
         @media (max-width: 1100px) {
             .studio-sidebar,
             .studio-inspector {
@@ -1589,6 +1699,8 @@
                 <div class="tool-grid">
                     <button class="tool-button" onclick="addStudioObject('profile_identity')">Identity Card</button>
                     <button class="tool-button" onclick="addStudioObject('profile_avatar')">Avatar Circle</button>
+                    <button class="tool-button" onclick="addStudioObject('display_name')">Display Name</button>
+                    <button class="tool-button" onclick="addStudioObject('username_text')">Username</button>
                     <button class="tool-button" onclick="addStudioObject('profile_actions')">Action Buttons</button>
                     <button class="tool-button" onclick="addStudioObject('creator_gallery')">Gallery</button>
                     <button class="tool-button" onclick="addStudioObject('creator_works')">Works</button>
@@ -1616,6 +1728,18 @@
             <div class="studio-workspace" id="studio-workspace">
                 <div id="studio-canvas-wrap" class="studio-canvas-wrap">
                     <div id="studio-canvas" class="profile-canvas">
+                        <div class="studio-preview-nav">
+                            <img src="Nullverse-3.png" alt="Nullverse">
+                            <div class="studio-preview-nav-links">
+                                <span>Home</span>
+                                <span>Notifications</span>
+                                <span>Explore</span>
+                                <span class="active">Profile</span>
+                                <span>Dashboard</span>
+                                <span>Messages</span>
+                            </div>
+                        </div>
+                        <div class="studio-page-guide"></div>
                         <div class="canvas-grid"></div>
                         <div id="canvas-empty-note" class="canvas-empty-note">
                             <div>
@@ -1671,7 +1795,7 @@
             {
                 key: "identity",
                 label: "Identity",
-                accepts: ["profile_identity", "profile_avatar"]
+                accepts: ["profile_identity", "profile_avatar", "display_name", "username_text"]
             },
             {
                 key: "actions",
@@ -1694,6 +1818,8 @@
             profile_identity: "Identity Card",
             profile_avatar: "Avatar Circle",
             profile_actions: "Action Buttons",
+            display_name: "Display Name",
+            username_text: "Username",
             creator_gallery: "Gallery",
             creator_works: "Works",
             world_card: "World Card",
@@ -2133,8 +2259,8 @@
             return {
                 version: 2,
                 canvas: {
-                    width: Math.max(1600, window.innerWidth),
-                    height: 2200,
+                    width: Math.max(2400, window.innerWidth * 2),
+                    height: 2400,
                     backgroundMode: "gradient",
                     backgroundColor: "#09090b",
                     backgroundGradient: "radial-gradient(circle at 20% 10%, rgba(255,255,255,.10), transparent 30%), linear-gradient(135deg, #050506, #14141b)",
@@ -2150,13 +2276,14 @@
             const layout = createBlankStudioLayout();
 
             layout.objects = [
-                makeObject("banner", 0, 0, 1600, 320),
-                makeObject("profile_avatar", 90, 235, 160, 160),
-                makeObject("profile_identity", 285, 250, 560, 150),
-                makeObject("profile_actions", 880, 278, 430, 90),
-                makeObject("bio", 90, 470, 520, 230),
-                makeObject("creator_gallery", 670, 470, 570, 255),
-                makeObject("creator_works", 90, 780, 1150, 240)
+                makeObject("banner", 0, 88, 1600, 320),
+                makeObject("profile_avatar", 90, 323, 160, 160),
+                makeObject("display_name", 285, 338, 560, 64),
+                makeObject("username_text", 285, 412, 330, 38),
+                makeObject("profile_actions", 880, 366, 430, 90),
+                makeObject("bio", 90, 558, 520, 230),
+                makeObject("creator_gallery", 670, 558, 570, 255),
+                makeObject("creator_works", 90, 868, 1150, 240)
             ];
 
             return layout;
@@ -2267,6 +2394,42 @@
                 object.styles.background = "transparent";
             }
 
+
+            if (type === "display_name") {
+                object.w = 520;
+                object.h = 70;
+                object.text = "";
+                object.styles.background = "transparent";
+                object.styles.borderColor = "transparent";
+                object.styles.fontSize = 54;
+                object.styles.radius = 0;
+            }
+
+            if (type === "username_text") {
+                object.w = 300;
+                object.h = 44;
+                object.text = "";
+                object.styles.background = "transparent";
+                object.styles.borderColor = "transparent";
+                object.styles.fontSize = 24;
+                object.styles.textColor = "rgba(255,255,255,.72)";
+                object.styles.radius = 0;
+            }
+
+            if (type === "profile_actions") {
+                object.w = 430;
+                object.h = 92;
+                object.styles.actionButtonBg = "rgba(0,0,0,.28)";
+                object.styles.actionButtonText = "#ffffff";
+                object.styles.actionButtonBorder = "rgba(255,255,255,.14)";
+                object.styles.actionButtonRadius = 12;
+                object.styles.actionButtonPaddingY = 10;
+                object.styles.actionButtonPaddingX = 13;
+                object.styles.actionButtonFontSize = 15;
+                object.styles.actionButtonGap = 10;
+                object.styles.actionButtonVariant = "filled";
+            }
+
             if (type === "banner") {
                 object.w = 720;
                 object.h = 220;
@@ -2325,6 +2488,12 @@
             document.getElementById("profile-studio-page").classList.add("open");
             setRadioValue("profile-layout-mode", "custom");
             renderStudio();
+
+            requestAnimationFrame(() => {
+                const workspace = document.getElementById("studio-workspace");
+                workspace.scrollLeft = Math.max(0, (studioLayout.canvas.width - workspace.clientWidth) / 2);
+                workspace.scrollTop = 0;
+            });
         }
 
         function toggleStudioPanel(panel) {
@@ -2380,6 +2549,39 @@
         function applyStudioZoom() {
             const wrap = document.getElementById("studio-canvas-wrap");
             wrap.style.transform = `scale(${studioZoom})`;
+        }
+
+
+        function startWorkspacePan(event) {
+            if (event.button !== 2) {
+                return;
+            }
+
+            event.preventDefault();
+
+            const workspace = document.getElementById("studio-workspace");
+
+            interactionState = {
+                mode: "pan",
+                startX: event.clientX,
+                startY: event.clientY,
+                originalScrollLeft: workspace.scrollLeft,
+                originalScrollTop: workspace.scrollTop
+            };
+
+            workspace.classList.add("panning");
+            window.addEventListener("pointermove", handleStudioPointerMove);
+            window.addEventListener("pointerup", stopStudioInteraction, { once: true });
+        }
+
+        function setupWorkspacePan() {
+            const workspace = document.getElementById("studio-workspace");
+
+            workspace.addEventListener("contextmenu", event => {
+                event.preventDefault();
+            });
+
+            workspace.addEventListener("pointerdown", startWorkspacePan);
         }
 
         function validateStudioLayout(layout) {
@@ -2676,6 +2878,23 @@
             return `<div class="text-object">Object</div>`;
         }
 
+
+        function getActionButtonInlineStyle(object) {
+            const styles = object.styles || {};
+            const variant = styles.actionButtonVariant || "filled";
+            const bg = variant === "ghost" ? "transparent" : styles.actionButtonBg || "rgba(0,0,0,.28)";
+            const border = variant === "none" ? "transparent" : styles.actionButtonBorder || "rgba(255,255,255,.14)";
+
+            return [
+                `background:${bg}`,
+                `color:${styles.actionButtonText || "#ffffff"}`,
+                `border-color:${border}`,
+                `border-radius:${Number(styles.actionButtonRadius ?? 12)}px`,
+                `padding:${Number(styles.actionButtonPaddingY ?? 10)}px ${Number(styles.actionButtonPaddingX ?? 13)}px`,
+                `font-size:${Number(styles.actionButtonFontSize ?? 15)}px`
+            ].join(";");
+        }
+
         function renderLayers() {
             const container = document.getElementById("studio-layers");
 
@@ -2878,6 +3097,57 @@
                                 <input value="${escapeHtml(object.imageUrl || "")}" onchange="updateObjectField('imageUrl', this.value)">
                             </div>
                         `;
+            }
+
+
+
+            if (object.type === "profile_actions") {
+                html += `
+                                <div class="inspector-group">
+                                    <h4>Action Buttons</h4>
+
+                                    <label>Button Variant</label>
+                                    <select onchange="updateObjectStyle('actionButtonVariant', this.value)">
+                                        ${["filled", "ghost", "none"].map(value => `
+                                            <option value="${value}" ${(object.styles.actionButtonVariant || "filled") === value ? "selected" : ""}>${value}</option>
+                                        `).join("")}
+                                    </select>
+
+                                    <label>Button Background</label>
+                                    <input value="${escapeHtml(object.styles.actionButtonBg || "rgba(0,0,0,.28)")}" onchange="updateObjectStyle('actionButtonBg', this.value)">
+
+                                    <label>Button Text Color</label>
+                                    <input type="color" value="${escapeHtml(object.styles.actionButtonText || "#ffffff")}" onchange="updateObjectStyle('actionButtonText', this.value)">
+
+                                    <label>Button Border</label>
+                                    <input value="${escapeHtml(object.styles.actionButtonBorder || "rgba(255,255,255,.14)")}" onchange="updateObjectStyle('actionButtonBorder', this.value)">
+
+                                    <div class="mini-grid">
+                                        <div>
+                                            <label>Button Radius</label>
+                                            <input type="number" min="0" max="80" value="${Number(object.styles.actionButtonRadius ?? 12)}" onchange="updateObjectStyle('actionButtonRadius', Number(this.value))">
+                                        </div>
+                                        <div>
+                                            <label>Button Font Size</label>
+                                            <input type="number" min="8" max="48" value="${Number(object.styles.actionButtonFontSize ?? 15)}" onchange="updateObjectStyle('actionButtonFontSize', Number(this.value))">
+                                        </div>
+                                        <div>
+                                            <label>Padding Y</label>
+                                            <input type="number" min="0" max="40" value="${Number(object.styles.actionButtonPaddingY ?? 10)}" onchange="updateObjectStyle('actionButtonPaddingY', Number(this.value))">
+                                        </div>
+                                        <div>
+                                            <label>Padding X</label>
+                                            <input type="number" min="0" max="60" value="${Number(object.styles.actionButtonPaddingX ?? 13)}" onchange="updateObjectStyle('actionButtonPaddingX', Number(this.value))">
+                                        </div>
+                                        <div>
+                                            <label>Button Gap</label>
+                                            <input type="number" min="0" max="40" value="${Number(object.styles.actionButtonGap ?? 10)}" onchange="updateObjectStyle('actionButtonGap', Number(this.value))">
+                                        </div>
+                                    </div>
+
+                                    <p class="help-text" style="margin:0;">Labels stay system-controlled for safety. You can style their look, not rename them.</p>
+                                </div>
+                            `;
             }
 
             if (["image", "banner", "image_text"].includes(object.type)) {
@@ -3132,6 +3402,13 @@
                 return;
             }
 
+            if (interactionState.mode === "pan") {
+                const workspace = document.getElementById("studio-workspace");
+                workspace.scrollLeft = interactionState.originalScrollLeft - (event.clientX - interactionState.startX);
+                workspace.scrollTop = interactionState.originalScrollTop - (event.clientY - interactionState.startY);
+                return;
+            }
+
             const object = studioLayout.objects.find(item => item.id === interactionState.id);
 
             if (!object) {
@@ -3208,9 +3485,14 @@
         }
 
         function stopStudioInteraction() {
+            const mode = interactionState?.mode;
             interactionState = null;
             window.removeEventListener("pointermove", handleStudioPointerMove);
-            renderStudio();
+            document.getElementById("studio-workspace")?.classList.remove("panning");
+
+            if (mode !== "pan") {
+                renderStudio();
+            }
         }
 
         function updateObjectElement(object) {
@@ -3480,6 +3762,7 @@
         window.changePassword = changePassword;
         window.logOut = logOut;
 
+        setupWorkspacePan();
         checkUserAndLoadProfile();
     </script>
 </body>
