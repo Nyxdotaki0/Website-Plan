@@ -682,24 +682,72 @@
 
         .studio-shell {
             display: grid;
-            grid-template-columns: 282px minmax(0, 1fr) 320px;
+            grid-template-columns: minmax(0, 1fr);
             min-height: 0;
+            position: relative;
         }
 
         .studio-sidebar,
         .studio-inspector {
-            border-color: var(--border-color);
-            background: rgba(12, 12, 14, .88);
+            position: fixed;
+            top: 92px;
+            bottom: 18px;
+            width: min(360px, calc(100vw - 32px));
+            z-index: 9200;
+            border: 1px solid var(--border-color);
+            border-radius: 22px;
+            background: rgba(12, 12, 14, .92);
             overflow: auto;
             padding: 16px;
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+            box-shadow: 0 24px 70px rgba(0, 0, 0, .58);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: transform .2s ease, opacity .2s ease, visibility .2s ease;
         }
 
         .studio-sidebar {
-            border-right: 1px solid var(--border-color);
+            left: 18px;
+            transform: translateX(-18px);
         }
 
+            .studio-sidebar.open {
+                transform: translateX(0);
+                opacity: 1;
+                visibility: visible;
+                pointer-events: auto;
+            }
+
         .studio-inspector {
-            border-left: 1px solid var(--border-color);
+            right: 18px;
+            transform: translateX(18px);
+        }
+
+            .studio-inspector.open {
+                transform: translateX(0);
+                opacity: 1;
+                visibility: visible;
+                pointer-events: auto;
+            }
+
+        .studio-floating-hint {
+            position: fixed;
+            left: 18px;
+            bottom: 18px;
+            z-index: 9150;
+            max-width: min(520px, calc(100vw - 36px));
+            padding: 12px 14px;
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 18px;
+            background: rgba(10, 10, 12, .66);
+            color: var(--text-secondary);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            font-size: .9rem;
+            line-height: 1.45;
+            pointer-events: none;
         }
 
         .studio-panel-title {
@@ -765,29 +813,28 @@
             min-width: 0;
             min-height: 0;
             overflow: auto;
-            padding: 34px;
-            background: radial-gradient(circle at 20% 10%, rgba(255, 255, 255, .045), transparent 28%), #050506;
+            padding: 0;
+            background: transparent;
         }
 
         .studio-canvas-wrap {
             width: max-content;
             min-width: 100%;
-            display: flex;
-            justify-content: center;
-            transform-origin: top center;
+            display: block;
+            transform-origin: top left;
         }
 
         .profile-canvas {
             position: relative;
-            width: 1200px;
-            height: 900px;
-            border: 1px solid rgba(255, 255, 255, .12);
-            border-radius: 24px;
-            overflow: hidden;
-            background: #09090b;
+            width: 1600px;
+            min-height: 2200px;
+            border: none;
+            border-radius: 0;
+            overflow: visible;
+            background: var(--page-bg);
             background-size: cover;
             background-position: center;
-            box-shadow: 0 24px 80px rgba(0, 0, 0, .52);
+            box-shadow: none;
         }
 
         .canvas-grid {
@@ -820,6 +867,8 @@
             overflow: visible;
             cursor: grab;
             user-select: none;
+            touch-action: none;
+            will-change: left, top, width, height, transform;
             box-shadow: 0 12px 30px rgba(0, 0, 0, .22);
             transform-origin: center center;
         }
@@ -1089,8 +1138,23 @@
         }
 
         .shape-object {
-            background: rgba(255, 255, 255, .12);
+            width: 100%;
+            height: 100%;
+            background: currentColor;
+            opacity: .9;
         }
+
+            .shape-object.circle {
+                border-radius: 999px;
+            }
+
+            .shape-object.star {
+                clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 56%, 79% 91%, 50% 70%, 21% 91%, 32% 56%, 2% 35%, 39% 35%);
+            }
+
+            .shape-object.diamond {
+                clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+            }
 
         .divider-object {
             align-items: center;
@@ -1141,20 +1205,9 @@
         }
 
         @media (max-width: 1100px) {
-            .studio-shell {
-                grid-template-columns: 240px minmax(0, 1fr);
-            }
-
+            .studio-sidebar,
             .studio-inspector {
-                position: fixed;
-                right: 14px;
                 top: 88px;
-                bottom: 14px;
-                width: min(330px, calc(100vw - 28px));
-                z-index: 9100;
-                border: 1px solid var(--border-color);
-                border-radius: 18px;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, .55);
             }
         }
 
@@ -1208,16 +1261,8 @@
                 grid-template-columns: 1fr;
             }
 
-            .studio-sidebar {
-                display: none;
-            }
-
             .studio-workspace {
-                padding: 18px;
-            }
-
-            .studio-canvas-wrap {
-                justify-content: flex-start;
+                padding: 0;
             }
         }
 
@@ -1275,11 +1320,12 @@
                     flex: 1;
                 }
 
+            .studio-sidebar,
             .studio-inspector {
                 left: 10px;
                 right: 10px;
-                top: auto;
-                height: 48dvh;
+                top: 116px;
+                bottom: 10px;
                 width: auto;
             }
         }
@@ -1527,6 +1573,8 @@
 
             <div class="button-row">
                 <button type="button" class="button-muted" onclick="closeProfileStudio()">Back</button>
+                <button type="button" class="button-muted" onclick="toggleStudioPanel('tools')">Add / Layers</button>
+                <button type="button" class="button-muted" onclick="toggleStudioPanel('inspector')">Inspector</button>
                 <button type="button" class="button-muted" onclick="zoomStudio(-0.1)">Zoom -</button>
                 <button type="button" class="button-muted" onclick="zoomStudio(0.1)">Zoom +</button>
                 <button type="button" class="button-muted" onclick="previewStudioAsProfile()">Preview</button>
@@ -1535,7 +1583,7 @@
         </div>
 
         <div class="studio-shell">
-            <aside class="studio-sidebar">
+            <aside id="studio-tools-panel" class="studio-sidebar">
                 <p class="studio-panel-title">Add Objects</p>
 
                 <div class="tool-grid">
@@ -1544,6 +1592,7 @@
                     <button class="tool-button" onclick="addStudioObject('profile_actions')">Action Buttons</button>
                     <button class="tool-button" onclick="addStudioObject('creator_gallery')">Gallery</button>
                     <button class="tool-button" onclick="addStudioObject('creator_works')">Works</button>
+                    <button class="tool-button" onclick="addStudioObject('world_card')">World Card</button>
                     <button class="tool-button" onclick="addStudioObject('stats')">Stats</button>
                     <button class="tool-button" onclick="addStudioObject('text')">Text Box</button>
                     <button class="tool-button" onclick="addStudioObject('bio')">Bio Box</button>
@@ -1551,7 +1600,9 @@
                     <button class="tool-button" onclick="addStudioObject('image_text')">Image + Text</button>
                     <button class="tool-button" onclick="addStudioObject('banner')">Banner</button>
                     <button class="tool-button" onclick="addStudioObject('section')">Section Card</button>
-                    <button class="tool-button" onclick="addStudioObject('shape')">Shape</button>
+                    <button class="tool-button" onclick="addStudioObject('shape')">Rectangle</button>
+                    <button class="tool-button" onclick="addStudioObject('circle')">Circle</button>
+                    <button class="tool-button" onclick="addStudioObject('star')">Star</button>
                     <button class="tool-button" onclick="addStudioObject('divider')">Divider</button>
                 </div>
 
@@ -1576,11 +1627,15 @@
                 </div>
             </div>
 
-            <aside class="studio-inspector">
+            <aside id="studio-inspector-panel" class="studio-inspector">
                 <p class="studio-panel-title">Inspector</p>
                 <div id="studio-inspector"></div>
                 <p id="studio-status" class="studio-status"></p>
             </aside>
+
+            <div class="studio-floating-hint">
+                Your profile page is the canvas. Open Add / Layers only when you need tools, then close it to see the page. Drag objects anywhere left, right, up, or down.
+            </div>
         </div>
     </section>
 
@@ -1641,6 +1696,7 @@
             profile_actions: "Action Buttons",
             creator_gallery: "Gallery",
             creator_works: "Works",
+            world_card: "World Card",
             stats: "Stats",
             text: "Text Box",
             bio: "Bio Box",
@@ -1648,7 +1704,9 @@
             image_text: "Image + Text",
             banner: "Banner",
             section: "Section Card",
-            shape: "Shape",
+            shape: "Rectangle",
+            circle: "Circle",
+            star: "Star",
             divider: "Divider"
         };
 
@@ -1660,6 +1718,7 @@
         let currentAvatarUrl = "";
         let currentBannerUrl = "";
         let currentProfileRecord = null;
+        let currentPublishedWorlds = [];
         let studioLayout = null;
         let selectedObjectId = null;
         let studioZoom = 1;
@@ -1859,6 +1918,8 @@
             document.getElementById("age-role-message").textContent =
                 "Age verification is complete. Your date of birth and age category are private and never shown publicly.";
 
+            await loadPublishedWorldsForStudio();
+
             studioLayout = normalizeStudioLayout(profile.profile_custom_layout || createBlankStudioLayout());
             renderStudio();
         }
@@ -1881,6 +1942,28 @@
 
         function getRadioValue(name, fallback) {
             return document.querySelector(`input[name="${name}"]:checked`)?.value || fallback;
+        }
+
+        async function loadPublishedWorldsForStudio() {
+            if (!currentUser) {
+                currentPublishedWorlds = [];
+                return;
+            }
+
+            const { data, error } = await supabaseClient
+                .from("worlds")
+                .select("id, title, summary, genres, themes, cover_image_url, world_type, content_type, updated_at")
+                .eq("owner_id", currentUser.id)
+                .eq("visibility", "published")
+                .order("updated_at", { ascending: false });
+
+            if (error) {
+                console.error(error);
+                currentPublishedWorlds = [];
+                return;
+            }
+
+            currentPublishedWorlds = data || [];
         }
 
         async function uploadFileIfSelected(inputId, bucketName, currentUrl, fileNameBase, options) {
@@ -2050,8 +2133,8 @@
             return {
                 version: 2,
                 canvas: {
-                    width: 1200,
-                    height: 900,
+                    width: Math.max(1600, window.innerWidth),
+                    height: 2200,
                     backgroundMode: "gradient",
                     backgroundColor: "#09090b",
                     backgroundGradient: "radial-gradient(circle at 20% 10%, rgba(255,255,255,.10), transparent 30%), linear-gradient(135deg, #050506, #14141b)",
@@ -2067,13 +2150,13 @@
             const layout = createBlankStudioLayout();
 
             layout.objects = [
-                makeObject("banner", 0, 0, 1200, 280),
-                makeObject("profile_avatar", 76, 210, 150, 150),
-                makeObject("profile_identity", 250, 230, 550, 150),
-                makeObject("profile_actions", 830, 255, 300, 90),
-                makeObject("bio", 76, 420, 480, 220),
-                makeObject("creator_gallery", 610, 420, 520, 240),
-                makeObject("creator_works", 76, 705, 1054, 220)
+                makeObject("banner", 0, 0, 1600, 320),
+                makeObject("profile_avatar", 90, 235, 160, 160),
+                makeObject("profile_identity", 285, 250, 560, 150),
+                makeObject("profile_actions", 880, 278, 430, 90),
+                makeObject("bio", 90, 470, 520, 230),
+                makeObject("creator_gallery", 670, 470, 570, 255),
+                makeObject("creator_works", 90, 780, 1150, 240)
             ];
 
             return layout;
@@ -2210,9 +2293,18 @@
                 object.text = "Write a custom profile section.";
             }
 
-            if (type === "shape") {
-                object.styles.background = "rgba(255,255,255,.12)";
-                object.styles.radius = 28;
+            if (["shape", "circle", "star"].includes(type)) {
+                object.styles.background = "rgba(255,255,255,.18)";
+                object.styles.textColor = "#ffffff";
+                object.styles.radius = type === "circle" ? 999 : 28;
+                object.shapeType = type === "circle" ? "circle" : type === "star" ? "star" : "rectangle";
+            }
+
+            if (type === "world_card") {
+                object.w = 360;
+                object.h = 320;
+                object.worldId = currentPublishedWorlds[0]?.id || "";
+                object.styles.radius = 22;
             }
 
             if (type === "divider") {
@@ -2233,6 +2325,20 @@
             document.getElementById("profile-studio-page").classList.add("open");
             setRadioValue("profile-layout-mode", "custom");
             renderStudio();
+        }
+
+        function toggleStudioPanel(panel) {
+            const toolsPanel = document.getElementById("studio-tools-panel");
+            const inspectorPanel = document.getElementById("studio-inspector-panel");
+
+            if (panel === "tools") {
+                toolsPanel.classList.toggle("open");
+                return;
+            }
+
+            if (panel === "inspector") {
+                inspectorPanel.classList.toggle("open");
+            }
         }
 
         function closeProfileStudio() {
@@ -2541,8 +2647,26 @@
                     `;
             }
 
-            if (object.type === "shape") {
-                return `<div class="shape-object" style="width:100%;height:100%;"></div>`;
+            if (["shape", "circle", "star"].includes(object.type)) {
+                const shapeType = object.shapeType || (object.type === "circle" ? "circle" : object.type === "star" ? "star" : "rectangle");
+                return `<div class="shape-object ${escapeHtml(shapeType)}"></div>`;
+            }
+
+            if (object.type === "world_card") {
+                const selectedWorld = currentPublishedWorlds.find(world => world.id === object.worldId) || currentPublishedWorlds[0];
+                const cover = object.imageUrl || selectedWorld?.cover_image_url || currentBannerUrl || "";
+                const title = selectedWorld?.title || "Choose a published world";
+                const summary = selectedWorld?.summary || "Pick which world this card should feature from the inspector.";
+
+                return `
+                            <div style="display:grid;grid-template-rows:58% 1fr;width:100%;height:100%;">
+                                <div class="image-object" style="background-image:url('${safeCssUrl(cover)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
+                                <div class="section-object">
+                                    <h3>${escapeHtml(title)}</h3>
+                                    <p>${escapeHtml(summary)}</p>
+                                </div>
+                            </div>
+                        `;
             }
 
             if (object.type === "divider") {
@@ -2723,6 +2847,39 @@
                     `;
             }
 
+            if (["shape", "circle", "star"].includes(object.type)) {
+                html += `
+                            <div class="inspector-group">
+                                <h4>Shape</h4>
+
+                                <label>Shape Type</label>
+                                <select onchange="updateObjectField('shapeType', this.value)">
+                                    ${["rectangle", "circle", "star", "diamond"].map(shape => `
+                                        <option value="${shape}" ${(object.shapeType || "rectangle") === shape ? "selected" : ""}>${shape}</option>
+                                    `).join("")}
+                                </select>
+                            </div>
+                        `;
+            }
+
+            if (object.type === "world_card") {
+                html += `
+                            <div class="inspector-group">
+                                <h4>World Card</h4>
+
+                                <label>Choose Published World</label>
+                                <select onchange="updateObjectField('worldId', this.value)">
+                                    ${currentPublishedWorlds.length ? currentPublishedWorlds.map(world => `
+                                        <option value="${escapeHtml(world.id)}" ${object.worldId === world.id ? "selected" : ""}>${escapeHtml(world.title || "Untitled World")}</option>
+                                    `).join("") : `<option value="">No published worlds yet</option>`}
+                                </select>
+
+                                <label>Custom Image URL</label>
+                                <input value="${escapeHtml(object.imageUrl || "")}" onchange="updateObjectField('imageUrl', this.value)">
+                            </div>
+                        `;
+            }
+
             if (["image", "banner", "image_text"].includes(object.type)) {
                 html += `
                         <div class="inspector-group">
@@ -2758,8 +2915,9 @@
         function addStudioObject(type) {
             const object = makeObject(type);
 
-            object.x = 110 + (studioLayout.objects.length % 6) * 28;
-            object.y = 110 + (studioLayout.objects.length % 6) * 28;
+            const workspace = document.getElementById("studio-workspace");
+            object.x = Math.round((workspace.scrollLeft + 140) / studioZoom) + (studioLayout.objects.length % 6) * 24;
+            object.y = Math.round((workspace.scrollTop + 140) / studioZoom) + (studioLayout.objects.length % 6) * 24;
 
             studioLayout.objects.push(object);
             selectedObjectId = object.id;
@@ -2908,10 +3066,10 @@
                 originalY: object.y
             };
 
+            setSelectedObjectDom(object.id);
             el.setPointerCapture(event.pointerId);
             window.addEventListener("pointermove", handleStudioPointerMove);
             window.addEventListener("pointerup", stopStudioInteraction, { once: true });
-            renderStudio();
         }
 
         function startObjectResize(event) {
@@ -3070,7 +3228,15 @@
         }
 
         function snap(value) {
-            return Math.round(value / 5) * 5;
+            return Math.round(value);
+        }
+
+        function setSelectedObjectDom(id) {
+            document.querySelectorAll(".canvas-object").forEach(el => {
+                el.classList.toggle("selected", el.dataset.id === id);
+            });
+
+            renderLayers();
         }
 
         function extendCanvasIfNeeded(object) {
@@ -3291,6 +3457,7 @@
                 .replaceAll(")", "\\)");
         }
 
+        window.toggleStudioPanel = toggleStudioPanel;
         window.openProfileStudio = openProfileStudio;
         window.closeProfileStudio = closeProfileStudio;
         window.loadStudioTemplate = loadStudioTemplate;

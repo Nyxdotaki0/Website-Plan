@@ -373,19 +373,19 @@
         .custom-profile-shell {
             width: 100%;
             overflow-x: auto;
-            padding: 28px 0 70px;
+            padding: 0;
         }
 
         .custom-profile-canvas {
             position: relative;
-            width: 1200px;
-            height: 900px;
-            margin: 0 auto;
-            overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, .12);
-            border-radius: 24px;
-            background: #09090b;
-            box-shadow: 0 24px 80px rgba(0, 0, 0, .52);
+            width: 1600px;
+            min-height: 2200px;
+            margin: 0;
+            overflow: visible;
+            border: none;
+            border-radius: 0;
+            background: var(--page-bg);
+            box-shadow: none;
             z-index: 1;
         }
 
@@ -1123,8 +1123,8 @@
             }
 
             parsed.canvas = {
-                width: 1200,
-                height: 900,
+                width: 1600,
+                height: 2200,
                 backgroundMode: "gradient",
                 backgroundColor: "#09090b",
                 backgroundGradient: "radial-gradient(circle at 20% 10%, rgba(255,255,255,.10), transparent 30%), linear-gradient(135deg, #050506, #14141b)",
@@ -1271,8 +1271,26 @@
                     `;
             }
 
-            if (object.type === "shape") {
-                return `<div class="shape-object" style="width:100%;height:100%;"></div>`;
+            if (["shape", "circle", "star"].includes(object.type)) {
+                const shapeType = object.shapeType || (object.type === "circle" ? "circle" : object.type === "star" ? "star" : "rectangle");
+                return `<div class="shape-object ${escapeHtml(shapeType)}"></div>`;
+            }
+
+            if (object.type === "world_card") {
+                const selectedWorld = profileWorlds.find(world => world.id === object.worldId) || profileWorlds[0];
+                const cover = object.imageUrl || selectedWorld?.cover_image_url || profile.banner_url || "";
+                const title = selectedWorld?.title || "Published World";
+                const summary = selectedWorld?.summary || "This creator can feature one of their published worlds here.";
+
+                return `
+                        <a href="${selectedWorld ? getWorldLink(selectedWorld) : '#'}" style="display:grid;grid-template-rows:58% 1fr;width:100%;height:100%;color:inherit;text-decoration:none;">
+                            <div class="image-object" style="background-image:url('${safeCssUrl(cover)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};"></div>
+                            <div class="section-object">
+                                <h3>${escapeHtml(title)}</h3>
+                                <p>${escapeHtml(summary)}</p>
+                            </div>
+                        </a>
+                    `;
             }
 
             if (object.type === "divider") {
