@@ -1062,7 +1062,19 @@
         /* Comic Tutorial System */
         body.tutorial-active {
             overflow: hidden !important;
+            touch-action: none;
         }
+
+            body.tutorial-active .main,
+            body.tutorial-active .chapter-list,
+            body.tutorial-active .page-studio-body,
+            body.tutorial-active .page-studio-thumbs {
+                overflow: hidden !important;
+            }
+
+            body.tutorial-active *:not(.tutorial-card):not(.tutorial-card *):not(.tutorial-welcome-card):not(.tutorial-welcome-card *) {
+                user-select: none;
+            }
 
         .tutorial-button {
             display: inline-flex;
@@ -1075,7 +1087,7 @@
             display: none;
             position: fixed;
             inset: 0;
-            z-index: 100000;
+            z-index: 2147483000;
         }
 
         .tutorial-welcome-overlay {
@@ -1091,45 +1103,47 @@
 
         .tutorial-shade {
             position: fixed;
-            z-index: 100000;
-            background: rgba(0,0,0,.58);
+            z-index: 2147483001;
+            background: rgba(0,0,0,.50);
             backdrop-filter: blur(5px);
             -webkit-backdrop-filter: blur(5px);
-            transition: top .28s ease, left .28s ease, width .28s ease, height .28s ease, opacity .2s ease;
+            transition: top .24s ease, left .24s ease, width .24s ease, height .24s ease, opacity .18s ease;
             pointer-events: auto;
         }
 
         .tutorial-spotlight {
             position: fixed;
-            z-index: 100002;
-            border: 2px solid rgba(255,255,255,.94);
+            z-index: 2147483003;
+            border: 2px solid rgba(255,255,255,.96);
             border-radius: 20px;
             box-shadow: 0 0 34px rgba(255,255,255,.45), inset 0 0 0 1px rgba(255,255,255,.16);
             pointer-events: none;
-            transition: all .28s ease;
+            transition: all .24s ease;
         }
 
         .tutorial-target-lift {
             position: relative !important;
-            z-index: 100001 !important;
+            z-index: 2147483002 !important;
             filter: none !important;
             transform: translateZ(0);
             isolation: isolate;
+            pointer-events: none !important;
         }
 
         .tutorial-card {
             position: fixed;
-            z-index: 100003;
+            z-index: 2147483005;
             width: min(380px, calc(100vw - 34px));
-            border: 1px solid rgba(255,255,255,.16);
+            border: 1px solid rgba(255,255,255,.18);
             border-radius: 22px;
-            background: radial-gradient(circle at 18% 8%, rgba(255,255,255,.12), transparent 30%), linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.025)), rgba(8,8,12,.96);
+            background: radial-gradient(circle at 18% 8%, rgba(255,255,255,.12), transparent 30%), linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.025)), rgba(8,8,12,.98);
             color: var(--text-primary);
             padding: 20px;
-            box-shadow: 0 22px 60px rgba(0,0,0,.52), inset 0 1px 0 rgba(255,255,255,.05);
-            backdrop-filter: blur(22px);
-            -webkit-backdrop-filter: blur(22px);
-            transition: top .28s ease, left .28s ease;
+            box-shadow: 0 28px 80px rgba(0,0,0,.72), inset 0 1px 0 rgba(255,255,255,.06);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            transition: top .24s ease, left .24s ease;
+            pointer-events: auto;
         }
 
             .tutorial-card h2 {
@@ -1197,22 +1211,23 @@
 
         .tutorial-arrow {
             position: fixed;
-            z-index: 100003;
+            z-index: 2147483004;
             width: 0;
             height: 0;
-            transition: top .28s ease, left .28s ease;
+            transition: top .24s ease, left .24s ease;
+            pointer-events: none;
         }
 
             .tutorial-arrow.down {
                 border-left: 12px solid transparent;
                 border-right: 12px solid transparent;
-                border-bottom: 14px solid rgba(255,255,255,.92);
+                border-bottom: 14px solid rgba(255,255,255,.94);
             }
 
             .tutorial-arrow.up {
                 border-left: 12px solid transparent;
                 border-right: 12px solid transparent;
-                border-top: 14px solid rgba(255,255,255,.92);
+                border-top: 14px solid rgba(255,255,255,.94);
             }
 
         .tutorial-welcome-card {
@@ -1512,12 +1527,15 @@
         async function notifyCredit(credit, worldId, message) { if (credit.type !== "nullverse_creator" || !credit.nullverse_username) return; const { data: profile } = await supabase.from("profiles").select("id,username").ilike("username", credit.nullverse_username).single(); if (profile && profile.id !== user.id) { await createNotification({ recipientId: profile.id, actorId: user.id, worldId, type: "image_credit", message, link: `comic.html?id=${encodeURIComponent(worldId)}` }) } }
         window.deleteCurrentChapter = async function () { if (!currentChapter) return; if (!confirm("Delete this chapter and its pages? This cannot be undone.")) return; await supabase.from("comic_pages").delete().eq("chapter_id", currentChapter.id).eq("world_id", comicId).eq("owner_id", user.id); const { error } = await supabase.from("comic_chapters").delete().eq("id", currentChapter.id).eq("world_id", comicId).eq("owner_id", user.id); if (error) { alert(error.message); return } currentChapter = null; await loadChapters(); openComicSettings() }; window.moveChapter = async function (index, direction) { const newIndex = index + direction; if (newIndex < 0 || newIndex >= allChapters.length) return;[allChapters[index], allChapters[newIndex]] = [allChapters[newIndex], allChapters[index]]; await saveChapterOrder(); renderChapters() }; async function saveChapterOrder() { for (let i = 0; i < allChapters.length; i++) { await supabase.from("comic_chapters").update({ display_order: i + 1 }).eq("id", allChapters[i].id).eq("world_id", comicId).eq("owner_id", user.id); allChapters[i].display_order = i + 1 } }
         window.moveChapterToPosition = async function () { const from = Number(document.getElementById("move-from").value) - 1, to = Number(document.getElementById("move-to").value) - 1; if (from < 0 || to < 0 || from >= allChapters.length || to >= allChapters.length) { alert("Invalid positions."); return } const moved = allChapters.splice(from, 1)[0]; allChapters.splice(to, 0, moved); await saveChapterOrder(); renderChapters() }; window.swapChapterPositions = async function () { const first = Number(document.getElementById("move-from").value) - 1, second = Number(document.getElementById("move-to").value) - 1; if (first < 0 || second < 0 || first >= allChapters.length || second >= allChapters.length) { alert("Invalid positions."); return } [allChapters[first], allChapters[second]] = [allChapters[second], allChapters[first]]; await saveChapterOrder(); renderChapters() }; window.saveActiveEditor = function () { if (currentChapter) { saveCurrentChapter(); return } if (document.getElementById("theme-name")) { saveAppearanceSettings(); return } if (document.getElementById("comic-title")) saveComicSettings() };
-        const comicTutorialStorageKey = "nullverse-comic-editor-tutorial-complete-v2";
+        const comicTutorialStorageKey = "nullverse-comic-editor-tutorial-complete-v3";
+
         let comicTutorialActive = false;
         let comicTutorialIndex = 0;
         let comicTutorialSteps = [];
         let comicTutorialCurrentTarget = null;
         let comicTutorialResizeFrame = null;
+        let comicTutorialSavedState = null;
+        let comicTutorialScrollGuardActive = false;
 
         function markComicTutorialComplete() {
             localStorage.setItem(comicTutorialStorageKey, "true");
@@ -1536,44 +1554,50 @@
                     target: "#tutorial-sidebar",
                     title: "Your Comic Studio Sidebar",
                     text: "This sidebar is your main navigation. It holds comic settings, reader appearance, chapter search, reorder tools, and every chapter you create.",
-                    padding: 6
+                    padding: 6,
+                    resetScroll: true
                 },
                 {
                     view: "overview",
                     target: "#comic-card",
                     title: "Comic Settings",
-                    text: "Start here when you need to edit the comic title, cover, description, genres, warnings, reading mode, publishing state, and chapter index."
+                    text: "Start here when you need to edit the comic title, cover, description, genres, warnings, reading mode, publishing state, and chapter index.",
+                    resetScroll: true
                 },
                 {
                     view: "overview",
                     target: "#appearance-card",
                     title: "Reader Appearance",
-                    text: "This controls the public reader background. You can keep the default Nullverse look or customize colors, gradients, artwork, opacity, blur, and overlay strength."
+                    text: "This controls the public reader background. You can keep the default Nullverse look or customize colors, gradients, artwork, opacity, blur, and overlay strength.",
+                    resetScroll: true
                 },
                 {
                     view: "overview",
                     target: "#tutorial-add-chapter-area",
                     title: "Add Chapter",
-                    text: "Use this button to create a new comic chapter. Chapters keep pages organized and let readers jump through the comic cleanly."
+                    text: "Use this button to create a new comic chapter. Chapters keep pages organized and let readers jump through the comic cleanly.",
+                    resetScroll: true
                 },
                 {
                     view: "overview",
                     target: "#tutorial-button",
                     title: "Replay This Tutorial",
-                    text: "The tutorial only asks once, but this button lets creators replay the guide any time they need a refresher."
+                    text: "The tutorial only asks once, but this button lets creators replay the guide any time they need a refresher.",
+                    resetScroll: true
                 },
                 {
                     view: "overview",
                     target: "#tutorial-comic-identity-area",
                     title: "Comic Identity",
                     text: "This setup card is where you name the comic, add a cover, write the description, and set genre or theme tags for discovery.",
-                    padding: 8
+                    padding: 8,
+                    resetScroll: true
                 },
                 {
                     view: "overview",
                     target: "#tutorial-reading-mode-area",
                     title: "Reading Mode",
-                    text: "Choose Paged for traditional comics and manga, or Webtoon for a vertical scrolling reader. This step now targets the full Reading Mode field so it lands exactly where it should."
+                    text: "Choose Paged for traditional comics and manga, or Webtoon for a vertical scrolling reader. This highlights the full Reading Mode field so it lands exactly where it should."
                 },
                 {
                     view: "overview",
@@ -1597,7 +1621,8 @@
                         target: ".chapter-hero-v2",
                         title: "Chapter Workspace",
                         text: "This is the workspace for one comic chapter. It shows chapter status, page count, reading mode, and the main Page Studio button.",
-                        padding: 8
+                        padding: 8,
+                        resetScroll: true
                     },
                     {
                         view: "chapter",
@@ -1643,6 +1668,7 @@
                         before: async function () {
                             openPageStudio();
                             await waitForTutorialPaint();
+                            setElementScroll(document.querySelector(".page-studio-body"), 0);
                         },
                         afterLeave: function () {
                             closePageStudio();
@@ -1654,7 +1680,8 @@
                     view: "overview",
                     target: "#tutorial-add-chapter-area",
                     title: "Create a Chapter First",
-                    text: "Once you create your first chapter, the tutorial can show the Chapter Workspace, Page Studio, page uploads, live preview, and page credit tools."
+                    text: "Once you create your first chapter, the tutorial can show the Chapter Workspace, Page Studio, page uploads, live preview, and page credit tools.",
+                    resetScroll: true
                 });
             }
 
@@ -1663,13 +1690,15 @@
                     view: "overview",
                     target: "#view-public-comic",
                     title: "View Public Page",
-                    text: "Open the public comic reader from here to see what readers will experience after you save."
+                    text: "Open the public comic reader from here to see what readers will experience after you save.",
+                    resetScroll: true
                 },
                 {
                     view: "overview",
                     target: "#tutorial-save-area",
                     title: "Save Changes",
-                    text: "Save regularly. Settings, appearance, chapter details, and page changes stay separate depending on where you are in the editor."
+                    text: "Save regularly. Settings, appearance, chapter details, and page changes stay separate depending on where you are in the editor.",
+                    resetScroll: true
                 }
             );
 
@@ -1686,6 +1715,7 @@
 
         window.acceptComicTutorialPrompt = function () {
             const welcome = document.getElementById("tutorial-welcome-overlay");
+
             if (welcome) {
                 welcome.classList.remove("open");
                 welcome.setAttribute("aria-hidden", "true");
@@ -1696,6 +1726,7 @@
 
         window.skipComicTutorialPrompt = function () {
             const welcome = document.getElementById("tutorial-welcome-overlay");
+
             if (welcome) {
                 welcome.classList.remove("open");
                 welcome.setAttribute("aria-hidden", "true");
@@ -1706,19 +1737,30 @@
 
         window.startComicTutorial = async function (manualReplay = false) {
             const welcome = document.getElementById("tutorial-welcome-overlay");
+
             if (welcome) {
                 welcome.classList.remove("open");
                 welcome.setAttribute("aria-hidden", "true");
             }
 
+            saveComicTutorialState();
             clearComicTutorialTargetLift();
+
+            closePageStudio();
+            openComicSettings();
+            await waitForTutorialPaint();
+
+            resetComicTutorialScrollPositions();
+
             comicTutorialSteps = buildComicTutorialSteps();
             comicTutorialIndex = 0;
             comicTutorialActive = true;
 
             document.body.classList.add("tutorial-active");
+            enableComicTutorialScrollGuard();
 
             const overlay = document.getElementById("tutorial-overlay");
+
             if (overlay) {
                 overlay.classList.add("open");
                 overlay.setAttribute("aria-hidden", "false");
@@ -1727,11 +1769,101 @@
             await showComicTutorialStep();
         };
 
+        function saveComicTutorialState() {
+            comicTutorialSavedState = {
+                wasPageStudioOpen: !!document.querySelector("#page-studio-overlay.open"),
+                currentChapterId: currentChapter?.id || null,
+                mainScroll: getElementScroll(document.querySelector(".main")),
+                chapterListScroll: getElementScroll(document.querySelector(".chapter-list")),
+                pageStudioScroll: getElementScroll(document.querySelector(".page-studio-body"))
+            };
+        }
+
+        function restoreComicTutorialState() {
+            if (!comicTutorialSavedState) return;
+
+            setElementScroll(document.querySelector(".main"), comicTutorialSavedState.mainScroll);
+            setElementScroll(document.querySelector(".chapter-list"), comicTutorialSavedState.chapterListScroll);
+
+            if (comicTutorialSavedState.wasPageStudioOpen) {
+                openPageStudio();
+                setTimeout(() => {
+                    setElementScroll(document.querySelector(".page-studio-body"), comicTutorialSavedState.pageStudioScroll);
+                }, 0);
+            }
+
+            comicTutorialSavedState = null;
+        }
+
+        function resetComicTutorialScrollPositions() {
+            setElementScroll(document.querySelector(".main"), 0);
+            setElementScroll(document.querySelector(".chapter-list"), 0);
+            setElementScroll(document.querySelector(".page-studio-body"), 0);
+            setElementScroll(document.querySelector(".page-studio-thumbs"), 0);
+            window.scrollTo(0, 0);
+        }
+
+        function getElementScroll(element) {
+            return element ? element.scrollTop : 0;
+        }
+
+        function setElementScroll(element, value) {
+            if (!element) return;
+            element.scrollTop = Number(value) || 0;
+        }
+
+        function enableComicTutorialScrollGuard() {
+            if (comicTutorialScrollGuardActive) return;
+
+            comicTutorialScrollGuardActive = true;
+
+            document.addEventListener("wheel", stopComicTutorialUserMovement, { capture: true, passive: false });
+            document.addEventListener("touchmove", stopComicTutorialUserMovement, { capture: true, passive: false });
+            document.addEventListener("pointerdown", stopComicTutorialOutsideInteraction, { capture: true });
+        }
+
+        function disableComicTutorialScrollGuard() {
+            if (!comicTutorialScrollGuardActive) return;
+
+            comicTutorialScrollGuardActive = false;
+
+            document.removeEventListener("wheel", stopComicTutorialUserMovement, { capture: true, passive: false });
+            document.removeEventListener("touchmove", stopComicTutorialUserMovement, { capture: true, passive: false });
+            document.removeEventListener("pointerdown", stopComicTutorialOutsideInteraction, { capture: true });
+        }
+
+        function stopComicTutorialUserMovement(event) {
+            if (!comicTutorialActive) return;
+
+            if (event.target.closest(".tutorial-card") || event.target.closest(".tutorial-welcome-card")) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        function stopComicTutorialOutsideInteraction(event) {
+            if (!comicTutorialActive) return;
+
+            if (event.target.closest(".tutorial-card") || event.target.closest(".tutorial-welcome-card")) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
         async function prepareComicTutorialView(step) {
             if (step.view === "overview") {
                 closePageStudio();
                 openComicSettings();
                 await waitForTutorialPaint();
+
+                if (step.resetScroll) {
+                    resetComicTutorialScrollPositions();
+                }
+
                 return;
             }
 
@@ -1739,10 +1871,17 @@
                 closePageStudio();
                 openAppearanceSettings();
                 await waitForTutorialPaint();
+
+                if (step.resetScroll) {
+                    resetComicTutorialScrollPositions();
+                }
+
                 return;
             }
 
             if (step.view === "chapter") {
+                closePageStudio();
+
                 if (!currentChapter && allChapters.length) {
                     await openChapter(allChapters[0].id);
                 }
@@ -1752,6 +1891,10 @@
                 }
 
                 await waitForTutorialPaint();
+
+                if (step.resetScroll) {
+                    resetComicTutorialScrollPositions();
+                }
             }
         }
 
@@ -1769,12 +1912,14 @@
             clearComicTutorialTargetLift();
 
             const previousStep = comicTutorialSteps[comicTutorialIndex - 1];
+
             if (previousStep?.afterLeave) {
                 previousStep.afterLeave();
                 await waitForTutorialPaint();
             }
 
             const step = comicTutorialSteps[comicTutorialIndex];
+
             if (!step) {
                 endComicTutorial(false);
                 return;
@@ -1794,23 +1939,20 @@
                 target = document.querySelector(".topbar") || document.body;
             }
 
-            target.scrollIntoView({
-                behavior: "smooth",
-                block: "center",
-                inline: "center"
-            });
+            scrollComicTutorialTargetIntoView(target);
+            await waitForTutorialPaint();
 
-            setTimeout(() => {
-                const freshTarget = findComicTutorialTarget(step) || target;
-                setComicTutorialTargetLift(freshTarget);
-                positionComicTutorialStep(freshTarget, step);
-            }, 330);
+            const freshTarget = findComicTutorialTarget(step) || target;
+
+            setComicTutorialTargetLift(freshTarget);
+            positionComicTutorialStep(freshTarget, step);
         }
 
         function findComicTutorialTarget(step) {
             if (!step?.target) return null;
 
             const targets = document.querySelectorAll(step.target);
+
             for (const target of targets) {
                 if (isTutorialTargetVisible(target)) {
                     return target;
@@ -1832,10 +1974,48 @@
                 rect.height > 0;
         }
 
+        function scrollComicTutorialTargetIntoView(target) {
+            if (!target) return;
+
+            const main = document.querySelector(".main");
+            const chapterList = document.querySelector(".chapter-list");
+            const studioBody = document.querySelector(".page-studio-body");
+            const studioThumbs = document.querySelector(".page-studio-thumbs");
+
+            if (studioBody && target.closest(".page-studio-overlay")) {
+                centerTargetInScroller(target, studioBody);
+                centerTargetInScroller(target, studioThumbs);
+                return;
+            }
+
+            if (main && target.closest(".main")) {
+                centerTargetInScroller(target, main);
+            }
+
+            if (chapterList && target.closest(".chapter-list")) {
+                centerTargetInScroller(target, chapterList);
+            }
+
+            window.scrollTo(0, 0);
+        }
+
+        function centerTargetInScroller(target, scroller) {
+            if (!target || !scroller) return;
+
+            const targetRect = target.getBoundingClientRect();
+            const scrollerRect = scroller.getBoundingClientRect();
+            const targetCenter = targetRect.top + targetRect.height / 2;
+            const scrollerCenter = scrollerRect.top + scrollerRect.height / 2;
+            const delta = targetCenter - scrollerCenter;
+
+            scroller.scrollTop += delta;
+        }
+
         function setComicTutorialTargetLift(target) {
             clearComicTutorialTargetLift();
 
             comicTutorialCurrentTarget = target;
+
             if (comicTutorialCurrentTarget) {
                 comicTutorialCurrentTarget.classList.add("tutorial-target-lift");
             }
@@ -1879,31 +2059,61 @@
                 return `<span class="tutorial-dot ${index === comicTutorialIndex ? "active" : ""}"></span>`;
             }).join("");
 
+            positionComicTutorialCard(card, arrow, hole);
+        }
+
+        function positionComicTutorialCard(card, arrow, hole) {
             const cardWidth = Math.min(380, window.innerWidth - 34);
+            const cardHeight = card.offsetHeight || 280;
+            const safeGap = 36;
+
+            const spaces = {
+                below: window.innerHeight - hole.bottom,
+                above: hole.top,
+                right: window.innerWidth - hole.right,
+                left: hole.left
+            };
+
             let cardLeft = hole.left + (hole.width / 2) - (cardWidth / 2);
-            cardLeft = Math.max(17, Math.min(cardLeft, window.innerWidth - cardWidth - 17));
-
-            const cardHeight = card.offsetHeight || 270;
-            const spaceBelow = window.innerHeight - hole.bottom;
             let cardTop;
-            let arrowTop;
             let arrowClass;
+            let arrowLeft;
+            let arrowTop;
 
-            if (spaceBelow > cardHeight + 48) {
+            if (spaces.below >= cardHeight + safeGap) {
                 cardTop = hole.bottom + 30;
-                arrowTop = hole.bottom + 10;
                 arrowClass = "down";
-            } else {
-                cardTop = Math.max(17, hole.top - cardHeight - 30);
-                arrowTop = Math.max(17, hole.top - 24);
+                arrowTop = hole.bottom + 10;
+            } else if (spaces.above >= cardHeight + safeGap) {
+                cardTop = hole.top - cardHeight - 30;
                 arrowClass = "up";
+                arrowTop = hole.top - 24;
+            } else {
+                cardTop = Math.max(17, Math.min(window.innerHeight - cardHeight - 17, 17));
+                cardLeft = hole.right + 24;
+
+                if (cardLeft + cardWidth > window.innerWidth - 17) {
+                    cardLeft = hole.left - cardWidth - 24;
+                }
+
+                if (cardLeft < 17) {
+                    cardLeft = 17;
+                    cardTop = window.innerHeight - cardHeight - 17;
+                }
+
+                arrowClass = spaces.above > spaces.below ? "up" : "down";
+                arrowTop = arrowClass === "up" ? Math.max(17, hole.top - 24) : Math.min(window.innerHeight - 24, hole.bottom + 10);
             }
+
+            cardLeft = Math.max(17, Math.min(cardLeft, window.innerWidth - cardWidth - 17));
+            cardTop = Math.max(17, Math.min(cardTop, window.innerHeight - cardHeight - 17));
+            arrowLeft = Math.max(18, Math.min(hole.left + hole.width / 2 - 12, window.innerWidth - 30));
 
             card.style.left = `${cardLeft}px`;
             card.style.top = `${cardTop}px`;
 
             arrow.className = `tutorial-arrow ${arrowClass}`;
-            arrow.style.left = `${Math.max(18, Math.min(hole.left + hole.width / 2 - 12, window.innerWidth - 30))}px`;
+            arrow.style.left = `${arrowLeft}px`;
             arrow.style.top = `${arrowTop}px`;
         }
 
@@ -1958,6 +2168,7 @@
             if (comicTutorialIndex <= 0) return;
 
             const currentStep = comicTutorialSteps[comicTutorialIndex];
+
             if (currentStep?.afterLeave) {
                 currentStep.afterLeave();
             }
@@ -1968,20 +2179,25 @@
 
         window.endComicTutorial = function (skipped = false) {
             const currentStep = comicTutorialSteps[comicTutorialIndex];
+
             if (currentStep?.afterLeave) {
                 currentStep.afterLeave();
             }
 
             clearComicTutorialTargetLift();
+            disableComicTutorialScrollGuard();
+
             comicTutorialActive = false;
             document.body.classList.remove("tutorial-active");
 
             const overlay = document.getElementById("tutorial-overlay");
+
             if (overlay) {
                 overlay.classList.remove("open");
                 overlay.setAttribute("aria-hidden", "true");
             }
 
+            restoreComicTutorialState();
             markComicTutorialComplete();
         };
 
@@ -1989,6 +2205,7 @@
             if (!comicTutorialActive) return;
 
             cancelAnimationFrame(comicTutorialResizeFrame);
+
             comicTutorialResizeFrame = requestAnimationFrame(() => {
                 const step = comicTutorialSteps[comicTutorialIndex];
                 const target = findComicTutorialTarget(step);
@@ -2001,6 +2218,14 @@
 
         document.addEventListener("keydown", function (event) {
             if (!comicTutorialActive) return;
+
+            const allowedKeys = ["Escape", "ArrowRight", "ArrowLeft", "Tab"];
+
+            if (!allowedKeys.includes(event.key)) {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
 
             if (event.key === "Escape") {
                 event.preventDefault();
@@ -2016,7 +2241,7 @@
                 event.preventDefault();
                 previousComicTutorialStep();
             }
-        });
+        }, true);
 
         async function initEditor() { await loadComic(); await loadChapters(); openComicSettings(); setTimeout(openComicTutorialPrompt, 500) } initEditor(); function escapeHtml(value) { return String(value || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;") }
     </script>
