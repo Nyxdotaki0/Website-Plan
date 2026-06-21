@@ -1588,28 +1588,59 @@
             const links = [...document.querySelectorAll(".chapter-nav-link")];
 
             function update() {
-                const scrollTop = window.scrollY || document.documentElement.scrollTop;
-                const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-                const percentage = docHeight > 0 ? Math.min(100, Math.max(0, (scrollTop / docHeight) * 100)) : 0;
+                const focus = document.body.classList.contains("reader-focus");
+                const scroller = focus ? document.querySelector("main") : document.documentElement;
+
+                const scrollTop = focus
+                    ? scroller.scrollTop
+                    : (window.scrollY || document.documentElement.scrollTop);
+
+                const docHeight = focus
+                    ? (scroller.scrollHeight - scroller.clientHeight)
+                    : (document.documentElement.scrollHeight - window.innerHeight);
+
+                const percentage = docHeight > 0
+                    ? Math.min(100, Math.max(0, (scrollTop / docHeight) * 100))
+                    : 0;
+
                 if (progress) progress.style.width = `${percentage}%`;
 
                 let activeId = "";
+
                 for (const chapter of chapters) {
                     const rect = chapter.getBoundingClientRect();
                     if (rect.top <= 180) activeId = chapter.id;
                 }
 
                 links.forEach(link => {
-                    link.classList.toggle("active", link.getAttribute("href") === `#${activeId}`);
+                    link.classList.toggle(
+                        "active",
+                        link.getAttribute("href") === `#${activeId}`
+                    );
                 });
             }
 
             if (window.__nullverseLiteratureScrollHandler) {
                 window.removeEventListener("scroll", window.__nullverseLiteratureScrollHandler);
+
+                const oldMain = document.querySelector("main");
+                if (oldMain) {
+                    oldMain.removeEventListener(
+                        "scroll",
+                        window.__nullverseLiteratureScrollHandler
+                    );
+                }
             }
 
             window.__nullverseLiteratureScrollHandler = update;
+
             window.addEventListener("scroll", update, { passive: true });
+
+            const main = document.querySelector("main");
+            if (main) {
+                main.addEventListener("scroll", update, { passive: true });
+            }
+
             update();
         }
 
