@@ -728,6 +728,39 @@
             align-content: start;
         }
 
+
+        .display-name-object,
+        .username-object {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+            line-height: 1.05;
+            overflow: hidden;
+        }
+
+        .username-object {
+            color: inherit;
+        }
+
+        .single-action-object {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 0;
+            background: transparent;
+            color: inherit;
+            font: inherit;
+            text-decoration: none;
+            cursor: pointer;
+            border-radius: inherit;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
         @media (max-width: 860px) {
             header {
                 flex-direction: column;
@@ -1150,14 +1183,16 @@
             }
 
             parsed.canvas = {
-                width: Math.max(2400, window.innerWidth * 2),
-                height: 2400,
+                width: 1600,
+                height: 2200,
                 backgroundMode: "gradient",
                 backgroundColor: "#09090b",
                 backgroundGradient: "radial-gradient(circle at 20% 10%, rgba(255,255,255,.10), transparent 30%), linear-gradient(135deg, #050506, #14141b)",
                 backgroundImage: "",
                 fontFamily: "Arial",
-                ...(parsed.canvas || {})
+                ...(parsed.canvas || {}),
+                width: 1600,
+                height: 2200
             };
 
             parsed.objects = Array.isArray(parsed.objects) ? parsed.objects : [];
@@ -1232,12 +1267,20 @@
                     `;
             }
 
+            if (object.type === "display_name") {
+                return `<div class="display-name-object">${displayName}</div>`;
+            }
+
+            if (object.type === "username_text") {
+                return `<div class="username-object">@${username}</div>`;
+            }
+
             if (object.type === "profile_actions") {
-                return `
-                        <div class="actions-object">
-                            ${buildCustomActions(profile)}
-                        </div>
-                    `;
+                return buildCustomActions(profile, object);
+            }
+
+            if (["follow_button", "message_button", "block_button", "report_button"].includes(object.type)) {
+                return buildSingleCustomAction(profile, object);
             }
 
             if (object.type === "stats") {
@@ -1251,11 +1294,11 @@
             }
 
             if (object.type === "creator_gallery") {
-                return `<div class="gallery-object">${renderGalleryMini(profile)}</div>`;
+                return `<div class="gallery-object">${renderGalleryMini(profile, object)}</div>`;
             }
 
             if (object.type === "creator_works") {
-                return `<div class="works-object">${renderWorksMini(profileWorlds)}</div>`;
+                return `<div class="works-object">${renderWorksMini(profileWorlds, object)}</div>`;
             }
 
             if (object.type === "bio") {
@@ -1349,6 +1392,34 @@
                 `;
         }
 
+        function buildSingleCustomAction(profile, object) {
+            if (currentUser.id === profile.id) {
+                if (object.type === "follow_button") {
+                    return `<a class="single-action-object" href="account-settings.html">Edit Profile</a>`;
+                }
+
+                return `<div class="single-action-object" style="opacity:.55;">${escapeHtml(getSingleActionLabel(object.type))}</div>`;
+            }
+
+            return `<button class="single-action-object" data-custom-action="${escapeHtml(getSingleActionName(object.type))}">${escapeHtml(getSingleActionLabel(object.type))}</button>`;
+        }
+
+        function getSingleActionLabel(type) {
+            if (type === "follow_button") return "Follow";
+            if (type === "message_button") return "Message";
+            if (type === "block_button") return "Block";
+            if (type === "report_button") return "Report";
+            return "Action";
+        }
+
+        function getSingleActionName(type) {
+            if (type === "follow_button") return "follow";
+            if (type === "message_button") return "message";
+            if (type === "block_button") return "block";
+            if (type === "report_button") return "report";
+            return "";
+        }
+
         function getActionButtonInlineStyle(object) {
             const styles = object.styles || {};
             const variant = styles.actionButtonVariant || "filled";
@@ -1389,24 +1460,44 @@
             }
         });
 
-        function renderGalleryMini(profile) {
-            if (!galleryItems.length) {
+        function renderGalleryMini(profile, object = null) {
+            let items = galleryItems;
+
+            if (object && Array.isArray(object.selectedGalleryIds) && object.selectedGalleryIds.length) {
+                items = object.selectedGalleryIds
+                    .map(id => galleryItems.find(item => item.id === id))
+                    .filter(Boolean);
+            } else {
+                items = items.slice(0, 3);
+            }
+
+            if (!items.length) {
                 return `<div class="empty-box">No creator gallery items yet.</div>`;
             }
 
-            return galleryItems.slice(0, 3).map(item => `
+            return items.map(item => `
                     <a class="gallery-mini-card profile-gallery-tile" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
                         <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title || "Gallery item")}">
                     </a>
                 `).join("");
         }
 
-        function renderWorksMini(worlds) {
-            if (!worlds.length) {
+        function renderWorksMini(worlds, object = null) {
+            let items = worlds;
+
+            if (object && Array.isArray(object.selectedWorldIds) && object.selectedWorldIds.length) {
+                items = object.selectedWorldIds
+                    .map(id => worlds.find(world => world.id === id))
+                    .filter(Boolean);
+            } else {
+                items = items.slice(0, 4);
+            }
+
+            if (!items.length) {
                 return `<div class="empty-box">No published works yet.</div>`;
             }
 
-            return worlds.slice(0, 4).map(world => `
+            return items.map(world => `
                     <a class="work-mini-card" href="${getWorldLink(world)}">
                         <strong>${escapeHtml(world.title || "Untitled")}</strong><br>
                         <span class="muted">${escapeHtml(world.content_type || world.type || "World")}</span>

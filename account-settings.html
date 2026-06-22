@@ -1225,12 +1225,51 @@
             line-height: 1.5;
         }
 
+        .studio-picker-list {
+            display: grid;
+            gap: 8px;
+            max-height: 220px;
+            overflow: auto;
+            padding-right: 4px;
+        }
+
+        .studio-picker-item {
+            display: grid;
+            grid-template-columns: auto 44px minmax(0, 1fr);
+            gap: 10px;
+            align-items: center;
+            padding: 9px;
+            border-radius: 13px;
+            border: 1px solid rgba(255, 255, 255, .08);
+            background: rgba(255, 255, 255, .035);
+            color: var(--text-secondary);
+        }
+
+            .studio-picker-item input {
+                width: auto;
+                margin: 0;
+            }
+
+        .studio-picker-thumb {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            object-fit: cover;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .10);
+        }
+
+        .studio-fixed-size-note {
+            color: var(--text-muted);
+            font-size: .86rem;
+            line-height: 1.45;
+            margin: -4px 0 12px;
+        }
+
 
 
         .studio-preview-nav {
-            position: absolute;
-            left: 0;
-            right: 0;
+            position: sticky;
             top: 0;
             z-index: 20;
             height: 88px;
@@ -1876,6 +1915,7 @@
         let currentBannerUrl = "";
         let currentProfileRecord = null;
         let currentPublishedWorlds = [];
+        let currentGalleryItems = [];
         let studioLayout = null;
         let selectedObjectId = null;
         let studioZoom = 1;
@@ -2078,6 +2118,7 @@
                 "Age verification is complete. Your date of birth and age category are private and never shown publicly.";
 
             await loadPublishedWorldsForStudio();
+            await loadGalleryItemsForStudio();
 
             studioLayout = normalizeStudioLayout(profile.profile_custom_layout || createBlankStudioLayout());
             renderStudio();
@@ -2123,6 +2164,28 @@
             }
 
             currentPublishedWorlds = data || [];
+        }
+
+        async function loadGalleryItemsForStudio() {
+            if (!currentUser) {
+                currentGalleryItems = [];
+                return;
+            }
+
+            const { data, error } = await supabaseClient
+                .from("creator_proof_gallery")
+                .select("id, title, description, image_url, type, visibility, created_at")
+                .eq("owner_id", currentUser.id)
+                .eq("visibility", "public")
+                .order("created_at", { ascending: false });
+
+            if (error) {
+                console.error(error);
+                currentGalleryItems = [];
+                return;
+            }
+
+            currentGalleryItems = data || [];
         }
 
         async function uploadFileIfSelected(inputId, bucketName, currentUrl, fileNameBase, options) {
@@ -2292,8 +2355,8 @@
             return {
                 version: 2,
                 canvas: {
-                    width: Math.max(3200, window.innerWidth * 3),
-                    height: 2800,
+                    width: 1600,
+                    height: 2200,
                     backgroundMode: "gradient",
                     backgroundColor: "#09090b",
                     backgroundGradient: "radial-gradient(circle at 20% 10%, rgba(255,255,255,.10), transparent 30%), linear-gradient(135deg, #050506, #14141b)",
@@ -2307,20 +2370,19 @@
 
         function createStarterStudioLayout() {
             const layout = createBlankStudioLayout();
-            const pageX = Math.round((layout.canvas.width - 1600) / 2);
 
             layout.objects = [
-                makeObject("banner", pageX, 88, 1600, 320),
-                makeObject("profile_avatar", pageX + 90, 323, 160, 160),
-                makeObject("display_name", pageX + 285, 338, 560, 64),
-                makeObject("username_text", pageX + 285, 412, 330, 38),
-                makeObject("follow_button", pageX + 880, 366, 130, 54),
-                makeObject("message_button", pageX + 1024, 366, 140, 54),
-                makeObject("block_button", pageX + 1178, 366, 120, 54),
-                makeObject("report_button", pageX + 1312, 366, 120, 54),
-                makeObject("bio", pageX + 90, 558, 520, 230),
-                makeObject("creator_gallery", pageX + 670, 558, 570, 255),
-                makeObject("creator_works", pageX + 90, 868, 1150, 240)
+                makeObject("banner", 0, 88, 1600, 320),
+                makeObject("profile_avatar", 90, 323, 160, 160),
+                makeObject("display_name", 285, 338, 560, 64),
+                makeObject("username_text", 285, 412, 330, 38),
+                makeObject("follow_button", 880, 366, 130, 54),
+                makeObject("message_button", 1024, 366, 140, 54),
+                makeObject("block_button", 1178, 366, 120, 54),
+                makeObject("report_button", 1312, 366, 120, 54),
+                makeObject("bio", 90, 558, 520, 230),
+                makeObject("creator_gallery", 670, 558, 570, 255),
+                makeObject("creator_works", 90, 868, 1150, 240)
             ];
 
             return layout;
@@ -2353,7 +2415,9 @@
             parsed.version = 2;
             parsed.canvas = {
                 ...createBlankStudioLayout().canvas,
-                ...(parsed.canvas || {})
+                ...(parsed.canvas || {}),
+                width: 1600,
+                height: 2200
             };
 
             parsed.objects = Array.isArray(parsed.objects) ? parsed.objects : [];
@@ -2369,6 +2433,8 @@
                 rotation: numberOr(object.rotation, 0),
                 visible: object.visible !== false,
                 requirement: object.requirement || getRequirementForType(object.type),
+                selectedWorldIds: Array.isArray(object.selectedWorldIds) ? object.selectedWorldIds : [],
+                selectedGalleryIds: Array.isArray(object.selectedGalleryIds) ? object.selectedGalleryIds : [],
                 styles: {
                     background: "rgba(255,255,255,.045)",
                     textColor: "#ffffff",
@@ -2411,6 +2477,8 @@
                 title: "",
                 text: "",
                 imageUrl: "",
+                selectedWorldIds: [],
+                selectedGalleryIds: [],
                 styles: {
                     background: "rgba(255,255,255,.045)",
                     textColor: "#ffffff",
@@ -2614,9 +2682,7 @@
         function centerStudioView() {
             const workspace = document.getElementById("studio-workspace");
             const rect = workspace.getBoundingClientRect();
-            const pageCenterX = Math.max(0, (studioLayout.canvas.width - rect.width / studioZoom) / 2);
-
-            studioPanX = rect.width / 2 - pageCenterX * studioZoom - rect.width / 2;
+            studioPanX = (rect.width - studioLayout.canvas.width * studioZoom) / 2;
             studioPanY = 0;
             applyStudioView();
         }
@@ -2987,6 +3053,73 @@
             return `<div class="text-object">Object</div>`;
         }
 
+
+        function getSelectedWorldItems(object) {
+            const ids = Array.isArray(object.selectedWorldIds) ? object.selectedWorldIds : [];
+
+            if (!ids.length) {
+                return currentPublishedWorlds.slice(0, 4);
+            }
+
+            return ids
+                .map(id => currentPublishedWorlds.find(world => world.id === id))
+                .filter(Boolean);
+        }
+
+        function getSelectedGalleryItems(object) {
+            const ids = Array.isArray(object.selectedGalleryIds) ? object.selectedGalleryIds : [];
+
+            if (!ids.length) {
+                return currentGalleryItems.slice(0, 3);
+            }
+
+            return ids
+                .map(id => currentGalleryItems.find(item => item.id === id))
+                .filter(Boolean);
+        }
+
+        function toggleObjectArrayValue(field, value, checked) {
+            const object = getSelectedObject();
+
+            if (!object) {
+                return;
+            }
+
+            const current = Array.isArray(object[field]) ? [...object[field]] : [];
+
+            if (checked && !current.includes(value)) {
+                current.push(value);
+            }
+
+            if (!checked) {
+                const index = current.indexOf(value);
+
+                if (index >= 0) {
+                    current.splice(index, 1);
+                }
+            }
+
+            object[field] = current;
+            renderStudio();
+        }
+
+        function getColorInputValue(value, fallback = "#ffffff") {
+            const text = String(value || "").trim();
+
+            if (/^#[0-9a-fA-F]{6}$/.test(text)) {
+                return text;
+            }
+
+            const rgba = text.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+
+            if (rgba) {
+                return "#" + [rgba[1], rgba[2], rgba[3]]
+                    .map(value => Math.max(0, Math.min(255, Number(value))).toString(16).padStart(2, "0"))
+                    .join("");
+            }
+
+            return fallback;
+        }
 
         function getActionButtonInlineStyle(object) {
             const styles = object.styles || {};
@@ -3652,8 +3785,7 @@
         }
 
         function extendCanvasIfNeeded(object) {
-            studioLayout.canvas.height = Math.max(studioLayout.canvas.height, object.y + object.h + 80);
-            studioLayout.canvas.width = Math.max(studioLayout.canvas.width, object.x + object.w + 80);
+            // Fixed-size page: do not grow the public profile stage while editing.
         }
 
         document.addEventListener("keydown", event => {
@@ -3886,6 +4018,7 @@
         window.deleteSelectedObject = deleteSelectedObject;
         window.duplicateSelectedObject = duplicateSelectedObject;
         window.moveSelectedLayer = moveSelectedLayer;
+        window.toggleObjectArrayValue = toggleObjectArrayValue;
         window.uploadStudioObjectImage = uploadStudioObjectImage;
         window.saveContentPreferences = saveContentPreferences;
         window.changeEmail = changeEmail;
