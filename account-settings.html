@@ -1164,6 +1164,75 @@
             min-height: 70px;
         }
 
+        .studio-content-card-preview {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            border-radius: inherit;
+            background: rgba(0,0,0,.18);
+            color: inherit;
+        }
+
+            .studio-content-card-preview img {
+                width: 100%;
+                height: 58%;
+                object-fit: cover;
+                display: block;
+                background: rgba(255,255,255,.06);
+            }
+
+        .studio-content-card-body {
+            padding: 12px;
+            overflow: hidden;
+        }
+
+            .studio-content-card-body h3 {
+                margin: 0 0 6px;
+                font-size: 1em;
+                line-height: 1.18;
+            }
+
+            .studio-content-card-body p {
+                margin: 0;
+                opacity: .78;
+                font-size: .82em;
+                line-height: 1.35;
+            }
+
+        .studio-gallery-card-preview {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            border-radius: inherit;
+            background: rgba(255,255,255,.04);
+        }
+
+            .studio-gallery-card-preview img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                display: block;
+            }
+
+        .studio-content-pill {
+            position: absolute;
+            left: 10px;
+            bottom: 10px;
+            z-index: 5;
+            max-width: calc(100% - 20px);
+            padding: 6px 9px;
+            border-radius: 999px;
+            background: rgba(0,0,0,.62);
+            border: 1px solid rgba(255,255,255,.16);
+            color: #fff;
+            font-size: .68rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         .text-object,
         .bio-object,
         .section-object,
@@ -1804,7 +1873,7 @@
                         <div>
                             <h3 style="margin:0 0 8px;">Profile Studio</h3>
                             <p style="margin:0;color:var(--text-secondary);line-height:1.6;">
-                                Start from a blank canvas or load a safe template. Add objects like text boxes, image boxes, avatar circles, action buttons, gallery, works, stats, dividers, and shapes. Move, resize, rotate, layer, and style everything directly on the canvas.
+                                Start from a blank canvas or load a safe template. Add objects like text boxes, image boxes, avatar circles, action buttons, exact world cards, exact gallery image cards, stats, dividers, and shapes. Move, resize, rotate, layer, and style everything directly on the canvas.
                             </p>
 
                             <div class="button-row" style="margin-top:14px;">
@@ -1923,9 +1992,7 @@
                     <button class="tool-button" onclick="addStudioObject('message_button')">Message Button</button>
                     <button class="tool-button" onclick="addStudioObject('block_button')">Block Button</button>
                     <button class="tool-button" onclick="addStudioObject('report_button')">Report Button</button>
-                    <button class="tool-button" onclick="addStudioObject('creator_gallery')">Gallery</button>
-                    <button class="tool-button" onclick="addStudioObject('creator_works')">Works</button>
-                    <button class="tool-button" onclick="addStudioObject('world_card')">World Card</button>
+                    <!-- World and gallery cards are added from the pickers below so creators choose exact public content. -->
                     <button class="tool-button" onclick="addStudioObject('stats')">Stats Group</button>
                     <button class="tool-button" onclick="addStudioObject('followers_box')">Followers Box</button>
                     <button class="tool-button" onclick="addStudioObject('following_box')">Following Box</button>
@@ -1941,6 +2008,9 @@
                     <button class="tool-button" onclick="addStudioObject('star')">Star</button>
                     <button class="tool-button" onclick="addStudioObject('divider')">Divider</button>
                 </div>
+
+                <p class="studio-panel-title" style="margin-top:18px;">Add Published Content</p>
+                <div id="studio-content-pickers" class="studio-picker-list"></div>
 
                 <p class="studio-panel-title" style="margin-top:18px;">Requirements</p>
                 <div id="studio-requirements" class="requirement-list"></div>
@@ -1968,7 +2038,7 @@
                         <div id="canvas-empty-note" class="canvas-empty-note">
                             <div>
                                 <strong>Blank Profile Canvas</strong><br>
-                                Add objects from the left. Your custom profile cannot publish until Identity, Actions, Gallery, and Works are present.
+                                Add objects from the left. Your custom profile cannot publish until Identity, Actions, at least one public work card, and at least one gallery image card are present.
                             </div>
                         </div>
                     </div>
@@ -2027,14 +2097,14 @@
                 accepts: ["profile_actions", "follow_button", "message_button", "block_button", "report_button"]
             },
             {
-                key: "gallery",
-                label: "Gallery",
-                accepts: ["creator_gallery"]
+                key: "work",
+                label: "At Least 1 Public Work Card",
+                accepts: ["world_card"]
             },
             {
-                key: "works",
-                label: "Works",
-                accepts: ["creator_works"]
+                key: "gallery_item",
+                label: "At Least 1 Gallery Image",
+                accepts: ["gallery_item"]
             }
         ];
 
@@ -2048,9 +2118,10 @@
             report_button: "Report Button",
             display_name: "Display Name",
             username_text: "Username",
-            creator_gallery: "Gallery",
-            creator_works: "Works",
+            creator_gallery: "Gallery Section (Legacy)",
+            creator_works: "Works Section (Legacy)",
             world_card: "World Card",
+            gallery_item: "Gallery Image Card",
             stats: "Stats Group",
             followers_box: "Followers Box",
             following_box: "Following Box",
@@ -2078,8 +2149,8 @@
             "message_button",
             "block_button",
             "report_button",
-            "creator_gallery",
-            "creator_works",
+            "world_card",
+            "gallery_item",
             "followers_box",
             "following_box",
             "works_count_box"
@@ -2102,7 +2173,8 @@
             works_count_box: { minW: 100, minH: 54, maxW: 360, maxH: 180 },
             creator_gallery: { minW: 260, minH: 160, maxW: 1400, maxH: 820 },
             creator_works: { minW: 300, minH: 160, maxW: 1500, maxH: 900 },
-            world_card: { minW: 180, minH: 170, maxW: 680, maxH: 760 },
+            world_card: { minW: 280, minH: 240, maxW: 760, maxH: 860 },
+            gallery_item: { minW: 150, minH: 150, maxW: 760, maxH: 760 },
             text: { minW: 80, minH: 30, maxW: 1200, maxH: 700 },
             bio: { minW: 160, minH: 80, maxW: 1200, maxH: 760 },
             image: { minW: 80, minH: 80, maxW: 1600, maxH: 1200 },
@@ -2360,7 +2432,7 @@
 
             const { data, error } = await supabaseClient
                 .from("worlds")
-                .select("id, title, summary, genres, themes, cover_image_url, world_type, content_type, updated_at")
+                .select("*")
                 .eq("owner_id", currentUser.id)
                 .eq("visibility", "published")
                 .order("updated_at", { ascending: false });
@@ -2382,7 +2454,7 @@
 
             const { data, error } = await supabaseClient
                 .from("creator_proof_gallery")
-                .select("id, title, description, image_url, type, visibility, created_at")
+                .select("*")
                 .eq("owner_id", currentUser.id)
                 .eq("visibility", "public")
                 .order("created_at", { ascending: false });
@@ -2598,8 +2670,8 @@
                 makeObject("block_button", 1178, 366, 120, 54),
                 makeObject("report_button", 1312, 366, 120, 54),
                 makeObject("bio", 90, 558, 520, 230),
-                makeObject("creator_gallery", 670, 558, 570, 255),
-                makeObject("creator_works", 90, 868, 1150, 240)
+                makeObject("gallery_item", 670, 558, 300, 255),
+                makeObject("world_card", 90, 868, 430, 340)
             ];
 
             return layout;
@@ -2652,6 +2724,8 @@
                 requirement: object.requirement || getRequirementForType(object.type),
                 selectedWorldIds: Array.isArray(object.selectedWorldIds) ? object.selectedWorldIds : [],
                 selectedGalleryIds: Array.isArray(object.selectedGalleryIds) ? object.selectedGalleryIds : [],
+                worldId: object.worldId || "",
+                galleryItemId: object.galleryItemId || "",
                 styles: normalizeObjectStyles({
                     background: "transparent",
                     textColor: "#ffffff",
@@ -2818,10 +2892,19 @@
             }
 
             if (type === "world_card") {
-                object.w = 360;
-                object.h = 320;
+                object.w = 420;
+                object.h = 340;
                 object.worldId = currentPublishedWorlds[0]?.id || "";
                 object.styles.radius = 22;
+                object.styles.background = "rgba(0,0,0,.22)";
+            }
+
+            if (type === "gallery_item") {
+                object.w = 280;
+                object.h = 280;
+                object.galleryItemId = currentGalleryItems[0]?.id || "";
+                object.styles.radius = 22;
+                object.styles.background = "transparent";
             }
 
             if (type === "divider") {
@@ -3029,10 +3112,10 @@
                     const isComplete = !validation.missing.some(item => item.key === requirement.key);
 
                     return `
-                                        <div class="requirement-pill ${isComplete ? "complete" : "missing"}">
-                                            ${isComplete ? "✓" : "!"} ${escapeHtml(requirement.label)}
-                                        </div>
-                                    `;
+                                            <div class="requirement-pill ${isComplete ? "complete" : "missing"}">
+                                                ${isComplete ? "✓" : "!"} ${escapeHtml(requirement.label)}
+                                            </div>
+                                        `;
                 }).join("");
             });
 
@@ -3074,6 +3157,7 @@
             emptyNote.style.display = studioLayout.objects.length ? "none" : "flex";
 
             renderLayers();
+            renderContentPickers();
             renderInspector();
             updateRequirementDisplays();
             applyStudioZoom();
@@ -3113,20 +3197,20 @@
             el.style.textAlign = object.styles.textAlign || "left";
 
             el.innerHTML = `
-                                <div class="object-inner">
-                                    ${renderStudioObjectPreview(object)}
-                                </div>
-                                ${object.requirement ? `<span class="object-requirement-tag">${escapeHtml(getRequirementLabel(object.requirement))}</span>` : ""}
-                                <span class="rotate-handle" data-action="rotate"></span>
-                                <span class="resize-handle nw" data-handle="nw"></span>
-                                <span class="resize-handle n" data-handle="n"></span>
-                                <span class="resize-handle ne" data-handle="ne"></span>
-                                <span class="resize-handle e" data-handle="e"></span>
-                                <span class="resize-handle se" data-handle="se"></span>
-                                <span class="resize-handle s" data-handle="s"></span>
-                                <span class="resize-handle sw" data-handle="sw"></span>
-                                <span class="resize-handle w" data-handle="w"></span>
-                            `;
+                                    <div class="object-inner">
+                                        ${renderStudioObjectPreview(object)}
+                                    </div>
+                                    ${object.requirement ? `<span class="object-requirement-tag">${escapeHtml(getRequirementLabel(object.requirement))}</span>` : ""}
+                                    <span class="rotate-handle" data-action="rotate"></span>
+                                    <span class="resize-handle nw" data-handle="nw"></span>
+                                    <span class="resize-handle n" data-handle="n"></span>
+                                    <span class="resize-handle ne" data-handle="ne"></span>
+                                    <span class="resize-handle e" data-handle="e"></span>
+                                    <span class="resize-handle se" data-handle="se"></span>
+                                    <span class="resize-handle s" data-handle="s"></span>
+                                    <span class="resize-handle sw" data-handle="sw"></span>
+                                    <span class="resize-handle w" data-handle="w"></span>
+                                `;
 
             el.addEventListener("pointerdown", startObjectMove);
 
@@ -3154,34 +3238,34 @@
 
             if (object.type === "profile_identity") {
                 return `
-                                    <div class="identity-object">
-                                        <img src="${escapeHtml(avatar)}" alt="">
-                                        <div>
-                                            <h2>${name}</h2>
-                                            <p>@${username}</p>
-                                            <p>${status}</p>
+                                        <div class="identity-object">
+                                            <img src="${escapeHtml(avatar)}" alt="">
+                                            <div>
+                                                <h2>${name}</h2>
+                                                <p>@${username}</p>
+                                                <p>${status}</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                `;
+                                    `;
             }
 
             if (object.type === "profile_avatar") {
                 return `
-                                    <div class="avatar-circle-object">
-                                        <img src="${escapeHtml(avatar)}" alt="">
-                                    </div>
-                                `;
+                                        <div class="avatar-circle-object">
+                                            <img src="${escapeHtml(avatar)}" alt="">
+                                        </div>
+                                    `;
             }
 
             if (object.type === "profile_actions") {
                 return `
-                                    <div class="actions-object" style="gap:${Number(object.styles.actionButtonGap ?? 10)}px;">
-                                        <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Follow</span>
-                                        <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Message</span>
-                                        <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Block</span>
-                                        <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Report</span>
-                                    </div>
-                                `;
+                                        <div class="actions-object" style="gap:${Number(object.styles.actionButtonGap ?? 10)}px;">
+                                            <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Follow</span>
+                                            <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Message</span>
+                                            <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Block</span>
+                                            <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Report</span>
+                                        </div>
+                                    `;
             }
 
             if (["follow_button", "message_button", "block_button", "report_button"].includes(object.type)) {
@@ -3190,84 +3274,84 @@
 
             if (["followers_box", "following_box", "works_count_box"].includes(object.type)) {
                 return `
-                                        <div class="system-stat-object">
-                                            <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
-                                            <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
-                                        </div>
-                                    `;
+                                            <div class="system-stat-object">
+                                                <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
+                                                <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
+                                            </div>
+                                        `;
             }
 
             if (object.type === "stats") {
                 return `
-                                    <div class="stats-object">
-                                        <div class="stat-mini"><strong>0</strong><span>Followers</span></div>
-                                        <div class="stat-mini"><strong>0</strong><span>Following</span></div>
-                                        <div class="stat-mini"><strong>0</strong><span>Works</span></div>
-                                    </div>
-                                `;
+                                        <div class="stats-object">
+                                            <div class="stat-mini"><strong>0</strong><span>Followers</span></div>
+                                            <div class="stat-mini"><strong>0</strong><span>Following</span></div>
+                                            <div class="stat-mini"><strong>0</strong><span>Works</span></div>
+                                        </div>
+                                    `;
             }
 
             if (object.type === "creator_gallery") {
                 return `
-                                    <div class="gallery-object">
-                                        <div class="gallery-thumb"></div>
-                                        <div class="gallery-thumb"></div>
-                                        <div class="gallery-thumb"></div>
-                                    </div>
-                                `;
+                                        <div class="gallery-object">
+                                            <div class="gallery-thumb"></div>
+                                            <div class="gallery-thumb"></div>
+                                            <div class="gallery-thumb"></div>
+                                        </div>
+                                    `;
             }
 
             if (object.type === "creator_works") {
                 return `
-                                    <div class="works-object">
-                                        <div class="work-thumb"></div>
-                                        <div class="work-thumb"></div>
-                                    </div>
-                                `;
+                                        <div class="works-object">
+                                            <div class="work-thumb"></div>
+                                            <div class="work-thumb"></div>
+                                        </div>
+                                    `;
             }
 
             if (object.type === "bio") {
                 return `
-                                    <div class="bio-object">
-                                        <h3>${escapeHtml(object.title || "About")}</h3>
-                                        <p>${bio}</p>
-                                    </div>
-                                `;
+                                        <div class="bio-object">
+                                            <h3>${escapeHtml(object.title || "About")}</h3>
+                                            <p>${bio}</p>
+                                        </div>
+                                    `;
             }
 
             if (object.type === "text") {
                 return `
-                                    <div class="text-object">
-                                        ${escapeHtml(object.text || "Custom text block")}
-                                    </div>
-                                `;
+                                        <div class="text-object">
+                                            ${escapeHtml(object.text || "Custom text block")}
+                                        </div>
+                                    `;
             }
 
             if (object.type === "section" || object.type === "featured") {
                 return `
-                                    <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
-                                        <h3>${escapeHtml(object.title || objectLabels[object.type])}</h3>
-                                        <p>${escapeHtml(object.text || "Write something here.")}</p>
-                                    </div>
-                                `;
+                                        <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
+                                            <h3>${escapeHtml(object.title || objectLabels[object.type])}</h3>
+                                            <p>${escapeHtml(object.text || "Write something here.")}</p>
+                                        </div>
+                                    `;
             }
 
             if (object.type === "image" || object.type === "banner") {
                 return `
-                                    <div class="image-object" style="width:100%;height:100%;background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
-                                `;
+                                        <div class="image-object" style="width:100%;height:100%;background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
+                                    `;
             }
 
             if (object.type === "image_text") {
                 return `
-                                    <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
-                                        <div class="image-object" style="background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
-                                        <div class="section-object">
-                                            <h3>${escapeHtml(object.title || "Image + Text")}</h3>
-                                            <p>${escapeHtml(object.text || "Add a caption or feature description.")}</p>
+                                        <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
+                                            <div class="image-object" style="background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
+                                            <div class="section-object">
+                                                <h3>${escapeHtml(object.title || "Image + Text")}</h3>
+                                                <p>${escapeHtml(object.text || "Add a caption or feature description.")}</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                `;
+                                    `;
             }
 
             if (["shape", "circle", "star"].includes(object.type)) {
@@ -3279,17 +3363,32 @@
                 const selectedWorld = currentPublishedWorlds.find(world => world.id === object.worldId) || currentPublishedWorlds[0];
                 const cover = object.imageUrl || selectedWorld?.cover_image_url || currentBannerUrl || "";
                 const title = selectedWorld?.title || "Choose a published world";
-                const summary = selectedWorld?.summary || "Pick which world this card should feature from the inspector.";
+                const summary = selectedWorld?.summary || "Pick which world this card should feature from the content picker or inspector.";
 
                 return `
-                                        <div style="display:grid;grid-template-rows:58% 1fr;width:100%;height:100%;">
-                                            <div class="image-object" style="background-image:url('${safeCssUrl(cover)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
-                                            <div class="section-object">
-                                                <h3>${escapeHtml(title)}</h3>
-                                                <p>${escapeHtml(summary)}</p>
+                                            <div class="studio-content-card-preview">
+                                                ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles.objectFit || "cover")};">` : ""}
+                                                ${buildStudioWorldCreditPill(selectedWorld)}
+                                                <div class="studio-content-card-body">
+                                                    <h3>${escapeHtml(title)}</h3>
+                                                    <p>${escapeHtml(summary)}</p>
+                                                </div>
                                             </div>
-                                        </div>
-                                    `;
+                                        `;
+            }
+
+            if (object.type === "gallery_item") {
+                const item = currentGalleryItems.find(galleryItem => galleryItem.id === object.galleryItemId) || currentGalleryItems[0];
+                const image = object.imageUrl || item?.image_url || currentBannerUrl || "";
+                const title = item?.title || "Choose a gallery image";
+
+                return `
+                                            <div class="studio-gallery-card-preview">
+                                                ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles.objectFit || "cover")};">` : ""}
+                                                ${item?.description ? `<span class="studio-content-pill" style="top:10px;bottom:auto;">${escapeHtml(item.description)}</span>` : ""}
+                                                ${buildStudioGalleryCreditPill(item)}
+                                            </div>
+                                        `;
             }
 
             if (object.type === "divider") {
@@ -3406,6 +3505,35 @@
             return "0";
         }
 
+        function getCreditValue(item, names) {
+            for (const name of names) {
+                if (item && item[name]) return item[name];
+            }
+            return "";
+        }
+
+        function formatCreditType(value) {
+            return String(value || "Credit")
+                .replaceAll("_", " ")
+                .replace(/\b\w/g, letter => letter.toUpperCase());
+        }
+
+        function buildStudioWorldCreditPill(world) {
+            if (!world) return "";
+            const type = getCreditValue(world, ["overview_card_credit_type", "cover_credit_type", "cover_image_credit_type", "image_credit_type", "credit_type"]);
+            if (!type || type === "no_credit_needed") return "";
+            const source = getCreditValue(world, ["overview_card_credit_name", "cover_credit_name", "cover_image_credit_name", "image_credit_name", "credit_name"]) || formatCreditType(type);
+            return `<span class="studio-content-pill">Credit: ${escapeHtml(source)}</span>`;
+        }
+
+        function buildStudioGalleryCreditPill(item) {
+            if (!item) return "";
+            const type = getCreditValue(item, ["image_credit_type", "credit_type", "gallery_credit_type"]);
+            if (!type || type === "no_credit_needed") return "";
+            const source = getCreditValue(item, ["image_credit_name", "credit_name", "gallery_credit_name"]) || formatCreditType(type);
+            return `<span class="studio-content-pill">Credit: ${escapeHtml(source)}</span>`;
+        }
+
         const studioColorPalette = [
             "#ffffff", "#d9d9d9", "#999999", "#4d4d4d", "#111111", "#000000", "transparent", "rgba(255,255,255,.08)",
             "#ff5c5c", "#ff9f43", "#ffd166", "#7bed9f", "#70a1ff", "#a29bfe", "#ff7ad9", "#00d2d3",
@@ -3414,18 +3542,18 @@
 
         function renderColorSwatches(updateFunctionName, field) {
             return `
-                        <div class="studio-color-swatch-grid">
-                            ${studioColorPalette.map(color => `
-                                <button
-                                    type="button"
-                                    class="studio-color-swatch"
-                                    title="${escapeHtml(color)}"
-                                    style="background:${escapeHtml(color)};"
-                                    onclick="${updateFunctionName}('${field}', '${escapeHtml(color)}')">
-                                </button>
-                            `).join("")}
-                        </div>
-                    `;
+                            <div class="studio-color-swatch-grid">
+                                ${studioColorPalette.map(color => `
+                                    <button
+                                        type="button"
+                                        class="studio-color-swatch"
+                                        title="${escapeHtml(color)}"
+                                        style="background:${escapeHtml(color)};"
+                                        onclick="${updateFunctionName}('${field}', '${escapeHtml(color)}')">
+                                    </button>
+                                `).join("")}
+                            </div>
+                        `;
         }
 
         function getPaintValue(value, fallback = "transparent") {
@@ -3444,20 +3572,20 @@
             const applyFn = prefix === "canvas" ? "applyCanvasGradient" : "applyObjectGradient";
 
             return `
-                        <div class="studio-gradient-builder">
-                            <select id="${dirId}" title="Gradient direction">
-                                <option value="135deg">Diagonal ↘</option>
-                                <option value="90deg">Left → Right</option>
-                                <option value="180deg">Top → Bottom</option>
-                                <option value="45deg">Diagonal ↗</option>
-                                <option value="0deg">Bottom → Top</option>
-                            </select>
-                            <span></span>
-                            <input id="${aId}" type="color" value="${escapeHtml(getColorInputValue(firstColor, "#111111"))}" title="Gradient color 1">
-                            <input id="${bId}" type="color" value="${escapeHtml(getColorInputValue(secondColor, "#ffffff"))}" title="Gradient color 2">
-                            <button type="button" class="button-muted" onclick="${applyFn}('${field}')">Apply Gradient</button>
-                        </div>
-                    `;
+                            <div class="studio-gradient-builder">
+                                <select id="${dirId}" title="Gradient direction">
+                                    <option value="135deg">Diagonal ↘</option>
+                                    <option value="90deg">Left → Right</option>
+                                    <option value="180deg">Top → Bottom</option>
+                                    <option value="45deg">Diagonal ↗</option>
+                                    <option value="0deg">Bottom → Top</option>
+                                </select>
+                                <span></span>
+                                <input id="${aId}" type="color" value="${escapeHtml(getColorInputValue(firstColor, "#111111"))}" title="Gradient color 1">
+                                <input id="${bId}" type="color" value="${escapeHtml(getColorInputValue(secondColor, "#ffffff"))}" title="Gradient color 2">
+                                <button type="button" class="button-muted" onclick="${applyFn}('${field}')">Apply Gradient</button>
+                            </div>
+                        `;
         }
 
         function renderObjectColorControl(label, field, value, fallback = "#ffffff") {
@@ -3465,17 +3593,17 @@
             const colorValue = getColorInputValue(safeValue, fallback);
 
             return `
-                        <div class="studio-color-control">
-                            <label>${escapeHtml(label)}</label>
-                            <div class="studio-color-row">
-                                <input type="color" value="${escapeHtml(colorValue)}" onchange="updateObjectStyle('${field}', this.value)">
-                                <div class="studio-color-preview"><span style="background:${escapeHtml(safeValue || fallback)};"></span></div>
+                            <div class="studio-color-control">
+                                <label>${escapeHtml(label)}</label>
+                                <div class="studio-color-row">
+                                    <input type="color" value="${escapeHtml(colorValue)}" onchange="updateObjectStyle('${field}', this.value)">
+                                    <div class="studio-color-preview"><span style="background:${escapeHtml(safeValue || fallback)};"></span></div>
+                                </div>
+                                ${renderColorSwatches("updateObjectStyle", field)}
+                                <input class="studio-color-fine-input" value="${escapeHtml(safeValue)}" placeholder="rgba(...), #ffffff, transparent, or linear-gradient(...)" onchange="updateObjectStyle('${field}', this.value)">
+                                ${renderGradientBuilder("object", field, colorValue, fallback)}
                             </div>
-                            ${renderColorSwatches("updateObjectStyle", field)}
-                            <input class="studio-color-fine-input" value="${escapeHtml(safeValue)}" placeholder="rgba(...), #ffffff, transparent, or linear-gradient(...)" onchange="updateObjectStyle('${field}', this.value)">
-                            ${renderGradientBuilder("object", field, colorValue, fallback)}
-                        </div>
-                    `;
+                        `;
         }
 
         function renderCanvasColorControl(label, field, value, fallback = "#09090b") {
@@ -3483,17 +3611,17 @@
             const colorValue = getColorInputValue(safeValue, fallback);
 
             return `
-                        <div class="studio-color-control">
-                            <label>${escapeHtml(label)}</label>
-                            <div class="studio-color-row">
-                                <input type="color" value="${escapeHtml(colorValue)}" onchange="updateCanvasField('${field}', this.value)">
-                                <div class="studio-color-preview"><span style="background:${escapeHtml(safeValue || fallback)};"></span></div>
+                            <div class="studio-color-control">
+                                <label>${escapeHtml(label)}</label>
+                                <div class="studio-color-row">
+                                    <input type="color" value="${escapeHtml(colorValue)}" onchange="updateCanvasField('${field}', this.value)">
+                                    <div class="studio-color-preview"><span style="background:${escapeHtml(safeValue || fallback)};"></span></div>
+                                </div>
+                                ${renderColorSwatches("updateCanvasField", field)}
+                                <input class="studio-color-fine-input" value="${escapeHtml(safeValue)}" placeholder="rgba(...), #09090b, transparent, or linear-gradient(...)" onchange="updateCanvasField('${field}', this.value)">
+                                ${renderGradientBuilder("canvas", field, colorValue, fallback)}
                             </div>
-                            ${renderColorSwatches("updateCanvasField", field)}
-                            <input class="studio-color-fine-input" value="${escapeHtml(safeValue)}" placeholder="rgba(...), #09090b, transparent, or linear-gradient(...)" onchange="updateCanvasField('${field}', this.value)">
-                            ${renderGradientBuilder("canvas", field, colorValue, fallback)}
-                        </div>
-                    `;
+                        `;
         }
 
         function applyObjectGradient(field) {
@@ -3669,17 +3797,86 @@
             };
         }
 
+
+        function renderContentPickers() {
+            const container = document.getElementById("studio-content-pickers");
+
+            if (!container) {
+                return;
+            }
+
+            const worldOptions = currentPublishedWorlds.length
+                ? currentPublishedWorlds.map(world => `<option value="${escapeHtml(world.id)}">${escapeHtml(world.title || "Untitled World")}</option>`).join("")
+                : `<option value="">No published works yet</option>`;
+
+            const galleryOptions = currentGalleryItems.length
+                ? currentGalleryItems.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title || "Untitled Gallery Image")}</option>`).join("")
+                : `<option value="">No public gallery images yet</option>`;
+
+            container.innerHTML = `
+                    <div class="inspector-group" style="margin:0;">
+                        <h4>Add a specific world card</h4>
+                        <select id="studio-world-select">${worldOptions}</select>
+                        <button type="button" class="button-muted" onclick="addSelectedWorldCard()" ${currentPublishedWorlds.length ? "" : "disabled"}>Add Selected World</button>
+                    </div>
+                    <div class="inspector-group" style="margin:0;">
+                        <h4>Add a specific gallery image</h4>
+                        <select id="studio-gallery-select">${galleryOptions}</select>
+                        <button type="button" class="button-muted" onclick="addSelectedGalleryCard()" ${currentGalleryItems.length ? "" : "disabled"}>Add Selected Gallery Image</button>
+                    </div>
+                `;
+        }
+
+        function addSelectedWorldCard() {
+            const id = document.getElementById("studio-world-select")?.value || currentPublishedWorlds[0]?.id || "";
+
+            if (!id) {
+                setStudioStatus("Publish at least one world before adding a world card.");
+                return;
+            }
+
+            const object = makeObject("world_card");
+            object.worldId = id;
+            addStudioObjectInstance(object, "World card added.");
+        }
+
+        function addSelectedGalleryCard() {
+            const id = document.getElementById("studio-gallery-select")?.value || currentGalleryItems[0]?.id || "";
+
+            if (!id) {
+                setStudioStatus("Add at least one public gallery image before adding a gallery card.");
+                return;
+            }
+
+            const object = makeObject("gallery_item");
+            object.galleryItemId = id;
+            addStudioObjectInstance(object, "Gallery image card added.");
+        }
+
+        function addStudioObjectInstance(object, message) {
+            const workspace = document.getElementById("studio-workspace");
+            const rect = workspace.getBoundingClientRect();
+            const center = screenPointToCanvasPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+            object.x = Math.round(center.x - object.w / 2) + (studioLayout.objects.length % 6) * 24;
+            object.y = Math.round(center.y - object.h / 2) + (studioLayout.objects.length % 6) * 24;
+            clampObjectToRules(object);
+            studioLayout.objects.push(object);
+            selectedObjectId = object.id;
+            renderStudio();
+            setStudioStatus(message || `${object.name || "Object"} added.`);
+        }
+
         function renderLayers() {
             const container = document.getElementById("studio-layers");
 
             const reversed = [...studioLayout.objects].reverse();
 
             container.innerHTML = reversed.map(object => `
-                                <button class="layer-item ${object.id === selectedObjectId ? "active" : ""}" onclick="selectStudioObject('${object.id}')">
-                                    <span>${escapeHtml(object.name || objectLabels[object.type] || object.type)}</span>
-                                    <small>${object.visible === false ? "Hidden" : ""}</small>
-                                </button>
-                            `).join("");
+                                    <button class="layer-item ${object.id === selectedObjectId ? "active" : ""}" onclick="selectStudioObject('${object.id}')">
+                                        <span>${escapeHtml(object.name || objectLabels[object.type] || object.type)}</span>
+                                        <small>${object.visible === false ? "Hidden" : ""}</small>
+                                    </button>
+                                `).join("");
         }
 
         function renderInspector() {
@@ -3690,134 +3887,134 @@
 
             if (!object) {
                 box.innerHTML = `
-                                    ${validationWarning}
-                                    <div class="inspector-group">
-                                        <h4>Canvas</h4>
+                                        ${validationWarning}
+                                        <div class="inspector-group">
+                                            <h4>Canvas</h4>
 
-                                        <label>Background Mode</label>
-                                        <select onchange="updateCanvasField('backgroundMode', this.value)">
-                                            <option value="gradient" ${studioLayout.canvas.backgroundMode === "gradient" ? "selected" : ""}>Gradient</option>
-                                            <option value="color" ${studioLayout.canvas.backgroundMode === "color" ? "selected" : ""}>Color</option>
-                                            <option value="image" ${studioLayout.canvas.backgroundMode === "image" ? "selected" : ""}>Image URL</option>
-                                        </select>
+                                            <label>Background Mode</label>
+                                            <select onchange="updateCanvasField('backgroundMode', this.value)">
+                                                <option value="gradient" ${studioLayout.canvas.backgroundMode === "gradient" ? "selected" : ""}>Gradient</option>
+                                                <option value="color" ${studioLayout.canvas.backgroundMode === "color" ? "selected" : ""}>Color</option>
+                                                <option value="image" ${studioLayout.canvas.backgroundMode === "image" ? "selected" : ""}>Image URL</option>
+                                            </select>
 
-                                        ${renderCanvasColorControl("Background Color", "backgroundColor", studioLayout.canvas.backgroundColor || "#09090b", "#09090b")}
+                                            ${renderCanvasColorControl("Background Color", "backgroundColor", studioLayout.canvas.backgroundColor || "#09090b", "#09090b")}
 
-                                        ${renderCanvasColorControl("Gradient", "backgroundGradient", studioLayout.canvas.backgroundGradient || "", "#09090b")}
+                                            ${renderCanvasColorControl("Gradient", "backgroundGradient", studioLayout.canvas.backgroundGradient || "", "#09090b")}
 
-                                        <label>Background Image URL</label>
-                                        <input value="${escapeHtml(studioLayout.canvas.backgroundImage || "")}" onchange="updateCanvasField('backgroundImage', this.value)">
+                                            <label>Background Image URL</label>
+                                            <input value="${escapeHtml(studioLayout.canvas.backgroundImage || "")}" onchange="updateCanvasField('backgroundImage', this.value)">
 
-                                        <div class="mini-grid">
-                                            <div>
-                                                <label>Width</label>
-                                                <input type="number" min="700" value="${studioLayout.canvas.width}" onchange="updateCanvasField('width', Number(this.value))">
+                                            <div class="mini-grid">
+                                                <div>
+                                                    <label>Width</label>
+                                                    <input type="number" min="700" value="${studioLayout.canvas.width}" onchange="updateCanvasField('width', Number(this.value))">
+                                                </div>
+                                                <div>
+                                                    <label>Height</label>
+                                                    <input type="number" min="700" value="${studioLayout.canvas.height}" onchange="updateCanvasField('height', Number(this.value))">
+                                                </div>
                                             </div>
-                                            <div>
-                                                <label>Height</label>
-                                                <input type="number" min="700" value="${studioLayout.canvas.height}" onchange="updateCanvasField('height', Number(this.value))">
-                                            </div>
+
+                                            <label>
+                                                <input type="checkbox" style="width:auto;margin-right:8px;" ${studioLayout.canvas.showGrid !== false ? "checked" : ""} onchange="updateCanvasField('showGrid', this.checked)">
+                                                Show Grid
+                                            </label>
                                         </div>
 
-                                        <label>
-                                            <input type="checkbox" style="width:auto;margin-right:8px;" ${studioLayout.canvas.showGrid !== false ? "checked" : ""} onchange="updateCanvasField('showGrid', this.checked)">
-                                            Show Grid
-                                        </label>
-                                    </div>
-
-                                    <p class="inspector-empty">Select an object to edit it. Drag, resize, and rotate directly on the canvas first. Use this panel for small exact changes.</p>
-                                `;
+                                        <p class="inspector-empty">Select an object to edit it. Drag, resize, and rotate directly on the canvas first. Use this panel for small exact changes.</p>
+                                    `;
                 return;
             }
 
             box.innerHTML = `
-                                ${validationWarning}
-                                <div class="inspector-group">
-                                    <h4>${escapeHtml(objectLabels[object.type] || object.type)}</h4>
+                                    ${validationWarning}
+                                    <div class="inspector-group">
+                                        <h4>${escapeHtml(objectLabels[object.type] || object.type)}</h4>
 
-                                    <label>Layer Name</label>
-                                    <input value="${escapeHtml(object.name || "")}" onchange="updateObjectField('name', this.value)">
+                                        <label>Layer Name</label>
+                                        <input value="${escapeHtml(object.name || "")}" onchange="updateObjectField('name', this.value)">
 
-                                    <div class="mini-grid">
-                                        <div>
-                                            <label>X</label>
-                                            <input type="number" value="${Math.round(object.x)}" onchange="updateObjectField('x', Number(this.value))">
+                                        <div class="mini-grid">
+                                            <div>
+                                                <label>X</label>
+                                                <input type="number" value="${Math.round(object.x)}" onchange="updateObjectField('x', Number(this.value))">
+                                            </div>
+                                            <div>
+                                                <label>Y</label>
+                                                <input type="number" value="${Math.round(object.y)}" onchange="updateObjectField('y', Number(this.value))">
+                                            </div>
+                                            <div>
+                                                <label>Width</label>
+                                                <input type="number" min="20" value="${Math.round(object.w)}" onchange="updateObjectField('w', Number(this.value))">
+                                            </div>
+                                            <div>
+                                                <label>Height</label>
+                                                <input type="number" min="20" value="${Math.round(object.h)}" onchange="updateObjectField('h', Number(this.value))">
+                                            </div>
+                                            <div>
+                                                <label>Rotation</label>
+                                                <input type="number" value="${Math.round(object.rotation || 0)}" onchange="updateObjectField('rotation', Number(this.value))">
+                                            </div>
+                                            <div>
+                                                <label>Opacity</label>
+                                                <input type="number" min="0" max="1" step="0.05" value="${object.styles.opacity ?? 1}" onchange="updateObjectStyle('opacity', Number(this.value))">
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label>Y</label>
-                                            <input type="number" value="${Math.round(object.y)}" onchange="updateObjectField('y', Number(this.value))">
-                                        </div>
-                                        <div>
-                                            <label>Width</label>
-                                            <input type="number" min="20" value="${Math.round(object.w)}" onchange="updateObjectField('w', Number(this.value))">
-                                        </div>
-                                        <div>
-                                            <label>Height</label>
-                                            <input type="number" min="20" value="${Math.round(object.h)}" onchange="updateObjectField('h', Number(this.value))">
-                                        </div>
-                                        <div>
-                                            <label>Rotation</label>
-                                            <input type="number" value="${Math.round(object.rotation || 0)}" onchange="updateObjectField('rotation', Number(this.value))">
-                                        </div>
-                                        <div>
-                                            <label>Opacity</label>
-                                            <input type="number" min="0" max="1" step="0.05" value="${object.styles.opacity ?? 1}" onchange="updateObjectStyle('opacity', Number(this.value))">
-                                        </div>
+
+                                        <label>
+                                            <input type="checkbox" style="width:auto;margin-right:8px;" ${object.visible !== false ? "checked" : ""} onchange="updateObjectField('visible', this.checked)">
+                                            Visible
+                                        </label>
                                     </div>
 
-                                    <label>
-                                        <input type="checkbox" style="width:auto;margin-right:8px;" ${object.visible !== false ? "checked" : ""} onchange="updateObjectField('visible', this.checked)">
-                                        Visible
-                                    </label>
-                                </div>
+                                    <div class="inspector-group">
+                                        <h4>Style</h4>
 
-                                <div class="inspector-group">
-                                    <h4>Style</h4>
+                                        ${renderObjectColorControl("Background", "background", object.styles.background || "", "#111111")}
 
-                                    ${renderObjectColorControl("Background", "background", object.styles.background || "", "#111111")}
+                                        ${renderObjectColorControl("Text Color", "textColor", object.styles.textColor || "#ffffff", "#ffffff")}
 
-                                    ${renderObjectColorControl("Text Color", "textColor", object.styles.textColor || "#ffffff", "#ffffff")}
+                                        ${renderObjectColorControl("Border Color", "borderColor", object.styles.borderColor || "rgba(255,255,255,.10)", "#ffffff")}
 
-                                    ${renderObjectColorControl("Border Color", "borderColor", object.styles.borderColor || "rgba(255,255,255,.10)", "#ffffff")}
-
-                                    <div class="mini-grid">
-                                        <div>
-                                            <label>Font Size</label>
-                                            <input type="number" min="8" max="120" value="${object.styles.fontSize || 16}" onchange="updateObjectStyle('fontSize', Number(this.value))">
+                                        <div class="mini-grid">
+                                            <div>
+                                                <label>Font Size</label>
+                                                <input type="number" min="8" max="120" value="${object.styles.fontSize || 16}" onchange="updateObjectStyle('fontSize', Number(this.value))">
+                                            </div>
+                                            <div>
+                                                <label>Radius</label>
+                                                <input type="number" min="0" max="999" value="${object.styles.radius || 18}" onchange="updateObjectStyle('radius', Number(this.value))">
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label>Radius</label>
-                                            <input type="number" min="0" max="999" value="${object.styles.radius || 18}" onchange="updateObjectStyle('radius', Number(this.value))">
-                                        </div>
+
+                                        <label>Font</label>
+                                        <select onchange="updateObjectStyle('fontFamily', this.value)">
+                                            ${["Arial", "Georgia", "Verdana", "Trebuchet MS", "Courier New"].map(font => `
+                                                <option value="${font}" ${object.styles.fontFamily === font ? "selected" : ""}>${font}</option>
+                                            `).join("")}
+                                        </select>
+
+                                        <label>Text Align</label>
+                                        <select onchange="updateObjectStyle('textAlign', this.value)">
+                                            ${["left", "center", "right"].map(align => `
+                                                <option value="${align}" ${object.styles.textAlign === align ? "selected" : ""}>${align}</option>
+                                            `).join("")}
+                                        </select>
                                     </div>
 
-                                    <label>Font</label>
-                                    <select onchange="updateObjectStyle('fontFamily', this.value)">
-                                        ${["Arial", "Georgia", "Verdana", "Trebuchet MS", "Courier New"].map(font => `
-                                            <option value="${font}" ${object.styles.fontFamily === font ? "selected" : ""}>${font}</option>
-                                        `).join("")}
-                                    </select>
+                                    ${renderContentInspector(object)}
 
-                                    <label>Text Align</label>
-                                    <select onchange="updateObjectStyle('textAlign', this.value)">
-                                        ${["left", "center", "right"].map(align => `
-                                            <option value="${align}" ${object.styles.textAlign === align ? "selected" : ""}>${align}</option>
-                                        `).join("")}
-                                    </select>
-                                </div>
-
-                                ${renderContentInspector(object)}
-
-                                <div class="inspector-group">
-                                    <h4>Arrange</h4>
-                                    <div class="button-row">
-                                        <button type="button" class="button-muted" onclick="moveSelectedLayer(1)">Forward</button>
-                                        <button type="button" class="button-muted" onclick="moveSelectedLayer(-1)">Backward</button>
-                                        <button type="button" class="button-muted" onclick="duplicateSelectedObject()">Duplicate</button>
-                                        <button type="button" class="danger-button" onclick="deleteSelectedObject()">Delete</button>
+                                    <div class="inspector-group">
+                                        <h4>Arrange</h4>
+                                        <div class="button-row">
+                                            <button type="button" class="button-muted" onclick="moveSelectedLayer(1)">Forward</button>
+                                            <button type="button" class="button-muted" onclick="moveSelectedLayer(-1)">Backward</button>
+                                            <button type="button" class="button-muted" onclick="duplicateSelectedObject()">Duplicate</button>
+                                            <button type="button" class="danger-button" onclick="deleteSelectedObject()">Delete</button>
+                                        </div>
                                     </div>
-                                </div>
-                            `;
+                                `;
         }
 
         function renderContentInspector(object) {
@@ -3825,130 +4022,148 @@
 
             if (["text", "section", "featured", "image_text"].includes(object.type)) {
                 html += `
-                                    <div class="inspector-group">
-                                        <h4>Content</h4>
+                                        <div class="inspector-group">
+                                            <h4>Content</h4>
 
-                                        ${object.type !== "text" ? `
-                                            <label>Title</label>
-                                            <input value="${escapeHtml(object.title || "")}" onchange="updateObjectField('title', this.value)">
-                                        ` : ""}
+                                            ${object.type !== "text" ? `
+                                                <label>Title</label>
+                                                <input value="${escapeHtml(object.title || "")}" onchange="updateObjectField('title', this.value)">
+                                            ` : ""}
 
-                                        <label>Text</label>
-                                        <textarea onchange="updateObjectField('text', this.value)">${escapeHtml(object.text || "")}</textarea>
-                                    </div>
-                                `;
+                                            <label>Text</label>
+                                            <textarea onchange="updateObjectField('text', this.value)">${escapeHtml(object.text || "")}</textarea>
+                                        </div>
+                                    `;
             }
 
             if (["shape", "circle", "star"].includes(object.type)) {
                 html += `
-                                        <div class="inspector-group">
-                                            <h4>Shape</h4>
+                                            <div class="inspector-group">
+                                                <h4>Shape</h4>
 
-                                            <label>Shape Type</label>
-                                            <select onchange="updateObjectField('shapeType', this.value)">
-                                                ${["rectangle", "circle", "star", "diamond"].map(shape => `
-                                                    <option value="${shape}" ${(object.shapeType || "rectangle") === shape ? "selected" : ""}>${shape}</option>
-                                                `).join("")}
-                                            </select>
-                                        </div>
-                                    `;
+                                                <label>Shape Type</label>
+                                                <select onchange="updateObjectField('shapeType', this.value)">
+                                                    ${["rectangle", "circle", "star", "diamond"].map(shape => `
+                                                        <option value="${shape}" ${(object.shapeType || "rectangle") === shape ? "selected" : ""}>${shape}</option>
+                                                    `).join("")}
+                                                </select>
+                                            </div>
+                                        `;
             }
 
             if (object.type === "world_card") {
                 html += `
-                                        <div class="inspector-group">
-                                            <h4>World Card</h4>
+                                            <div class="inspector-group">
+                                                <h4>World Card</h4>
 
-                                            <label>Choose Published World</label>
-                                            <select onchange="updateObjectField('worldId', this.value)">
-                                                ${currentPublishedWorlds.length ? currentPublishedWorlds.map(world => `
-                                                    <option value="${escapeHtml(world.id)}" ${object.worldId === world.id ? "selected" : ""}>${escapeHtml(world.title || "Untitled World")}</option>
-                                                `).join("") : `<option value="">No published worlds yet</option>`}
-                                            </select>
+                                                <label>Choose Published World</label>
+                                                <select onchange="updateObjectField('worldId', this.value)">
+                                                    ${currentPublishedWorlds.length ? currentPublishedWorlds.map(world => `
+                                                        <option value="${escapeHtml(world.id)}" ${object.worldId === world.id ? "selected" : ""}>${escapeHtml(world.title || "Untitled World")}</option>
+                                                    `).join("") : `<option value="">No published worlds yet</option>`}
+                                                </select>
 
-                                            <label>Custom Image URL</label>
-                                            <input value="${escapeHtml(object.imageUrl || "")}" onchange="updateObjectField('imageUrl', this.value)">
-                                        </div>
-                                    `;
+                                                <label>Custom Image URL</label>
+                                                <input value="${escapeHtml(object.imageUrl || "")}" onchange="updateObjectField('imageUrl', this.value)">
+                                            </div>
+                                        `;
+            }
+
+            if (object.type === "gallery_item") {
+                html += `
+                                            <div class="inspector-group">
+                                                <h4>Gallery Image Card</h4>
+
+                                                <label>Choose Public Gallery Image</label>
+                                                <select onchange="updateObjectField('galleryItemId', this.value)">
+                                                    ${currentGalleryItems.length ? currentGalleryItems.map(item => `
+                                                        <option value="${escapeHtml(item.id)}" ${object.galleryItemId === item.id ? "selected" : ""}>${escapeHtml(item.title || "Untitled Gallery Image")}</option>
+                                                    `).join("") : `<option value="">No public gallery images yet</option>`}
+                                                </select>
+
+                                                <label>Custom Image URL</label>
+                                                <input value="${escapeHtml(object.imageUrl || "")}" onchange="updateObjectField('imageUrl', this.value)">
+                                            </div>
+                                        `;
             }
 
 
 
             if (object.type === "profile_actions") {
                 html += `
-                                            <div class="inspector-group">
-                                                <h4>Action Buttons</h4>
+                                                <div class="inspector-group">
+                                                    <h4>Action Buttons</h4>
 
-                                                <label>Button Variant</label>
-                                                <select onchange="updateObjectStyle('actionButtonVariant', this.value)">
-                                                    ${["filled", "ghost", "none"].map(value => `
-                                                        <option value="${value}" ${(object.styles.actionButtonVariant || "filled") === value ? "selected" : ""}>${value}</option>
-                                                    `).join("")}
-                                                </select>
+                                                    <label>Button Variant</label>
+                                                    <select onchange="updateObjectStyle('actionButtonVariant', this.value)">
+                                                        ${["filled", "ghost", "none"].map(value => `
+                                                            <option value="${value}" ${(object.styles.actionButtonVariant || "filled") === value ? "selected" : ""}>${value}</option>
+                                                        `).join("")}
+                                                    </select>
 
-                                                ${renderObjectColorControl("Button Background", "actionButtonBg", object.styles.actionButtonBg || "rgba(0,0,0,.28)", "#111111")}
+                                                    ${renderObjectColorControl("Button Background", "actionButtonBg", object.styles.actionButtonBg || "rgba(0,0,0,.28)", "#111111")}
 
-                                                ${renderObjectColorControl("Button Text Color", "actionButtonText", object.styles.actionButtonText || "#ffffff", "#ffffff")}
+                                                    ${renderObjectColorControl("Button Text Color", "actionButtonText", object.styles.actionButtonText || "#ffffff", "#ffffff")}
 
-                                                ${renderObjectColorControl("Button Border", "actionButtonBorder", object.styles.actionButtonBorder || "rgba(255,255,255,.14)", "#ffffff")}
+                                                    ${renderObjectColorControl("Button Border", "actionButtonBorder", object.styles.actionButtonBorder || "rgba(255,255,255,.14)", "#ffffff")}
 
-                                                <div class="mini-grid">
-                                                    <div>
-                                                        <label>Button Radius</label>
-                                                        <input type="number" min="0" max="80" value="${Number(object.styles.actionButtonRadius ?? 12)}" onchange="updateObjectStyle('actionButtonRadius', Number(this.value))">
+                                                    <div class="mini-grid">
+                                                        <div>
+                                                            <label>Button Radius</label>
+                                                            <input type="number" min="0" max="80" value="${Number(object.styles.actionButtonRadius ?? 12)}" onchange="updateObjectStyle('actionButtonRadius', Number(this.value))">
+                                                        </div>
+                                                        <div>
+                                                            <label>Button Font Size</label>
+                                                            <input type="number" min="8" max="48" value="${Number(object.styles.actionButtonFontSize ?? 15)}" onchange="updateObjectStyle('actionButtonFontSize', Number(this.value))">
+                                                        </div>
+                                                        <div>
+                                                            <label>Padding Y</label>
+                                                            <input type="number" min="0" max="40" value="${Number(object.styles.actionButtonPaddingY ?? 10)}" onchange="updateObjectStyle('actionButtonPaddingY', Number(this.value))">
+                                                        </div>
+                                                        <div>
+                                                            <label>Padding X</label>
+                                                            <input type="number" min="0" max="60" value="${Number(object.styles.actionButtonPaddingX ?? 13)}" onchange="updateObjectStyle('actionButtonPaddingX', Number(this.value))">
+                                                        </div>
+                                                        <div>
+                                                            <label>Button Gap</label>
+                                                            <input type="number" min="0" max="40" value="${Number(object.styles.actionButtonGap ?? 10)}" onchange="updateObjectStyle('actionButtonGap', Number(this.value))">
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <label>Button Font Size</label>
-                                                        <input type="number" min="8" max="48" value="${Number(object.styles.actionButtonFontSize ?? 15)}" onchange="updateObjectStyle('actionButtonFontSize', Number(this.value))">
-                                                    </div>
-                                                    <div>
-                                                        <label>Padding Y</label>
-                                                        <input type="number" min="0" max="40" value="${Number(object.styles.actionButtonPaddingY ?? 10)}" onchange="updateObjectStyle('actionButtonPaddingY', Number(this.value))">
-                                                    </div>
-                                                    <div>
-                                                        <label>Padding X</label>
-                                                        <input type="number" min="0" max="60" value="${Number(object.styles.actionButtonPaddingX ?? 13)}" onchange="updateObjectStyle('actionButtonPaddingX', Number(this.value))">
-                                                    </div>
-                                                    <div>
-                                                        <label>Button Gap</label>
-                                                        <input type="number" min="0" max="40" value="${Number(object.styles.actionButtonGap ?? 10)}" onchange="updateObjectStyle('actionButtonGap', Number(this.value))">
-                                                    </div>
+
+                                                    <p class="help-text" style="margin:0;">Labels stay system-controlled for safety. You can style their look, not rename them.</p>
                                                 </div>
-
-                                                <p class="help-text" style="margin:0;">Labels stay system-controlled for safety. You can style their look, not rename them.</p>
-                                            </div>
-                                        `;
+                                            `;
             }
 
             if (["follow_button", "message_button", "block_button", "report_button"].includes(object.type)) {
                 html += `
-                                    <div class="inspector-group">
-                                        <h4>System Button</h4>
-                                        <p class="help-text" style="margin:0 0 10px;">This button will always say ${escapeHtml(getSingleActionLabel(object.type))}. You can change its size, fill, text color, border, radius, font, and rotation.</p>
-                                        <label>Button Label</label>
-                                        <input value="${escapeHtml(getSingleActionLabel(object.type))}" disabled>
-                                    </div>
-                                `;
+                                        <div class="inspector-group">
+                                            <h4>System Button</h4>
+                                            <p class="help-text" style="margin:0 0 10px;">This button will always say ${escapeHtml(getSingleActionLabel(object.type))}. You can change its size, fill, text color, border, radius, font, and rotation.</p>
+                                            <label>Button Label</label>
+                                            <input value="${escapeHtml(getSingleActionLabel(object.type))}" disabled>
+                                        </div>
+                                    `;
             }
 
-            if (["image", "banner", "image_text"].includes(object.type)) {
+            if (["image", "banner", "image_text", "gallery_item", "world_card"].includes(object.type)) {
                 html += `
-                                    <div class="inspector-group">
-                                        <h4>Image</h4>
+                                        <div class="inspector-group">
+                                            <h4>Image</h4>
 
-                                        <label>Image URL</label>
-                                        <input value="${escapeHtml(object.imageUrl || "")}" onchange="updateObjectField('imageUrl', this.value)">
+                                            <label>Image URL</label>
+                                            <input value="${escapeHtml(object.imageUrl || "")}" onchange="updateObjectField('imageUrl', this.value)">
 
-                                        <label>Upload Image</label>
-                                        <input type="file" accept="image/*" onchange="uploadStudioObjectImage(this)">
+                                            <label>Upload Image</label>
+                                            <input type="file" accept="image/*" onchange="uploadStudioObjectImage(this)">
 
-                                        <label>Image Fit</label>
-                                        <select onchange="updateObjectStyle('objectFit', this.value)">
-                                            <option value="cover" ${object.styles.objectFit === "cover" ? "selected" : ""}>Cover</option>
-                                            <option value="contain" ${object.styles.objectFit === "contain" ? "selected" : ""}>Contain</option>
-                                        </select>
-                                    </div>
-                                `;
+                                            <label>Image Fit</label>
+                                            <select onchange="updateObjectStyle('objectFit', this.value)">
+                                                <option value="cover" ${object.styles.objectFit === "cover" ? "selected" : ""}>Cover</option>
+                                                <option value="contain" ${object.styles.objectFit === "contain" ? "selected" : ""}>Contain</option>
+                                            </select>
+                                        </div>
+                                    `;
             }
 
             return html;
@@ -3964,18 +4179,22 @@
         }
 
         function addStudioObject(type) {
-            const object = makeObject(type);
+            if (type === "world_card") {
+                addSelectedWorldCard();
+                return;
+            }
 
-            const workspace = document.getElementById("studio-workspace");
-            const rect = workspace.getBoundingClientRect();
-            const center = screenPointToCanvasPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-            object.x = Math.round(center.x - object.w / 2) + (studioLayout.objects.length % 6) * 24;
-            object.y = Math.round(center.y - object.h / 2) + (studioLayout.objects.length % 6) * 24;
+            if (type === "gallery_item") {
+                addSelectedGalleryCard();
+                return;
+            }
 
-            studioLayout.objects.push(object);
-            selectedObjectId = object.id;
-            renderStudio();
-            setStudioStatus(`${objectLabels[type] || "Object"} added.`);
+            if (type === "creator_gallery" || type === "creator_works") {
+                setStudioStatus("Use the published content pickers to add exact world cards or gallery image cards.");
+                return;
+            }
+
+            addStudioObjectInstance(makeObject(type), `${objectLabels[type] || "Object"} added.`);
         }
 
         function updateObjectField(field, value) {
@@ -4478,17 +4697,17 @@
                 const avatar = blockedProfile?.avatar_url || defaultAvatar;
 
                 return `
-                                    <div class="drawer-card">
-                                        <div class="drawer-user">
-                                            <img src="${escapeHtml(avatar)}" alt="">
-                                            <div>
-                                                <strong>${escapeHtml(blockedProfile?.display_name || "Unknown User")}</strong>
-                                                <p>@${escapeHtml(blockedProfile?.username || "unknown")}</p>
+                                        <div class="drawer-card">
+                                            <div class="drawer-user">
+                                                <img src="${escapeHtml(avatar)}" alt="">
+                                                <div>
+                                                    <strong>${escapeHtml(blockedProfile?.display_name || "Unknown User")}</strong>
+                                                    <p>@${escapeHtml(blockedProfile?.username || "unknown")}</p>
+                                                </div>
                                             </div>
+                                            <button style="margin-top:14px;" onclick="unblockUser('${block.blocked_id}')">Unblock</button>
                                         </div>
-                                        <button style="margin-top:14px;" onclick="unblockUser('${block.blocked_id}')">Unblock</button>
-                                    </div>
-                                `;
+                                    `;
             }).join("");
         }
 

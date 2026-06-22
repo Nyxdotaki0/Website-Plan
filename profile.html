@@ -382,11 +382,11 @@
             position: relative;
             width: 1600px;
             min-height: 2200px;
-            margin: 0;
+            margin: 0 auto;
             overflow: visible;
             border: none;
             border-radius: 0;
-            background: var(--page-bg);
+            background: transparent !important;
             box-shadow: none;
             z-index: 1;
         }
@@ -679,6 +679,25 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+
+        .custom-gallery-item-card {
+            position: relative;
+            display: block;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            border-radius: inherit;
+            color: inherit;
+            text-decoration: none;
+            background: transparent;
+        }
+
+            .custom-gallery-item-card img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                display: block;
+            }
 
         .custom-world-card {
             display: grid;
@@ -1290,11 +1309,14 @@
             const layout = normalizeLayout(profile.profile_custom_layout);
             const canvas = document.createElement("div");
 
+            root.style.minHeight = layout.canvas.height + "px";
+            applyCanvasBackground(root, layout.canvas);
+
             canvas.className = "custom-profile-canvas";
             canvas.style.width = layout.canvas.width + "px";
             canvas.style.height = layout.canvas.height + "px";
             canvas.style.fontFamily = layout.canvas.fontFamily || "Arial";
-            applyCanvasBackground(canvas, layout.canvas);
+            canvas.style.background = "transparent";
 
             layout.objects
                 .filter(object => object.visible !== false)
@@ -1478,23 +1500,23 @@
 
             if (object.type === "profile_identity") {
                 return `
-                            <div class="identity-object">
-                                <img src="${escapeHtml(avatar)}" alt="">
-                                <div>
-                                    <h2>${displayName}</h2>
-                                    <p>@${username}</p>
-                                    <p>${status}</p>
+                                <div class="identity-object">
+                                    <img src="${escapeHtml(avatar)}" alt="">
+                                    <div>
+                                        <h2>${displayName}</h2>
+                                        <p>@${username}</p>
+                                        <p>${status}</p>
+                                    </div>
                                 </div>
-                            </div>
-                        `;
+                            `;
             }
 
             if (object.type === "profile_avatar") {
                 return `
-                            <div class="avatar-circle-object">
-                                <img src="${escapeHtml(avatar)}" alt="">
-                            </div>
-                        `;
+                                <div class="avatar-circle-object">
+                                    <img src="${escapeHtml(avatar)}" alt="">
+                                </div>
+                            `;
             }
 
             if (object.type === "display_name") {
@@ -1515,25 +1537,39 @@
 
             if (["followers_box", "following_box", "works_count_box"].includes(object.type)) {
                 return `
-                            <div class="system-stat-object">
-                                <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
-                                <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
-                            </div>
-                        `;
+                                <div class="system-stat-object">
+                                    <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
+                                    <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
+                                </div>
+                            `;
             }
 
             if (object.type === "stats") {
                 return `
-                            <div class="stats-object">
-                                <div class="stat-mini"><strong>${followCounts.followers || 0}</strong><span>Followers</span></div>
-                                <div class="stat-mini"><strong>${followCounts.following || 0}</strong><span>Following</span></div>
-                                <div class="stat-mini"><strong>${profileWorlds.length || 0}</strong><span>Works</span></div>
-                            </div>
-                        `;
+                                <div class="stats-object">
+                                    <div class="stat-mini"><strong>${followCounts.followers || 0}</strong><span>Followers</span></div>
+                                    <div class="stat-mini"><strong>${followCounts.following || 0}</strong><span>Following</span></div>
+                                    <div class="stat-mini"><strong>${profileWorlds.length || 0}</strong><span>Works</span></div>
+                                </div>
+                            `;
             }
 
             if (object.type === "creator_gallery") {
                 return `<div class="gallery-object">${renderGalleryMini(profile, object)}</div>`;
+            }
+
+            if (object.type === "gallery_item") {
+                const item = galleryItems.find(galleryItem => galleryItem.id === object.galleryItemId) || galleryItems[0];
+                const image = object.imageUrl || item?.image_url || profile.banner_url || "";
+                const title = item?.title || "Gallery image";
+
+                return `
+                                <a class="custom-gallery-item-card" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
+                                    ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
+                                    ${buildGalleryDescriptionPill(item)}
+                                    ${buildGalleryCreditPill(item)}
+                                </a>
+                            `;
             }
 
             if (object.type === "creator_works") {
@@ -1542,11 +1578,11 @@
 
             if (object.type === "bio") {
                 return `
-                            <div class="bio-object">
-                                <h3>${escapeHtml(object.title || "About")}</h3>
-                                <p>${bio}</p>
-                            </div>
-                        `;
+                                <div class="bio-object">
+                                    <h3>${escapeHtml(object.title || "About")}</h3>
+                                    <p>${bio}</p>
+                                </div>
+                            `;
             }
 
             if (object.type === "text") {
@@ -1555,29 +1591,29 @@
 
             if (object.type === "section" || object.type === "featured") {
                 return `
-                            <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
-                                <h3>${escapeHtml(object.title || "Section")}</h3>
-                                <p>${escapeHtml(object.text || "")}</p>
-                            </div>
-                        `;
+                                <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
+                                    <h3>${escapeHtml(object.title || "Section")}</h3>
+                                    <p>${escapeHtml(object.text || "")}</p>
+                                </div>
+                            `;
             }
 
             if (object.type === "image" || object.type === "banner") {
                 return `
-                            <div class="image-object" style="width:100%;height:100%;background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};"></div>
-                        `;
+                                <div class="image-object" style="width:100%;height:100%;background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};"></div>
+                            `;
             }
 
             if (object.type === "image_text") {
                 return `
-                            <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
-                                <div class="image-object" style="background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};"></div>
-                                <div class="section-object">
-                                    <h3>${escapeHtml(object.title || "Image + Text")}</h3>
-                                    <p>${escapeHtml(object.text || "")}</p>
+                                <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
+                                    <div class="image-object" style="background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};"></div>
+                                    <div class="section-object">
+                                        <h3>${escapeHtml(object.title || "Image + Text")}</h3>
+                                        <p>${escapeHtml(object.text || "")}</p>
+                                    </div>
                                 </div>
-                            </div>
-                        `;
+                            `;
             }
 
             if (["shape", "circle", "star"].includes(object.type)) {
@@ -1592,17 +1628,17 @@
                 const summary = selectedWorld?.summary || "This creator can feature one of their published worlds here.";
 
                 return `
-                            <a class="custom-world-card" href="${selectedWorld ? getWorldLink(selectedWorld) : '#'}">
-                                <div class="custom-world-cover">
-                                    ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
-                                    ${buildWorldCreditPill(selectedWorld)}
-                                </div>
-                                <div class="custom-world-body">
-                                    <h3>${escapeHtml(title)}</h3>
-                                    <p>${escapeHtml(summary)}</p>
-                                </div>
-                            </a>
-                        `;
+                                <a class="custom-world-card" href="${selectedWorld ? getWorldLink(selectedWorld) : '#'}">
+                                    <div class="custom-world-cover">
+                                        ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
+                                        ${buildWorldCreditPill(selectedWorld)}
+                                    </div>
+                                    <div class="custom-world-body">
+                                        <h3>${escapeHtml(title)}</h3>
+                                        <p>${escapeHtml(summary)}</p>
+                                    </div>
+                                </a>
+                            `;
             }
 
             if (object.type === "divider") {
@@ -1618,20 +1654,20 @@
 
             if (currentUser.id === profile.id) {
                 return `
-                            <div class="actions-object" style="gap:${gap}px;">
-                                <a class="custom-action-button" style="${inlineStyle}" href="account-settings.html">Edit Profile</a>
-                            </div>
-                        `;
+                                <div class="actions-object" style="gap:${gap}px;">
+                                    <a class="custom-action-button" style="${inlineStyle}" href="account-settings.html">Edit Profile</a>
+                                </div>
+                            `;
             }
 
             return `
-                        <div class="actions-object" style="gap:${gap}px;">
-                            <button class="custom-action-button" style="${inlineStyle}" data-custom-action="follow">Follow</button>
-                            <button class="custom-action-button" style="${inlineStyle}" data-custom-action="message">Message</button>
-                            <button class="custom-action-button" style="${inlineStyle}" data-custom-action="block">Block</button>
-                            <button class="custom-action-button" style="${inlineStyle}" data-custom-action="report">Report</button>
-                        </div>
-                    `;
+                            <div class="actions-object" style="gap:${gap}px;">
+                                <button class="custom-action-button" style="${inlineStyle}" data-custom-action="follow">Follow</button>
+                                <button class="custom-action-button" style="${inlineStyle}" data-custom-action="message">Message</button>
+                                <button class="custom-action-button" style="${inlineStyle}" data-custom-action="block">Block</button>
+                                <button class="custom-action-button" style="${inlineStyle}" data-custom-action="report">Report</button>
+                            </div>
+                        `;
         }
 
         function buildSingleCustomAction(profile, object) {
@@ -1733,12 +1769,12 @@
             }
 
             return items.map(item => `
-                        <a class="gallery-mini-card profile-gallery-tile" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
-                            <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title || "Gallery item")}">
-                            ${buildGalleryDescriptionPill(item)}
-                            ${buildGalleryCreditPill(item)}
-                        </a>
-                    `).join("");
+                            <a class="gallery-mini-card profile-gallery-tile" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
+                                <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title || "Gallery item")}">
+                                ${buildGalleryDescriptionPill(item)}
+                                ${buildGalleryCreditPill(item)}
+                            </a>
+                        `).join("");
         }
 
         function renderWorksMini(worlds, object = null) {
@@ -1759,17 +1795,17 @@
             return items.map(world => {
                 const cover = world.cover_image_url || world.cover_url || "";
                 return `
-                        <a class="work-mini-card custom-world-card" href="${getWorldLink(world)}">
-                            <div class="custom-world-cover">
-                                ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">` : ""}
-                                ${buildWorldCreditPill(world)}
-                            </div>
-                            <div class="custom-world-body">
-                                <h3>${escapeHtml(world.title || "Untitled")}</h3>
-                                <p>${escapeHtml(world.summary || world.content_type || world.type || "World")}</p>
-                            </div>
-                        </a>
-                    `;
+                            <a class="work-mini-card custom-world-card" href="${getWorldLink(world)}">
+                                <div class="custom-world-cover">
+                                    ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">` : ""}
+                                    ${buildWorldCreditPill(world)}
+                                </div>
+                                <div class="custom-world-body">
+                                    <h3>${escapeHtml(world.title || "Untitled")}</h3>
+                                    <p>${escapeHtml(world.summary || world.content_type || world.type || "World")}</p>
+                                </div>
+                            </a>
+                        `;
             }).join("");
         }
 
@@ -1781,18 +1817,18 @@
             return worlds.map(world => {
                 const cover = world.cover_image_url || world.cover_url || "";
                 return `
-                        <div class="card">
-                            ${cover ? `
-                                <div class="custom-world-cover" style="height:150px;border-radius:14px;margin-bottom:14px;">
-                                    <img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">
-                                    ${buildWorldCreditPill(world)}
-                                </div>
-                            ` : ""}
-                            <p class="empty">${escapeHtml(world.content_type || world.type || "World")}</p>
-                            <h3><a href="${getWorldLink(world)}">${escapeHtml(world.title || "Untitled")}</a></h3>
-                            <p>${escapeHtml(world.summary || "No summary yet.")}</p>
-                        </div>
-                    `;
+                            <div class="card">
+                                ${cover ? `
+                                    <div class="custom-world-cover" style="height:150px;border-radius:14px;margin-bottom:14px;">
+                                        <img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">
+                                        ${buildWorldCreditPill(world)}
+                                    </div>
+                                ` : ""}
+                                <p class="empty">${escapeHtml(world.content_type || world.type || "World")}</p>
+                                <h3><a href="${getWorldLink(world)}">${escapeHtml(world.title || "Untitled")}</a></h3>
+                                <p>${escapeHtml(world.summary || "No summary yet.")}</p>
+                            </div>
+                        `;
             }).join("");
         }
 
@@ -1814,11 +1850,11 @@
             const { data, error } = await supabase
                 .from("creator_proof_gallery")
                 .select(`
-                            *,
-                            creator_gallery_likes (
-                                user_id
-                            )
-                        `)
+                                *,
+                                creator_gallery_likes (
+                                    user_id
+                                )
+                            `)
                 .eq("owner_id", profileId)
                 .eq("visibility", "public");
 
@@ -1893,10 +1929,10 @@
 
         function renderFollowButton(profileId, isFollowing) {
             document.getElementById("follow-button-container").innerHTML = `
-                        <button id="follow-button" class="button follow-button ${isFollowing ? "following" : ""}">
-                            ${isFollowing ? "Following" : "Follow"}
-                        </button>
-                    `;
+                            <button id="follow-button" class="button follow-button ${isFollowing ? "following" : ""}">
+                                ${isFollowing ? "Following" : "Follow"}
+                            </button>
+                        `;
 
             document.getElementById("follow-button").addEventListener("click", async () => {
                 const button = document.getElementById("follow-button");
@@ -1939,8 +1975,8 @@
             }
 
             document.getElementById("block-button-container").innerHTML = `
-                        <button id="block-user-btn" class="button secondary">Block</button>
-                    `;
+                            <button id="block-user-btn" class="button secondary">Block</button>
+                        `;
 
             document.getElementById("block-user-btn").addEventListener("click", () => {
                 document.getElementById("block-modal").style.display = "flex";
@@ -1959,8 +1995,8 @@
             }
 
             document.getElementById("message-button-container").innerHTML = `
-                        <button id="message-user-btn" class="button">Message</button>
-                    `;
+                            <button id="message-user-btn" class="button">Message</button>
+                        `;
 
             document.getElementById("message-user-btn").addEventListener("click", () => openConversation(profile.id));
         }
@@ -2013,8 +2049,8 @@
             }
 
             document.getElementById("report-button-container").innerHTML = `
-                        <button id="report-user-btn" class="button secondary">Report</button>
-                    `;
+                            <button id="report-user-btn" class="button secondary">Report</button>
+                        `;
 
             document.getElementById("report-user-btn").addEventListener("click", () => {
                 document.getElementById("report-modal").style.display = "flex";
@@ -2105,10 +2141,10 @@
                     : "Permanent";
 
             document.getElementById("moderation-status-display").innerHTML = `
-                        <strong>Current Status:</strong> ${escapeHtml(profile.account_status || "active")}<br>
-                        <strong>Expires:</strong> ${escapeHtml(expires)}<br>
-                        <strong>Reason:</strong> ${escapeHtml(profile.moderation_reason || "None")}
-                    `;
+                            <strong>Current Status:</strong> ${escapeHtml(profile.account_status || "active")}<br>
+                            <strong>Expires:</strong> ${escapeHtml(expires)}<br>
+                            <strong>Reason:</strong> ${escapeHtml(profile.moderation_reason || "None")}
+                        `;
         }
 
         async function loadModerationHistory() {
@@ -2117,12 +2153,12 @@
             const { data, error } = await supabase
                 .from("moderation_logs")
                 .select(`
-                            *,
-                            moderator:profiles!moderation_logs_moderator_id_fkey(
-                                username,
-                                display_name
-                            )
-                        `)
+                                *,
+                                moderator:profiles!moderation_logs_moderator_id_fkey(
+                                    username,
+                                    display_name
+                                )
+                            `)
                 .eq("target_user_id", profile.id)
                 .order("created_at", { ascending: false })
                 .limit(20);
@@ -2138,13 +2174,13 @@
             }
 
             container.innerHTML = data.map(log => `
-                        <div style="border-bottom:1px solid var(--border-color);padding-bottom:10px;margin-bottom:10px;">
-                            <strong>${escapeHtml(log.action)}</strong><br>
-                            By: ${escapeHtml(log.moderator?.display_name || log.moderator?.username || "Unknown")}<br>
-                            Reason: ${escapeHtml(log.reason || "None")}<br>
-                            ${new Date(log.created_at).toLocaleString()}
-                        </div>
-                    `).join("");
+                            <div style="border-bottom:1px solid var(--border-color);padding-bottom:10px;margin-bottom:10px;">
+                                <strong>${escapeHtml(log.action)}</strong><br>
+                                By: ${escapeHtml(log.moderator?.display_name || log.moderator?.username || "Unknown")}<br>
+                                Reason: ${escapeHtml(log.reason || "None")}<br>
+                                ${new Date(log.created_at).toLocaleString()}
+                            </div>
+                        `).join("");
         }
 
         window.toggleModerationDrawer = function () {
