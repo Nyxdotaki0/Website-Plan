@@ -1114,6 +1114,33 @@
                 font-size: 13px;
             }
 
+
+        .system-stat-object {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 4px;
+            color: inherit;
+            background: transparent;
+            border-radius: inherit;
+            pointer-events: none;
+            line-height: 1.05;
+        }
+
+            .system-stat-object strong {
+                font-size: 1.8em;
+                line-height: 1;
+            }
+
+            .system-stat-object span {
+                font-size: .82em;
+                opacity: .75;
+            }
+
         .gallery-object,
         .works-object {
             padding: 14px;
@@ -1461,6 +1488,26 @@
 
         .text-object {
             align-self: auto;
+        }
+
+
+
+        .studio-validation-warning {
+            border: 1px solid rgba(255, 170, 80, .32);
+            border-radius: 14px;
+            padding: 10px 11px;
+            margin: 0 0 12px;
+            background: rgba(255, 170, 80, .08);
+            color: #ffd9ad;
+            line-height: 1.45;
+            font-size: .88rem;
+        }
+
+        .studio-lock-note {
+            color: var(--text-muted);
+            line-height: 1.45;
+            font-size: .86rem;
+            margin: -4px 0 12px;
         }
 
         @media (max-width: 1100px) {
@@ -1858,7 +1905,10 @@
                     <button class="tool-button" onclick="addStudioObject('creator_gallery')">Gallery</button>
                     <button class="tool-button" onclick="addStudioObject('creator_works')">Works</button>
                     <button class="tool-button" onclick="addStudioObject('world_card')">World Card</button>
-                    <button class="tool-button" onclick="addStudioObject('stats')">Stats</button>
+                    <button class="tool-button" onclick="addStudioObject('stats')">Stats Group</button>
+                    <button class="tool-button" onclick="addStudioObject('followers_box')">Followers Box</button>
+                    <button class="tool-button" onclick="addStudioObject('following_box')">Following Box</button>
+                    <button class="tool-button" onclick="addStudioObject('works_count_box')">Works Count Box</button>
                     <button class="tool-button" onclick="addStudioObject('text')">Text Box</button>
                     <button class="tool-button" onclick="addStudioObject('bio')">Bio Box</button>
                     <button class="tool-button" onclick="addStudioObject('image')">Image Box</button>
@@ -1980,7 +2030,10 @@
             creator_gallery: "Gallery",
             creator_works: "Works",
             world_card: "World Card",
-            stats: "Stats",
+            stats: "Stats Group",
+            followers_box: "Followers Box",
+            following_box: "Following Box",
+            works_count_box: "Works Count Box",
             text: "Text Box",
             bio: "Bio Box",
             image: "Image Box",
@@ -1991,6 +2044,53 @@
             circle: "Circle",
             star: "Star",
             divider: "Divider"
+        };
+
+
+        const protectedObjectTypes = [
+            "profile_identity",
+            "profile_avatar",
+            "display_name",
+            "username_text",
+            "profile_actions",
+            "follow_button",
+            "message_button",
+            "block_button",
+            "report_button",
+            "creator_gallery",
+            "creator_works",
+            "followers_box",
+            "following_box",
+            "works_count_box"
+        ];
+
+        const systemActionTypes = ["follow_button", "message_button", "block_button", "report_button"];
+        const systemStatTypes = ["followers_box", "following_box", "works_count_box"];
+
+        const objectSizeRules = {
+            profile_avatar: { minW: 72, minH: 72, maxW: 360, maxH: 360 },
+            display_name: { minW: 120, minH: 36, maxW: 900, maxH: 180 },
+            username_text: { minW: 90, minH: 28, maxW: 600, maxH: 110 },
+            profile_actions: { minW: 260, minH: 60, maxW: 900, maxH: 260 },
+            follow_button: { minW: 82, minH: 34, maxW: 280, maxH: 120 },
+            message_button: { minW: 92, minH: 34, maxW: 300, maxH: 120 },
+            block_button: { minW: 78, minH: 34, maxW: 260, maxH: 120 },
+            report_button: { minW: 82, minH: 34, maxW: 260, maxH: 120 },
+            followers_box: { minW: 100, minH: 54, maxW: 360, maxH: 180 },
+            following_box: { minW: 100, minH: 54, maxW: 360, maxH: 180 },
+            works_count_box: { minW: 100, minH: 54, maxW: 360, maxH: 180 },
+            creator_gallery: { minW: 260, minH: 160, maxW: 1400, maxH: 820 },
+            creator_works: { minW: 300, minH: 160, maxW: 1500, maxH: 900 },
+            world_card: { minW: 180, minH: 170, maxW: 680, maxH: 760 },
+            text: { minW: 80, minH: 30, maxW: 1200, maxH: 700 },
+            bio: { minW: 160, minH: 80, maxW: 1200, maxH: 760 },
+            image: { minW: 80, minH: 80, maxW: 1600, maxH: 1200 },
+            banner: { minW: 300, minH: 90, maxW: 1600, maxH: 600 },
+            shape: { minW: 30, minH: 30, maxW: 1600, maxH: 1600 },
+            circle: { minW: 30, minH: 30, maxW: 1200, maxH: 1200 },
+            star: { minW: 30, minH: 30, maxW: 1200, maxH: 1200 },
+            divider: { minW: 80, minH: 8, maxW: 1600, maxH: 80 },
+            default: { minW: 40, minH: 30, maxW: 1600, maxH: 1200 }
         };
 
         const usernameInput = document.getElementById("username");
@@ -2376,6 +2476,15 @@
                 }
 
                 studioLayout = normalizeStudioLayout(studioLayout || createBlankStudioLayout());
+                const isCustomMode = getRadioValue("profile-layout-mode", "default") === "custom";
+
+                if (isCustomMode || enforceCustomRequirements) {
+                    const safetyValidation = validateStudioSafety(studioLayout);
+
+                    if (!safetyValidation.valid) {
+                        throw new Error(safetyValidation.message);
+                    }
+                }
 
                 if (enforceCustomRequirements) {
                     const validation = validateStudioLayout(studioLayout);
@@ -2535,6 +2644,15 @@
                     ...(object.styles || {})
                 }
             }));
+
+            parsed.objects = parsed.objects.map(object => {
+                const rule = getObjectSizeRule(object.type);
+                object.w = Math.max(rule.minW, Math.min(rule.maxW, Number(object.w) || rule.minW));
+                object.h = Math.max(rule.minH, Math.min(rule.maxH, Number(object.h) || rule.minH));
+                object.x = Math.max(0, Math.min(parsed.canvas.width - object.w, Number(object.x) || 0));
+                object.y = Math.max(0, Math.min(parsed.canvas.height - object.h, Number(object.y) || 0));
+                return object;
+            });
 
             return parsed;
         }
@@ -3038,6 +3156,15 @@
                 return `<div class="single-action-object">${escapeHtml(getSingleActionLabel(object.type))}</div>`;
             }
 
+            if (["followers_box", "following_box", "works_count_box"].includes(object.type)) {
+                return `
+                                    <div class="system-stat-object">
+                                        <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
+                                        <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
+                                    </div>
+                                `;
+            }
+
             if (object.type === "stats") {
                 return `
                                 <div class="stats-object">
@@ -3232,6 +3359,21 @@
             return "Action";
         }
 
+
+        function getSingleStatLabel(type) {
+            if (type === "followers_box") return "Followers";
+            if (type === "following_box") return "Following";
+            if (type === "works_count_box") return "Works";
+            return "Stat";
+        }
+
+        function getSingleStatValue(type) {
+            if (type === "followers_box") return "0";
+            if (type === "following_box") return "0";
+            if (type === "works_count_box") return String(currentPublishedWorlds.length || 0);
+            return "0";
+        }
+
         const studioColorPalette = [
             "#ffffff", "#d9d9d9", "#999999", "#4d4d4d", "#111111", "#000000", "transparent", "rgba(255,255,255,.08)",
             "#ff5c5c", "#ff9f43", "#ffd166", "#7bed9f", "#70a1ff", "#a29bfe", "#ff7ad9", "#00d2d3",
@@ -3288,6 +3430,165 @@
                 `;
         }
 
+
+        function getObjectSizeRule(type) {
+            return objectSizeRules[type] || objectSizeRules.default;
+        }
+
+        function clampObjectToRules(object) {
+            const rule = getObjectSizeRule(object.type);
+            object.w = Math.max(rule.minW, Math.min(rule.maxW, Number(object.w) || rule.minW));
+            object.h = Math.max(rule.minH, Math.min(rule.maxH, Number(object.h) || rule.minH));
+            object.x = Math.max(0, Math.min(studioLayout.canvas.width - object.w, Number(object.x) || 0));
+            object.y = Math.max(88, Math.min(studioLayout.canvas.height - object.h, Number(object.y) || 88));
+            return object;
+        }
+
+        function parseColorForContrast(value) {
+            const text = String(value || "").trim().toLowerCase();
+
+            if (!text || text === "transparent") {
+                return null;
+            }
+
+            const hex = text.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+            if (hex) {
+                let raw = hex[1];
+                if (raw.length === 3) raw = raw.split("").map(ch => ch + ch).join("");
+                return {
+                    r: parseInt(raw.slice(0, 2), 16),
+                    g: parseInt(raw.slice(2, 4), 16),
+                    b: parseInt(raw.slice(4, 6), 16),
+                    a: 1
+                };
+            }
+
+            const rgba = text.match(/rgba?\(([^)]+)\)/i);
+            if (rgba) {
+                const parts = rgba[1].split(",").map(part => part.trim());
+                return {
+                    r: Math.max(0, Math.min(255, Number(parts[0]) || 0)),
+                    g: Math.max(0, Math.min(255, Number(parts[1]) || 0)),
+                    b: Math.max(0, Math.min(255, Number(parts[2]) || 0)),
+                    a: parts[3] === undefined ? 1 : Math.max(0, Math.min(1, Number(parts[3]) || 0))
+                };
+            }
+
+            return null;
+        }
+
+        function relativeLuminance(color) {
+            function channel(value) {
+                value = value / 255;
+                return value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+            }
+
+            return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
+        }
+
+        function contrastRatio(colorA, colorB) {
+            const a = relativeLuminance(colorA);
+            const b = relativeLuminance(colorB);
+            return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+        }
+
+        function hasUnsafeColorContrast(object) {
+            if (["image", "banner", "profile_avatar", "divider"].includes(object.type)) {
+                return false;
+            }
+
+            const bg = parseColorForContrast(object.styles?.background);
+            const text = parseColorForContrast(object.styles?.textColor);
+
+            if (!bg || !text || bg.a < 0.35) {
+                return false;
+            }
+
+            return contrastRatio(bg, text) < 2.2;
+        }
+
+        function objectRect(object) {
+            return {
+                left: Number(object.x) || 0,
+                top: Number(object.y) || 0,
+                right: (Number(object.x) || 0) + (Number(object.w) || 0),
+                bottom: (Number(object.y) || 0) + (Number(object.h) || 0)
+            };
+        }
+
+        function rectOverlapArea(a, b) {
+            const width = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+            const height = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+            return width * height;
+        }
+
+        function isObjectMostlyCovered(object, objects) {
+            const index = objects.findIndex(item => item.id === object.id);
+            if (index < 0) return false;
+
+            const rect = objectRect(object);
+            const area = Math.max(1, (object.w || 0) * (object.h || 0));
+            let covered = 0;
+
+            objects.slice(index + 1).forEach(other => {
+                if (other.visible === false || Number(other.styles?.opacity ?? 1) < 0.15) {
+                    return;
+                }
+
+                const otherRect = objectRect(other);
+                covered += rectOverlapArea(rect, otherRect);
+            });
+
+            return covered / area > 0.70;
+        }
+
+        function validateStudioSafety(layout) {
+            const objects = (layout.objects || []).filter(object => object.visible !== false);
+            const messages = [];
+
+            (layout.objects || []).forEach(object => {
+                const rule = getObjectSizeRule(object.type);
+
+                if ((object.w || 0) < rule.minW || (object.h || 0) < rule.minH) {
+                    messages.push(`${objectLabels[object.type] || object.type} is too small.`);
+                }
+
+                if ((object.w || 0) > rule.maxW || (object.h || 0) > rule.maxH) {
+                    messages.push(`${objectLabels[object.type] || object.type} is too large.`);
+                }
+
+                if (hasUnsafeColorContrast(object)) {
+                    messages.push(`${objectLabels[object.type] || object.type} has background and text colors that are too similar.`);
+                }
+            });
+
+            objects.forEach(object => {
+                if (!protectedObjectTypes.includes(object.type)) {
+                    return;
+                }
+
+                if (object.x < 0 || object.y < 88 || object.x + object.w > layout.canvas.width || object.y + object.h > layout.canvas.height) {
+                    messages.push(`${objectLabels[object.type] || object.type} must stay inside the visible profile page.`);
+                }
+
+                if (isObjectMostlyCovered(object, layout.objects || [])) {
+                    messages.push(`${objectLabels[object.type] || object.type} is covered by another layer and may be inaccessible.`);
+                }
+            });
+
+            if (messages.length) {
+                return {
+                    valid: false,
+                    message: messages[0]
+                };
+            }
+
+            return {
+                valid: true,
+                message: "Profile safety checks passed."
+            };
+        }
+
         function renderLayers() {
             const container = document.getElementById("studio-layers");
 
@@ -3304,9 +3605,12 @@
         function renderInspector() {
             const box = document.getElementById("studio-inspector");
             const object = getSelectedObject();
+            const safetyValidation = validateStudioSafety(studioLayout || createBlankStudioLayout());
+            const validationWarning = safetyValidation.valid ? "" : `<div class="studio-validation-warning">${escapeHtml(safetyValidation.message)}</div>`;
 
             if (!object) {
                 box.innerHTML = `
+                                ${validationWarning}
                                 <div class="inspector-group">
                                     <h4>Canvas</h4>
 
@@ -3348,6 +3652,7 @@
             }
 
             box.innerHTML = `
+                            ${validationWarning}
                             <div class="inspector-group">
                                 <h4>${escapeHtml(objectLabels[object.type] || object.type)}</h4>
 
@@ -3602,6 +3907,11 @@
             }
 
             object[field] = value;
+
+            if (["x", "y", "w", "h"].includes(field)) {
+                clampObjectToRules(object);
+            }
+
             renderStudio();
         }
 
@@ -3820,6 +4130,7 @@
 
                 object.x = snap(interactionState.originalX + dx);
                 object.y = snap(interactionState.originalY + dy);
+                clampObjectToRules(object);
             }
 
             if (interactionState.mode === "resize") {
@@ -3867,18 +4178,23 @@
                 h = interactionState.originalH - dy;
             }
 
-            if (w < 24) {
-                w = 24;
+            const rule = getObjectSizeRule(object.type);
+
+            if (w < rule.minW) {
+                w = rule.minW;
                 x = object.x;
             }
 
-            if (h < 24) {
-                h = 24;
+            if (h < rule.minH) {
+                h = rule.minH;
                 y = object.y;
             }
 
-            object.x = snap(x);
-            object.y = snap(y);
+            w = Math.min(w, rule.maxW);
+            h = Math.min(h, rule.maxH);
+
+            object.x = snap(Math.max(0, Math.min(studioLayout.canvas.width - w, x)));
+            object.y = snap(Math.max(88, Math.min(studioLayout.canvas.height - h, y)));
             object.w = snap(w);
             object.h = snap(h);
         }
