@@ -812,29 +812,34 @@
         .studio-workspace {
             min-width: 0;
             min-height: 0;
-            overflow: auto;
+            overflow: hidden;
             padding: 0;
-            background: transparent;
+            background: #050506;
+            position: relative;
+            cursor: default;
         }
 
         .studio-canvas-wrap {
+            position: absolute;
+            left: 0;
+            top: 0;
             width: max-content;
-            min-width: 100%;
             display: block;
             transform-origin: top left;
+            will-change: transform;
         }
 
         .profile-canvas {
             position: relative;
             width: 1600px;
             min-height: 2200px;
-            border: none;
+            border: 1px solid rgba(255, 255, 255, .10);
             border-radius: 0;
             overflow: visible;
             background: var(--page-bg);
             background-size: cover;
             background-position: center;
-            box-shadow: none;
+            box-shadow: 0 24px 90px rgba(0, 0, 0, .42);
         }
 
         .canvas-grid {
@@ -1047,6 +1052,22 @@
             flex-wrap: wrap;
         }
 
+        .single-action-object {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-weight: 700;
+            line-height: 1;
+            color: inherit;
+            background: transparent;
+            border-radius: inherit;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
         .fake-btn {
             border: 1px solid rgba(255, 255, 255, .14);
             background: rgba(0, 0, 0, .28);
@@ -1207,7 +1228,9 @@
 
 
         .studio-preview-nav {
-            position: sticky;
+            position: absolute;
+            left: 0;
+            right: 0;
             top: 0;
             z-index: 20;
             height: 88px;
@@ -1701,7 +1724,11 @@
                     <button class="tool-button" onclick="addStudioObject('profile_avatar')">Avatar Circle</button>
                     <button class="tool-button" onclick="addStudioObject('display_name')">Display Name</button>
                     <button class="tool-button" onclick="addStudioObject('username_text')">Username</button>
-                    <button class="tool-button" onclick="addStudioObject('profile_actions')">Action Buttons</button>
+                    <button class="tool-button" onclick="addStudioObject('profile_actions')">Action Group</button>
+                    <button class="tool-button" onclick="addStudioObject('follow_button')">Follow Button</button>
+                    <button class="tool-button" onclick="addStudioObject('message_button')">Message Button</button>
+                    <button class="tool-button" onclick="addStudioObject('block_button')">Block Button</button>
+                    <button class="tool-button" onclick="addStudioObject('report_button')">Report Button</button>
                     <button class="tool-button" onclick="addStudioObject('creator_gallery')">Gallery</button>
                     <button class="tool-button" onclick="addStudioObject('creator_works')">Works</button>
                     <button class="tool-button" onclick="addStudioObject('world_card')">World Card</button>
@@ -1800,7 +1827,7 @@
             {
                 key: "actions",
                 label: "Follow / Message Area",
-                accepts: ["profile_actions"]
+                accepts: ["profile_actions", "follow_button", "message_button", "block_button", "report_button"]
             },
             {
                 key: "gallery",
@@ -1817,7 +1844,11 @@
         const objectLabels = {
             profile_identity: "Identity Card",
             profile_avatar: "Avatar Circle",
-            profile_actions: "Action Buttons",
+            profile_actions: "Action Button Group",
+            follow_button: "Follow Button",
+            message_button: "Message Button",
+            block_button: "Block Button",
+            report_button: "Report Button",
             display_name: "Display Name",
             username_text: "Username",
             creator_gallery: "Gallery",
@@ -1848,6 +1879,8 @@
         let studioLayout = null;
         let selectedObjectId = null;
         let studioZoom = 1;
+        let studioPanX = 0;
+        let studioPanY = 0;
         let interactionState = null;
 
         function normalizeUsername(value) {
@@ -2259,8 +2292,8 @@
             return {
                 version: 2,
                 canvas: {
-                    width: Math.max(2400, window.innerWidth * 2),
-                    height: 2400,
+                    width: Math.max(3200, window.innerWidth * 3),
+                    height: 2800,
                     backgroundMode: "gradient",
                     backgroundColor: "#09090b",
                     backgroundGradient: "radial-gradient(circle at 20% 10%, rgba(255,255,255,.10), transparent 30%), linear-gradient(135deg, #050506, #14141b)",
@@ -2274,16 +2307,20 @@
 
         function createStarterStudioLayout() {
             const layout = createBlankStudioLayout();
+            const pageX = Math.round((layout.canvas.width - 1600) / 2);
 
             layout.objects = [
-                makeObject("banner", 0, 88, 1600, 320),
-                makeObject("profile_avatar", 90, 323, 160, 160),
-                makeObject("display_name", 285, 338, 560, 64),
-                makeObject("username_text", 285, 412, 330, 38),
-                makeObject("profile_actions", 880, 366, 430, 90),
-                makeObject("bio", 90, 558, 520, 230),
-                makeObject("creator_gallery", 670, 558, 570, 255),
-                makeObject("creator_works", 90, 868, 1150, 240)
+                makeObject("banner", pageX, 88, 1600, 320),
+                makeObject("profile_avatar", pageX + 90, 323, 160, 160),
+                makeObject("display_name", pageX + 285, 338, 560, 64),
+                makeObject("username_text", pageX + 285, 412, 330, 38),
+                makeObject("follow_button", pageX + 880, 366, 130, 54),
+                makeObject("message_button", pageX + 1024, 366, 140, 54),
+                makeObject("block_button", pageX + 1178, 366, 120, 54),
+                makeObject("report_button", pageX + 1312, 366, 120, 54),
+                makeObject("bio", pageX + 90, 558, 520, 230),
+                makeObject("creator_gallery", pageX + 670, 558, 570, 255),
+                makeObject("creator_works", pageX + 90, 868, 1150, 240)
             ];
 
             return layout;
@@ -2430,6 +2467,18 @@
                 object.styles.actionButtonVariant = "filled";
             }
 
+            if (["follow_button", "message_button", "block_button", "report_button"].includes(type)) {
+                object.w = type === "message_button" ? 150 : 132;
+                object.h = 54;
+                object.styles.background = "rgba(0,0,0,.34)";
+                object.styles.textColor = "#ffffff";
+                object.styles.borderColor = "rgba(255,255,255,.16)";
+                object.styles.radius = 14;
+                object.styles.fontSize = 15;
+                object.styles.fontFamily = "Arial";
+                object.styles.opacity = 1;
+            }
+
             if (type === "banner") {
                 object.w = 720;
                 object.h = 220;
@@ -2490,9 +2539,7 @@
             renderStudio();
 
             requestAnimationFrame(() => {
-                const workspace = document.getElementById("studio-workspace");
-                workspace.scrollLeft = Math.max(0, (studioLayout.canvas.width - workspace.clientWidth) / 2);
-                workspace.scrollTop = 0;
+                centerStudioView();
             });
         }
 
@@ -2542,13 +2589,46 @@
         }
 
         function zoomStudio(delta) {
-            studioZoom = Math.max(.4, Math.min(1.6, studioZoom + delta));
-            applyStudioZoom();
+            const workspace = document.getElementById("studio-workspace");
+            const rect = workspace.getBoundingClientRect();
+            const focusX = rect.left + rect.width / 2;
+            const focusY = rect.top + rect.height / 2;
+            const before = screenPointToCanvasPoint(focusX, focusY);
+
+            studioZoom = Math.max(.25, Math.min(2.2, studioZoom + delta));
+
+            studioPanX = focusX - before.x * studioZoom;
+            studioPanY = focusY - before.y * studioZoom;
+            applyStudioView();
         }
 
         function applyStudioZoom() {
+            applyStudioView();
+        }
+
+        function applyStudioView() {
             const wrap = document.getElementById("studio-canvas-wrap");
-            wrap.style.transform = `scale(${studioZoom})`;
+            wrap.style.transform = `translate(${studioPanX}px, ${studioPanY}px) scale(${studioZoom})`;
+        }
+
+        function centerStudioView() {
+            const workspace = document.getElementById("studio-workspace");
+            const rect = workspace.getBoundingClientRect();
+            const pageCenterX = Math.max(0, (studioLayout.canvas.width - rect.width / studioZoom) / 2);
+
+            studioPanX = rect.width / 2 - pageCenterX * studioZoom - rect.width / 2;
+            studioPanY = 0;
+            applyStudioView();
+        }
+
+        function screenPointToCanvasPoint(clientX, clientY) {
+            const workspace = document.getElementById("studio-workspace");
+            const rect = workspace.getBoundingClientRect();
+
+            return {
+                x: (clientX - rect.left - studioPanX) / studioZoom,
+                y: (clientY - rect.top - studioPanY) / studioZoom
+            };
         }
 
 
@@ -2565,8 +2645,8 @@
                 mode: "pan",
                 startX: event.clientX,
                 startY: event.clientY,
-                originalScrollLeft: workspace.scrollLeft,
-                originalScrollTop: workspace.scrollTop
+                originalPanX: studioPanX,
+                originalPanY: studioPanY
             };
 
             workspace.classList.add("panning");
@@ -2582,13 +2662,38 @@
             });
 
             workspace.addEventListener("pointerdown", startWorkspacePan);
+
+            workspace.addEventListener("wheel", event => {
+                if (!event.ctrlKey) {
+                    return;
+                }
+
+                event.preventDefault();
+                const before = screenPointToCanvasPoint(event.clientX, event.clientY);
+                studioZoom = Math.max(.25, Math.min(2.2, studioZoom + (event.deltaY < 0 ? .08 : -.08)));
+                studioPanX = event.clientX - workspace.getBoundingClientRect().left - before.x * studioZoom;
+                studioPanY = event.clientY - workspace.getBoundingClientRect().top - before.y * studioZoom;
+                applyStudioView();
+            }, { passive: false });
         }
 
         function validateStudioLayout(layout) {
             const visibleObjects = (layout.objects || []).filter(object => object.visible !== false);
-            const missing = requirementConfig.filter(requirement => {
-                return !visibleObjects.some(object => requirement.accepts.includes(object.type));
-            });
+            const visibleTypes = visibleObjects.map(object => object.type);
+
+            function hasRequirement(requirement) {
+                if (requirement.key === "actions") {
+                    const hasGroup = visibleTypes.includes("profile_actions");
+                    const hasIndividualSet = ["follow_button", "message_button", "block_button", "report_button"]
+                        .every(type => visibleTypes.includes(type));
+
+                    return hasGroup || hasIndividualSet;
+                }
+
+                return visibleTypes.some(type => requirement.accepts.includes(type));
+            }
+
+            const missing = requirementConfig.filter(requirement => !hasRequirement(requirement));
 
             if (missing.length) {
                 return {
@@ -2621,10 +2726,10 @@
                     const isComplete = !validation.missing.some(item => item.key === requirement.key);
 
                     return `
-                            <div class="requirement-pill ${isComplete ? "complete" : "missing"}">
-                                ${isComplete ? "✓" : "!"} ${escapeHtml(requirement.label)}
-                            </div>
-                        `;
+                                <div class="requirement-pill ${isComplete ? "complete" : "missing"}">
+                                    ${isComplete ? "✓" : "!"} ${escapeHtml(requirement.label)}
+                                </div>
+                            `;
                 }).join("");
             });
 
@@ -2705,20 +2810,20 @@
             el.style.textAlign = object.styles.textAlign || "left";
 
             el.innerHTML = `
-                    <div class="object-inner">
-                        ${renderStudioObjectPreview(object)}
-                    </div>
-                    ${object.requirement ? `<span class="object-requirement-tag">${escapeHtml(getRequirementLabel(object.requirement))}</span>` : ""}
-                    <span class="rotate-handle" data-action="rotate"></span>
-                    <span class="resize-handle nw" data-handle="nw"></span>
-                    <span class="resize-handle n" data-handle="n"></span>
-                    <span class="resize-handle ne" data-handle="ne"></span>
-                    <span class="resize-handle e" data-handle="e"></span>
-                    <span class="resize-handle se" data-handle="se"></span>
-                    <span class="resize-handle s" data-handle="s"></span>
-                    <span class="resize-handle sw" data-handle="sw"></span>
-                    <span class="resize-handle w" data-handle="w"></span>
-                `;
+                        <div class="object-inner">
+                            ${renderStudioObjectPreview(object)}
+                        </div>
+                        ${object.requirement ? `<span class="object-requirement-tag">${escapeHtml(getRequirementLabel(object.requirement))}</span>` : ""}
+                        <span class="rotate-handle" data-action="rotate"></span>
+                        <span class="resize-handle nw" data-handle="nw"></span>
+                        <span class="resize-handle n" data-handle="n"></span>
+                        <span class="resize-handle ne" data-handle="ne"></span>
+                        <span class="resize-handle e" data-handle="e"></span>
+                        <span class="resize-handle se" data-handle="se"></span>
+                        <span class="resize-handle s" data-handle="s"></span>
+                        <span class="resize-handle sw" data-handle="sw"></span>
+                        <span class="resize-handle w" data-handle="w"></span>
+                    `;
 
             el.addEventListener("pointerdown", startObjectMove);
 
@@ -2746,107 +2851,111 @@
 
             if (object.type === "profile_identity") {
                 return `
-                        <div class="identity-object">
-                            <img src="${escapeHtml(avatar)}" alt="">
-                            <div>
-                                <h2>${name}</h2>
-                                <p>@${username}</p>
-                                <p>${status}</p>
+                            <div class="identity-object">
+                                <img src="${escapeHtml(avatar)}" alt="">
+                                <div>
+                                    <h2>${name}</h2>
+                                    <p>@${username}</p>
+                                    <p>${status}</p>
+                                </div>
                             </div>
-                        </div>
-                    `;
+                        `;
             }
 
             if (object.type === "profile_avatar") {
                 return `
-                        <div class="avatar-circle-object">
-                            <img src="${escapeHtml(avatar)}" alt="">
-                        </div>
-                    `;
+                            <div class="avatar-circle-object">
+                                <img src="${escapeHtml(avatar)}" alt="">
+                            </div>
+                        `;
             }
 
             if (object.type === "profile_actions") {
                 return `
-                        <div class="actions-object">
-                            <span class="fake-btn">Follow</span>
-                            <span class="fake-btn">Message</span>
-                            <span class="fake-btn">Block</span>
-                            <span class="fake-btn">Report</span>
-                        </div>
-                    `;
+                            <div class="actions-object" style="gap:${Number(object.styles.actionButtonGap ?? 10)}px;">
+                                <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Follow</span>
+                                <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Message</span>
+                                <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Block</span>
+                                <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Report</span>
+                            </div>
+                        `;
+            }
+
+            if (["follow_button", "message_button", "block_button", "report_button"].includes(object.type)) {
+                return `<div class="single-action-object">${escapeHtml(getSingleActionLabel(object.type))}</div>`;
             }
 
             if (object.type === "stats") {
                 return `
-                        <div class="stats-object">
-                            <div class="stat-mini"><strong>0</strong><span>Followers</span></div>
-                            <div class="stat-mini"><strong>0</strong><span>Following</span></div>
-                            <div class="stat-mini"><strong>0</strong><span>Works</span></div>
-                        </div>
-                    `;
+                            <div class="stats-object">
+                                <div class="stat-mini"><strong>0</strong><span>Followers</span></div>
+                                <div class="stat-mini"><strong>0</strong><span>Following</span></div>
+                                <div class="stat-mini"><strong>0</strong><span>Works</span></div>
+                            </div>
+                        `;
             }
 
             if (object.type === "creator_gallery") {
                 return `
-                        <div class="gallery-object">
-                            <div class="gallery-thumb"></div>
-                            <div class="gallery-thumb"></div>
-                            <div class="gallery-thumb"></div>
-                        </div>
-                    `;
+                            <div class="gallery-object">
+                                <div class="gallery-thumb"></div>
+                                <div class="gallery-thumb"></div>
+                                <div class="gallery-thumb"></div>
+                            </div>
+                        `;
             }
 
             if (object.type === "creator_works") {
                 return `
-                        <div class="works-object">
-                            <div class="work-thumb"></div>
-                            <div class="work-thumb"></div>
-                        </div>
-                    `;
+                            <div class="works-object">
+                                <div class="work-thumb"></div>
+                                <div class="work-thumb"></div>
+                            </div>
+                        `;
             }
 
             if (object.type === "bio") {
                 return `
-                        <div class="bio-object">
-                            <h3>${escapeHtml(object.title || "About")}</h3>
-                            <p>${bio}</p>
-                        </div>
-                    `;
+                            <div class="bio-object">
+                                <h3>${escapeHtml(object.title || "About")}</h3>
+                                <p>${bio}</p>
+                            </div>
+                        `;
             }
 
             if (object.type === "text") {
                 return `
-                        <div class="text-object">
-                            ${escapeHtml(object.text || "Custom text block")}
-                        </div>
-                    `;
+                            <div class="text-object">
+                                ${escapeHtml(object.text || "Custom text block")}
+                            </div>
+                        `;
             }
 
             if (object.type === "section" || object.type === "featured") {
                 return `
-                        <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
-                            <h3>${escapeHtml(object.title || objectLabels[object.type])}</h3>
-                            <p>${escapeHtml(object.text || "Write something here.")}</p>
-                        </div>
-                    `;
+                            <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
+                                <h3>${escapeHtml(object.title || objectLabels[object.type])}</h3>
+                                <p>${escapeHtml(object.text || "Write something here.")}</p>
+                            </div>
+                        `;
             }
 
             if (object.type === "image" || object.type === "banner") {
                 return `
-                        <div class="image-object" style="width:100%;height:100%;background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
-                    `;
+                            <div class="image-object" style="width:100%;height:100%;background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
+                        `;
             }
 
             if (object.type === "image_text") {
                 return `
-                        <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
-                            <div class="image-object" style="background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
-                            <div class="section-object">
-                                <h3>${escapeHtml(object.title || "Image + Text")}</h3>
-                                <p>${escapeHtml(object.text || "Add a caption or feature description.")}</p>
+                            <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
+                                <div class="image-object" style="background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
+                                <div class="section-object">
+                                    <h3>${escapeHtml(object.title || "Image + Text")}</h3>
+                                    <p>${escapeHtml(object.text || "Add a caption or feature description.")}</p>
+                                </div>
                             </div>
-                        </div>
-                    `;
+                        `;
             }
 
             if (["shape", "circle", "star"].includes(object.type)) {
@@ -2861,14 +2970,14 @@
                 const summary = selectedWorld?.summary || "Pick which world this card should feature from the inspector.";
 
                 return `
-                            <div style="display:grid;grid-template-rows:58% 1fr;width:100%;height:100%;">
-                                <div class="image-object" style="background-image:url('${safeCssUrl(cover)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
-                                <div class="section-object">
-                                    <h3>${escapeHtml(title)}</h3>
-                                    <p>${escapeHtml(summary)}</p>
+                                <div style="display:grid;grid-template-rows:58% 1fr;width:100%;height:100%;">
+                                    <div class="image-object" style="background-image:url('${safeCssUrl(cover)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
+                                    <div class="section-object">
+                                        <h3>${escapeHtml(title)}</h3>
+                                        <p>${escapeHtml(summary)}</p>
+                                    </div>
                                 </div>
-                            </div>
-                        `;
+                            `;
             }
 
             if (object.type === "divider") {
@@ -2895,17 +3004,25 @@
             ].join(";");
         }
 
+        function getSingleActionLabel(type) {
+            if (type === "follow_button") return "Follow";
+            if (type === "message_button") return "Message";
+            if (type === "block_button") return "Block";
+            if (type === "report_button") return "Report";
+            return "Action";
+        }
+
         function renderLayers() {
             const container = document.getElementById("studio-layers");
 
             const reversed = [...studioLayout.objects].reverse();
 
             container.innerHTML = reversed.map(object => `
-                    <button class="layer-item ${object.id === selectedObjectId ? "active" : ""}" onclick="selectStudioObject('${object.id}')">
-                        <span>${escapeHtml(object.name || objectLabels[object.type] || object.type)}</span>
-                        <small>${object.visible === false ? "Hidden" : ""}</small>
-                    </button>
-                `).join("");
+                        <button class="layer-item ${object.id === selectedObjectId ? "active" : ""}" onclick="selectStudioObject('${object.id}')">
+                            <span>${escapeHtml(object.name || objectLabels[object.type] || object.type)}</span>
+                            <small>${object.visible === false ? "Hidden" : ""}</small>
+                        </button>
+                    `).join("");
         }
 
         function renderInspector() {
@@ -2914,137 +3031,137 @@
 
             if (!object) {
                 box.innerHTML = `
-                        <div class="inspector-group">
-                            <h4>Canvas</h4>
+                            <div class="inspector-group">
+                                <h4>Canvas</h4>
 
-                            <label>Background Mode</label>
-                            <select onchange="updateCanvasField('backgroundMode', this.value)">
-                                <option value="gradient" ${studioLayout.canvas.backgroundMode === "gradient" ? "selected" : ""}>Gradient</option>
-                                <option value="color" ${studioLayout.canvas.backgroundMode === "color" ? "selected" : ""}>Color</option>
-                                <option value="image" ${studioLayout.canvas.backgroundMode === "image" ? "selected" : ""}>Image URL</option>
-                            </select>
+                                <label>Background Mode</label>
+                                <select onchange="updateCanvasField('backgroundMode', this.value)">
+                                    <option value="gradient" ${studioLayout.canvas.backgroundMode === "gradient" ? "selected" : ""}>Gradient</option>
+                                    <option value="color" ${studioLayout.canvas.backgroundMode === "color" ? "selected" : ""}>Color</option>
+                                    <option value="image" ${studioLayout.canvas.backgroundMode === "image" ? "selected" : ""}>Image URL</option>
+                                </select>
 
-                            <label>Background Color</label>
-                            <input type="color" value="${escapeHtml(studioLayout.canvas.backgroundColor || "#09090b")}" onchange="updateCanvasField('backgroundColor', this.value)">
+                                <label>Background Color</label>
+                                <input type="color" value="${escapeHtml(studioLayout.canvas.backgroundColor || "#09090b")}" onchange="updateCanvasField('backgroundColor', this.value)">
 
-                            <label>Gradient CSS</label>
-                            <textarea onchange="updateCanvasField('backgroundGradient', this.value)">${escapeHtml(studioLayout.canvas.backgroundGradient || "")}</textarea>
+                                <label>Gradient CSS</label>
+                                <textarea onchange="updateCanvasField('backgroundGradient', this.value)">${escapeHtml(studioLayout.canvas.backgroundGradient || "")}</textarea>
 
-                            <label>Background Image URL</label>
-                            <input value="${escapeHtml(studioLayout.canvas.backgroundImage || "")}" onchange="updateCanvasField('backgroundImage', this.value)">
+                                <label>Background Image URL</label>
+                                <input value="${escapeHtml(studioLayout.canvas.backgroundImage || "")}" onchange="updateCanvasField('backgroundImage', this.value)">
 
-                            <div class="mini-grid">
-                                <div>
-                                    <label>Width</label>
-                                    <input type="number" min="700" value="${studioLayout.canvas.width}" onchange="updateCanvasField('width', Number(this.value))">
+                                <div class="mini-grid">
+                                    <div>
+                                        <label>Width</label>
+                                        <input type="number" min="700" value="${studioLayout.canvas.width}" onchange="updateCanvasField('width', Number(this.value))">
+                                    </div>
+                                    <div>
+                                        <label>Height</label>
+                                        <input type="number" min="700" value="${studioLayout.canvas.height}" onchange="updateCanvasField('height', Number(this.value))">
+                                    </div>
                                 </div>
-                                <div>
-                                    <label>Height</label>
-                                    <input type="number" min="700" value="${studioLayout.canvas.height}" onchange="updateCanvasField('height', Number(this.value))">
-                                </div>
+
+                                <label>
+                                    <input type="checkbox" style="width:auto;margin-right:8px;" ${studioLayout.canvas.showGrid !== false ? "checked" : ""} onchange="updateCanvasField('showGrid', this.checked)">
+                                    Show Grid
+                                </label>
                             </div>
 
-                            <label>
-                                <input type="checkbox" style="width:auto;margin-right:8px;" ${studioLayout.canvas.showGrid !== false ? "checked" : ""} onchange="updateCanvasField('showGrid', this.checked)">
-                                Show Grid
-                            </label>
-                        </div>
-
-                        <p class="inspector-empty">Select an object to edit it. Drag, resize, and rotate directly on the canvas first. Use this panel for small exact changes.</p>
-                    `;
+                            <p class="inspector-empty">Select an object to edit it. Drag, resize, and rotate directly on the canvas first. Use this panel for small exact changes.</p>
+                        `;
                 return;
             }
 
             box.innerHTML = `
-                    <div class="inspector-group">
-                        <h4>${escapeHtml(objectLabels[object.type] || object.type)}</h4>
+                        <div class="inspector-group">
+                            <h4>${escapeHtml(objectLabels[object.type] || object.type)}</h4>
 
-                        <label>Layer Name</label>
-                        <input value="${escapeHtml(object.name || "")}" onchange="updateObjectField('name', this.value)">
+                            <label>Layer Name</label>
+                            <input value="${escapeHtml(object.name || "")}" onchange="updateObjectField('name', this.value)">
 
-                        <div class="mini-grid">
-                            <div>
-                                <label>X</label>
-                                <input type="number" value="${Math.round(object.x)}" onchange="updateObjectField('x', Number(this.value))">
+                            <div class="mini-grid">
+                                <div>
+                                    <label>X</label>
+                                    <input type="number" value="${Math.round(object.x)}" onchange="updateObjectField('x', Number(this.value))">
+                                </div>
+                                <div>
+                                    <label>Y</label>
+                                    <input type="number" value="${Math.round(object.y)}" onchange="updateObjectField('y', Number(this.value))">
+                                </div>
+                                <div>
+                                    <label>Width</label>
+                                    <input type="number" min="20" value="${Math.round(object.w)}" onchange="updateObjectField('w', Number(this.value))">
+                                </div>
+                                <div>
+                                    <label>Height</label>
+                                    <input type="number" min="20" value="${Math.round(object.h)}" onchange="updateObjectField('h', Number(this.value))">
+                                </div>
+                                <div>
+                                    <label>Rotation</label>
+                                    <input type="number" value="${Math.round(object.rotation || 0)}" onchange="updateObjectField('rotation', Number(this.value))">
+                                </div>
+                                <div>
+                                    <label>Opacity</label>
+                                    <input type="number" min="0" max="1" step="0.05" value="${object.styles.opacity ?? 1}" onchange="updateObjectStyle('opacity', Number(this.value))">
+                                </div>
                             </div>
-                            <div>
-                                <label>Y</label>
-                                <input type="number" value="${Math.round(object.y)}" onchange="updateObjectField('y', Number(this.value))">
-                            </div>
-                            <div>
-                                <label>Width</label>
-                                <input type="number" min="20" value="${Math.round(object.w)}" onchange="updateObjectField('w', Number(this.value))">
-                            </div>
-                            <div>
-                                <label>Height</label>
-                                <input type="number" min="20" value="${Math.round(object.h)}" onchange="updateObjectField('h', Number(this.value))">
-                            </div>
-                            <div>
-                                <label>Rotation</label>
-                                <input type="number" value="${Math.round(object.rotation || 0)}" onchange="updateObjectField('rotation', Number(this.value))">
-                            </div>
-                            <div>
-                                <label>Opacity</label>
-                                <input type="number" min="0" max="1" step="0.05" value="${object.styles.opacity ?? 1}" onchange="updateObjectStyle('opacity', Number(this.value))">
-                            </div>
+
+                            <label>
+                                <input type="checkbox" style="width:auto;margin-right:8px;" ${object.visible !== false ? "checked" : ""} onchange="updateObjectField('visible', this.checked)">
+                                Visible
+                            </label>
                         </div>
 
-                        <label>
-                            <input type="checkbox" style="width:auto;margin-right:8px;" ${object.visible !== false ? "checked" : ""} onchange="updateObjectField('visible', this.checked)">
-                            Visible
-                        </label>
-                    </div>
+                        <div class="inspector-group">
+                            <h4>Style</h4>
 
-                    <div class="inspector-group">
-                        <h4>Style</h4>
+                            <label>Background</label>
+                            <input value="${escapeHtml(object.styles.background || "")}" onchange="updateObjectStyle('background', this.value)">
 
-                        <label>Background</label>
-                        <input value="${escapeHtml(object.styles.background || "")}" onchange="updateObjectStyle('background', this.value)">
+                            <label>Text Color</label>
+                            <input type="color" value="${escapeHtml(object.styles.textColor || "#ffffff")}" onchange="updateObjectStyle('textColor', this.value)">
 
-                        <label>Text Color</label>
-                        <input type="color" value="${escapeHtml(object.styles.textColor || "#ffffff")}" onchange="updateObjectStyle('textColor', this.value)">
+                            <label>Border Color</label>
+                            <input value="${escapeHtml(object.styles.borderColor || "rgba(255,255,255,.10)")}" onchange="updateObjectStyle('borderColor', this.value)">
 
-                        <label>Border Color</label>
-                        <input value="${escapeHtml(object.styles.borderColor || "rgba(255,255,255,.10)")}" onchange="updateObjectStyle('borderColor', this.value)">
-
-                        <div class="mini-grid">
-                            <div>
-                                <label>Font Size</label>
-                                <input type="number" min="8" max="120" value="${object.styles.fontSize || 16}" onchange="updateObjectStyle('fontSize', Number(this.value))">
+                            <div class="mini-grid">
+                                <div>
+                                    <label>Font Size</label>
+                                    <input type="number" min="8" max="120" value="${object.styles.fontSize || 16}" onchange="updateObjectStyle('fontSize', Number(this.value))">
+                                </div>
+                                <div>
+                                    <label>Radius</label>
+                                    <input type="number" min="0" max="999" value="${object.styles.radius || 18}" onchange="updateObjectStyle('radius', Number(this.value))">
+                                </div>
                             </div>
-                            <div>
-                                <label>Radius</label>
-                                <input type="number" min="0" max="999" value="${object.styles.radius || 18}" onchange="updateObjectStyle('radius', Number(this.value))">
-                            </div>
+
+                            <label>Font</label>
+                            <select onchange="updateObjectStyle('fontFamily', this.value)">
+                                ${["Arial", "Georgia", "Verdana", "Trebuchet MS", "Courier New"].map(font => `
+                                    <option value="${font}" ${object.styles.fontFamily === font ? "selected" : ""}>${font}</option>
+                                `).join("")}
+                            </select>
+
+                            <label>Text Align</label>
+                            <select onchange="updateObjectStyle('textAlign', this.value)">
+                                ${["left", "center", "right"].map(align => `
+                                    <option value="${align}" ${object.styles.textAlign === align ? "selected" : ""}>${align}</option>
+                                `).join("")}
+                            </select>
                         </div>
 
-                        <label>Font</label>
-                        <select onchange="updateObjectStyle('fontFamily', this.value)">
-                            ${["Arial", "Georgia", "Verdana", "Trebuchet MS", "Courier New"].map(font => `
-                                <option value="${font}" ${object.styles.fontFamily === font ? "selected" : ""}>${font}</option>
-                            `).join("")}
-                        </select>
+                        ${renderContentInspector(object)}
 
-                        <label>Text Align</label>
-                        <select onchange="updateObjectStyle('textAlign', this.value)">
-                            ${["left", "center", "right"].map(align => `
-                                <option value="${align}" ${object.styles.textAlign === align ? "selected" : ""}>${align}</option>
-                            `).join("")}
-                        </select>
-                    </div>
-
-                    ${renderContentInspector(object)}
-
-                    <div class="inspector-group">
-                        <h4>Arrange</h4>
-                        <div class="button-row">
-                            <button type="button" class="button-muted" onclick="moveSelectedLayer(1)">Forward</button>
-                            <button type="button" class="button-muted" onclick="moveSelectedLayer(-1)">Backward</button>
-                            <button type="button" class="button-muted" onclick="duplicateSelectedObject()">Duplicate</button>
-                            <button type="button" class="danger-button" onclick="deleteSelectedObject()">Delete</button>
+                        <div class="inspector-group">
+                            <h4>Arrange</h4>
+                            <div class="button-row">
+                                <button type="button" class="button-muted" onclick="moveSelectedLayer(1)">Forward</button>
+                                <button type="button" class="button-muted" onclick="moveSelectedLayer(-1)">Backward</button>
+                                <button type="button" class="button-muted" onclick="duplicateSelectedObject()">Duplicate</button>
+                                <button type="button" class="danger-button" onclick="deleteSelectedObject()">Delete</button>
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
         }
 
         function renderContentInspector(object) {
@@ -3052,122 +3169,133 @@
 
             if (["text", "section", "featured", "image_text"].includes(object.type)) {
                 html += `
-                        <div class="inspector-group">
-                            <h4>Content</h4>
+                            <div class="inspector-group">
+                                <h4>Content</h4>
 
-                            ${object.type !== "text" ? `
-                                <label>Title</label>
-                                <input value="${escapeHtml(object.title || "")}" onchange="updateObjectField('title', this.value)">
-                            ` : ""}
+                                ${object.type !== "text" ? `
+                                    <label>Title</label>
+                                    <input value="${escapeHtml(object.title || "")}" onchange="updateObjectField('title', this.value)">
+                                ` : ""}
 
-                            <label>Text</label>
-                            <textarea onchange="updateObjectField('text', this.value)">${escapeHtml(object.text || "")}</textarea>
-                        </div>
-                    `;
+                                <label>Text</label>
+                                <textarea onchange="updateObjectField('text', this.value)">${escapeHtml(object.text || "")}</textarea>
+                            </div>
+                        `;
             }
 
             if (["shape", "circle", "star"].includes(object.type)) {
                 html += `
-                            <div class="inspector-group">
-                                <h4>Shape</h4>
+                                <div class="inspector-group">
+                                    <h4>Shape</h4>
 
-                                <label>Shape Type</label>
-                                <select onchange="updateObjectField('shapeType', this.value)">
-                                    ${["rectangle", "circle", "star", "diamond"].map(shape => `
-                                        <option value="${shape}" ${(object.shapeType || "rectangle") === shape ? "selected" : ""}>${shape}</option>
-                                    `).join("")}
-                                </select>
-                            </div>
-                        `;
+                                    <label>Shape Type</label>
+                                    <select onchange="updateObjectField('shapeType', this.value)">
+                                        ${["rectangle", "circle", "star", "diamond"].map(shape => `
+                                            <option value="${shape}" ${(object.shapeType || "rectangle") === shape ? "selected" : ""}>${shape}</option>
+                                        `).join("")}
+                                    </select>
+                                </div>
+                            `;
             }
 
             if (object.type === "world_card") {
                 html += `
-                            <div class="inspector-group">
-                                <h4>World Card</h4>
+                                <div class="inspector-group">
+                                    <h4>World Card</h4>
 
-                                <label>Choose Published World</label>
-                                <select onchange="updateObjectField('worldId', this.value)">
-                                    ${currentPublishedWorlds.length ? currentPublishedWorlds.map(world => `
-                                        <option value="${escapeHtml(world.id)}" ${object.worldId === world.id ? "selected" : ""}>${escapeHtml(world.title || "Untitled World")}</option>
-                                    `).join("") : `<option value="">No published worlds yet</option>`}
-                                </select>
+                                    <label>Choose Published World</label>
+                                    <select onchange="updateObjectField('worldId', this.value)">
+                                        ${currentPublishedWorlds.length ? currentPublishedWorlds.map(world => `
+                                            <option value="${escapeHtml(world.id)}" ${object.worldId === world.id ? "selected" : ""}>${escapeHtml(world.title || "Untitled World")}</option>
+                                        `).join("") : `<option value="">No published worlds yet</option>`}
+                                    </select>
 
-                                <label>Custom Image URL</label>
-                                <input value="${escapeHtml(object.imageUrl || "")}" onchange="updateObjectField('imageUrl', this.value)">
-                            </div>
-                        `;
+                                    <label>Custom Image URL</label>
+                                    <input value="${escapeHtml(object.imageUrl || "")}" onchange="updateObjectField('imageUrl', this.value)">
+                                </div>
+                            `;
             }
 
 
 
             if (object.type === "profile_actions") {
                 html += `
-                                <div class="inspector-group">
-                                    <h4>Action Buttons</h4>
+                                    <div class="inspector-group">
+                                        <h4>Action Buttons</h4>
 
-                                    <label>Button Variant</label>
-                                    <select onchange="updateObjectStyle('actionButtonVariant', this.value)">
-                                        ${["filled", "ghost", "none"].map(value => `
-                                            <option value="${value}" ${(object.styles.actionButtonVariant || "filled") === value ? "selected" : ""}>${value}</option>
-                                        `).join("")}
-                                    </select>
+                                        <label>Button Variant</label>
+                                        <select onchange="updateObjectStyle('actionButtonVariant', this.value)">
+                                            ${["filled", "ghost", "none"].map(value => `
+                                                <option value="${value}" ${(object.styles.actionButtonVariant || "filled") === value ? "selected" : ""}>${value}</option>
+                                            `).join("")}
+                                        </select>
 
-                                    <label>Button Background</label>
-                                    <input value="${escapeHtml(object.styles.actionButtonBg || "rgba(0,0,0,.28)")}" onchange="updateObjectStyle('actionButtonBg', this.value)">
+                                        <label>Button Background</label>
+                                        <input value="${escapeHtml(object.styles.actionButtonBg || "rgba(0,0,0,.28)")}" onchange="updateObjectStyle('actionButtonBg', this.value)">
 
-                                    <label>Button Text Color</label>
-                                    <input type="color" value="${escapeHtml(object.styles.actionButtonText || "#ffffff")}" onchange="updateObjectStyle('actionButtonText', this.value)">
+                                        <label>Button Text Color</label>
+                                        <input type="color" value="${escapeHtml(object.styles.actionButtonText || "#ffffff")}" onchange="updateObjectStyle('actionButtonText', this.value)">
 
-                                    <label>Button Border</label>
-                                    <input value="${escapeHtml(object.styles.actionButtonBorder || "rgba(255,255,255,.14)")}" onchange="updateObjectStyle('actionButtonBorder', this.value)">
+                                        <label>Button Border</label>
+                                        <input value="${escapeHtml(object.styles.actionButtonBorder || "rgba(255,255,255,.14)")}" onchange="updateObjectStyle('actionButtonBorder', this.value)">
 
-                                    <div class="mini-grid">
-                                        <div>
-                                            <label>Button Radius</label>
-                                            <input type="number" min="0" max="80" value="${Number(object.styles.actionButtonRadius ?? 12)}" onchange="updateObjectStyle('actionButtonRadius', Number(this.value))">
+                                        <div class="mini-grid">
+                                            <div>
+                                                <label>Button Radius</label>
+                                                <input type="number" min="0" max="80" value="${Number(object.styles.actionButtonRadius ?? 12)}" onchange="updateObjectStyle('actionButtonRadius', Number(this.value))">
+                                            </div>
+                                            <div>
+                                                <label>Button Font Size</label>
+                                                <input type="number" min="8" max="48" value="${Number(object.styles.actionButtonFontSize ?? 15)}" onchange="updateObjectStyle('actionButtonFontSize', Number(this.value))">
+                                            </div>
+                                            <div>
+                                                <label>Padding Y</label>
+                                                <input type="number" min="0" max="40" value="${Number(object.styles.actionButtonPaddingY ?? 10)}" onchange="updateObjectStyle('actionButtonPaddingY', Number(this.value))">
+                                            </div>
+                                            <div>
+                                                <label>Padding X</label>
+                                                <input type="number" min="0" max="60" value="${Number(object.styles.actionButtonPaddingX ?? 13)}" onchange="updateObjectStyle('actionButtonPaddingX', Number(this.value))">
+                                            </div>
+                                            <div>
+                                                <label>Button Gap</label>
+                                                <input type="number" min="0" max="40" value="${Number(object.styles.actionButtonGap ?? 10)}" onchange="updateObjectStyle('actionButtonGap', Number(this.value))">
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label>Button Font Size</label>
-                                            <input type="number" min="8" max="48" value="${Number(object.styles.actionButtonFontSize ?? 15)}" onchange="updateObjectStyle('actionButtonFontSize', Number(this.value))">
-                                        </div>
-                                        <div>
-                                            <label>Padding Y</label>
-                                            <input type="number" min="0" max="40" value="${Number(object.styles.actionButtonPaddingY ?? 10)}" onchange="updateObjectStyle('actionButtonPaddingY', Number(this.value))">
-                                        </div>
-                                        <div>
-                                            <label>Padding X</label>
-                                            <input type="number" min="0" max="60" value="${Number(object.styles.actionButtonPaddingX ?? 13)}" onchange="updateObjectStyle('actionButtonPaddingX', Number(this.value))">
-                                        </div>
-                                        <div>
-                                            <label>Button Gap</label>
-                                            <input type="number" min="0" max="40" value="${Number(object.styles.actionButtonGap ?? 10)}" onchange="updateObjectStyle('actionButtonGap', Number(this.value))">
-                                        </div>
+
+                                        <p class="help-text" style="margin:0;">Labels stay system-controlled for safety. You can style their look, not rename them.</p>
                                     </div>
+                                `;
+            }
 
-                                    <p class="help-text" style="margin:0;">Labels stay system-controlled for safety. You can style their look, not rename them.</p>
-                                </div>
-                            `;
+            if (["follow_button", "message_button", "block_button", "report_button"].includes(object.type)) {
+                html += `
+                            <div class="inspector-group">
+                                <h4>System Button</h4>
+                                <p class="help-text" style="margin:0 0 10px;">This button will always say ${escapeHtml(getSingleActionLabel(object.type))}. You can change its size, fill, text color, border, radius, font, and rotation.</p>
+                                <label>Button Label</label>
+                                <input value="${escapeHtml(getSingleActionLabel(object.type))}" disabled>
+                            </div>
+                        `;
             }
 
             if (["image", "banner", "image_text"].includes(object.type)) {
                 html += `
-                        <div class="inspector-group">
-                            <h4>Image</h4>
+                            <div class="inspector-group">
+                                <h4>Image</h4>
 
-                            <label>Image URL</label>
-                            <input value="${escapeHtml(object.imageUrl || "")}" onchange="updateObjectField('imageUrl', this.value)">
+                                <label>Image URL</label>
+                                <input value="${escapeHtml(object.imageUrl || "")}" onchange="updateObjectField('imageUrl', this.value)">
 
-                            <label>Upload Image</label>
-                            <input type="file" accept="image/*" onchange="uploadStudioObjectImage(this)">
+                                <label>Upload Image</label>
+                                <input type="file" accept="image/*" onchange="uploadStudioObjectImage(this)">
 
-                            <label>Image Fit</label>
-                            <select onchange="updateObjectStyle('objectFit', this.value)">
-                                <option value="cover" ${object.styles.objectFit === "cover" ? "selected" : ""}>Cover</option>
-                                <option value="contain" ${object.styles.objectFit === "contain" ? "selected" : ""}>Contain</option>
-                            </select>
-                        </div>
-                    `;
+                                <label>Image Fit</label>
+                                <select onchange="updateObjectStyle('objectFit', this.value)">
+                                    <option value="cover" ${object.styles.objectFit === "cover" ? "selected" : ""}>Cover</option>
+                                    <option value="contain" ${object.styles.objectFit === "contain" ? "selected" : ""}>Contain</option>
+                                </select>
+                            </div>
+                        `;
             }
 
             return html;
@@ -3186,8 +3314,10 @@
             const object = makeObject(type);
 
             const workspace = document.getElementById("studio-workspace");
-            object.x = Math.round((workspace.scrollLeft + 140) / studioZoom) + (studioLayout.objects.length % 6) * 24;
-            object.y = Math.round((workspace.scrollTop + 140) / studioZoom) + (studioLayout.objects.length % 6) * 24;
+            const rect = workspace.getBoundingClientRect();
+            const center = screenPointToCanvasPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+            object.x = Math.round(center.x - object.w / 2) + (studioLayout.objects.length % 6) * 24;
+            object.y = Math.round(center.y - object.h / 2) + (studioLayout.objects.length % 6) * 24;
 
             studioLayout.objects.push(object);
             selectedObjectId = object.id;
@@ -3403,9 +3533,9 @@
             }
 
             if (interactionState.mode === "pan") {
-                const workspace = document.getElementById("studio-workspace");
-                workspace.scrollLeft = interactionState.originalScrollLeft - (event.clientX - interactionState.startX);
-                workspace.scrollTop = interactionState.originalScrollTop - (event.clientY - interactionState.startY);
+                studioPanX = interactionState.originalPanX + (event.clientX - interactionState.startX);
+                studioPanY = interactionState.originalPanY + (event.clientY - interactionState.startY);
+                applyStudioView();
                 return;
             }
 
@@ -3685,17 +3815,17 @@
                 const avatar = blockedProfile?.avatar_url || defaultAvatar;
 
                 return `
-                        <div class="drawer-card">
-                            <div class="drawer-user">
-                                <img src="${escapeHtml(avatar)}" alt="">
-                                <div>
-                                    <strong>${escapeHtml(blockedProfile?.display_name || "Unknown User")}</strong>
-                                    <p>@${escapeHtml(blockedProfile?.username || "unknown")}</p>
+                            <div class="drawer-card">
+                                <div class="drawer-user">
+                                    <img src="${escapeHtml(avatar)}" alt="">
+                                    <div>
+                                        <strong>${escapeHtml(blockedProfile?.display_name || "Unknown User")}</strong>
+                                        <p>@${escapeHtml(blockedProfile?.username || "unknown")}</p>
+                                    </div>
                                 </div>
+                                <button style="margin-top:14px;" onclick="unblockUser('${block.blocked_id}')">Unblock</button>
                             </div>
-                            <button style="margin-top:14px;" onclick="unblockUser('${block.blocked_id}')">Unblock</button>
-                        </div>
-                    `;
+                        `;
             }).join("");
         }
 
