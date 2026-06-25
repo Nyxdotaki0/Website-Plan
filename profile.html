@@ -926,85 +926,6 @@
             white-space: nowrap;
         }
 
-
-
-        .profile-badge-row {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            flex-wrap: wrap;
-            margin-top: 10px;
-        }
-
-        .profile-badge,
-        .custom-profile-badge {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: max-content;
-            min-width: 120px;
-            height: 34px;
-            padding: 0 14px;
-            border-radius: 999px;
-            border: 1px solid rgba(255,255,255,.20);
-            background: #050506;
-            color: #fff;
-            font-size: 13px;
-            font-weight: 800;
-            letter-spacing: .04em;
-            text-transform: uppercase;
-            white-space: nowrap;
-            box-shadow: 0 0 16px rgba(255,255,255,.08);
-        }
-
-            .profile-badge.void-architect,
-            .custom-profile-badge.void-architect {
-                border-color: rgba(255, 255, 255, .42);
-                background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, .22), transparent 34%), linear-gradient(180deg, #35353b 0%, #141419 46%, #050506 100%);
-                color: #ffffff;
-                box-shadow: 0 0 0 1px rgba(255, 255, 255, .15), 0 0 22px rgba(255, 255, 255, .24), inset 0 1px 0 rgba(255, 255, 255, .16);
-                animation: voidBadgePulse 2.8s ease-in-out infinite;
-            }
-
-            .profile-badge.moderator,
-            .custom-profile-badge.moderator {
-                border-color: rgba(255, 255, 255, .24);
-                background: linear-gradient(180deg, #f5f5f5 0%, #bfc0c7 45%, #6c6d76 100%);
-                color: #07070a;
-                box-shadow: 0 0 0 1px rgba(255, 255, 255, .18), 0 0 18px rgba(255, 255, 255, .16), inset 0 1px 0 rgba(255, 255, 255, .55);
-            }
-
-            .profile-badge.verified-artist,
-            .custom-profile-badge.verified-artist {
-                border-color: rgba(135, 210, 255, .92);
-                background: #050506;
-                color: #ffffff;
-                box-shadow: 0 0 0 1px rgba(135, 210, 255, .42), 0 0 18px rgba(135, 210, 255, .45);
-            }
-
-        @keyframes voidBadgePulse {
-            0%, 100% {
-                filter: brightness(1);
-                box-shadow: 0 0 0 1px rgba(255, 255, 255, .15), 0 0 18px rgba(255, 255, 255, .20), inset 0 1px 0 rgba(255, 255, 255, .16);
-            }
-
-            50% {
-                filter: brightness(1.12);
-                box-shadow: 0 0 0 1px rgba(255, 255, 255, .24), 0 0 30px rgba(255, 255, 255, .36), inset 0 1px 0 rgba(255, 255, 255, .22);
-            }
-        }
-
-        .custom-profile-object.profile-badge-object {
-            z-index: 9999 !important;
-            overflow: visible;
-        }
-
-        .custom-profile-canvas.mobile-custom-profile-canvas {
-            width: 430px;
-            min-height: 1450px;
-            margin: 0 auto;
-        }
-
         @media (max-width: 860px) {
             header {
                 flex-direction: column;
@@ -1082,7 +1003,6 @@
                     <div class="info-text">
                         <h1 id="profile-display-name">Loading...</h1>
                         <div id="profile-username" class="username">@username</div>
-                        <div id="profile-badge-row" class="profile-badge-row"></div>
                         <div id="profile-bio" class="bio">Loading bio...</div>
                         <div id="profile-creator-type" class="muted"></div>
                     </div>
@@ -1340,7 +1260,7 @@
         }
 
         function renderProfile(profile) {
-            const normalizedLayout = getResponsiveProfileLayout(profile.profile_custom_layout);
+            const normalizedLayout = normalizeLayout(profile.profile_custom_layout);
 
             const useCustom =
                 profile.profile_layout_mode === "custom" &&
@@ -1366,9 +1286,6 @@
             document.getElementById("profile-username").textContent = "@" + (profile.username || "username");
             document.getElementById("profile-bio").textContent = profile.bio || "No bio yet.";
             document.getElementById("profile-creator-type").textContent = profile.creator_type || "";
-            document.getElementById("profile-badge-row").innerHTML = getOwnedBadges(profile)
-                .map(badge => buildProfileBadgeMarkup(badge))
-                .join("");
 
             if (profile.avatar_url) {
                 document.getElementById("profile-avatar").src = profile.avatar_url;
@@ -1394,7 +1311,7 @@
 
         function renderCustomProfile(profile) {
             const root = document.getElementById("custom-profile-root");
-            const layout = getResponsiveProfileLayout(profile.profile_custom_layout);
+            const layout = normalizeLayout(profile.profile_custom_layout);
 
             if (!layout.objects || !layout.objects.some(object => object.visible !== false)) {
                 document.getElementById("default-profile-root").style.display = "block";
@@ -1407,7 +1324,7 @@
             root.style.minHeight = layout.canvas.height + "px";
             applyCanvasBackground(root, layout.canvas);
 
-            canvas.className = "custom-profile-canvas" + (layout.layoutMode === "mobile" ? " mobile-custom-profile-canvas" : "");
+            canvas.className = "custom-profile-canvas";
             canvas.style.width = layout.canvas.width + "px";
             canvas.style.height = layout.canvas.height + "px";
             canvas.style.fontFamily = layout.canvas.fontFamily || "Arial";
@@ -1423,72 +1340,7 @@
             root.appendChild(canvas);
         }
 
-
-        function getOwnedBadges(profileRecord = profile) {
-            const badges = [];
-            const rawBadges = Array.isArray(profileRecord?.profile_badges) ? profileRecord.profile_badges : [];
-            const role = String(profileRecord?.role || "").toLowerCase();
-
-            if (role === "void_architect" || role === "void architect" || rawBadges.includes("void_architect")) {
-                badges.push({
-                    key: "void_architect",
-                    label: "Void Architect",
-                    className: "void-architect"
-                });
-            }
-
-            if (role === "moderator" || rawBadges.includes("moderator")) {
-                badges.push({
-                    key: "moderator",
-                    label: "Moderator",
-                    className: "moderator"
-                });
-            }
-
-            if (profileRecord?.verified_artist === true || rawBadges.includes("verified_artist") || profileRecord?.artist_verified === true) {
-                badges.push({
-                    key: "verified_artist",
-                    label: "Verified Artist",
-                    className: "verified-artist"
-                });
-            }
-
-            return badges;
-        }
-
-        function getBadgeByKey(key, profileRecord = profile) {
-            return getOwnedBadges(profileRecord).find(badge => badge.key === key) || null;
-        }
-
-        function buildProfileBadgeMarkup(badge, className = "profile-badge") {
-            if (!badge) {
-                return "";
-            }
-
-            return `<span class="${className} ${escapeHtml(badge.className || badge.key)}">${escapeHtml(badge.label)}</span>`;
-        }
-
-        function getResponsiveProfileLayout(layout) {
-            let parsed = layout;
-
-            if (typeof parsed === "string") {
-                try {
-                    parsed = JSON.parse(parsed);
-                } catch {
-                    parsed = null;
-                }
-            }
-
-            if (parsed?.layouts) {
-                const wantsMobile = window.matchMedia("(max-width: 860px)").matches;
-                const selected = wantsMobile ? (parsed.layouts.mobile || parsed.layouts.desktop) : (parsed.layouts.desktop || parsed.layouts.mobile);
-                return normalizeLayout(selected, wantsMobile ? "mobile" : "desktop");
-            }
-
-            return normalizeLayout(parsed, "desktop");
-        }
-
-        function normalizeLayout(layout, preferredMode = "desktop") {
+        function normalizeLayout(layout) {
             let parsed = layout;
 
             if (typeof parsed === "string") {
@@ -1510,20 +1362,17 @@
                 parsed.objects = parsed.blocks;
             }
 
-            const layoutMode = parsed.layoutMode === "mobile" || preferredMode === "mobile" ? "mobile" : "desktop";
-
-            parsed.layoutMode = layoutMode;
             parsed.canvas = {
-                width: layoutMode === "mobile" ? 430 : 1600,
-                height: layoutMode === "mobile" ? 1450 : 2200,
+                width: 1600,
+                height: 2200,
                 backgroundMode: "gradient",
                 backgroundColor: "#09090b",
                 backgroundGradient: "radial-gradient(circle at 20% 10%, rgba(255,255,255,.10), transparent 30%), linear-gradient(135deg, #050506, #14141b)",
                 backgroundImage: "",
                 fontFamily: "Arial",
                 ...(parsed.canvas || {}),
-                width: layoutMode === "mobile" ? 430 : 1600,
-                height: layoutMode === "mobile" ? 1450 : 2200
+                width: 1600,
+                height: 2200
             };
 
             parsed.objects = Array.isArray(parsed.objects) ? parsed.objects : [];
@@ -1633,7 +1482,7 @@
             const el = document.createElement("div");
             const styles = object.styles || {};
 
-            el.className = "custom-profile-object" + (object.type === "profile_badge" ? " profile-badge-object" : "");
+            el.className = "custom-profile-object";
             el.style.left = (object.x || 0) + "px";
             el.style.top = (object.y || 0) + "px";
             el.style.width = (object.w || 200) + "px";
@@ -1663,23 +1512,23 @@
 
             if (object.type === "profile_identity") {
                 return `
-                                        <div class="identity-object">
-                                            <img src="${escapeHtml(avatar)}" alt="">
-                                            <div>
-                                                <h2>${displayName}</h2>
-                                                <p>@${username}</p>
-                                                <p>${status}</p>
-                                            </div>
-                                        </div>
-                                    `;
+                                <div class="identity-object">
+                                    <img src="${escapeHtml(avatar)}" alt="">
+                                    <div>
+                                        <h2>${displayName}</h2>
+                                        <p>@${username}</p>
+                                        <p>${status}</p>
+                                    </div>
+                                </div>
+                            `;
             }
 
             if (object.type === "profile_avatar") {
                 return `
-                                        <div class="avatar-circle-object">
-                                            <img src="${escapeHtml(avatar)}" alt="">
-                                        </div>
-                                    `;
+                                <div class="avatar-circle-object">
+                                    <img src="${escapeHtml(avatar)}" alt="">
+                                </div>
+                            `;
             }
 
             if (object.type === "display_name") {
@@ -1700,21 +1549,21 @@
 
             if (["followers_box", "following_box", "works_count_box"].includes(object.type)) {
                 return `
-                                        <div class="system-stat-object">
-                                            <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
-                                            <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
-                                        </div>
-                                    `;
+                                <div class="system-stat-object">
+                                    <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
+                                    <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
+                                </div>
+                            `;
             }
 
             if (object.type === "stats") {
                 return `
-                                        <div class="stats-object">
-                                            <div class="stat-mini"><strong>${followCounts.followers || 0}</strong><span>Followers</span></div>
-                                            <div class="stat-mini"><strong>${followCounts.following || 0}</strong><span>Following</span></div>
-                                            <div class="stat-mini"><strong>${profileWorlds.length || 0}</strong><span>Works</span></div>
-                                        </div>
-                                    `;
+                                <div class="stats-object">
+                                    <div class="stat-mini"><strong>${followCounts.followers || 0}</strong><span>Followers</span></div>
+                                    <div class="stat-mini"><strong>${followCounts.following || 0}</strong><span>Following</span></div>
+                                    <div class="stat-mini"><strong>${profileWorlds.length || 0}</strong><span>Works</span></div>
+                                </div>
+                            `;
             }
 
             if (object.type === "creator_gallery") {
@@ -1727,12 +1576,12 @@
                 const title = item?.title || "Gallery image";
 
                 return `
-                                        <a class="custom-gallery-item-card" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
-                                            ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
-                                            ${buildGalleryDescriptionPill(item)}
-                                            ${buildGalleryCreditPill(item)}
-                                        </a>
-                                    `;
+                                <a class="custom-gallery-item-card" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
+                                    ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
+                                    ${buildGalleryDescriptionPill(item)}
+                                    ${buildGalleryCreditPill(item)}
+                                </a>
+                            `;
             }
 
             if (object.type === "creator_works") {
@@ -1741,11 +1590,11 @@
 
             if (object.type === "bio") {
                 return `
-                                        <div class="bio-object">
-                                            <h3>${escapeHtml(object.title || "About")}</h3>
-                                            <p>${bio}</p>
-                                        </div>
-                                    `;
+                                <div class="bio-object">
+                                    <h3>${escapeHtml(object.title || "About")}</h3>
+                                    <p>${bio}</p>
+                                </div>
+                            `;
             }
 
             if (object.type === "text") {
@@ -1754,29 +1603,29 @@
 
             if (object.type === "section" || object.type === "featured") {
                 return `
-                                        <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
-                                            <h3>${escapeHtml(object.title || "Section")}</h3>
-                                            <p>${escapeHtml(object.text || "")}</p>
-                                        </div>
-                                    `;
+                                <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
+                                    <h3>${escapeHtml(object.title || "Section")}</h3>
+                                    <p>${escapeHtml(object.text || "")}</p>
+                                </div>
+                            `;
             }
 
             if (object.type === "image" || object.type === "banner") {
                 return `
-                                        <div class="image-object" style="width:100%;height:100%;background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};"></div>
-                                    `;
+                                <div class="image-object" style="width:100%;height:100%;background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};"></div>
+                            `;
             }
 
             if (object.type === "image_text") {
                 return `
-                                        <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
-                                            <div class="image-object" style="background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};"></div>
-                                            <div class="section-object">
-                                                <h3>${escapeHtml(object.title || "Image + Text")}</h3>
-                                                <p>${escapeHtml(object.text || "")}</p>
-                                            </div>
-                                        </div>
-                                    `;
+                                <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
+                                    <div class="image-object" style="background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};"></div>
+                                    <div class="section-object">
+                                        <h3>${escapeHtml(object.title || "Image + Text")}</h3>
+                                        <p>${escapeHtml(object.text || "")}</p>
+                                    </div>
+                                </div>
+                            `;
             }
 
             if (["shape", "circle", "star"].includes(object.type)) {
@@ -1791,22 +1640,17 @@
                 const summary = selectedWorld?.summary || "This creator can feature one of their published worlds here.";
 
                 return `
-                                        <a class="custom-world-card" href="${selectedWorld ? getWorldLink(selectedWorld) : '#'}">
-                                            <div class="custom-world-cover">
-                                                ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
-                                                ${buildWorldCreditPill(selectedWorld)}
-                                            </div>
-                                            <div class="custom-world-body">
-                                                <h3>${escapeHtml(title)}</h3>
-                                                <p>${escapeHtml(summary)}</p>
-                                            </div>
-                                        </a>
-                                    `;
-            }
-
-            if (object.type === "profile_badge") {
-                const badge = getBadgeByKey(object.badgeKey, profile) || getOwnedBadges(profile)[0];
-                return buildProfileBadgeMarkup(badge, "custom-profile-badge");
+                                <a class="custom-world-card" href="${selectedWorld ? getWorldLink(selectedWorld) : '#'}">
+                                    <div class="custom-world-cover">
+                                        ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
+                                        ${buildWorldCreditPill(selectedWorld)}
+                                    </div>
+                                    <div class="custom-world-body">
+                                        <h3>${escapeHtml(title)}</h3>
+                                        <p>${escapeHtml(summary)}</p>
+                                    </div>
+                                </a>
+                            `;
             }
 
             if (object.type === "divider") {
@@ -1822,20 +1666,20 @@
 
             if (currentUser.id === profile.id) {
                 return `
-                                        <div class="actions-object" style="gap:${gap}px;">
-                                            <a class="custom-action-button" style="${inlineStyle}" href="account-settings.html">Edit Profile</a>
-                                        </div>
-                                    `;
+                                <div class="actions-object" style="gap:${gap}px;">
+                                    <a class="custom-action-button" style="${inlineStyle}" href="account-settings.html">Edit Profile</a>
+                                </div>
+                            `;
             }
 
             return `
-                                    <div class="actions-object" style="gap:${gap}px;">
-                                        <button class="custom-action-button" style="${inlineStyle}" data-custom-action="follow">Follow</button>
-                                        <button class="custom-action-button" style="${inlineStyle}" data-custom-action="message">Message</button>
-                                        <button class="custom-action-button" style="${inlineStyle}" data-custom-action="block">Block</button>
-                                        <button class="custom-action-button" style="${inlineStyle}" data-custom-action="report">Report</button>
-                                    </div>
-                                `;
+                            <div class="actions-object" style="gap:${gap}px;">
+                                <button class="custom-action-button" style="${inlineStyle}" data-custom-action="follow">Follow</button>
+                                <button class="custom-action-button" style="${inlineStyle}" data-custom-action="message">Message</button>
+                                <button class="custom-action-button" style="${inlineStyle}" data-custom-action="block">Block</button>
+                                <button class="custom-action-button" style="${inlineStyle}" data-custom-action="report">Report</button>
+                            </div>
+                        `;
         }
 
         function buildSingleCustomAction(profile, object) {
@@ -1937,12 +1781,12 @@
             }
 
             return items.map(item => `
-                                    <a class="gallery-mini-card profile-gallery-tile" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
-                                        <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title || "Gallery item")}">
-                                        ${buildGalleryDescriptionPill(item)}
-                                        ${buildGalleryCreditPill(item)}
-                                    </a>
-                                `).join("");
+                            <a class="gallery-mini-card profile-gallery-tile" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
+                                <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title || "Gallery item")}">
+                                ${buildGalleryDescriptionPill(item)}
+                                ${buildGalleryCreditPill(item)}
+                            </a>
+                        `).join("");
         }
 
         function renderWorksMini(worlds, object = null) {
@@ -1963,17 +1807,17 @@
             return items.map(world => {
                 const cover = world.cover_image_url || world.cover_url || "";
                 return `
-                                    <a class="work-mini-card custom-world-card" href="${getWorldLink(world)}">
-                                        <div class="custom-world-cover">
-                                            ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">` : ""}
-                                            ${buildWorldCreditPill(world)}
-                                        </div>
-                                        <div class="custom-world-body">
-                                            <h3>${escapeHtml(world.title || "Untitled")}</h3>
-                                            <p>${escapeHtml(world.summary || world.content_type || world.type || "World")}</p>
-                                        </div>
-                                    </a>
-                                `;
+                            <a class="work-mini-card custom-world-card" href="${getWorldLink(world)}">
+                                <div class="custom-world-cover">
+                                    ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">` : ""}
+                                    ${buildWorldCreditPill(world)}
+                                </div>
+                                <div class="custom-world-body">
+                                    <h3>${escapeHtml(world.title || "Untitled")}</h3>
+                                    <p>${escapeHtml(world.summary || world.content_type || world.type || "World")}</p>
+                                </div>
+                            </a>
+                        `;
             }).join("");
         }
 
@@ -1985,18 +1829,18 @@
             return worlds.map(world => {
                 const cover = world.cover_image_url || world.cover_url || "";
                 return `
-                                    <div class="card">
-                                        ${cover ? `
-                                            <div class="custom-world-cover" style="height:150px;border-radius:14px;margin-bottom:14px;">
-                                                <img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">
-                                                ${buildWorldCreditPill(world)}
-                                            </div>
-                                        ` : ""}
-                                        <p class="empty">${escapeHtml(world.content_type || world.type || "World")}</p>
-                                        <h3><a href="${getWorldLink(world)}">${escapeHtml(world.title || "Untitled")}</a></h3>
-                                        <p>${escapeHtml(world.summary || "No summary yet.")}</p>
+                            <div class="card">
+                                ${cover ? `
+                                    <div class="custom-world-cover" style="height:150px;border-radius:14px;margin-bottom:14px;">
+                                        <img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">
+                                        ${buildWorldCreditPill(world)}
                                     </div>
-                                `;
+                                ` : ""}
+                                <p class="empty">${escapeHtml(world.content_type || world.type || "World")}</p>
+                                <h3><a href="${getWorldLink(world)}">${escapeHtml(world.title || "Untitled")}</a></h3>
+                                <p>${escapeHtml(world.summary || "No summary yet.")}</p>
+                            </div>
+                        `;
             }).join("");
         }
 
@@ -2018,11 +1862,11 @@
             const { data, error } = await supabase
                 .from("creator_proof_gallery")
                 .select(`
-                                        *,
-                                        creator_gallery_likes (
-                                            user_id
-                                        )
-                                    `)
+                                *,
+                                creator_gallery_likes (
+                                    user_id
+                                )
+                            `)
                 .eq("owner_id", profileId)
                 .eq("visibility", "public");
 
@@ -2097,10 +1941,10 @@
 
         function renderFollowButton(profileId, isFollowing) {
             document.getElementById("follow-button-container").innerHTML = `
-                                    <button id="follow-button" class="button follow-button ${isFollowing ? "following" : ""}">
-                                        ${isFollowing ? "Following" : "Follow"}
-                                    </button>
-                                `;
+                            <button id="follow-button" class="button follow-button ${isFollowing ? "following" : ""}">
+                                ${isFollowing ? "Following" : "Follow"}
+                            </button>
+                        `;
 
             document.getElementById("follow-button").addEventListener("click", async () => {
                 const button = document.getElementById("follow-button");
@@ -2143,8 +1987,8 @@
             }
 
             document.getElementById("block-button-container").innerHTML = `
-                                    <button id="block-user-btn" class="button secondary">Block</button>
-                                `;
+                            <button id="block-user-btn" class="button secondary">Block</button>
+                        `;
 
             document.getElementById("block-user-btn").addEventListener("click", () => {
                 document.getElementById("block-modal").style.display = "flex";
@@ -2163,8 +2007,8 @@
             }
 
             document.getElementById("message-button-container").innerHTML = `
-                                    <button id="message-user-btn" class="button">Message</button>
-                                `;
+                            <button id="message-user-btn" class="button">Message</button>
+                        `;
 
             document.getElementById("message-user-btn").addEventListener("click", () => openConversation(profile.id));
         }
@@ -2217,8 +2061,8 @@
             }
 
             document.getElementById("report-button-container").innerHTML = `
-                                    <button id="report-user-btn" class="button secondary">Report</button>
-                                `;
+                            <button id="report-user-btn" class="button secondary">Report</button>
+                        `;
 
             document.getElementById("report-user-btn").addEventListener("click", () => {
                 document.getElementById("report-modal").style.display = "flex";
@@ -2309,10 +2153,10 @@
                     : "Permanent";
 
             document.getElementById("moderation-status-display").innerHTML = `
-                                    <strong>Current Status:</strong> ${escapeHtml(profile.account_status || "active")}<br>
-                                    <strong>Expires:</strong> ${escapeHtml(expires)}<br>
-                                    <strong>Reason:</strong> ${escapeHtml(profile.moderation_reason || "None")}
-                                `;
+                            <strong>Current Status:</strong> ${escapeHtml(profile.account_status || "active")}<br>
+                            <strong>Expires:</strong> ${escapeHtml(expires)}<br>
+                            <strong>Reason:</strong> ${escapeHtml(profile.moderation_reason || "None")}
+                        `;
         }
 
         async function loadModerationHistory() {
@@ -2321,12 +2165,12 @@
             const { data, error } = await supabase
                 .from("moderation_logs")
                 .select(`
-                                        *,
-                                        moderator:profiles!moderation_logs_moderator_id_fkey(
-                                            username,
-                                            display_name
-                                        )
-                                    `)
+                                *,
+                                moderator:profiles!moderation_logs_moderator_id_fkey(
+                                    username,
+                                    display_name
+                                )
+                            `)
                 .eq("target_user_id", profile.id)
                 .order("created_at", { ascending: false })
                 .limit(20);
@@ -2342,13 +2186,13 @@
             }
 
             container.innerHTML = data.map(log => `
-                                    <div style="border-bottom:1px solid var(--border-color);padding-bottom:10px;margin-bottom:10px;">
-                                        <strong>${escapeHtml(log.action)}</strong><br>
-                                        By: ${escapeHtml(log.moderator?.display_name || log.moderator?.username || "Unknown")}<br>
-                                        Reason: ${escapeHtml(log.reason || "None")}<br>
-                                        ${new Date(log.created_at).toLocaleString()}
-                                    </div>
-                                `).join("");
+                            <div style="border-bottom:1px solid var(--border-color);padding-bottom:10px;margin-bottom:10px;">
+                                <strong>${escapeHtml(log.action)}</strong><br>
+                                By: ${escapeHtml(log.moderator?.display_name || log.moderator?.username || "Unknown")}<br>
+                                Reason: ${escapeHtml(log.reason || "None")}<br>
+                                ${new Date(log.created_at).toLocaleString()}
+                            </div>
+                        `).join("");
         }
 
         window.toggleModerationDrawer = function () {
@@ -2483,12 +2327,6 @@
                 .replaceAll('"', '\\"')
                 .replaceAll(")", "\\)");
         }
-
-        window.addEventListener("resize", () => {
-            if (profile && profile.profile_layout_mode === "custom") {
-                renderProfile(profile);
-            }
-        });
 
         window.logOut = async function () {
             await supabase.auth.signOut();
