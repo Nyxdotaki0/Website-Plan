@@ -1260,7 +1260,12 @@
         }
 
         function renderProfile(profile) {
-            const useCustom = profile.profile_layout_mode === "custom" && profile.profile_custom_layout;
+            const normalizedLayout = normalizeLayout(profile.profile_custom_layout);
+
+            const useCustom =
+                profile.profile_layout_mode === "custom" &&
+                normalizedLayout.objects &&
+                normalizedLayout.objects.some(object => object.visible !== false);
 
             if (useCustom) {
                 document.getElementById("default-profile-root").style.display = "none";
@@ -1307,6 +1312,13 @@
         function renderCustomProfile(profile) {
             const root = document.getElementById("custom-profile-root");
             const layout = normalizeLayout(profile.profile_custom_layout);
+
+            if (!layout.objects || !layout.objects.some(object => object.visible !== false)) {
+                document.getElementById("default-profile-root").style.display = "block";
+                document.getElementById("custom-profile-root").style.display = "none";
+                renderDefaultProfile(profile);
+                return;
+            }
             const canvas = document.createElement("div");
 
             root.style.minHeight = layout.canvas.height + "px";
