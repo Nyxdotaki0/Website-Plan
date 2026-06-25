@@ -747,6 +747,7 @@
             justify-content: center;
             transition: .18s ease
         }
+
         .reader-stage.webtoon .reader-arrow,
         .reader-stage.webtoon .tap-zone {
             display: none;
@@ -764,17 +765,17 @@
             bottom: 68px;
         }
 
-            .reader-arrow:hover {
-                background: rgba(255,255,255,.16)
-            }
+        .reader-arrow:hover {
+            background: rgba(255,255,255,.16)
+        }
 
-            .reader-arrow.left {
-                left: 18px
-            }
+        .reader-arrow.left {
+            left: 18px
+        }
 
-            .reader-arrow.right {
-                right: 18px
-            }
+        .reader-arrow.right {
+            right: 18px
+        }
 
         .reader-bottombar {
             min-height: 52px;
@@ -995,6 +996,30 @@
             .reader-credit-mobile-btn {
                 display: block
             }
+        }
+
+
+        .placed-image-frame {
+            position: relative;
+            overflow: hidden;
+        }
+
+            .placed-image-frame > img,
+            img.placed-image {
+                transform-origin: center center;
+                will-change: transform;
+            }
+
+        .chapter-index::before {
+            background-size: var(--comic-index-image-size, cover);
+            transform: var(--comic-index-image-transform, none);
+            transform-origin: center center;
+        }
+
+        .comic-background-image,
+        .reader-bg-image {
+            transform-origin: center center;
+            transform: var(--comic-background-image-transform, scale(1.03));
         }
     </style>
 </head>
@@ -1314,6 +1339,53 @@
             document.getElementById("community-link").href = `world-additions.html?id=${encodeURIComponent(comic.id)}`;
         }
 
+
+
+        function getDefaultImagePlacement() {
+            return {
+                x: 0,
+                y: 0,
+                scale: 1,
+                rotation: 0,
+                fit: "cover"
+            };
+        }
+
+        function normalizeImagePlacement(value) {
+            let parsed = value;
+
+            if (typeof parsed === "string") {
+                try {
+                    parsed = JSON.parse(parsed);
+                } catch {
+                    parsed = null;
+                }
+            }
+
+            return {
+                ...getDefaultImagePlacement(),
+                ...(parsed && typeof parsed === "object" ? parsed : {})
+            };
+        }
+
+        function getPlacementTransformStyle(placement) {
+            const normalized = normalizeImagePlacement(placement);
+
+            return `object-fit:${normalized.fit || "cover"};transform:translate(${normalized.x || 0}px, ${normalized.y || 0}px) rotate(${normalized.rotation || 0}deg) scale(${normalized.scale || 1});transform-origin:center center;`;
+        }
+
+        function getPlacementTransformValue(placement, includeBaseScale = false) {
+            const normalized = normalizeImagePlacement(placement);
+            const base = includeBaseScale ? " scale(1.03)" : "";
+
+            return `translate(${normalized.x || 0}px, ${normalized.y || 0}px) rotate(${normalized.rotation || 0}deg) scale(${normalized.scale || 1})${base}`;
+        }
+
+        function getPlacementBackgroundSize(placement) {
+            const normalized = normalizeImagePlacement(placement);
+            return normalized.fit === "contain" ? "contain" : "cover";
+        }
+
         function renderComicHero(comic, profile) {
             document.title = `${comic.title || "Comic"} - Nullverse`;
             document.getElementById("comic-title").textContent = comic.title || "Untitled Comic";
@@ -1341,7 +1413,7 @@
             coverWrap.classList.toggle("has-credit", !!coverCredit);
 
             if (comic.cover_image_url) {
-                coverWrap.innerHTML = `<img src="${escapeHtml(comic.cover_image_url)}" alt="">${coverCredit}`;
+                coverWrap.innerHTML = `<img class="placed-image" src="${escapeHtml(comic.cover_image_url)}" alt="" style="${getPlacementTransformStyle(comic.cover_image_placement)}">${coverCredit}`;
             } else {
                 coverWrap.innerHTML = `<div class="cover-placeholder">No cover image yet</div>`;
             }
@@ -1383,7 +1455,8 @@
                 imageLayer.style.backgroundRepeat = comic.theme_background_image_repeat || "no-repeat";
                 imageLayer.style.backgroundPosition = `${comic.theme_background_position_x || 50}% ${comic.theme_background_position_y || 50}%`;
                 const savedSize = comic.theme_background_image_size || "cover";
-                imageLayer.style.backgroundSize = savedSize === "auto" ? `${comic.theme_background_zoom || 100}%` : savedSize;
+                imageLayer.style.backgroundSize = getPlacementBackgroundSize(comic.theme_background_image_placement);
+                imageLayer.style.transform = getPlacementTransformValue(comic.theme_background_image_placement, true);
             }
 
             overlayLayer.style.background = `rgba(0,0,0,${comic.theme_background_overlay_strength ?? .35})`;
@@ -1397,6 +1470,8 @@
             root.style.setProperty("--comic-index-background", indexBackground);
             root.style.setProperty("--comic-index-text", comic.theme_index_text_color || "#f5f5f5");
             root.style.setProperty("--comic-index-image", comic.theme_index_style === "image" && comic.theme_index_image_url ? `url("${comic.theme_index_image_url}")` : "none");
+            root.style.setProperty("--comic-index-image-size", getPlacementBackgroundSize(comic.theme_index_image_placement));
+            root.style.setProperty("--comic-index-image-transform", getPlacementTransformValue(comic.theme_index_image_placement));
             root.style.setProperty("--comic-index-opacity", comic.theme_index_opacity ?? .85);
             root.style.setProperty("--comic-index-overlay", comic.theme_index_overlay ?? .35);
             root.style.setProperty("--comic-index-button-text", comic.theme_index_button_text_color || comic.theme_index_text_color || "#f5f5f5");
@@ -1409,10 +1484,10 @@
             readerImage.style.setProperty("--reader-bg-image", style === "image" && comic.theme_background_image_url ? `url("${comic.theme_background_image_url}")` : "none");
             readerImage.style.setProperty("--reader-bg-opacity", comic.theme_background_image_opacity ?? .22);
             readerImage.style.setProperty("--reader-bg-blur", `${comic.theme_background_image_blur || 0}px`);
-            readerImage.style.setProperty("--reader-bg-position", `${comic.theme_background_position_x || 50}% ${comic.theme_background_position_y || 50}%`);
+            readerImage.style.setProperty("--reader-bg-position", "center");
             readerImage.style.setProperty("--reader-bg-repeat", comic.theme_background_image_repeat || "no-repeat");
-            const readerSize = comic.theme_background_image_size || "cover";
-            readerImage.style.setProperty("--reader-bg-size", readerSize === "auto" ? `${comic.theme_background_zoom || 100}%` : readerSize);
+            readerImage.style.setProperty("--reader-bg-size", getPlacementBackgroundSize(comic.theme_background_image_placement));
+            readerImage.style.setProperty("--comic-background-image-transform", getPlacementTransformValue(comic.theme_background_image_placement, true));
             readerOverlay.style.setProperty("--reader-bg-overlay", .7);
         }
 
@@ -1527,7 +1602,7 @@ ${pages.length ? `
 <div class="chapter-gallery-grid">
 ${pages.map((page, pageIndex) => `
 <div class="page-thumb" onclick="openReader(${chapterIndex},${pageIndex})">
-<img src="${escapeHtml(page.image_url || "")}" alt="Page ${pageIndex + 1}">
+<img src="${escapeHtml(page.image_url || "")}" alt="Page ${pageIndex + 1}" style="${getPlacementTransformStyle(page.image_placement)}">
 <div class="page-thumb-footer">
 <span>Page ${pageIndex + 1}</span>
 ${hasCredit(page) ? `<span class="credit-dot">?</span>` : ""}
@@ -1587,10 +1662,11 @@ ${hasCredit(page) ? `<span class="credit-dot">?</span>` : ""}
                 content.innerHTML = `
 <div class="reader-webtoon-stack">
 ${pages.map((page, index) => `
-<img 
-src="${escapeHtml(page.image_url || "")}" 
-alt="Page ${index + 1}" 
-data-page-index="${index}">
+<img
+src="${escapeHtml(page.image_url || "")}"
+alt="Page ${index + 1}"
+data-page-index="${index}"
+style="${getPlacementTransformStyle(page.image_placement)}">
 `).join("")}
 </div>
 `;
@@ -1605,7 +1681,7 @@ data-page-index="${index}">
             }
 
             const page = pages[readerPageIndex] || pages[0];
-            content.innerHTML = `<img class="reader-page" src="${escapeHtml(page.image_url || "")}" alt="Page ${readerPageIndex + 1}">`;
+            content.innerHTML = `<img class="reader-page placed-image" src="${escapeHtml(page.image_url || "")}" alt="Page ${readerPageIndex + 1}" style="${getPlacementTransformStyle(page.image_placement)}">`;
             document.getElementById("reader-bottombar").textContent = `Chapter ${readerChapterIndex + 1} · Page ${readerPageIndex + 1} / ${pages.length}`;
             updateReaderCredit(page);
         }
