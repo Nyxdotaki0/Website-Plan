@@ -283,7 +283,19 @@
                 max-height: 470px;
                 object-fit: contain;
                 display: block;
+                transform-origin: center center;
             }
+
+            .cover-wrap.placed-cover {
+                height: 470px;
+            }
+
+                .cover-wrap.placed-cover img {
+                    width: 100%;
+                    height: 100%;
+                    max-height: none;
+                    object-fit: cover;
+                }
 
             .cover-wrap.has-credit {
                 padding-bottom: 54px;
@@ -459,8 +471,10 @@
                 position: absolute;
                 inset: 0;
                 background-image: var(--literature-index-image);
-                background-size: cover;
+                background-size: var(--literature-index-image-size, cover);
                 background-position: center;
+                transform-origin: center center;
+                transform: var(--literature-index-image-transform, none);
                 opacity: var(--literature-index-opacity,.85);
                 z-index: 0;
             }
@@ -571,8 +585,10 @@
                 position: absolute;
                 inset: 0;
                 background-image: var(--chapter-card-image);
-                background-size: cover;
+                background-size: var(--chapter-card-image-size, cover);
                 background-position: center;
+                transform-origin: center center;
+                transform: var(--chapter-card-image-transform, none);
                 opacity: var(--chapter-card-image-opacity,.85);
                 z-index: 0;
             }
@@ -912,77 +928,6 @@
             display: none;
         }
 
-
-
-        .placed-image-stage {
-            position: absolute;
-            inset: 0;
-            overflow: hidden;
-            border-radius: inherit;
-            z-index: 0;
-            pointer-events: none;
-        }
-
-            .placed-image-stage img {
-                width: 100%;
-                height: 100%;
-                display: block;
-                object-fit: cover;
-                transform-origin: center center;
-                will-change: transform;
-            }
-
-        .cover-wrap .placed-image-stage {
-            position: relative;
-            height: 470px;
-            min-height: 320px;
-            border-radius: inherit;
-        }
-
-        .chapter-header-image-wrap .placed-image-stage {
-            position: relative;
-            height: 340px;
-            border-radius: 18px;
-            border: 1px solid rgba(255,255,255,.12);
-            box-shadow: 0 18px 44px rgba(0,0,0,.30);
-        }
-
-        .chapter-header-image-wrap.full .placed-image-stage,
-        .chapter-header-image-wrap.top .placed-image-stage,
-        .chapter-header-image-wrap.bottom .placed-image-stage {
-            height: 460px;
-        }
-
-        .chapter-index .placed-image-stage,
-        .literature-chapter .placed-image-stage,
-        .literature-background-layer .placed-image-stage {
-            position: absolute;
-        }
-
-        .literature-background-layer .placed-image-stage {
-            position: fixed;
-            inset: 0;
-            border-radius: 0;
-            z-index: 1;
-        }
-
-        .literature-background-base {
-            z-index: 0;
-        }
-
-        .literature-background-image {
-            z-index: 1;
-        }
-
-        .literature-background-overlay {
-            z-index: 2;
-        }
-
-        .chapter-index .placed-image-stage,
-        .literature-chapter .placed-image-stage {
-            z-index: 0;
-        }
-
         @media (max-width: 1050px) {
             main {
                 grid-template-columns: 1fr;
@@ -1211,6 +1156,55 @@
         let blockedContentWarnings = [];
         let ageRole = "unknown";
 
+
+        function getDefaultImagePlacement() {
+            return {
+                x: 0,
+                y: 0,
+                scale: 1,
+                rotation: 0,
+                fit: "cover"
+            };
+        }
+
+        function normalizeImagePlacement(value) {
+            let parsed = value;
+
+            if (typeof parsed === "string") {
+                try {
+                    parsed = JSON.parse(parsed);
+                } catch {
+                    parsed = null;
+                }
+            }
+
+            return {
+                ...getDefaultImagePlacement(),
+                ...(parsed && typeof parsed === "object" ? parsed : {})
+            };
+        }
+
+        function getImagePlacementTransform(placement, includeDefaultScale = false) {
+            const safe = normalizeImagePlacement(placement);
+            const baseScale = includeDefaultScale ? 1.03 : 1;
+            const finalScale = (Number(safe.scale) || 1) * baseScale;
+
+            return `translate(${Number(safe.x) || 0}px, ${Number(safe.y) || 0}px) rotate(${Number(safe.rotation) || 0}deg) scale(${finalScale})`;
+        }
+
+        function getImagePlacementFit(placement) {
+            return normalizeImagePlacement(placement).fit || "cover";
+        }
+
+        function getImagePlacementStyle(placement) {
+            const safe = normalizeImagePlacement(placement);
+
+            return `
+                    object-fit:${safe.fit || "cover"};
+                    transform:${getImagePlacementTransform(safe)};
+                `;
+        }
+
         setupReportSystem();
         await loadViewerContentPreferences();
 
@@ -1388,51 +1382,6 @@
 
         }
 
-
-        function getDefaultImagePlacement() {
-            return {
-                x: 0,
-                y: 0,
-                scale: 1,
-                rotation: 0,
-                fit: "cover"
-            };
-        }
-
-        function normalizeImagePlacement(value) {
-            let parsed = value;
-
-            if (typeof parsed === "string") {
-                try {
-                    parsed = JSON.parse(parsed);
-                } catch {
-                    parsed = null;
-                }
-            }
-
-            return {
-                ...getDefaultImagePlacement(),
-                ...(parsed && typeof parsed === "object" ? parsed : {})
-            };
-        }
-
-        function buildPlacedImageStage(url, placement, className = "") {
-            if (!url) {
-                return "";
-            }
-
-            const safe = normalizeImagePlacement(placement);
-
-            return `
-                    <div class="placed-image-stage ${className}">
-                        <img src="${escapeHtml(url)}" alt="" style="
-                            object-fit:${escapeHtml(safe.fit || "cover")};
-                            transform:translate(${Number(safe.x) || 0}px, ${Number(safe.y) || 0}px) rotate(${Number(safe.rotation) || 0}deg) scale(${Number(safe.scale) || 1});
-                        ">
-                    </div>
-                `;
-        }
-
         function renderBookHero(literature, profile) {
             document.title = `${literature.title || "Literature"} - Nullverse`;
             document.getElementById("book-title").textContent = literature.title || "Untitled Literature";
@@ -1458,11 +1407,14 @@
                 context: "Cover Image"
             });
 
+            const coverPlacement = normalizeImagePlacement(literature.cover_image_placement);
+
             coverWrap.classList.toggle("has-credit", !!coverCredit);
+            coverWrap.classList.toggle("placed-cover", !!literature.cover_image_placement);
 
             if (literature.cover_image_url) {
                 coverWrap.innerHTML = `
-                            ${buildPlacedImageStage(literature.cover_image_url, literature.cover_image_placement, "cover-placed-image")}
+                            <img src="${escapeHtml(literature.cover_image_url)}" alt="" style="${getImagePlacementStyle(coverPlacement)}">
                             ${coverCredit}
                         `;
             } else {
@@ -1478,16 +1430,6 @@
                 ownerUsername: profile?.username,
                 context: "Reader Background"
             });
-
-            const backgroundLayer = document.getElementById("literature-background-layer");
-            backgroundLayer.querySelectorAll(".placed-image-stage").forEach(stage => stage.remove());
-
-            if (literature.theme_background_style === "image" && literature.theme_background_image_url) {
-                backgroundLayer.insertAdjacentHTML(
-                    "afterbegin",
-                    buildPlacedImageStage(literature.theme_background_image_url, literature.theme_background_image_placement, "literature-background-placed-image")
-                );
-            }
 
             if (backgroundCredit && literature.theme_background_style === "image" && literature.theme_background_image_url) {
                 document.getElementById("literature-background-layer").insertAdjacentHTML("beforeend", backgroundCredit);
@@ -1515,16 +1457,15 @@
 
             if (style === "image" && literature.theme_background_image_url) {
                 baseLayer.style.background = `linear-gradient(135deg, ${literature.theme_background_color_1 || "#050505"}, ${literature.theme_background_color_2 || "#000000"})`;
-                imageLayer.style.backgroundImage = "none";
+                imageLayer.style.backgroundImage = `url("${literature.theme_background_image_url}")`;
                 imageLayer.style.opacity = literature.theme_background_image_opacity ?? .35;
                 imageLayer.style.filter = `blur(${literature.theme_background_image_blur || 0}px)`;
-                imageLayer.style.backgroundRepeat = literature.theme_background_image_repeat || "no-repeat";
-                imageLayer.style.backgroundPosition = `${literature.theme_background_position_x || 50}% ${literature.theme_background_position_y || 50}%`;
+                const backgroundPlacement = normalizeImagePlacement(literature.theme_background_image_placement);
 
-                const savedSize = literature.theme_background_image_size || "cover";
-                imageLayer.style.backgroundSize = savedSize === "auto"
-                    ? `${literature.theme_background_zoom || 100}%`
-                    : savedSize;
+                imageLayer.style.backgroundRepeat = literature.theme_background_image_repeat || "no-repeat";
+                imageLayer.style.backgroundPosition = "center";
+                imageLayer.style.backgroundSize = getImagePlacementFit(backgroundPlacement);
+                imageLayer.style.transform = getImagePlacementTransform(backgroundPlacement, true);
             }
 
             overlayLayer.style.background = `rgba(0,0,0,${literature.theme_background_overlay_strength ?? .35})`;
@@ -1541,7 +1482,16 @@
 
             root.style.setProperty("--literature-index-background", indexBackground);
             root.style.setProperty("--literature-index-text", literature.theme_index_text_color || "#f5f5f5");
-            root.style.setProperty("--literature-index-image", "none");
+            root.style.setProperty(
+                "--literature-index-image",
+                literature.theme_index_style === "image" && literature.theme_index_image_url
+                    ? `url("${literature.theme_index_image_url}")`
+                    : "none"
+            );
+            const indexPlacement = normalizeImagePlacement(literature.theme_index_image_placement);
+
+            root.style.setProperty("--literature-index-image-size", getImagePlacementFit(indexPlacement));
+            root.style.setProperty("--literature-index-image-transform", getImagePlacementTransform(indexPlacement));
             root.style.setProperty("--literature-index-opacity", literature.theme_index_opacity ?? .85);
             root.style.setProperty("--literature-index-overlay", literature.theme_index_overlay ?? .35);
             root.style.setProperty("--literature-index-button-text", literature.theme_index_button_text_color || literature.theme_index_text_color || "#f5f5f5");
@@ -1593,15 +1543,6 @@
 
             const oldCredit = nav.querySelector(".credit-pill");
             if (oldCredit) oldCredit.remove();
-
-            nav.querySelectorAll(".placed-image-stage").forEach(stage => stage.remove());
-
-            if (currentLiterature.theme_index_style === "image" && currentLiterature.theme_index_image_url) {
-                nav.insertAdjacentHTML(
-                    "afterbegin",
-                    buildPlacedImageStage(currentLiterature.theme_index_image_url, currentLiterature.theme_index_image_placement, "literature-index-placed-image")
-                );
-            }
 
             const indexCredit = buildCreditPill({
                 type: currentLiterature.index_credit_type,
@@ -1870,7 +1811,6 @@
                         <article id="chapter-${chapterNumber}"
                                  class="literature-chapter"
                                  style="${buildChapterCardStyle(chapter)} ${buildChapterWritingStyle(chapter)}">
-                            ${chapter.theme_card_style === "image" && chapter.theme_card_image_url ? buildPlacedImageStage(chapter.theme_card_image_url, chapter.theme_card_image_placement, "chapter-card-placed-image") : ""}
                             <div class="chapter-title-row">
                                 <div class="chapter-eyebrow">Chapter ${chapterNumber} · ${getChapterReadTime(chapter)} min read</div>
                                 <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
@@ -1936,7 +1876,7 @@
 
             return `
                         <div class="${classes}">
-                            ${buildPlacedImageStage(chapter.image_url, chapter.image_placement, "chapter-header-placed-image")}
+                            <img src="${escapeHtml(chapter.image_url)}" alt="" style="${getImagePlacementStyle(chapter.image_placement)}">
                             ${credit}
                         </div>
                     `;
@@ -1953,12 +1893,18 @@
                 background = `linear-gradient(135deg, ${chapter.theme_card_color_1 || "#141416"}, ${chapter.theme_card_color_2 || "#0b0b0d"})`;
             }
 
-            const image = "none";
+            const image = chapter.theme_card_style === "image" && chapter.theme_card_image_url
+                ? `url("${chapter.theme_card_image_url}")`
+                : "none";
+
+            const placement = normalizeImagePlacement(chapter.theme_card_image_placement);
 
             return `
                         --chapter-card-background:${background};
                         --chapter-card-text:${chapter.theme_card_text_color || "#f5f5f5"};
                         --chapter-card-image:${image};
+                        --chapter-card-image-size:${getImagePlacementFit(placement)};
+                        --chapter-card-image-transform:${getImagePlacementTransform(placement)};
                         --chapter-card-image-opacity:${chapter.theme_card_opacity ?? .85};
                         --chapter-card-overlay:${chapter.theme_card_overlay ?? .35};
                     `;
