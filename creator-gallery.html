@@ -623,6 +623,36 @@
                 margin-top: 0;
             }
 
+        .image-placement-topbar {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        .image-placement-sidebar-actions {
+            position: sticky;
+            bottom: -18px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 18px -18px -18px;
+            padding: 14px 18px 18px;
+            background: linear-gradient(180deg, rgba(12,12,14,.72), rgba(12,12,14,.98));
+            border-top: 1px solid rgba(255,255,255,.10);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+
+            .image-placement-sidebar-actions .button {
+                margin-top: 0;
+                text-align: center;
+                width: 100%;
+            }
+
+            .image-placement-sidebar-actions .primary-button {
+                grid-column: 1 / -1;
+            }
+
         @media (max-width: 800px) {
             header {
                 padding: 12px 14px;
@@ -950,7 +980,7 @@
                 <div class="image-placement-actions">
                     <button type="button" class="button" onclick="resetImagePlacementStudio()">Reset</button>
                     <button type="button" class="button" onclick="closeImagePlacementStudio()">Cancel</button>
-                    <button type="button" class="button primary-button" onclick="applyImagePlacementStudio()">Apply Placement</button>
+                    <button type="button" class="button primary-button" onclick="applyImagePlacementStudio()">Continue to Details</button>
                 </div>
             </div>
 
@@ -1020,6 +1050,12 @@
                         <button type="button" class="button" onclick="nudgeImagePlacement(10, 0)">→</button>
                         <button type="button" class="button" onclick="nudgeImagePlacement(0, -10)">↑</button>
                         <button type="button" class="button" onclick="nudgeImagePlacement(0, 10)">↓</button>
+                    </div>
+
+                    <div class="image-placement-sidebar-actions">
+                        <button type="button" class="button" onclick="resetImagePlacementStudio()">Reset</button>
+                        <button type="button" class="button" onclick="closeImagePlacementStudio()">Cancel</button>
+                        <button type="button" class="button primary-button" onclick="applyImagePlacementStudio()">Continue to Details</button>
                     </div>
                 </aside>
             </div>
@@ -1126,11 +1162,11 @@
             let galleryQuery = supabase
                 .from("creator_proof_gallery")
                 .select(`
-            *,
-            creator_gallery_likes (
-                user_id
-            )
-        `)
+                *,
+                creator_gallery_likes (
+                    user_id
+                )
+            `)
                 .eq("owner_id", profile.id)
                 .order("created_at", { ascending: false });
 
@@ -1161,16 +1197,16 @@
             )];
 
             container.innerHTML = `
-                    <button class="filter-chip active" data-type="all">
-                        All
-                    </button>
-
-                    ${types.map(type => `
-                        <button class="filter-chip" data-type="${escapeHtml(type)}">
-                            ${escapeHtml(formatGalleryType(type))}
+                        <button class="filter-chip active" data-type="all">
+                            All
                         </button>
-                    `).join("")}
-                `;
+
+                        ${types.map(type => `
+                            <button class="filter-chip" data-type="${escapeHtml(type)}">
+                                ${escapeHtml(formatGalleryType(type))}
+                            </button>
+                        `).join("")}
+                    `;
 
             container.querySelectorAll(".filter-chip").forEach(button => {
                 button.addEventListener("click", () => {
@@ -1207,36 +1243,36 @@
                 const likedByMe = likes.some(like => like.user_id === currentUser.id);
 
                 return `
-                <article class="gallery-card" onclick="openGalleryLightbox('${item.id}')">
-                    <div class="gallery-image-frame">
-                        <img
-                            src="${escapeHtml(item.image_url)}"
-                            alt="${escapeHtml(item.title || "Creator gallery item")}"
-                            style="${getImagePlacementStyle(item.image_placement)}">
-                    </div>
+                    <article class="gallery-card" onclick="openGalleryLightbox('${item.id}')">
+                        <div class="gallery-image-frame">
+                            <img
+                                src="${escapeHtml(item.image_url)}"
+                                alt="${escapeHtml(item.title || "Creator gallery item")}"
+                                style="${getImagePlacementStyle(item.image_placement)}">
+                        </div>
 
-                    <div class="gallery-overlay">
-                        <span class="gallery-pill">
-                            ${escapeHtml(item.title || "Untitled")}
-                        </span>
+                        <div class="gallery-overlay">
+                            <span class="gallery-pill">
+                                ${escapeHtml(item.title || "Untitled")}
+                            </span>
 
-                        <span class="gallery-pill">
-                            ${escapeHtml(formatGalleryType(item.proof_type))}
-                        </span>
-                    </div>
+                            <span class="gallery-pill">
+                                ${escapeHtml(formatGalleryType(item.proof_type))}
+                            </span>
+                        </div>
 
-                    ${currentUser.id === item.owner_id && item.visibility === "private" ? `
-                        <span class="gallery-private-pill">Private</span>
-                    ` : ""}
+                        ${currentUser.id === item.owner_id && item.visibility === "private" ? `
+                            <span class="gallery-private-pill">Private</span>
+                        ` : ""}
 
-                    <button
-                        class="button gallery-like-button"
-                        data-id="${item.id}"
-                        onclick="event.stopPropagation(); toggleGalleryLike('${item.id}')">
-                        ${likedByMe ? "♥" : "♡"} ${likes.length}
-                    </button>
-                </article>
-            `;
+                        <button
+                            class="button gallery-like-button"
+                            data-id="${item.id}"
+                            onclick="event.stopPropagation(); toggleGalleryLike('${item.id}')">
+                            ${likedByMe ? "♥" : "♡"} ${likes.length}
+                        </button>
+                    </article>
+                `;
             }).join("");
         }
 
@@ -1376,9 +1412,9 @@
             const safe = normalizeImagePlacement(placement);
 
             return `
-                    object-fit:${safe.fit || "cover"};
-                    transform:translate(${Number(safe.x) || 0}px, ${Number(safe.y) || 0}px) rotate(${Number(safe.rotation) || 0}deg) scale(${Number(safe.scale) || 1});
-                `;
+                        object-fit:${safe.fit || "cover"};
+                        transform:translate(${Number(safe.x) || 0}px, ${Number(safe.y) || 0}px) rotate(${Number(safe.rotation) || 0}deg) scale(${Number(safe.scale) || 1});
+                    `;
         }
 
         function isCurrentGalleryOwner() {
@@ -1585,6 +1621,10 @@
 
             overlay.classList.add("open");
             overlay.setAttribute("aria-hidden", "false");
+            overlay.scrollTop = 0;
+
+            document.querySelector(".image-placement-workspace")?.scrollTo({ top: 0, left: 0 });
+            document.querySelector(".image-placement-sidebar")?.scrollTo({ top: 0, left: 0 });
 
             document.getElementById("image-placement-title").textContent = config.title;
             document.getElementById("image-placement-subtitle").textContent = config.subtitle;
@@ -1600,9 +1640,9 @@
             document.getElementById("image-placement-frame-width").value = config.width;
             document.getElementById("image-placement-frame-height").value = config.height;
             document.getElementById("image-placement-meta").innerHTML = `
-                    <strong>Visible frame:</strong> ${config.width}px × ${config.height}px<br>
-                    <strong>Tip:</strong> Drag the image to reposition it, pull the corner handle to resize, or use the top handle/slider to rotate.
-                `;
+                        <strong>Visible frame:</strong> ${config.width}px × ${config.height}px<br>
+                        <strong>Tip:</strong> Drag the image to reposition it, pull the corner handle to resize, or use the top handle/slider to rotate.
+                    `;
 
             syncImagePlacementControls();
             updateImagePlacementPreview();
