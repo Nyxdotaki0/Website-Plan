@@ -1134,6 +1134,100 @@
             margin-left: 0 !important;
         }
 
+
+
+        /* ============================================================
+           PROFILE PUBLIC SYNC PATCH
+           Matches the newer Profile Studio output and gives the nav
+           its own reliable unread notification badge fallback.
+        ============================================================ */
+
+        .notification-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .notification-badge {
+            min-width: 18px;
+            height: 18px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background: #fff;
+            color: #000;
+            font-size: .72rem;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            font-weight: 800;
+        }
+
+        .notification-link.has-unread .notification-badge {
+            display: inline-flex;
+        }
+
+        .custom-profile-object {
+            border-style: solid;
+            border-width: 1px;
+        }
+
+            .custom-profile-object[data-type="text"],
+            .custom-profile-object[data-type="display_name"],
+            .custom-profile-object[data-type="username_text"] {
+                border-color: transparent !important;
+            }
+
+        .display-name-object,
+        .username-object,
+        .text-object {
+            font-family: var(--custom-object-font-family, Arial, sans-serif) !important;
+            font-size: inherit !important;
+            line-height: var(--custom-object-line-height, 1.16) !important;
+            white-space: pre-wrap !important;
+            word-break: normal !important;
+            overflow-wrap: normal !important;
+            tab-size: 4 !important;
+        }
+
+        .shape-object {
+            width: 100%;
+            height: 100%;
+            background: inherit;
+            opacity: .9;
+        }
+
+            .shape-object.rectangle {
+                border-radius: 0;
+            }
+
+            .shape-object.circle {
+                border-radius: 999px;
+            }
+
+            .shape-object.star {
+                clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 56%, 79% 91%, 50% 70%, 21% 91%, 32% 56%, 2% 35%, 39% 35%);
+            }
+
+            .shape-object.diamond {
+                clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+            }
+
+        .follow-button.following,
+        .custom-action-button.following,
+        .single-action-object.following {
+            border-color: rgba(120, 255, 150, .34) !important;
+            background: rgba(120, 255, 150, .10) !important;
+            color: #dfffe6 !important;
+        }
+
+        .custom-action-button:disabled,
+        .single-action-object:disabled {
+            opacity: .48;
+            cursor: not-allowed;
+        }
+
+
         @media (max-width: 860px) {
             header {
                 flex-direction: column;
@@ -1397,7 +1491,7 @@
         setupMessageBadge();
 
         const currentUser = await requireBetaAccess();
-        setupNotificationBadge();
+        await setupProfileNavBadges();
 
         const {
             profile: currentProfile,
@@ -1415,6 +1509,10 @@
             followers: 0,
             following: 0
         };
+
+        let isFollowingProfile = false;
+        let canMessageProfile = false;
+        let followActionBusy = false;
 
         let query = supabase.from("profiles").select("*");
 
@@ -1446,12 +1544,77 @@
             }
         }
 
+        async function setupProfileNavBadges() {
+            const notificationLink = document.querySelector('a[href="notifications.html"]');
+
+            try {
+                await setupNotificationBadge();
+            } catch (error) {
+                console.warn("Notification badge module fallback activated:", error);
+            }
+
+            if (!notificationLink || !currentUser) {
+                return;
+            }
+
+            notificationLink.classList.add("notification-link");
+
+            let badge = notificationLink.querySelector(".notification-badge");
+
+            if (!badge) {
+                badge = document.createElement("span");
+                badge.className = "notification-badge";
+                notificationLink.appendChild(badge);
+            }
+
+            async function updateNotificationBadge() {
+                const { count, error } = await supabase
+                    .from("notifications")
+                    .select("id", { count: "exact", head: true })
+                    .eq("recipient_id", currentUser.id)
+                    .eq("is_read", false);
+
+                if (error) {
+                    console.error("Notification badge error:", error);
+                    notificationLink.classList.remove("has-unread");
+                    badge.style.display = "none";
+                    badge.textContent = "";
+                    return;
+                }
+
+                const unreadCount = count || 0;
+                notificationLink.classList.toggle("has-unread", unreadCount > 0);
+                badge.style.display = unreadCount > 0 ? "inline-flex" : "none";
+                badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+            }
+
+            await updateNotificationBadge();
+
+            const channel = supabase
+                .channel(`profile-notification-badge-${currentUser.id}`)
+                .on("postgres_changes", {
+                    event: "*",
+                    schema: "public",
+                    table: "notifications",
+                    filter: `recipient_id=eq.${currentUser.id}`
+                }, updateNotificationBadge)
+                .subscribe();
+
+            window.addEventListener("beforeunload", () => {
+                supabase.removeChannel(channel);
+            });
+        }
+
         async function loadProfileData(profileId) {
             await Promise.all([
                 loadProfileWorlds(profileId),
                 loadFollowData(profileId),
                 loadCreatorGalleryPreview(profileId)
             ]);
+
+            canMessageProfile = currentUser && currentUser.id !== profileId
+                ? await canMessageUser(profileId)
+                : false;
         }
 
         async function areUsersBlocked(userA, userB) {
@@ -1772,7 +1935,14 @@
         function buildWorldCreditPill(world) {
             if (!world) return "";
 
-            const type = getCreditValue(world, ["cover_credit_type", "cover_image_credit_type", "image_credit_type", "credit_type"]);
+            const type = getCreditValue(world, [
+                "overview_card_credit_type",
+                "cover_credit_type",
+                "cover_image_credit_type",
+                "image_credit_type",
+                "credit_type"
+            ]);
+
             if (!type || type === "no_credit_needed") return "";
 
             let source = "";
@@ -1782,12 +1952,32 @@
                 source = `@${profile?.username || "creator"}`;
                 href = `profile.html?user=${encodeURIComponent(profile?.username || "")}`;
             } else if (type === "nullverse_creator") {
-                const username = getCreditValue(world, ["cover_credit_nullverse_username", "cover_image_credit_nullverse_username", "image_credit_nullverse_username", "credit_nullverse_username"]);
+                const username = getCreditValue(world, [
+                    "overview_card_credit_nullverse_username",
+                    "cover_credit_nullverse_username",
+                    "cover_image_credit_nullverse_username",
+                    "image_credit_nullverse_username",
+                    "credit_nullverse_username"
+                ]);
+
                 source = username ? `@${username}` : "Nullverse Creator";
                 href = username ? `profile.html?user=${encodeURIComponent(username)}` : "";
             } else {
-                source = getCreditValue(world, ["cover_credit_name", "cover_image_credit_name", "image_credit_name", "credit_name"]) || formatCreditType(type);
-                href = getCreditValue(world, ["cover_credit_url", "cover_image_credit_url", "image_credit_url", "credit_url"]);
+                source = getCreditValue(world, [
+                    "overview_card_credit_name",
+                    "cover_credit_name",
+                    "cover_image_credit_name",
+                    "image_credit_name",
+                    "credit_name"
+                ]) || formatCreditType(type);
+
+                href = getCreditValue(world, [
+                    "overview_card_credit_url",
+                    "cover_credit_url",
+                    "cover_image_credit_url",
+                    "image_credit_url",
+                    "credit_url"
+                ]);
             }
 
             const label = `Credit: ${source}`;
@@ -1829,30 +2019,85 @@
             return `<span class="custom-gallery-description-pill">${escapeHtml(description)}</span>`;
         }
 
+        const publicStudioFontFamilies = {
+            "Arial": "Arial",
+            "Georgia": "Georgia",
+            "Verdana": "Verdana",
+            "Trebuchet MS": "Trebuchet MS",
+            "Courier New": "Courier New"
+        };
+
+        function normalizePublicStudioFontFamily(value) {
+            const firstFamily = String(value || "")
+                .split(",")[0]
+                .trim()
+                .replace(/^['"]|['"]$/g, "");
+
+            if (!firstFamily) {
+                return "Arial";
+            }
+
+            if (publicStudioFontFamilies[firstFamily]) {
+                return publicStudioFontFamilies[firstFamily];
+            }
+
+            const lowered = firstFamily.toLowerCase();
+            const found = Object.keys(publicStudioFontFamilies).find(font => font.toLowerCase() === lowered);
+
+            return found || "Arial";
+        }
+
+        function getPublicStudioCssFontFamily(value) {
+            const family = normalizePublicStudioFontFamily(value);
+            const quoted = family.includes(" ") ? `"${family}"` : family;
+
+            return `${quoted}, Arial, sans-serif`;
+        }
+
+        function getPublicObjectFontFamily(object, layout = null) {
+            return normalizePublicStudioFontFamily(
+                object?.styles?.fontFamily ||
+                object?.textFontFamily ||
+                object?.fontFamily ||
+                layout?.canvas?.fontFamily ||
+                "Arial"
+            );
+        }
+
         function renderCustomObject(profile, object, layout = null) {
             const el = document.createElement("div");
             const styles = object.styles || {};
-            const navOffset = getPublishedProfileNavOffset(layout || getResponsiveProfileLayout(profile.profile_custom_layout));
+            const activeLayout = layout || getResponsiveProfileLayout(profile.profile_custom_layout);
+            const navOffset = getPublishedProfileNavOffset(activeLayout);
             const publicY = Math.max(0, Number(object.y || 0) - navOffset);
+            const fontFamily = getPublicObjectFontFamily(object, activeLayout);
+            const lineHeight = Number(styles.lineHeight ?? 1.16);
+            const isTextObject = ["text", "display_name", "username_text"].includes(object.type);
+            const isRectangle = object.type === "shape" || object.shapeType === "rectangle";
+            const borderColor = isTextObject
+                ? "transparent"
+                : normalizePaint(styles.borderColor, "rgba(255,255,255,.10)");
 
             el.className = "custom-profile-object" + (object.type === "profile_badge" ? " profile-badge-object" : "");
             el.dataset.type = object.type || "object";
+            el.dataset.shapeType = object.shapeType || "";
             el.style.left = (object.x || 0) + "px";
             el.style.top = publicY + "px";
             el.style.width = (object.w || 200) + "px";
             el.style.height = (object.h || 120) + "px";
             el.style.transform = `rotate(${object.rotation || 0}deg)`;
             el.style.background = normalizePaint(styles.background, "transparent");
-            el.style.color = styles.textColor || "#ffffff";
-            el.style.borderRadius = (styles.radius ?? 18) + "px";
-            el.style.borderColor = styles.borderColor || "rgba(255,255,255,.10)";
+            el.style.color = normalizePaint(styles.textColor, "#ffffff");
+            el.style.borderRadius = (isRectangle ? 0 : (styles.radius ?? 18)) + "px";
+            el.style.border = `1px solid ${borderColor}`;
             el.style.opacity = styles.opacity ?? 1;
             el.style.fontSize = (styles.fontSize || 16) + "px";
-            el.style.fontFamily = styles.fontFamily || "Arial";
+            el.style.fontFamily = getPublicStudioCssFontFamily(fontFamily);
             el.style.textAlign = styles.textAlign || "left";
-            el.style.setProperty("--studio-object-line-height", String(styles.lineHeight ?? 1.16));
+            el.style.setProperty("--custom-object-font-family", getPublicStudioCssFontFamily(fontFamily));
+            el.style.setProperty("--custom-object-line-height", String(lineHeight));
 
-            el.innerHTML = `<div class="custom-object-inner" style="line-height:var(--studio-object-line-height, 1.16);">${renderCustomObjectContent(profile, object)}</div>`;
+            el.innerHTML = `<div class="custom-object-inner" style="font-family:${escapeHtml(getPublicStudioCssFontFamily(fontFamily))};line-height:${lineHeight};text-align:${escapeHtml(styles.textAlign || "left")};">${renderCustomObjectContent(profile, object)}</div>`;
 
             return el;
         }
@@ -1867,23 +2112,23 @@
 
             if (object.type === "profile_identity") {
                 return `
-                                                                    <div class="identity-object">
-                                                                        <img src="${escapeHtml(avatar)}" alt="">
-                                                                        <div>
-                                                                            <h2>${displayName}</h2>
-                                                                            <p>@${username}</p>
-                                                                            <p>${status}</p>
+                                                                        <div class="identity-object">
+                                                                            <img src="${escapeHtml(avatar)}" alt="">
+                                                                            <div>
+                                                                                <h2>${displayName}</h2>
+                                                                                <p>@${username}</p>
+                                                                                <p>${status}</p>
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
-                                                                `;
+                                                                    `;
             }
 
             if (object.type === "profile_avatar") {
                 return `
-                                                                    <div class="avatar-circle-object">
-                                                                        <img src="${escapeHtml(avatar)}" alt="">
-                                                                    </div>
-                                                                `;
+                                                                        <div class="avatar-circle-object">
+                                                                            <img src="${escapeHtml(avatar)}" alt="">
+                                                                        </div>
+                                                                    `;
             }
 
             if (object.type === "display_name") {
@@ -1904,21 +2149,21 @@
 
             if (["followers_box", "following_box", "works_count_box"].includes(object.type)) {
                 return `
-                                                                    <div class="system-stat-object">
-                                                                        <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
-                                                                        <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
-                                                                    </div>
-                                                                `;
+                                                                        <div class="system-stat-object">
+                                                                            <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
+                                                                            <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
+                                                                        </div>
+                                                                    `;
             }
 
             if (object.type === "stats") {
                 return `
-                                                                    <div class="stats-object">
-                                                                        <div class="stat-mini"><strong>${followCounts.followers || 0}</strong><span>Followers</span></div>
-                                                                        <div class="stat-mini"><strong>${followCounts.following || 0}</strong><span>Following</span></div>
-                                                                        <div class="stat-mini"><strong>${profileWorlds.length || 0}</strong><span>Works</span></div>
-                                                                    </div>
-                                                                `;
+                                                                        <div class="stats-object">
+                                                                            <div class="stat-mini"><strong>${followCounts.followers || 0}</strong><span>Followers</span></div>
+                                                                            <div class="stat-mini"><strong>${followCounts.following || 0}</strong><span>Following</span></div>
+                                                                            <div class="stat-mini"><strong>${profileWorlds.length || 0}</strong><span>Works</span></div>
+                                                                        </div>
+                                                                    `;
             }
 
             if (object.type === "creator_gallery") {
@@ -1931,12 +2176,12 @@
                 const title = item?.title || "Gallery image";
 
                 return `
-                                                                    <a class="custom-gallery-item-card" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
-                                                                        ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
-                                                                        ${buildGalleryDescriptionPill(item)}
-                                                                        ${buildGalleryCreditPill(item)}
-                                                                    </a>
-                                                                `;
+                                                                        <a class="custom-gallery-item-card" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
+                                                                            ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
+                                                                            ${buildGalleryDescriptionPill(item)}
+                                                                            ${buildGalleryCreditPill(item)}
+                                                                        </a>
+                                                                    `;
             }
 
             if (object.type === "creator_works") {
@@ -1945,11 +2190,11 @@
 
             if (object.type === "bio") {
                 return `
-                                                                    <div class="bio-object">
-                                                                        <h3>${escapeHtml(object.title || "About")}</h3>
-                                                                        <p>${bio}</p>
-                                                                    </div>
-                                                                `;
+                                                                        <div class="bio-object">
+                                                                            <h3>${escapeHtml(object.title || "About")}</h3>
+                                                                            <p>${bio}</p>
+                                                                        </div>
+                                                                    `;
             }
 
             if (object.type === "text") {
@@ -1958,29 +2203,29 @@
 
             if (object.type === "section" || object.type === "featured") {
                 return `
-                                                                    <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
-                                                                        <h3>${escapeHtml(object.title || "Section")}</h3>
-                                                                        <p>${escapeHtml(object.text || "")}</p>
-                                                                    </div>
-                                                                `;
+                                                                        <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
+                                                                            <h3>${escapeHtml(object.title || "Section")}</h3>
+                                                                            <p>${escapeHtml(object.text || "")}</p>
+                                                                        </div>
+                                                                    `;
             }
 
             if (object.type === "image" || object.type === "banner") {
                 return `
-                                                                    <div class="image-object" style="width:100%;height:100%;background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};"></div>
-                                                                `;
+                                                                        <div class="image-object" style="width:100%;height:100%;background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};"></div>
+                                                                    `;
             }
 
             if (object.type === "image_text") {
                 return `
-                                                                    <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
-                                                                        <div class="image-object" style="background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};"></div>
-                                                                        <div class="section-object">
-                                                                            <h3>${escapeHtml(object.title || "Image + Text")}</h3>
-                                                                            <p>${escapeHtml(object.text || "")}</p>
+                                                                        <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
+                                                                            <div class="image-object" style="background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};"></div>
+                                                                            <div class="section-object">
+                                                                                <h3>${escapeHtml(object.title || "Image + Text")}</h3>
+                                                                                <p>${escapeHtml(object.text || "")}</p>
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
-                                                                `;
+                                                                    `;
             }
 
             if (["shape", "circle", "star"].includes(object.type)) {
@@ -1995,17 +2240,17 @@
                 const summary = selectedWorld?.summary || "This creator can feature one of their published worlds here.";
 
                 return `
-                                                                    <a class="custom-world-card" href="${selectedWorld ? getWorldLink(selectedWorld) : '#'}">
-                                                                        <div class="custom-world-cover">
-                                                                            ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
-                                                                            ${buildWorldCreditPill(selectedWorld)}
-                                                                        </div>
-                                                                        <div class="custom-world-body">
-                                                                            <h3>${escapeHtml(title)}</h3>
-                                                                            <p>${escapeHtml(summary)}</p>
-                                                                        </div>
-                                                                    </a>
-                                                                `;
+                                                                        <a class="custom-world-card" href="${selectedWorld ? getWorldLink(selectedWorld) : '#'}">
+                                                                            <div class="custom-world-cover">
+                                                                                ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
+                                                                                ${buildWorldCreditPill(selectedWorld)}
+                                                                            </div>
+                                                                            <div class="custom-world-body">
+                                                                                <h3>${escapeHtml(title)}</h3>
+                                                                                <p>${escapeHtml(summary)}</p>
+                                                                            </div>
+                                                                        </a>
+                                                                    `;
             }
 
             if (object.type === "profile_badge") {
@@ -2026,20 +2271,24 @@
 
             if (currentUser.id === profile.id) {
                 return `
-                                                                    <div class="actions-object" style="gap:${gap}px;">
-                                                                        <a class="custom-action-button" style="${inlineStyle}" href="account-settings.html">Edit Profile</a>
-                                                                    </div>
-                                                                `;
+                                                                        <div class="actions-object" style="gap:${gap}px;">
+                                                                            <a class="custom-action-button" style="${inlineStyle}" href="account-settings.html">Edit Profile</a>
+                                                                        </div>
+                                                                    `;
             }
 
+            const followLabel = isFollowingProfile ? "Following" : "Follow";
+            const messageDisabled = canMessageProfile ? "" : "disabled";
+            const messageTitle = canMessageProfile ? "Message this creator" : "Messaging requires both creators to follow each other.";
+
             return `
-                                                                <div class="actions-object" style="gap:${gap}px;">
-                                                                    <button class="custom-action-button" style="${inlineStyle}" data-custom-action="follow">Follow</button>
-                                                                    <button class="custom-action-button" style="${inlineStyle}" data-custom-action="message">Message</button>
-                                                                    <button class="custom-action-button" style="${inlineStyle}" data-custom-action="block">Block</button>
-                                                                    <button class="custom-action-button" style="${inlineStyle}" data-custom-action="report">Report</button>
-                                                                </div>
-                                                            `;
+                                                                    <div class="actions-object" style="gap:${gap}px;">
+                                                                        <button class="custom-action-button ${isFollowingProfile ? "following" : ""}" style="${inlineStyle}" data-custom-action="follow" aria-pressed="${isFollowingProfile ? "true" : "false"}">${followLabel}</button>
+                                                                        <button class="custom-action-button" style="${inlineStyle}" data-custom-action="message" title="${escapeHtml(messageTitle)}" ${messageDisabled}>Message</button>
+                                                                        <button class="custom-action-button" style="${inlineStyle}" data-custom-action="block">Block</button>
+                                                                        <button class="custom-action-button" style="${inlineStyle}" data-custom-action="report">Report</button>
+                                                                    </div>
+                                                                `;
         }
 
         function buildSingleCustomAction(profile, object) {
@@ -2051,7 +2300,14 @@
                 return `<div class="single-action-object" style="opacity:.55;">${escapeHtml(getSingleActionLabel(object.type))}</div>`;
             }
 
-            return `<button class="single-action-object" data-custom-action="${escapeHtml(getSingleActionName(object.type))}">${escapeHtml(getSingleActionLabel(object.type))}</button>`;
+            const actionName = getSingleActionName(object.type);
+            const label = object.type === "follow_button" && isFollowingProfile
+                ? "Following"
+                : getSingleActionLabel(object.type);
+            const disabled = object.type === "message_button" && !canMessageProfile;
+            const title = disabled ? "Messaging requires both creators to follow each other." : "";
+
+            return `<button class="single-action-object ${object.type === "follow_button" && isFollowingProfile ? "following" : ""}" data-custom-action="${escapeHtml(actionName)}" aria-pressed="${object.type === "follow_button" && isFollowingProfile ? "true" : "false"}" title="${escapeHtml(title)}" ${disabled ? "disabled" : ""}>${escapeHtml(label)}</button>`;
         }
 
         function getSingleActionLabel(type) {
@@ -2102,23 +2358,35 @@
             ].join(";");
         }
 
-        document.addEventListener("click", event => {
-            const action = event.target.closest("[data-custom-action]")?.dataset.customAction;
+        document.addEventListener("click", async event => {
+            const actionButton = event.target.closest("[data-custom-action]");
+            const action = actionButton?.dataset.customAction;
 
             if (!action || !profile) {
                 return;
             }
 
+            event.preventDefault();
+            event.stopPropagation();
+
             if (action === "follow") {
-                document.getElementById("follow-button")?.click();
+                await toggleFollowProfile(profile.id);
+                return;
             }
 
             if (action === "message") {
-                document.getElementById("message-user-btn")?.click();
+                if (!canMessageProfile) {
+                    alert("Messaging requires both creators to follow each other.");
+                    return;
+                }
+
+                await openConversation(profile.id);
+                return;
             }
 
             if (action === "block") {
                 document.getElementById("block-modal").style.display = "flex";
+                return;
             }
 
             if (action === "report") {
@@ -2142,12 +2410,12 @@
             }
 
             return items.map(item => `
-                                                                <a class="gallery-mini-card profile-gallery-tile" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
-                                                                    <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title || "Gallery item")}">
-                                                                    ${buildGalleryDescriptionPill(item)}
-                                                                    ${buildGalleryCreditPill(item)}
-                                                                </a>
-                                                            `).join("");
+                                                                    <a class="gallery-mini-card profile-gallery-tile" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
+                                                                        <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title || "Gallery item")}">
+                                                                        ${buildGalleryDescriptionPill(item)}
+                                                                        ${buildGalleryCreditPill(item)}
+                                                                    </a>
+                                                                `).join("");
         }
 
         function renderWorksMini(worlds, object = null) {
@@ -2168,17 +2436,17 @@
             return items.map(world => {
                 const cover = world.cover_image_url || world.cover_url || "";
                 return `
-                                                                <a class="work-mini-card custom-world-card" href="${getWorldLink(world)}">
-                                                                    <div class="custom-world-cover">
-                                                                        ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">` : ""}
-                                                                        ${buildWorldCreditPill(world)}
-                                                                    </div>
-                                                                    <div class="custom-world-body">
-                                                                        <h3>${escapeHtml(world.title || "Untitled")}</h3>
-                                                                        <p>${escapeHtml(world.summary || world.content_type || world.type || "World")}</p>
-                                                                    </div>
-                                                                </a>
-                                                            `;
+                                                                    <a class="work-mini-card custom-world-card" href="${getWorldLink(world)}">
+                                                                        <div class="custom-world-cover">
+                                                                            ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">` : ""}
+                                                                            ${buildWorldCreditPill(world)}
+                                                                        </div>
+                                                                        <div class="custom-world-body">
+                                                                            <h3>${escapeHtml(world.title || "Untitled")}</h3>
+                                                                            <p>${escapeHtml(world.summary || world.content_type || world.type || "World")}</p>
+                                                                        </div>
+                                                                    </a>
+                                                                `;
             }).join("");
         }
 
@@ -2190,18 +2458,18 @@
             return worlds.map(world => {
                 const cover = world.cover_image_url || world.cover_url || "";
                 return `
-                                                                <div class="card">
-                                                                    ${cover ? `
-                                                                        <div class="custom-world-cover" style="height:150px;border-radius:14px;margin-bottom:14px;">
-                                                                            <img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">
-                                                                            ${buildWorldCreditPill(world)}
-                                                                        </div>
-                                                                    ` : ""}
-                                                                    <p class="empty">${escapeHtml(world.content_type || world.type || "World")}</p>
-                                                                    <h3><a href="${getWorldLink(world)}">${escapeHtml(world.title || "Untitled")}</a></h3>
-                                                                    <p>${escapeHtml(world.summary || "No summary yet.")}</p>
-                                                                </div>
-                                                            `;
+                                                                    <div class="card">
+                                                                        ${cover ? `
+                                                                            <div class="custom-world-cover" style="height:150px;border-radius:14px;margin-bottom:14px;">
+                                                                                <img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">
+                                                                                ${buildWorldCreditPill(world)}
+                                                                            </div>
+                                                                        ` : ""}
+                                                                        <p class="empty">${escapeHtml(world.content_type || world.type || "World")}</p>
+                                                                        <h3><a href="${getWorldLink(world)}">${escapeHtml(world.title || "Untitled")}</a></h3>
+                                                                        <p>${escapeHtml(world.summary || "No summary yet.")}</p>
+                                                                    </div>
+                                                                `;
             }).join("");
         }
 
@@ -2223,11 +2491,11 @@
             const { data, error } = await supabase
                 .from("creator_proof_gallery")
                 .select(`
-                                                                    *,
-                                                                    creator_gallery_likes (
-                                                                        user_id
-                                                                    )
-                                                                `)
+                                                                        *,
+                                                                        creator_gallery_likes (
+                                                                            user_id
+                                                                        )
+                                                                    `)
                 .eq("owner_id", profileId)
                 .eq("visibility", "public");
 
@@ -2279,44 +2547,133 @@
 
             followCounts.followers = followerCount || 0;
             followCounts.following = followingCount || 0;
+            isFollowingProfile = false;
 
             if (!currentUser || currentUser.id === profileId) {
                 return;
             }
 
-            const { data: existingFollow } = await supabase
+            const { data: existingFollow, error } = await supabase
                 .from("follows")
-                .select("*")
+                .select("id")
                 .eq("follower_id", currentUser.id)
                 .eq("following_id", profileId)
                 .maybeSingle();
 
-            renderFollowButton(profileId, !!existingFollow);
+            if (error) {
+                console.error("Follow state error:", error);
+                isFollowingProfile = false;
+                return;
+            }
+
+            isFollowingProfile = !!existingFollow;
         }
 
-        function renderProfileButtons(profile) {
-            renderReportButton(profile);
-            renderBlockButton(profile);
-            renderMessageButton(profile);
+        function clearProfileButtonContainers() {
+            [
+                "follow-button-container",
+                "message-button-container",
+                "block-button-container",
+                "report-button-container"
+            ].forEach(id => {
+                const container = document.getElementById(id);
+
+                if (container) {
+                    container.innerHTML = "";
+                }
+            });
         }
 
-        function renderFollowButton(profileId, isFollowing) {
-            document.getElementById("follow-button-container").innerHTML = `
-                                                                <button id="follow-button" class="button follow-button ${isFollowing ? "following" : ""}">
-                                                                    ${isFollowing ? "Following" : "Follow"}
-                                                                </button>
-                                                            `;
+        function renderProfileButtons(targetProfile) {
+            clearProfileButtonContainers();
 
-            document.getElementById("follow-button").addEventListener("click", async () => {
-                const button = document.getElementById("follow-button");
-                button.disabled = true;
+            if (!currentUser || !targetProfile || currentUser.id === targetProfile.id) {
+                updateCustomActionStates();
+                return;
+            }
 
-                if (isFollowing) {
-                    await supabase
+            renderFollowButton(targetProfile.id, isFollowingProfile);
+            renderMessageButton(targetProfile);
+            renderBlockButton(targetProfile);
+            renderReportButton(targetProfile);
+            updateCustomActionStates();
+        }
+
+        function renderFollowButton(profileId, isFollowing = isFollowingProfile) {
+            const container = document.getElementById("follow-button-container");
+
+            if (!container || !currentUser || currentUser.id === profileId) {
+                return;
+            }
+
+            container.innerHTML = `
+                                                                    <button
+                                                                        id="follow-button"
+                                                                        class="button follow-button ${isFollowing ? "following" : ""}"
+                                                                        aria-pressed="${isFollowing ? "true" : "false"}">
+                                                                        ${isFollowing ? "Following" : "Follow"}
+                                                                    </button>
+                                                                `;
+
+            document.getElementById("follow-button")?.addEventListener("click", () => {
+                toggleFollowProfile(profileId);
+            });
+        }
+
+        function setFollowActionBusy(isBusy) {
+            followActionBusy = isBusy;
+
+            document.querySelectorAll("#follow-button, [data-custom-action='follow']").forEach(button => {
+                if (button instanceof HTMLButtonElement) {
+                    button.disabled = isBusy;
+                }
+            });
+        }
+
+        function updateCustomActionStates() {
+            const followLabel = isFollowingProfile ? "Following" : "Follow";
+
+            document.querySelectorAll("#follow-button, [data-custom-action='follow']").forEach(button => {
+                button.textContent = followActionBusy ? "Updating..." : followLabel;
+                button.classList.toggle("following", isFollowingProfile);
+                button.setAttribute("aria-pressed", isFollowingProfile ? "true" : "false");
+
+                if (button instanceof HTMLButtonElement) {
+                    button.disabled = followActionBusy;
+                }
+            });
+
+            document.querySelectorAll("[data-custom-action='message']").forEach(button => {
+                const disabled = !canMessageProfile;
+                button.classList.toggle("disabled", disabled);
+                button.title = disabled ? "Messaging requires both creators to follow each other." : "Message this creator";
+
+                if (button instanceof HTMLButtonElement) {
+                    button.disabled = disabled;
+                }
+            });
+        }
+
+        async function toggleFollowProfile(profileId = profile?.id) {
+            if (!currentUser || !profileId || currentUser.id === profileId || followActionBusy) {
+                return;
+            }
+
+            const wasFollowing = isFollowingProfile;
+            setFollowActionBusy(true);
+            updateCustomActionStates();
+
+            try {
+                if (wasFollowing) {
+                    const { error } = await supabase
                         .from("follows")
                         .delete()
                         .eq("follower_id", currentUser.id)
                         .eq("following_id", profileId);
+
+                    if (error) {
+                        throw error;
+                    }
                 } else {
                     const { error: followError } = await supabase
                         .from("follows")
@@ -2324,6 +2681,10 @@
                             follower_id: currentUser.id,
                             following_id: profileId
                         });
+
+                    if (followError && followError.code !== "23505") {
+                        throw followError;
+                    }
 
                     if (!followError) {
                         await createNotification({
@@ -2337,44 +2698,50 @@
                 }
 
                 await loadFollowData(profileId);
+                canMessageProfile = await canMessageUser(profileId);
                 renderProfile(profile);
-                button.disabled = false;
-            });
+            } catch (error) {
+                console.error("Follow action error:", error);
+                alert(error.message || "Follow action failed.");
+                isFollowingProfile = wasFollowing;
+                updateCustomActionStates();
+            } finally {
+                setFollowActionBusy(false);
+                updateCustomActionStates();
+            }
         }
 
-        function renderBlockButton(profile) {
-            if (!currentUser || currentUser.id === profile.id) {
+        function renderBlockButton(targetProfile) {
+            if (!currentUser || currentUser.id === targetProfile.id) {
                 return;
             }
 
             document.getElementById("block-button-container").innerHTML = `
-                                                                <button id="block-user-btn" class="button secondary">Block</button>
-                                                            `;
+                                                                    <button id="block-user-btn" class="button secondary">Block</button>
+                                                                `;
 
             document.getElementById("block-user-btn").addEventListener("click", () => {
                 document.getElementById("block-modal").style.display = "flex";
             });
         }
 
-        async function renderMessageButton(profile) {
-            if (!currentUser || currentUser.id === profile.id) {
-                return;
-            }
-
-            const canMessage = await canMessageUser(profile.id);
-
-            if (!canMessage) {
+        function renderMessageButton(targetProfile) {
+            if (!currentUser || currentUser.id === targetProfile.id || !canMessageProfile) {
                 return;
             }
 
             document.getElementById("message-button-container").innerHTML = `
-                                                                <button id="message-user-btn" class="button">Message</button>
-                                                            `;
+                                                                    <button id="message-user-btn" class="button">Message</button>
+                                                                `;
 
-            document.getElementById("message-user-btn").addEventListener("click", () => openConversation(profile.id));
+            document.getElementById("message-user-btn").addEventListener("click", () => openConversation(targetProfile.id));
         }
 
         async function canMessageUser(targetUserId) {
+            if (!currentUser || !targetUserId || currentUser.id === targetUserId) {
+                return false;
+            }
+
             const { data: blockRows } = await supabase
                 .from("user_blocks")
                 .select("id")
@@ -2404,6 +2771,11 @@
         }
 
         async function openConversation(targetUserId) {
+            if (!canMessageProfile) {
+                alert("Messaging requires both creators to follow each other.");
+                return;
+            }
+
             const { data: conversationId, error } = await supabase.rpc("create_dm_conversation", {
                 target_user: targetUserId
             });
@@ -2422,8 +2794,8 @@
             }
 
             document.getElementById("report-button-container").innerHTML = `
-                                                                <button id="report-user-btn" class="button secondary">Report</button>
-                                                            `;
+                                                                    <button id="report-user-btn" class="button secondary">Report</button>
+                                                                `;
 
             document.getElementById("report-user-btn").addEventListener("click", () => {
                 document.getElementById("report-modal").style.display = "flex";
@@ -2458,7 +2830,7 @@
                     blocked_id: profile.id
                 });
 
-            if (error) {
+            if (error && error.code !== "23505") {
                 alert(error.message);
                 return;
             }
@@ -2514,10 +2886,10 @@
                     : "Permanent";
 
             document.getElementById("moderation-status-display").innerHTML = `
-                                                                <strong>Current Status:</strong> ${escapeHtml(profile.account_status || "active")}<br>
-                                                                <strong>Expires:</strong> ${escapeHtml(expires)}<br>
-                                                                <strong>Reason:</strong> ${escapeHtml(profile.moderation_reason || "None")}
-                                                            `;
+                                                                    <strong>Current Status:</strong> ${escapeHtml(profile.account_status || "active")}<br>
+                                                                    <strong>Expires:</strong> ${escapeHtml(expires)}<br>
+                                                                    <strong>Reason:</strong> ${escapeHtml(profile.moderation_reason || "None")}
+                                                                `;
         }
 
         async function loadModerationHistory() {
@@ -2526,12 +2898,12 @@
             const { data, error } = await supabase
                 .from("moderation_logs")
                 .select(`
-                                                                    *,
-                                                                    moderator:profiles!moderation_logs_moderator_id_fkey(
-                                                                        username,
-                                                                        display_name
-                                                                    )
-                                                                `)
+                                                                        *,
+                                                                        moderator:profiles!moderation_logs_moderator_id_fkey(
+                                                                            username,
+                                                                            display_name
+                                                                        )
+                                                                    `)
                 .eq("target_user_id", profile.id)
                 .order("created_at", { ascending: false })
                 .limit(20);
@@ -2547,13 +2919,13 @@
             }
 
             container.innerHTML = data.map(log => `
-                                                                <div style="border-bottom:1px solid var(--border-color);padding-bottom:10px;margin-bottom:10px;">
-                                                                    <strong>${escapeHtml(log.action)}</strong><br>
-                                                                    By: ${escapeHtml(log.moderator?.display_name || log.moderator?.username || "Unknown")}<br>
-                                                                    Reason: ${escapeHtml(log.reason || "None")}<br>
-                                                                    ${new Date(log.created_at).toLocaleString()}
-                                                                </div>
-                                                            `).join("");
+                                                                    <div style="border-bottom:1px solid var(--border-color);padding-bottom:10px;margin-bottom:10px;">
+                                                                        <strong>${escapeHtml(log.action)}</strong><br>
+                                                                        By: ${escapeHtml(log.moderator?.display_name || log.moderator?.username || "Unknown")}<br>
+                                                                        Reason: ${escapeHtml(log.reason || "None")}<br>
+                                                                        ${new Date(log.created_at).toLocaleString()}
+                                                                    </div>
+                                                                `).join("");
         }
 
         window.toggleModerationDrawer = function () {
