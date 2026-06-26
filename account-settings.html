@@ -2939,6 +2939,69 @@
                 color: #eaf3ff !important;
                 opacity: 1 !important;
             }
+
+        /* ============================================================
+           PROFILE STUDIO AUTHORITATIVE LOCK MODEL
+           Locked layers are true canvas pass-through layers:
+           no click, select, drag, resize, rotate, edit, delete,
+           duplicate, or marquee selection until unlocked from UI.
+        ============================================================ */
+
+        .canvas-object.locked-object,
+        .canvas-object.locked-object *,
+        .canvas-object.text-box-object.locked-object,
+        .canvas-object.text-box-object.locked-object * {
+            pointer-events: none !important;
+            cursor: default !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        }
+
+            .canvas-object.locked-object .resize-handle,
+            .canvas-object.locked-object .rotate-handle {
+                display: none !important;
+                pointer-events: none !important;
+            }
+
+            .canvas-object.locked-object.selected,
+            .canvas-object.locked-object.multi-selected {
+                outline: 2px dashed rgba(255, 214, 102, .95) !important;
+                outline-offset: 7px !important;
+            }
+
+        .layer-item,
+        .layer-select-button,
+        .layer-lock-toggle,
+        .studio-lock-action-button {
+            pointer-events: auto !important;
+        }
+
+            .layer-item.locked {
+                border-color: rgba(255, 214, 102, .62) !important;
+                background: rgba(255, 214, 102, .12) !important;
+                color: #ffe7aa !important;
+            }
+
+                .layer-item.locked.active {
+                    border-color: rgba(255, 214, 102, .88) !important;
+                    background: rgba(255, 214, 102, .20) !important;
+                }
+
+            .layer-lock-toggle.locked,
+            .studio-lock-action-button.locked {
+                border-color: rgba(255, 214, 102, .72) !important;
+                background: rgba(255, 214, 102, .16) !important;
+                color: #ffe7aa !important;
+                opacity: 1 !important;
+            }
+
+            .layer-lock-toggle.unlocked,
+            .studio-lock-action-button.unlocked {
+                border-color: rgba(180, 220, 255, .34) !important;
+                background: rgba(120, 190, 255, .08) !important;
+                color: #eaf3ff !important;
+                opacity: 1 !important;
+            }
     </style>
 </head>
 <body>
@@ -3490,25 +3553,44 @@
                 pushStudioHistory();
             }
 
-            setObjectLockedState(object, nextLocked);
-            syncStudioLockSetFromLayout(studioLayout);
+            /*
+                FINAL LOCK MODEL:
+                - object.locked is the only source of truth.
+                - locked canvas objects receive pointer-events:none through CSS.
+                - canvas clicks pass through locked objects to the workspace.
+                - Layers + Inspector are the only places that can lock/unlock.
+            */
+            object.locked = nextLocked;
 
             selectedObjectId = object.id;
             selectedObjectIds = [object.id];
 
             persistActiveStudioLayoutReference();
+
+            if (studioLayouts && studioLayout) {
+                studioLayouts[activeStudioLayout] = studioLayout;
+            }
+
             renderStudio();
 
             requestAnimationFrame(() => {
+                const freshObject = studioLayout?.objects?.find(item => item.id === object.id);
+
+                if (freshObject) {
+                    selectedObjectId = freshObject.id;
+                    selectedObjectIds = [freshObject.id];
+                }
+
                 renderLayers();
                 renderInspector();
                 updateRequirementDisplays();
+                applyStudioLockDomState(freshObject || object);
             });
 
             setStudioStatus(
                 nextLocked
-                    ? "Layer locked. It is frozen on the canvas until you unlock it from Layer Actions or the Layers shelf."
-                    : "Layer unlocked. You can edit it again."
+                    ? "Layer locked. It cannot be clicked, selected, dragged, resized, rotated, edited, deleted, duplicated, or moved from the canvas."
+                    : "Layer unlocked. You can fully edit it again."
             );
         }
 
@@ -3528,10 +3610,115 @@
             const object = studioLayout?.objects?.find(item => item.id === objectId) || getSelectedObject();
 
             if (!object) {
+                setStudioStatus("Select a layer first.");
                 return;
             }
 
             setStudioObjectLock(object.id, !isObjectLocked(object));
+        }
+
+        function lockStudioObject(objectId) {
+            setStudioObjectLock(objectId, true);
+        }
+
+        function unlockStudioObject(objectId) {
+            setStudioObjectLock(objectId, false);
+        }
+
+        function applyStudioLockDomState(object) {
+            if (!object || !object.id) {
+                return;
+            }
+
+            const locked = isObjectLocked(object);
+            const canvasObject = document.querySelector(`.canvas-object[data-id="${CSS.escape(object.id)}"]`);
+
+            if (canvasObject) {
+                canvasObject.dataset.locked = locked ? "true" : "false";
+                canvasObject.classList.toggle("locked-object", locked);
+                canvasObject.classList.toggle("selected", selectedObjectIds.length <= 1 && selectedObjectId === object.id);
+                canvasObject.classList.toggle("multi-selected", selectedObjectIds.length > 1 && selectedObjectIds.includes(object.id));
+            }
+
+            document.querySelectorAll(`[data-lock-object-id="${CSS.escape(object.id)}"]`).forEach(button => {
+                button.dataset.lockCommand = locked ? "unlock" : "lock";
+                button.classList.toggle("locked", locked);
+                button.classList.toggle("unlocked", !locked);
+                button.textContent = locked ? "🔒 Locked" : "🔓 Unlocked";
+                button.title = locked ? "Unlock this layer" : "Lock this layer";
+                button.setAttribute("aria-label", locked ? "Unlock this layer" : "Lock this layer");
+            });
+
+            document.querySelectorAll(`[data-layer-id="${CSS.escape(object.id)}"]`).forEach(row => {
+                row.classList.toggle("locked", locked);
+                row.classList.toggle("active", selectedObjectIds.includes(object.id));
+            });
+        }
+
+        function setupStudioLockControlDelegation() {
+            if (window.__nullverseStudioLockControlsReady) {
+                return;
+            }
+
+            window.__nullverseStudioLockControlsReady = true;
+
+            function getLockControlFromEvent(event) {
+                const target = event.target?.nodeType === Node.ELEMENT_NODE
+                    ? event.target
+                    : event.target?.parentElement;
+
+                return target?.closest?.("[data-studio-lock-control='true']") || null;
+            }
+
+            document.addEventListener("pointerdown", event => {
+                const button = getLockControlFromEvent(event);
+
+                if (!button || !button.closest("#profile-studio-page")) {
+                    return;
+                }
+
+                event.stopPropagation();
+
+                if (typeof event.stopImmediatePropagation === "function") {
+                    event.stopImmediatePropagation();
+                }
+            }, true);
+
+            document.addEventListener("click", event => {
+                const button = getLockControlFromEvent(event);
+
+                if (!button || !button.closest("#profile-studio-page")) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (typeof event.stopImmediatePropagation === "function") {
+                    event.stopImmediatePropagation();
+                }
+
+                const objectId = button.dataset.lockObjectId;
+                const command = button.dataset.lockCommand;
+
+                if (!objectId) {
+                    setStudioStatus("Layer could not be found. Refresh Studio and try again.");
+                    return;
+                }
+
+                if (command === "unlock") {
+                    setStudioObjectLock(objectId, false);
+                    return;
+                }
+
+                if (command === "lock") {
+                    setStudioObjectLock(objectId, true);
+                    return;
+                }
+
+                const object = studioLayout?.objects?.find(item => item.id === objectId);
+                setStudioObjectLock(objectId, !isObjectLocked(object));
+            }, true);
         }
 
 
@@ -4825,10 +5012,10 @@
                     const isComplete = !validation.missing.some(item => item.key === requirement.key);
 
                     return `
-                                                                                                                                        <div class="requirement-pill ${isComplete ? "complete" : "missing"}">
-                                                                                                                                            ${isComplete ? "✓" : "!"} ${escapeHtml(requirement.label)}
-                                                                                                                                        </div>
-                                                                                                                                    `;
+                                                                                                                                            <div class="requirement-pill ${isComplete ? "complete" : "missing"}">
+                                                                                                                                                ${isComplete ? "✓" : "!"} ${escapeHtml(requirement.label)}
+                                                                                                                                            </div>
+                                                                                                                                        `;
                 }).join("");
             });
 
@@ -5297,20 +5484,20 @@
             el.style.setProperty("--studio-object-line-height", String(objectLineHeight));
 
             el.innerHTML = `
-                                                                                                                                <div class="object-inner" style="font-family:${escapeHtml(getStudioCssFontFamily(objectFontFamily))};font-size:${objectFontSize}px;line-height:${objectLineHeight};text-align:${escapeHtml(object.styles.textAlign || "left")};">
-                                                                                                                                    ${renderStudioObjectPreview(object)}
-                                                                                                                                </div>
-                                                                                                                                ${object.requirement ? `<span class="object-requirement-tag">${escapeHtml(getRequirementLabel(object.requirement))}</span>` : ""}
-                                                                                                                                <span class="rotate-handle" data-action="rotate"></span>
-                                                                                                                                <span class="resize-handle nw" data-handle="nw"></span>
-                                                                                                                                <span class="resize-handle n" data-handle="n"></span>
-                                                                                                                                <span class="resize-handle ne" data-handle="ne"></span>
-                                                                                                                                <span class="resize-handle e" data-handle="e"></span>
-                                                                                                                                <span class="resize-handle se" data-handle="se"></span>
-                                                                                                                                <span class="resize-handle s" data-handle="s"></span>
-                                                                                                                                <span class="resize-handle sw" data-handle="sw"></span>
-                                                                                                                                <span class="resize-handle w" data-handle="w"></span>
-                                                                                                                            `;
+                                                                                                                                    <div class="object-inner" style="font-family:${escapeHtml(getStudioCssFontFamily(objectFontFamily))};font-size:${objectFontSize}px;line-height:${objectLineHeight};text-align:${escapeHtml(object.styles.textAlign || "left")};">
+                                                                                                                                        ${renderStudioObjectPreview(object)}
+                                                                                                                                    </div>
+                                                                                                                                    ${object.requirement ? `<span class="object-requirement-tag">${escapeHtml(getRequirementLabel(object.requirement))}</span>` : ""}
+                                                                                                                                    <span class="rotate-handle" data-action="rotate"></span>
+                                                                                                                                    <span class="resize-handle nw" data-handle="nw"></span>
+                                                                                                                                    <span class="resize-handle n" data-handle="n"></span>
+                                                                                                                                    <span class="resize-handle ne" data-handle="ne"></span>
+                                                                                                                                    <span class="resize-handle e" data-handle="e"></span>
+                                                                                                                                    <span class="resize-handle se" data-handle="se"></span>
+                                                                                                                                    <span class="resize-handle s" data-handle="s"></span>
+                                                                                                                                    <span class="resize-handle sw" data-handle="sw"></span>
+                                                                                                                                    <span class="resize-handle w" data-handle="w"></span>
+                                                                                                                                `;
 
             el.querySelectorAll("img").forEach(image => {
                 image.draggable = false;
@@ -5351,23 +5538,23 @@
 
             if (object.type === "profile_identity") {
                 return `
-                                                                                                                                    <div class="identity-object">
-                                                                                                                                        <img src="${escapeHtml(avatar)}" alt="">
-                                                                                                                                        <div>
-                                                                                                                                            <h2>${name}</h2>
-                                                                                                                                            <p>@${username}</p>
-                                                                                                                                            <p>${status}</p>
+                                                                                                                                        <div class="identity-object">
+                                                                                                                                            <img src="${escapeHtml(avatar)}" alt="">
+                                                                                                                                            <div>
+                                                                                                                                                <h2>${name}</h2>
+                                                                                                                                                <p>@${username}</p>
+                                                                                                                                                <p>${status}</p>
+                                                                                                                                            </div>
                                                                                                                                         </div>
-                                                                                                                                    </div>
-                                                                                                                                `;
+                                                                                                                                    `;
             }
 
             if (object.type === "profile_avatar") {
                 return `
-                                                                                                                                    <div class="avatar-circle-object">
-                                                                                                                                        <img src="${escapeHtml(avatar)}" alt="">
-                                                                                                                                    </div>
-                                                                                                                                `;
+                                                                                                                                        <div class="avatar-circle-object">
+                                                                                                                                            <img src="${escapeHtml(avatar)}" alt="">
+                                                                                                                                        </div>
+                                                                                                                                    `;
             }
 
             if (object.type === "display_name") {
@@ -5380,13 +5567,13 @@
 
             if (object.type === "profile_actions") {
                 return `
-                                                                                                                                    <div class="actions-object" style="gap:${Number(object.styles.actionButtonGap ?? 10)}px;">
-                                                                                                                                        <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Follow</span>
-                                                                                                                                        <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Message</span>
-                                                                                                                                        <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Block</span>
-                                                                                                                                        <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Report</span>
-                                                                                                                                    </div>
-                                                                                                                                `;
+                                                                                                                                        <div class="actions-object" style="gap:${Number(object.styles.actionButtonGap ?? 10)}px;">
+                                                                                                                                            <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Follow</span>
+                                                                                                                                            <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Message</span>
+                                                                                                                                            <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Block</span>
+                                                                                                                                            <span class="fake-btn" style="${getActionButtonInlineStyle(object)}">Report</span>
+                                                                                                                                        </div>
+                                                                                                                                    `;
             }
 
             if (["follow_button", "message_button", "block_button", "report_button"].includes(object.type)) {
@@ -5395,84 +5582,84 @@
 
             if (["followers_box", "following_box", "works_count_box"].includes(object.type)) {
                 return `
-                                                                                                                                        <div class="system-stat-object">
-                                                                                                                                            <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
-                                                                                                                                            <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
-                                                                                                                                        </div>
-                                                                                                                                    `;
+                                                                                                                                            <div class="system-stat-object">
+                                                                                                                                                <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
+                                                                                                                                                <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
+                                                                                                                                            </div>
+                                                                                                                                        `;
             }
 
             if (object.type === "stats") {
                 return `
-                                                                                                                                    <div class="stats-object">
-                                                                                                                                        <div class="stat-mini"><strong>0</strong><span>Followers</span></div>
-                                                                                                                                        <div class="stat-mini"><strong>0</strong><span>Following</span></div>
-                                                                                                                                        <div class="stat-mini"><strong>0</strong><span>Works</span></div>
-                                                                                                                                    </div>
-                                                                                                                                `;
+                                                                                                                                        <div class="stats-object">
+                                                                                                                                            <div class="stat-mini"><strong>0</strong><span>Followers</span></div>
+                                                                                                                                            <div class="stat-mini"><strong>0</strong><span>Following</span></div>
+                                                                                                                                            <div class="stat-mini"><strong>0</strong><span>Works</span></div>
+                                                                                                                                        </div>
+                                                                                                                                    `;
             }
 
             if (object.type === "creator_gallery") {
                 return `
-                                                                                                                                    <div class="gallery-object">
-                                                                                                                                        <div class="gallery-thumb"></div>
-                                                                                                                                        <div class="gallery-thumb"></div>
-                                                                                                                                        <div class="gallery-thumb"></div>
-                                                                                                                                    </div>
-                                                                                                                                `;
+                                                                                                                                        <div class="gallery-object">
+                                                                                                                                            <div class="gallery-thumb"></div>
+                                                                                                                                            <div class="gallery-thumb"></div>
+                                                                                                                                            <div class="gallery-thumb"></div>
+                                                                                                                                        </div>
+                                                                                                                                    `;
             }
 
             if (object.type === "creator_works") {
                 return `
-                                                                                                                                    <div class="works-object">
-                                                                                                                                        <div class="work-thumb"></div>
-                                                                                                                                        <div class="work-thumb"></div>
-                                                                                                                                    </div>
-                                                                                                                                `;
+                                                                                                                                        <div class="works-object">
+                                                                                                                                            <div class="work-thumb"></div>
+                                                                                                                                            <div class="work-thumb"></div>
+                                                                                                                                        </div>
+                                                                                                                                    `;
             }
 
             if (object.type === "bio") {
                 return `
-                                                                                                                                    <div class="bio-object">
-                                                                                                                                        <h3>${escapeHtml(object.title || "About")}</h3>
-                                                                                                                                        <p>${bio}</p>
-                                                                                                                                    </div>
-                                                                                                                                `;
+                                                                                                                                        <div class="bio-object">
+                                                                                                                                            <h3>${escapeHtml(object.title || "About")}</h3>
+                                                                                                                                            <p>${bio}</p>
+                                                                                                                                        </div>
+                                                                                                                                    `;
             }
 
             if (object.type === "text") {
                 return `
-                                                                                                                                    <div class="text-object" style="${escapeHtml(getStudioTextInlineStyle(object))}">
-                                                                                                                                        <div class="studio-text-editable" style="${escapeHtml(getStudioTextInlineStyle(object))}" contenteditable="${object.locked === true ? "false" : "true"}" spellcheck="true" data-placeholder="Click here to type." data-editable-object-id="${escapeHtml(object.id)}">${escapeHtml(object.text || "")}</div>
-                                                                                                                                    </div>
-                                                                                                                                `;
+                                                                                                                                        <div class="text-object" style="${escapeHtml(getStudioTextInlineStyle(object))}">
+                                                                                                                                            <div class="studio-text-editable" style="${escapeHtml(getStudioTextInlineStyle(object))}" contenteditable="${object.locked === true ? "false" : "true"}" spellcheck="true" data-placeholder="Click here to type." data-editable-object-id="${escapeHtml(object.id)}">${escapeHtml(object.text || "")}</div>
+                                                                                                                                        </div>
+                                                                                                                                    `;
             }
 
             if (object.type === "section" || object.type === "featured") {
                 return `
-                                                                                                                                    <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
-                                                                                                                                        <h3>${escapeHtml(object.title || objectLabels[object.type])}</h3>
-                                                                                                                                        <p>${escapeHtml(object.text || "Write something here.")}</p>
-                                                                                                                                    </div>
-                                                                                                                                `;
+                                                                                                                                        <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
+                                                                                                                                            <h3>${escapeHtml(object.title || objectLabels[object.type])}</h3>
+                                                                                                                                            <p>${escapeHtml(object.text || "Write something here.")}</p>
+                                                                                                                                        </div>
+                                                                                                                                    `;
             }
 
             if (object.type === "image" || object.type === "banner") {
                 return `
-                                                                                                                                    <div class="image-object" style="width:100%;height:100%;background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
-                                                                                                                                `;
+                                                                                                                                        <div class="image-object" style="width:100%;height:100%;background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
+                                                                                                                                    `;
             }
 
             if (object.type === "image_text") {
                 return `
-                                                                                                                                    <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
-                                                                                                                                        <div class="image-object" style="background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
-                                                                                                                                        <div class="section-object">
-                                                                                                                                            <h3>${escapeHtml(object.title || "Image + Text")}</h3>
-                                                                                                                                            <p>${escapeHtml(object.text || "Add a caption or feature description.")}</p>
+                                                                                                                                        <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
+                                                                                                                                            <div class="image-object" style="background-image:url('${safeCssUrl(banner)}');background-size:${escapeHtml(object.styles.objectFit || "cover")};"></div>
+                                                                                                                                            <div class="section-object">
+                                                                                                                                                <h3>${escapeHtml(object.title || "Image + Text")}</h3>
+                                                                                                                                                <p>${escapeHtml(object.text || "Add a caption or feature description.")}</p>
+                                                                                                                                            </div>
                                                                                                                                         </div>
-                                                                                                                                    </div>
-                                                                                                                                `;
+                                                                                                                                    `;
             }
 
             if (["shape", "circle", "star"].includes(object.type)) {
@@ -5488,15 +5675,15 @@
                 const summary = selectedWorld?.summary || "Pick which world this card should feature from the content picker or inspector.";
 
                 return `
-                                                                                                                                        <div class="studio-content-card-preview">
-                                                                                                                                            ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles.objectFit || "cover")};">` : ""}
-                                                                                                                                            ${buildStudioWorldCreditPill(selectedWorld)}
-                                                                                                                                            <div class="studio-content-card-body">
-                                                                                                                                                <h3>${escapeHtml(title)}</h3>
-                                                                                                                                                <p>${escapeHtml(summary)}</p>
+                                                                                                                                            <div class="studio-content-card-preview">
+                                                                                                                                                ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles.objectFit || "cover")};">` : ""}
+                                                                                                                                                ${buildStudioWorldCreditPill(selectedWorld)}
+                                                                                                                                                <div class="studio-content-card-body">
+                                                                                                                                                    <h3>${escapeHtml(title)}</h3>
+                                                                                                                                                    <p>${escapeHtml(summary)}</p>
+                                                                                                                                                </div>
                                                                                                                                             </div>
-                                                                                                                                        </div>
-                                                                                                                                    `;
+                                                                                                                                        `;
             }
 
             if (object.type === "gallery_item") {
@@ -5505,12 +5692,12 @@
                 const title = item?.title || "Choose a gallery image";
 
                 return `
-                                                                                                                                        <div class="studio-gallery-card-preview">
-                                                                                                                                            ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles.objectFit || "cover")};">` : ""}
-                                                                                                                                            ${item?.description ? `<span class="studio-content-pill" style="top:10px;bottom:auto;">${escapeHtml(item.description)}</span>` : ""}
-                                                                                                                                            ${buildStudioGalleryCreditPill(item)}
-                                                                                                                                        </div>
-                                                                                                                                    `;
+                                                                                                                                            <div class="studio-gallery-card-preview">
+                                                                                                                                                ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles.objectFit || "cover")};">` : ""}
+                                                                                                                                                ${item?.description ? `<span class="studio-content-pill" style="top:10px;bottom:auto;">${escapeHtml(item.description)}</span>` : ""}
+                                                                                                                                                ${buildStudioGalleryCreditPill(item)}
+                                                                                                                                            </div>
+                                                                                                                                        `;
             }
 
             if (object.type === "profile_badge") {
@@ -6007,18 +6194,18 @@
 
         function renderColorSwatches(updateFunctionName, field) {
             return `
-                                                                                                                        <div class="studio-color-swatch-grid">
-                                                                                                                            ${studioColorPalette.map(color => `
-                                                                                                                                <button
-                                                                                                                                    type="button"
-                                                                                                                                    class="studio-color-swatch"
-                                                                                                                                    title="${escapeHtml(color)}"
-                                                                                                                                    style="background:${escapeHtml(color)};"
-                                                                                                                                    onclick="${updateFunctionName}('${field}', '${escapeHtml(color)}')">
-                                                                                                                                </button>
-                                                                                                                            `).join("")}
-                                                                                                                        </div>
-                                                                                                                    `;
+                                                                                                                            <div class="studio-color-swatch-grid">
+                                                                                                                                ${studioColorPalette.map(color => `
+                                                                                                                                    <button
+                                                                                                                                        type="button"
+                                                                                                                                        class="studio-color-swatch"
+                                                                                                                                        title="${escapeHtml(color)}"
+                                                                                                                                        style="background:${escapeHtml(color)};"
+                                                                                                                                        onclick="${updateFunctionName}('${field}', '${escapeHtml(color)}')">
+                                                                                                                                    </button>
+                                                                                                                                `).join("")}
+                                                                                                                            </div>
+                                                                                                                        `;
         }
 
         function getPaintValue(value, fallback = "transparent") {
@@ -6044,18 +6231,18 @@
             ];
 
             return `
-                                                                                                                        <div class="studio-gradient-builder">
-                                                                                                                            <select id="${dirId}" title="Gradient direction">
-                                                                                                                                ${directions.map(item => `
-                                                                                                                                    <option value="${item.value}" ${direction === item.value ? "selected" : ""}>${item.label}</option>
-                                                                                                                                `).join("")}
-                                                                                                                            </select>
-                                                                                                                            <span></span>
-                                                                                                                            <input id="${aId}" type="color" value="${escapeHtml(getColorInputValue(firstColor, "#111111"))}" title="Gradient color 1">
-                                                                                                                            <input id="${bId}" type="color" value="${escapeHtml(getColorInputValue(secondColor, "#ffffff"))}" title="Gradient color 2">
-                                                                                                                            <button type="button" class="button-muted" onclick="${applyFn}('${field}')">Apply Gradient</button>
-                                                                                                                        </div>
-                                                                                                                    `;
+                                                                                                                            <div class="studio-gradient-builder">
+                                                                                                                                <select id="${dirId}" title="Gradient direction">
+                                                                                                                                    ${directions.map(item => `
+                                                                                                                                        <option value="${item.value}" ${direction === item.value ? "selected" : ""}>${item.label}</option>
+                                                                                                                                    `).join("")}
+                                                                                                                                </select>
+                                                                                                                                <span></span>
+                                                                                                                                <input id="${aId}" type="color" value="${escapeHtml(getColorInputValue(firstColor, "#111111"))}" title="Gradient color 1">
+                                                                                                                                <input id="${bId}" type="color" value="${escapeHtml(getColorInputValue(secondColor, "#ffffff"))}" title="Gradient color 2">
+                                                                                                                                <button type="button" class="button-muted" onclick="${applyFn}('${field}')">Apply Gradient</button>
+                                                                                                                            </div>
+                                                                                                                        `;
         }
 
         function renderObjectColorControl(label, field, value, fallback = "#ffffff") {
@@ -6070,27 +6257,27 @@
             const alphaId = gradientInputId("object", field, "opacity-label");
 
             return `
-                                                                                                                        <div class="studio-color-control">
-                                                                                                                            <label>${escapeHtml(label)}</label>
-                                                                                                                            <div class="studio-color-row">
-                                                                                                                                <input type="color" value="${escapeHtml(colorValue)}" oninput="updateObjectSolidColor('${field}', this.value)">
-                                                                                                                                <div class="studio-color-preview"><span style="background:${escapeHtml(safeValue || fallback)};"></span></div>
+                                                                                                                            <div class="studio-color-control">
+                                                                                                                                <label>${escapeHtml(label)}</label>
+                                                                                                                                <div class="studio-color-row">
+                                                                                                                                    <input type="color" value="${escapeHtml(colorValue)}" oninput="updateObjectSolidColor('${field}', this.value)">
+                                                                                                                                    <div class="studio-color-preview"><span style="background:${escapeHtml(safeValue || fallback)};"></span></div>
+                                                                                                                                </div>
+                                                                                                                                ${renderColorSwatches("updateObjectSolidColor", field)}
+
+                                                                                                                                <label style="margin-top:8px;">Opacity <span id="${alphaId}" style="color:var(--text-muted);font-size:.82rem;">${Math.round(alphaValue * 100)}%</span></label>
+                                                                                                                                <input
+                                                                                                                                    type="range"
+                                                                                                                                    min="0"
+                                                                                                                                    max="100"
+                                                                                                                                    step="1"
+                                                                                                                                    value="${Math.round(alphaValue * 100)}"
+                                                                                                                                    oninput="document.getElementById('${alphaId}').textContent = this.value + '%'; updateObjectPaintOpacity('${field}', Number(this.value) / 100)">
+
+                                                                                                                                <input class="studio-color-fine-input" value="${escapeHtml(safeValue)}" placeholder="rgba(...), #ffffff, transparent, or linear-gradient(...)" onchange="updateObjectManualPaint('${field}', this.value)">
+                                                                                                                                ${renderGradientBuilder("object", field, gradientA, gradientB, directionValue)}
                                                                                                                             </div>
-                                                                                                                            ${renderColorSwatches("updateObjectSolidColor", field)}
-
-                                                                                                                            <label style="margin-top:8px;">Opacity <span id="${alphaId}" style="color:var(--text-muted);font-size:.82rem;">${Math.round(alphaValue * 100)}%</span></label>
-                                                                                                                            <input
-                                                                                                                                type="range"
-                                                                                                                                min="0"
-                                                                                                                                max="100"
-                                                                                                                                step="1"
-                                                                                                                                value="${Math.round(alphaValue * 100)}"
-                                                                                                                                oninput="document.getElementById('${alphaId}').textContent = this.value + '%'; updateObjectPaintOpacity('${field}', Number(this.value) / 100)">
-
-                                                                                                                            <input class="studio-color-fine-input" value="${escapeHtml(safeValue)}" placeholder="rgba(...), #ffffff, transparent, or linear-gradient(...)" onchange="updateObjectManualPaint('${field}', this.value)">
-                                                                                                                            ${renderGradientBuilder("object", field, gradientA, gradientB, directionValue)}
-                                                                                                                        </div>
-                                                                                                                    `;
+                                                                                                                        `;
         }
 
         function renderCanvasColorControl(label, field, value, fallback = "#09090b") {
@@ -6104,27 +6291,27 @@
             const alphaId = gradientInputId("canvas", field, "opacity-label");
 
             return `
-                                                                                                                        <div class="studio-color-control">
-                                                                                                                            <label>${escapeHtml(label)}</label>
-                                                                                                                            <div class="studio-color-row">
-                                                                                                                                <input type="color" value="${escapeHtml(colorValue)}" oninput="updateCanvasSolidColor('${field}', this.value)">
-                                                                                                                                <div class="studio-color-preview"><span style="background:${escapeHtml(safeValue || fallback)};"></span></div>
+                                                                                                                            <div class="studio-color-control">
+                                                                                                                                <label>${escapeHtml(label)}</label>
+                                                                                                                                <div class="studio-color-row">
+                                                                                                                                    <input type="color" value="${escapeHtml(colorValue)}" oninput="updateCanvasSolidColor('${field}', this.value)">
+                                                                                                                                    <div class="studio-color-preview"><span style="background:${escapeHtml(safeValue || fallback)};"></span></div>
+                                                                                                                                </div>
+                                                                                                                                ${renderColorSwatches("updateCanvasSolidColor", field)}
+
+                                                                                                                                <label style="margin-top:8px;">Opacity <span id="${alphaId}" style="color:var(--text-muted);font-size:.82rem;">${Math.round(alphaValue * 100)}%</span></label>
+                                                                                                                                <input
+                                                                                                                                    type="range"
+                                                                                                                                    min="0"
+                                                                                                                                    max="100"
+                                                                                                                                    step="1"
+                                                                                                                                    value="${Math.round(alphaValue * 100)}"
+                                                                                                                                    oninput="document.getElementById('${alphaId}').textContent = this.value + '%'; updateCanvasPaintOpacity('${field}', Number(this.value) / 100)">
+
+                                                                                                                                <input class="studio-color-fine-input" value="${escapeHtml(safeValue)}" placeholder="rgba(...), #09090b, transparent, or linear-gradient(...)" onchange="updateCanvasManualPaint('${field}', this.value)">
+                                                                                                                                ${renderGradientBuilder("canvas", field, gradientA, gradientB, directionValue)}
                                                                                                                             </div>
-                                                                                                                            ${renderColorSwatches("updateCanvasSolidColor", field)}
-
-                                                                                                                            <label style="margin-top:8px;">Opacity <span id="${alphaId}" style="color:var(--text-muted);font-size:.82rem;">${Math.round(alphaValue * 100)}%</span></label>
-                                                                                                                            <input
-                                                                                                                                type="range"
-                                                                                                                                min="0"
-                                                                                                                                max="100"
-                                                                                                                                step="1"
-                                                                                                                                value="${Math.round(alphaValue * 100)}"
-                                                                                                                                oninput="document.getElementById('${alphaId}').textContent = this.value + '%'; updateCanvasPaintOpacity('${field}', Number(this.value) / 100)">
-
-                                                                                                                            <input class="studio-color-fine-input" value="${escapeHtml(safeValue)}" placeholder="rgba(...), #09090b, transparent, or linear-gradient(...)" onchange="updateCanvasManualPaint('${field}', this.value)">
-                                                                                                                            ${renderGradientBuilder("canvas", field, gradientA, gradientB, directionValue)}
-                                                                                                                        </div>
-                                                                                                                    `;
+                                                                                                                        `;
         }
 
         function updateObjectManualPaint(field, value) {
@@ -6414,22 +6601,22 @@
                 : `<option value="">No badges owned yet</option>`;
 
             container.innerHTML = `
-                                                                                                                <div class="inspector-group" style="margin:0;">
-                                                                                                                    <h4>Add an owned badge</h4>
-                                                                                                                    <select id="studio-badge-select">${badgeOptions}</select>
-                                                                                                                    <button type="button" class="button-muted" onclick="addSelectedBadge()" ${currentOwnedBadges.length ? "" : "disabled"}>Add Selected Badge</button>
-                                                                                                                </div>
-                                                                                                                <div class="inspector-group" style="margin:0;">
-                                                                                                                    <h4>Add a specific world card</h4>
-                                                                                                                    <select id="studio-world-select">${worldOptions}</select>
-                                                                                                                    <button type="button" class="button-muted" onclick="addSelectedWorldCard()" ${currentPublishedWorlds.length ? "" : "disabled"}>Add Selected World</button>
-                                                                                                                </div>
-                                                                                                                <div class="inspector-group" style="margin:0;">
-                                                                                                                    <h4>Add a specific gallery image</h4>
-                                                                                                                    <select id="studio-gallery-select">${galleryOptions}</select>
-                                                                                                                    <button type="button" class="button-muted" onclick="addSelectedGalleryCard()" ${currentGalleryItems.length ? "" : "disabled"}>Add Selected Gallery Image</button>
-                                                                                                                </div>
-                                                                                                            `;
+                                                                                                                    <div class="inspector-group" style="margin:0;">
+                                                                                                                        <h4>Add an owned badge</h4>
+                                                                                                                        <select id="studio-badge-select">${badgeOptions}</select>
+                                                                                                                        <button type="button" class="button-muted" onclick="addSelectedBadge()" ${currentOwnedBadges.length ? "" : "disabled"}>Add Selected Badge</button>
+                                                                                                                    </div>
+                                                                                                                    <div class="inspector-group" style="margin:0;">
+                                                                                                                        <h4>Add a specific world card</h4>
+                                                                                                                        <select id="studio-world-select">${worldOptions}</select>
+                                                                                                                        <button type="button" class="button-muted" onclick="addSelectedWorldCard()" ${currentPublishedWorlds.length ? "" : "disabled"}>Add Selected World</button>
+                                                                                                                    </div>
+                                                                                                                    <div class="inspector-group" style="margin:0;">
+                                                                                                                        <h4>Add a specific gallery image</h4>
+                                                                                                                        <select id="studio-gallery-select">${galleryOptions}</select>
+                                                                                                                        <button type="button" class="button-muted" onclick="addSelectedGalleryCard()" ${currentGalleryItems.length ? "" : "disabled"}>Add Selected Gallery Image</button>
+                                                                                                                    </div>
+                                                                                                                `;
         }
 
         function addSelectedBadge() {
@@ -6496,6 +6683,8 @@
                 return;
             }
 
+            setupStudioLockControlDelegation();
+
             const reversed = [...studioLayout.objects].reverse();
 
             container.innerHTML = reversed.map(object => {
@@ -6504,32 +6693,33 @@
                 const layerName = escapeHtml(object.name || objectLabels[object.type] || object.type);
                 const lockButtonLabel = locked ? "🔒 Locked" : "🔓 Unlocked";
                 const lockButtonTitle = locked ? "Unlock this layer" : "Lock this layer";
-                const nextLockValue = locked ? "false" : "true";
+                const lockCommand = locked ? "unlock" : "lock";
                 const visibleLabel = object.visible === false ? `<span class="layer-hidden-label">Hidden</span>` : "";
 
                 return `
-                                            <div class="layer-item ${selectedObjectIds.includes(object.id) ? "active" : ""} ${locked ? "locked" : ""}" data-layer-id="${safeId}">
-                                                <button
-                                                    type="button"
-                                                    class="layer-select-button"
-                                                    onclick="event.preventDefault(); event.stopPropagation(); selectStudioObject('${safeId}')">
-                                                    <span>${layerName}</span>
-                                                </button>
-
-                                                <small class="layer-meta">
-                                                    ${visibleLabel}
+                                                <div class="layer-item ${selectedObjectIds.includes(object.id) ? "active" : ""} ${locked ? "locked" : ""}" data-layer-id="${safeId}">
                                                     <button
                                                         type="button"
-                                                        class="layer-lock-toggle ${locked ? "locked" : "unlocked"}"
-                                                        data-lock-object-id="${safeId}"
-                                                        title="${lockButtonTitle}"
-                                                        aria-label="${lockButtonTitle}"
-                                                        onclick="event.preventDefault(); event.stopPropagation(); setStudioObjectLock('${safeId}', ${nextLockValue});">
-                                                        ${lockButtonLabel}
+                                                        class="layer-select-button"
+                                                        onclick="event.preventDefault(); event.stopPropagation(); selectStudioObject('${safeId}')">
+                                                        <span>${layerName}</span>
                                                     </button>
-                                                </small>
-                                            </div>
-                                        `;
+
+                                                    <small class="layer-meta">
+                                                        ${visibleLabel}
+                                                        <button
+                                                            type="button"
+                                                            class="layer-lock-toggle ${locked ? "locked" : "unlocked"}"
+                                                            data-studio-lock-control="true"
+                                                            data-lock-object-id="${safeId}"
+                                                            data-lock-command="${lockCommand}"
+                                                            title="${lockButtonTitle}"
+                                                            aria-label="${lockButtonTitle}">
+                                                            ${lockButtonLabel}
+                                                        </button>
+                                                    </small>
+                                                </div>
+                                            `;
             }).join("");
         }
         function renderInspector() {
@@ -6540,37 +6730,33 @@
 
             if (!object) {
                 box.innerHTML = `
-                                                        ${validationWarning}
+                                                            ${validationWarning}
 
-                                                        <div class="inspector-group">
-                                                            <h4>Canvas</h4>
+                                                            <div class="inspector-group">
+                                                                <h4>Canvas</h4>
 
-                                                            <p class="studio-inspector-note" style="margin-bottom:12px;">
-                                                                The whole profile page below the reference nav bar is customizable. This is not a centered card anymore.
-                                                            </p>
+                                                                <label>Background Mode</label>
+                                                                <select onchange="updateCanvasField('backgroundMode', this.value)">
+                                                                    <option value="gradient" ${studioLayout.canvas.backgroundMode === "gradient" ? "selected" : ""}>Gradient</option>
+                                                                    <option value="color" ${studioLayout.canvas.backgroundMode === "color" ? "selected" : ""}>Color</option>
+                                                                    <option value="image" ${studioLayout.canvas.backgroundMode === "image" ? "selected" : ""}>Image URL</option>
+                                                                </select>
 
-                                                            <label>Background Mode</label>
-                                                            <select onchange="updateCanvasField('backgroundMode', this.value)">
-                                                                <option value="gradient" ${studioLayout.canvas.backgroundMode === "gradient" ? "selected" : ""}>Gradient</option>
-                                                                <option value="color" ${studioLayout.canvas.backgroundMode === "color" ? "selected" : ""}>Color</option>
-                                                                <option value="image" ${studioLayout.canvas.backgroundMode === "image" ? "selected" : ""}>Image URL</option>
-                                                            </select>
+                                                                ${renderCanvasColorControl("Background Color", "backgroundColor", studioLayout.canvas.backgroundColor || "#09090b", "#09090b")}
 
-                                                            ${renderCanvasColorControl("Background Color", "backgroundColor", studioLayout.canvas.backgroundColor || "#09090b", "#09090b")}
+                                                                ${renderCanvasColorControl("Gradient", "backgroundGradient", studioLayout.canvas.backgroundGradient || "", "#09090b")}
 
-                                                            ${renderCanvasColorControl("Gradient", "backgroundGradient", studioLayout.canvas.backgroundGradient || "", "#09090b")}
+                                                                <label>Background Image URL</label>
+                                                                <input value="${escapeHtml(studioLayout.canvas.backgroundImage || "")}" onchange="updateCanvasField('backgroundImage', this.value)">
 
-                                                            <label>Background Image URL</label>
-                                                            <input value="${escapeHtml(studioLayout.canvas.backgroundImage || "")}" onchange="updateCanvasField('backgroundImage', this.value)">
+                                                                <label>
+                                                                    <input type="checkbox" style="width:auto;margin-right:8px;" ${studioLayout.canvas.showGrid !== false ? "checked" : ""} onchange="updateCanvasField('showGrid', this.checked)">
+                                                                    Show Grid
+                                                                </label>
+                                                            </div>
 
-                                                            <label>
-                                                                <input type="checkbox" style="width:auto;margin-right:8px;" ${studioLayout.canvas.showGrid !== false ? "checked" : ""} onchange="updateCanvasField('showGrid', this.checked)">
-                                                                Show Grid
-                                                            </label>
-                                                        </div>
-
-                                                        <p class="inspector-empty">Select an object to edit it. The inspector will only show controls that actually apply to that selected object.</p>
-                                                    `;
+                                                            <p class="inspector-empty">Select an object to edit it. The inspector will only show controls that actually apply to that selected object.</p>
+                                                        `;
 
                 return;
             }
@@ -6633,11 +6819,11 @@
 
         function renderInspectorLockedObject(object) {
             return `
-                                            <div class="inspector-group studio-locked-panel">
-                                                <h4>🔒 Locked Layer</h4>
-                                                <p class="studio-inspector-note">Unlock this layer in Layer Actions before editing it.</p>
-                                            </div>
-                                        `;
+                                                <div class="inspector-group studio-locked-panel">
+                                                    <h4>🔒 Locked Layer</h4>
+                                                    <p class="studio-inspector-note">Unlock this layer in Layer Actions before editing it.</p>
+                                                </div>
+                                            `;
         }
         function renderInspectorLayoutGroup(object) {
             const rule = getObjectSizeRule(object.type);
@@ -6647,130 +6833,130 @@
             const opacityPercent = Math.round(Number(object.styles?.opacity ?? 1) * 100);
 
             return `
-                                                    <div class="inspector-group ${locked ? "studio-locked-panel" : ""}">
-                                                        <h4>${escapeHtml(objectLabels[object.type] || object.type)}</h4>
+                                                        <div class="inspector-group ${locked ? "studio-locked-panel" : ""}">
+                                                            <h4>${escapeHtml(objectLabels[object.type] || object.type)}</h4>
 
-                                                        <label>Layer Name</label>
-                                                        <input value="${escapeHtml(object.name || "")}" ${lockedAttr} onchange="updateObjectField('name', this.value)">
+                                                            <label>Layer Name</label>
+                                                            <input value="${escapeHtml(object.name || "")}" ${lockedAttr} onchange="updateObjectField('name', this.value)">
 
-                                                        <div class="mini-grid">
-                                                            <div>
-                                                                <label>X</label>
-                                                                <input type="number" value="${Math.round(object.x)}" ${lockedAttr} onchange="updateObjectField('x', Number(this.value))">
+                                                            <div class="mini-grid">
+                                                                <div>
+                                                                    <label>X</label>
+                                                                    <input type="number" value="${Math.round(object.x)}" ${lockedAttr} onchange="updateObjectField('x', Number(this.value))">
+                                                                </div>
+
+                                                                <div>
+                                                                    <label>Y</label>
+                                                                    <input type="number" value="${Math.round(object.y)}" ${lockedAttr} onchange="updateObjectField('y', Number(this.value))">
+                                                                </div>
+
+                                                                <div>
+                                                                    <label>Width</label>
+                                                                    <input type="number" min="${rule.minW}" max="${rule.maxW}" value="${Math.round(object.w)}" ${locked || lockedSize ? "disabled" : ""} onchange="updateObjectField('w', Number(this.value))">
+                                                                </div>
+
+                                                                <div>
+                                                                    <label>Height</label>
+                                                                    <input type="number" min="${rule.minH}" max="${rule.maxH}" value="${Math.round(object.h)}" ${locked || lockedSize || isPlainTextStudioObject(object) ? "disabled" : ""} onchange="updateObjectField('h', Number(this.value))">
+                                                                </div>
+
+                                                                <div>
+                                                                    <label>Rotation</label>
+                                                                    <input type="number" value="${Math.round(object.rotation || 0)}" ${lockedAttr} onchange="updateObjectField('rotation', Number(this.value))">
+                                                                </div>
                                                             </div>
 
-                                                            <div>
-                                                                <label>Y</label>
-                                                                <input type="number" value="${Math.round(object.y)}" ${lockedAttr} onchange="updateObjectField('y', Number(this.value))">
+                                                            ${isPlainTextStudioObject(object) ? `<p class="studio-inspector-note">Text height and width auto-wrap to the actual text, line breaks, and tabs so transparent text boxes do not create huge invisible hitboxes.</p>` : ""}
+
+                                                            <label style="margin-top:12px;">Opacity</label>
+                                                            <div class="studio-opacity-row">
+                                                                <input class="studio-opacity-range" type="range" min="0" max="100" step="1" value="${opacityPercent}" ${lockedAttr} oninput="updateObjectStyle('opacity', Number(this.value) / 100, { skipHistory: true }); document.getElementById('studio-object-opacity-value').textContent = this.value + '%';" onchange="updateObjectStyle('opacity', Number(this.value) / 100)">
+                                                                <span id="studio-object-opacity-value" class="studio-opacity-value">${opacityPercent}%</span>
                                                             </div>
 
-                                                            <div>
-                                                                <label>Width</label>
-                                                                <input type="number" min="${rule.minW}" max="${rule.maxW}" value="${Math.round(object.w)}" ${locked || lockedSize ? "disabled" : ""} onchange="updateObjectField('w', Number(this.value))">
-                                                            </div>
-
-                                                            <div>
-                                                                <label>Height</label>
-                                                                <input type="number" min="${rule.minH}" max="${rule.maxH}" value="${Math.round(object.h)}" ${locked || lockedSize || isPlainTextStudioObject(object) ? "disabled" : ""} onchange="updateObjectField('h', Number(this.value))">
-                                                            </div>
-
-                                                            <div>
-                                                                <label>Rotation</label>
-                                                                <input type="number" value="${Math.round(object.rotation || 0)}" ${lockedAttr} onchange="updateObjectField('rotation', Number(this.value))">
-                                                            </div>
+                                                            <label>
+                                                                <input type="checkbox" style="width:auto;margin-right:8px;" ${object.visible !== false ? "checked" : ""} ${lockedAttr} onchange="updateObjectField('visible', this.checked)">
+                                                                Visible
+                                                            </label>
                                                         </div>
-
-                                                        ${isPlainTextStudioObject(object) ? `<p class="studio-inspector-note">Text height and width auto-wrap to the actual text, line breaks, and tabs so transparent text boxes do not create huge invisible hitboxes.</p>` : ""}
-
-                                                        <label style="margin-top:12px;">Opacity</label>
-                                                        <div class="studio-opacity-row">
-                                                            <input class="studio-opacity-range" type="range" min="0" max="100" step="1" value="${opacityPercent}" ${lockedAttr} oninput="updateObjectStyle('opacity', Number(this.value) / 100, { skipHistory: true }); document.getElementById('studio-object-opacity-value').textContent = this.value + '%';" onchange="updateObjectStyle('opacity', Number(this.value) / 100)">
-                                                            <span id="studio-object-opacity-value" class="studio-opacity-value">${opacityPercent}%</span>
-                                                        </div>
-
-                                                        <label>
-                                                            <input type="checkbox" style="width:auto;margin-right:8px;" ${object.visible !== false ? "checked" : ""} ${lockedAttr} onchange="updateObjectField('visible', this.checked)">
-                                                            Visible
-                                                        </label>
-                                                    </div>
-                                                `;
+                                                    `;
         }
         function renderInspectorPlainTextGroup(object) {
             const lineHeight = Number(object.styles.lineHeight ?? 1.16);
 
             return `
-                                                    <div class="inspector-group">
-                                                        <h4>Text</h4>
+                                                        <div class="inspector-group">
+                                                            <h4>Text</h4>
 
-                                                        ${renderObjectColorControl("Text Color", "textColor", object.styles.textColor || "#ffffff", "#ffffff")}
+                                                            ${renderObjectColorControl("Text Color", "textColor", object.styles.textColor || "#ffffff", "#ffffff")}
 
-                                                        <div class="mini-grid">
-                                                            <div>
-                                                                <label>Font Size</label>
-                                                                <input type="number" min="8" max="160" value="${Number(object.styles.fontSize || 16)}" data-style-target="${escapeHtml(object.id)}" data-style-field="fontSize" oninput="updateObjectStyleById('${escapeHtml(object.id)}', 'fontSize', Number(this.value), { skipHistory: true })" onchange="updateObjectStyleById('${escapeHtml(object.id)}', 'fontSize', Number(this.value))">
+                                                            <div class="mini-grid">
+                                                                <div>
+                                                                    <label>Font Size</label>
+                                                                    <input type="number" min="8" max="160" value="${Number(object.styles.fontSize || 16)}" data-style-target="${escapeHtml(object.id)}" data-style-field="fontSize" oninput="updateObjectStyleById('${escapeHtml(object.id)}', 'fontSize', Number(this.value), { skipHistory: true })" onchange="updateObjectStyleById('${escapeHtml(object.id)}', 'fontSize', Number(this.value))">
+                                                                </div>
+
+                                                                <div>
+                                                                    <label>Line Height</label>
+                                                                    <input type="number" min="0.8" max="3" step="0.05" value="${lineHeight}" onchange="updateObjectStyle('lineHeight', Number(this.value))">
+                                                                </div>
                                                             </div>
 
-                                                            <div>
-                                                                <label>Line Height</label>
-                                                                <input type="number" min="0.8" max="3" step="0.05" value="${lineHeight}" onchange="updateObjectStyle('lineHeight', Number(this.value))">
-                                                            </div>
+                                                            <label>Font</label>
+                                                            <select data-style-target="${escapeHtml(object.id)}" data-style-field="fontFamily" oninput="updateObjectStyleById(\'${escapeHtml(object.id)}\', \'fontFamily\', this.value, { skipHistory: true })" onchange="updateObjectStyleById(\'${escapeHtml(object.id)}\', \'fontFamily\', this.value, { refreshInspector: true })">
+                                                                ${Object.keys(studioFontFamilies).map(font => `<option value="${escapeHtml(font)}" ${getObjectFontFamily(object) === font ? "selected" : ""}>${escapeHtml(font)}</option>`).join("")}
+                                                            </select>
+
+                                                            <label>Text Align</label>
+                                                            <select onchange="updateObjectStyle('textAlign', this.value)">
+                                                                <option value="left" ${object.styles.textAlign === "left" ? "selected" : ""}>Left</option>
+                                                                <option value="center" ${object.styles.textAlign === "center" ? "selected" : ""}>Center</option>
+                                                                <option value="right" ${object.styles.textAlign === "right" ? "selected" : ""}>Right</option>
+                                                            </select>
                                                         </div>
-
-                                                        <label>Font</label>
-                                                        <select data-style-target="${escapeHtml(object.id)}" data-style-field="fontFamily" oninput="updateObjectStyleById(\'${escapeHtml(object.id)}\', \'fontFamily\', this.value, { skipHistory: true })" onchange="updateObjectStyleById(\'${escapeHtml(object.id)}\', \'fontFamily\', this.value, { refreshInspector: true })">
-                                                            ${Object.keys(studioFontFamilies).map(font => `<option value="${escapeHtml(font)}" ${getObjectFontFamily(object) === font ? "selected" : ""}>${escapeHtml(font)}</option>`).join("")}
-                                                        </select>
-
-                                                        <label>Text Align</label>
-                                                        <select onchange="updateObjectStyle('textAlign', this.value)">
-                                                            <option value="left" ${object.styles.textAlign === "left" ? "selected" : ""}>Left</option>
-                                                            <option value="center" ${object.styles.textAlign === "center" ? "selected" : ""}>Center</option>
-                                                            <option value="right" ${object.styles.textAlign === "right" ? "selected" : ""}>Right</option>
-                                                        </select>
-                                                    </div>
-                                                `;
+                                                    `;
         }
 
         function renderInspectorTextSourceGroup(object) {
             if (object.type === "text") {
                 return `
-                                                        <div class="inspector-group">
-                                                            <h4>Text Content</h4>
-                                                            <textarea rows="7" spellcheck="true" oninput="updateTextObjectContent('${escapeHtml(object.id)}', this.value)">${escapeHtml(object.text || "")}</textarea>
-                                                            <p class="studio-inspector-note">Line breaks and tab spacing are preserved. You can also edit directly on the canvas.</p>
-                                                        </div>
-                                                    `;
+                                                            <div class="inspector-group">
+                                                                <h4>Text Content</h4>
+                                                                <textarea rows="7" spellcheck="true" oninput="updateTextObjectContent('${escapeHtml(object.id)}', this.value)">${escapeHtml(object.text || "")}</textarea>
+                                                                <p class="studio-inspector-note">Line breaks and tab spacing are preserved. You can also edit directly on the canvas.</p>
+                                                            </div>
+                                                        `;
             }
 
             return `
-                                                    <div class="inspector-group">
-                                                        <h4>Source</h4>
-                                                        <p class="studio-inspector-note">This text comes from your public identity fields, so the content is edited in Public Identity. Only its visual style changes here.</p>
-                                                    </div>
-                                                `;
+                                                        <div class="inspector-group">
+                                                            <h4>Source</h4>
+                                                            <p class="studio-inspector-note">This text comes from your public identity fields, so the content is edited in Public Identity. Only its visual style changes here.</p>
+                                                        </div>
+                                                    `;
         }
 
         function renderInspectorShapeGroup(object) {
             const shapeLabel = object.type === "divider" ? "Divider" : "Shape";
 
             return `
-                                                    <div class="inspector-group">
-                                                        <h4>${shapeLabel} Style</h4>
+                                                        <div class="inspector-group">
+                                                            <h4>${shapeLabel} Style</h4>
 
-                                                        ${object.type === "divider" ? renderObjectColorControl("Divider Color", "textColor", object.styles.textColor || "#ffffff", "#ffffff") : renderObjectColorControl("Fill", "background", object.styles.background || "rgba(255,255,255,.18)", "#ffffff")}
+                                                            ${object.type === "divider" ? renderObjectColorControl("Divider Color", "textColor", object.styles.textColor || "#ffffff", "#ffffff") : renderObjectColorControl("Fill", "background", object.styles.background || "rgba(255,255,255,.18)", "#ffffff")}
 
-                                                        ${object.type === "divider" ? "" : renderObjectColorControl("Border Color", "borderColor", object.styles.borderColor || "rgba(255,255,255,.10)", "#ffffff")}
+                                                            ${object.type === "divider" ? "" : renderObjectColorControl("Border Color", "borderColor", object.styles.borderColor || "rgba(255,255,255,.10)", "#ffffff")}
 
-                                                        ${object.type === "divider" || object.shapeType === "rectangle" || object.type === "shape" ? "" : `
-                                                            <label>Corner Radius</label>
-                                                            <input type="number" min="0" max="999" value="${Number(object.styles.radius ?? 18)}" onchange="updateObjectStyle('radius', Number(this.value))">
-                                                        `}
+                                                            ${object.type === "divider" || object.shapeType === "rectangle" || object.type === "shape" ? "" : `
+                                                                <label>Corner Radius</label>
+                                                                <input type="number" min="0" max="999" value="${Number(object.styles.radius ?? 18)}" onchange="updateObjectStyle('radius', Number(this.value))">
+                                                            `}
 
-                                                        ${object.shapeType === "rectangle" || object.type === "shape" ? `<p class="studio-inspector-note">Rectangles now use pointed corners by default.</p>` : ""}
+                                                            ${object.shapeType === "rectangle" || object.type === "shape" ? `<p class="studio-inspector-note">Rectangles now use pointed corners by default.</p>` : ""}
 
-                                                        <p class="studio-inspector-note">Shape blocks do not show text controls because they are visual objects, not text boxes.</p>
-                                                    </div>
-                                                `;
+                                                            <p class="studio-inspector-note">Shape blocks do not show text controls because they are visual objects, not text boxes.</p>
+                                                        </div>
+                                                    `;
         }
 
         function renderInspectorActionButtonGroup(object) {
@@ -6778,65 +6964,65 @@
             const label = isGroup ? "Action Button Group" : getSingleActionLabel(object.type);
 
             return `
-                                                    <div class="inspector-group">
-                                                        <h4>Void Glass Button</h4>
+                                                        <div class="inspector-group">
+                                                            <h4>Void Glass Button</h4>
 
-                                                        <p class="studio-inspector-note" style="margin-bottom:12px;">
-                                                            System labels stay locked for safety. You can only style the glass color, gradient, text color, radius, and spacing.
-                                                        </p>
+                                                            <p class="studio-inspector-note" style="margin-bottom:12px;">
+                                                                System labels stay locked for safety. You can only style the glass color, gradient, text color, radius, and spacing.
+                                                            </p>
 
-                                                        <label>Locked Label</label>
-                                                        <input value="${escapeHtml(label)}" disabled>
+                                                            <label>Locked Label</label>
+                                                            <input value="${escapeHtml(label)}" disabled>
 
-                                                        ${isGroup
+                                                            ${isGroup
                     ? renderObjectColorControl("Button Glass", "actionButtonBg", object.styles.actionButtonBg || "linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.045))", "#111111")
                     : renderObjectColorControl("Button Glass", "background", object.styles.background || "linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.045))", "#111111")}
 
-                                                        ${isGroup
+                                                            ${isGroup
                     ? renderObjectColorControl("Button Text", "actionButtonText", object.styles.actionButtonText || "#ffffff", "#ffffff")
                     : renderObjectColorControl("Button Text", "textColor", object.styles.textColor || "#ffffff", "#ffffff")}
 
-                                                        ${isGroup
+                                                            ${isGroup
                     ? renderObjectColorControl("Glass Border", "actionButtonBorder", object.styles.actionButtonBorder || "rgba(255,255,255,.18)", "#ffffff")
                     : renderObjectColorControl("Glass Border", "borderColor", object.styles.borderColor || "rgba(255,255,255,.18)", "#ffffff")}
 
-                                                        <div class="mini-grid">
-                                                            <div>
-                                                                <label>Radius</label>
-                                                                <input type="number" min="0" max="80" value="${Number(isGroup ? object.styles.actionButtonRadius ?? 14 : object.styles.radius ?? 14)}" onchange="${isGroup ? "updateObjectStyle('actionButtonRadius', Number(this.value))" : "updateObjectStyle('radius', Number(this.value))"}">
-                                                            </div>
-
-                                                            ${isGroup ? `
+                                                            <div class="mini-grid">
                                                                 <div>
-                                                                    <label>Button Gap</label>
-                                                                    <input type="number" min="0" max="40" value="${Number(object.styles.actionButtonGap ?? 10)}" onchange="updateObjectStyle('actionButtonGap', Number(this.value))">
+                                                                    <label>Radius</label>
+                                                                    <input type="number" min="0" max="80" value="${Number(isGroup ? object.styles.actionButtonRadius ?? 14 : object.styles.radius ?? 14)}" onchange="${isGroup ? "updateObjectStyle('actionButtonRadius', Number(this.value))" : "updateObjectStyle('radius', Number(this.value))"}">
                                                                 </div>
-                                                            ` : ""}
+
+                                                                ${isGroup ? `
+                                                                    <div>
+                                                                        <label>Button Gap</label>
+                                                                        <input type="number" min="0" max="40" value="${Number(object.styles.actionButtonGap ?? 10)}" onchange="updateObjectStyle('actionButtonGap', Number(this.value))">
+                                                                    </div>
+                                                                ` : ""}
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                `;
+                                                    `;
         }
 
         function renderInspectorImageGroup(object) {
             const imageLabel = object.type === "profile_avatar" ? "Profile Picture Source" : "Image";
 
             return `
-                                                    <div class="inspector-group">
-                                                        <h4>${imageLabel}</h4>
+                                                        <div class="inspector-group">
+                                                            <h4>${imageLabel}</h4>
 
-                                                        <label>Image URL</label>
-                                                        <input value="${escapeHtml(object.imageUrl || "")}" onchange="updateObjectField('imageUrl', this.value)">
+                                                            <label>Image URL</label>
+                                                            <input value="${escapeHtml(object.imageUrl || "")}" onchange="updateObjectField('imageUrl', this.value)">
 
-                                                        <label>Upload Image</label>
-                                                        <input type="file" accept="image/*" onchange="uploadStudioObjectImage(this)">
+                                                            <label>Upload Image</label>
+                                                            <input type="file" accept="image/*" onchange="uploadStudioObjectImage(this)">
 
-                                                        <label>Image Fit</label>
-                                                        <select onchange="updateObjectStyle('objectFit', this.value)">
-                                                            <option value="cover" ${object.styles.objectFit === "cover" ? "selected" : ""}>Cover</option>
-                                                            <option value="contain" ${object.styles.objectFit === "contain" ? "selected" : ""}>Contain</option>
-                                                        </select>
-                                                    </div>
-                                                `;
+                                                            <label>Image Fit</label>
+                                                            <select onchange="updateObjectStyle('objectFit', this.value)">
+                                                                <option value="cover" ${object.styles.objectFit === "cover" ? "selected" : ""}>Cover</option>
+                                                                <option value="contain" ${object.styles.objectFit === "contain" ? "selected" : ""}>Contain</option>
+                                                            </select>
+                                                        </div>
+                                                    `;
         }
 
         function renderInspectorContentGroup(object) {
@@ -6844,95 +7030,95 @@
 
             if (object.type === "world_card") {
                 specific = `
-                                                        <label>Featured World</label>
-                                                        <select onchange="updateObjectField('worldId', this.value)">
-                                                            ${currentPublishedWorlds.map(world => `<option value="${escapeHtml(world.id)}" ${object.worldId === world.id ? "selected" : ""}>${escapeHtml(world.title || "Untitled World")}</option>`).join("")}
-                                                        </select>
-                                                    `;
+                                                            <label>Featured World</label>
+                                                            <select onchange="updateObjectField('worldId', this.value)">
+                                                                ${currentPublishedWorlds.map(world => `<option value="${escapeHtml(world.id)}" ${object.worldId === world.id ? "selected" : ""}>${escapeHtml(world.title || "Untitled World")}</option>`).join("")}
+                                                            </select>
+                                                        `;
             }
 
             if (object.type === "gallery_item") {
                 specific = `
-                                                        <label>Gallery Image</label>
-                                                        <select onchange="updateObjectField('galleryItemId', this.value)">
-                                                            ${currentGalleryItems.map(item => `<option value="${escapeHtml(item.id)}" ${object.galleryItemId === item.id ? "selected" : ""}>${escapeHtml(item.title || "Untitled Gallery Image")}</option>`).join("")}
-                                                        </select>
-                                                    `;
+                                                            <label>Gallery Image</label>
+                                                            <select onchange="updateObjectField('galleryItemId', this.value)">
+                                                                ${currentGalleryItems.map(item => `<option value="${escapeHtml(item.id)}" ${object.galleryItemId === item.id ? "selected" : ""}>${escapeHtml(item.title || "Untitled Gallery Image")}</option>`).join("")}
+                                                            </select>
+                                                        `;
             }
 
             if (["bio", "section", "image_text"].includes(object.type)) {
                 specific = `
-                                                        <label>Title</label>
-                                                        <input value="${escapeHtml(object.title || "")}" onchange="updateObjectField('title', this.value)">
+                                                            <label>Title</label>
+                                                            <input value="${escapeHtml(object.title || "")}" onchange="updateObjectField('title', this.value)">
 
-                                                        ${object.type === "bio" ? `<p class="studio-inspector-note">Bio text comes from your Public Identity bio.</p>` : `
-                                                            <label>Text</label>
-                                                            <textarea rows="5" onchange="updateObjectField('text', this.value)">${escapeHtml(object.text || "")}</textarea>
-                                                        `}
-                                                    `;
+                                                            ${object.type === "bio" ? `<p class="studio-inspector-note">Bio text comes from your Public Identity bio.</p>` : `
+                                                                <label>Text</label>
+                                                                <textarea rows="5" onchange="updateObjectField('text', this.value)">${escapeHtml(object.text || "")}</textarea>
+                                                            `}
+                                                        `;
             }
 
             return `
-                                                    <div class="inspector-group">
-                                                        <h4>Content</h4>
-                                                        ${specific || `<p class="studio-inspector-note">This block uses live profile data.</p>`}
-                                                    </div>
-                                                `;
+                                                        <div class="inspector-group">
+                                                            <h4>Content</h4>
+                                                            ${specific || `<p class="studio-inspector-note">This block uses live profile data.</p>`}
+                                                        </div>
+                                                    `;
         }
 
         function renderInspectorSurfaceGroup(object, options = {}) {
             const allowText = options.allowText !== false;
 
             return `
-                                                    <div class="inspector-group">
-                                                        <h4>Surface</h4>
+                                                        <div class="inspector-group">
+                                                            <h4>Surface</h4>
 
-                                                        ${renderObjectColorControl("Background", "background", object.styles.background || "transparent", "#111111")}
+                                                            ${renderObjectColorControl("Background", "background", object.styles.background || "transparent", "#111111")}
 
-                                                        ${allowText ? renderObjectColorControl("Text Color", "textColor", object.styles.textColor || "#ffffff", "#ffffff") : ""}
+                                                            ${allowText ? renderObjectColorControl("Text Color", "textColor", object.styles.textColor || "#ffffff", "#ffffff") : ""}
 
-                                                        ${renderObjectColorControl("Border Color", "borderColor", object.styles.borderColor || "rgba(255,255,255,.10)", "#ffffff")}
+                                                            ${renderObjectColorControl("Border Color", "borderColor", object.styles.borderColor || "rgba(255,255,255,.10)", "#ffffff")}
 
-                                                        <label>Corner Radius</label>
-                                                        <input type="number" min="0" max="80" value="${Number(object.styles.radius ?? 18)}" onchange="updateObjectStyle('radius', Number(this.value))">
-                                                    </div>
-                                                `;
+                                                            <label>Corner Radius</label>
+                                                            <input type="number" min="0" max="80" value="${Number(object.styles.radius ?? 18)}" onchange="updateObjectStyle('radius', Number(this.value))">
+                                                        </div>
+                                                    `;
         }
 
         function renderInspectorStatGroup(object) {
             return `
-                                                    <div class="inspector-group">
-                                                        <h4>Stat Block</h4>
+                                                        <div class="inspector-group">
+                                                            <h4>Stat Block</h4>
 
-                                                        <p class="studio-inspector-note" style="margin-bottom:12px;">
-                                                            The number and label are system-controlled. You can style the block while keeping it readable.
-                                                        </p>
+                                                            <p class="studio-inspector-note" style="margin-bottom:12px;">
+                                                                The number and label are system-controlled. You can style the block while keeping it readable.
+                                                            </p>
 
-                                                        ${renderObjectColorControl("Glass Background", "background", object.styles.background || "rgba(255,255,255,.045)", "#111111")}
-                                                        ${renderObjectColorControl("Text Color", "textColor", object.styles.textColor || "#ffffff", "#ffffff")}
-                                                        ${renderObjectColorControl("Border Color", "borderColor", object.styles.borderColor || "rgba(255,255,255,.10)", "#ffffff")}
-                                                    </div>
-                                                `;
+                                                            ${renderObjectColorControl("Glass Background", "background", object.styles.background || "rgba(255,255,255,.045)", "#111111")}
+                                                            ${renderObjectColorControl("Text Color", "textColor", object.styles.textColor || "#ffffff", "#ffffff")}
+                                                            ${renderObjectColorControl("Border Color", "borderColor", object.styles.borderColor || "rgba(255,255,255,.10)", "#ffffff")}
+                                                        </div>
+                                                    `;
         }
 
         function renderInspectorBadgeGroup(object) {
             const badge = getBadgeByKey(object.badgeKey) || currentOwnedBadges[0];
 
             return `
-                                                    <div class="inspector-group">
-                                                        <h4>Official Badge</h4>
-                                                        <p class="studio-inspector-note" style="margin-bottom:12px;">
-                                                            Badges keep their official size and style so status cannot be faked or distorted.
-                                                        </p>
+                                                        <div class="inspector-group">
+                                                            <h4>Official Badge</h4>
+                                                            <p class="studio-inspector-note" style="margin-bottom:12px;">
+                                                                Badges keep their official size and style so status cannot be faked or distorted.
+                                                            </p>
 
-                                                        <label>Badge</label>
-                                                        <select onchange="updateObjectField('badgeKey', this.value)">
-                                                            ${currentOwnedBadges.map(item => `<option value="${escapeHtml(item.key)}" ${object.badgeKey === item.key ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}
-                                                        </select>
+                                                            <label>Badge</label>
+                                                            <select onchange="updateObjectField('badgeKey', this.value)">
+                                                                ${currentOwnedBadges.map(item => `<option value="${escapeHtml(item.key)}" ${object.badgeKey === item.key ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}
+                                                            </select>
 
-                                                        <input value="${escapeHtml(badge?.label || "Official Badge")}" disabled>
-                                                    </div>
-                                                `;
+                                                            <input value="${escapeHtml(badge?.label || "Official Badge")}" disabled>
+                                                        </div>
+                                                    `;
         }
 
         function renderInspectorLayerActionsGroup(object) {
@@ -6941,29 +7127,35 @@
             const safeId = escapeHtml(object.id);
             const lockButtonLabel = locked ? "🔒 Locked" : "🔓 Unlocked";
             const lockButtonClass = locked ? "locked" : "unlocked";
-            const nextLockValue = locked ? "false" : "true";
+            const lockCommand = locked ? "unlock" : "lock";
+            const lockTitle = locked ? "Unlock this layer" : "Lock this layer";
             const actionDisabled = locked ? "disabled" : "";
 
+            setupStudioLockControlDelegation();
+
             return `
-                                                    <div class="inspector-group">
-                                                        <h4>Layer Actions</h4>
+                                                        <div class="inspector-group">
+                                                            <h4>Layer Actions</h4>
 
-                                                        <div class="button-row">
-                                                            <button
-                                                                type="button"
-                                                                class="button-muted studio-lock-action-button ${lockButtonClass}"
-                                                                data-lock-object-id="${safeId}"
-                                                                onclick="event.preventDefault(); event.stopPropagation(); setStudioObjectLock('${safeId}', ${nextLockValue});">
-                                                                ${lockButtonLabel}
-                                                            </button>
+                                                            <div class="button-row">
+                                                                <button
+                                                                    type="button"
+                                                                    class="button-muted studio-lock-action-button ${lockButtonClass}"
+                                                                    data-studio-lock-control="true"
+                                                                    data-lock-object-id="${safeId}"
+                                                                    data-lock-command="${lockCommand}"
+                                                                    title="${lockTitle}"
+                                                                    aria-label="${lockTitle}">
+                                                                    ${lockButtonLabel}
+                                                                </button>
 
-                                                            <button type="button" class="button-muted" onclick="moveSelectedLayer(1)" ${actionDisabled}>Bring Forward</button>
-                                                            <button type="button" class="button-muted" onclick="moveSelectedLayer(-1)" ${actionDisabled}>Send Backward</button>
-                                                            <button type="button" class="button-muted" onclick="duplicateSelectedObject()" ${locked || object.type === "profile_badge" ? "disabled" : ""}>Duplicate</button>
-                                                            <button type="button" class="danger-button" onclick="deleteSelectedObject()" ${locked ? "disabled" : ""} ${isProtected ? "title='Required platform objects may be needed before publishing.'" : ""}>Delete</button>
+                                                                <button type="button" class="button-muted" onclick="moveSelectedLayer(1)" ${actionDisabled}>Bring Forward</button>
+                                                                <button type="button" class="button-muted" onclick="moveSelectedLayer(-1)" ${actionDisabled}>Send Backward</button>
+                                                                <button type="button" class="button-muted" onclick="duplicateSelectedObject()" ${locked || object.type === "profile_badge" ? "disabled" : ""}>Duplicate</button>
+                                                                <button type="button" class="danger-button" onclick="deleteSelectedObject()" ${locked ? "disabled" : ""} ${isProtected ? "title='Required platform objects may be needed before publishing.'" : ""}>Delete</button>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                `;
+                                                    `;
         }
 
         function selectStudioObject(id, additive = false) {
@@ -7062,16 +7254,16 @@
             box.style.width = bounds.w + "px";
             box.style.height = bounds.h + "px";
             box.innerHTML = `
-                                                                                                                <span class="group-rotate-handle" data-action="group-rotate"></span>
-                                                                                                                <span class="group-resize-handle nw" data-handle="nw"></span>
-                                                                                                                <span class="group-resize-handle n" data-handle="n"></span>
-                                                                                                                <span class="group-resize-handle ne" data-handle="ne"></span>
-                                                                                                                <span class="group-resize-handle e" data-handle="e"></span>
-                                                                                                                <span class="group-resize-handle se" data-handle="se"></span>
-                                                                                                                <span class="group-resize-handle s" data-handle="s"></span>
-                                                                                                                <span class="group-resize-handle sw" data-handle="sw"></span>
-                                                                                                                <span class="group-resize-handle w" data-handle="w"></span>
-                                                                                                            `;
+                                                                                                                    <span class="group-rotate-handle" data-action="group-rotate"></span>
+                                                                                                                    <span class="group-resize-handle nw" data-handle="nw"></span>
+                                                                                                                    <span class="group-resize-handle n" data-handle="n"></span>
+                                                                                                                    <span class="group-resize-handle ne" data-handle="ne"></span>
+                                                                                                                    <span class="group-resize-handle e" data-handle="e"></span>
+                                                                                                                    <span class="group-resize-handle se" data-handle="se"></span>
+                                                                                                                    <span class="group-resize-handle s" data-handle="s"></span>
+                                                                                                                    <span class="group-resize-handle sw" data-handle="sw"></span>
+                                                                                                                    <span class="group-resize-handle w" data-handle="w"></span>
+                                                                                                                `;
 
             box.addEventListener("pointerdown", startGroupMove);
 
@@ -7331,15 +7523,9 @@
                 bindCanvasTextEditors(el, object);
             }
 
-            if (isObjectLocked(object)) {
-                el.onpointerdown = startLockedObjectPointerDown;
-                el.onmousedown = startLockedObjectPointerDown;
-                el.onclick = startLockedObjectPointerDown;
-            } else {
-                el.onpointerdown = null;
-                el.onmousedown = null;
-                el.onclick = null;
-            }
+            el.onpointerdown = null;
+            el.onmousedown = null;
+            el.onclick = null;
         }
 
         function updateCanvasField(field, value, options = {}) {
@@ -8533,17 +8719,17 @@
                 const avatar = blockedProfile?.avatar_url || defaultAvatar;
 
                 return `
-                                                                                                                                    <div class="drawer-card">
-                                                                                                                                        <div class="drawer-user">
-                                                                                                                                            <img src="${escapeHtml(avatar)}" alt="">
-                                                                                                                                            <div>
-                                                                                                                                                <strong>${escapeHtml(blockedProfile?.display_name || "Unknown User")}</strong>
-                                                                                                                                                <p>@${escapeHtml(blockedProfile?.username || "unknown")}</p>
+                                                                                                                                        <div class="drawer-card">
+                                                                                                                                            <div class="drawer-user">
+                                                                                                                                                <img src="${escapeHtml(avatar)}" alt="">
+                                                                                                                                                <div>
+                                                                                                                                                    <strong>${escapeHtml(blockedProfile?.display_name || "Unknown User")}</strong>
+                                                                                                                                                    <p>@${escapeHtml(blockedProfile?.username || "unknown")}</p>
+                                                                                                                                                </div>
                                                                                                                                             </div>
+                                                                                                                                            <button style="margin-top:14px;" onclick="unblockUser('${block.blocked_id}')">Unblock</button>
                                                                                                                                         </div>
-                                                                                                                                        <button style="margin-top:14px;" onclick="unblockUser('${block.blocked_id}')">Unblock</button>
-                                                                                                                                    </div>
-                                                                                                                                `;
+                                                                                                                                    `;
             }).join("");
         }
 
@@ -8615,11 +8801,16 @@
         window.toggleObjectArrayValue = toggleObjectArrayValue;
         window.uploadStudioObjectImage = uploadStudioObjectImage;
         window.saveContentPreferences = saveContentPreferences;
+        window.setStudioObjectLock = setStudioObjectLock;
+        window.lockStudioObject = lockStudioObject;
+        window.unlockStudioObject = unlockStudioObject;
+        window.toggleSelectedLayerLock = toggleSelectedLayerLock;
         window.toggleObjectLock = toggleObjectLock;
         window.changeEmail = changeEmail;
         window.changePassword = changePassword;
         window.logOut = logOut;
 
+        setupStudioLockControlDelegation();
         setupWorkspacePan();
         checkUserAndLoadProfile();
         window.toggleSelectedLayerLock = toggleSelectedLayerLock;
