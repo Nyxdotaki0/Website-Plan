@@ -1280,25 +1280,6 @@
             cursor: not-allowed;
         }
 
-
-        /* ============================================================
-           PROFILE PUBLIC CUSTOM-FIRST HOTFIX
-           Prevents the default profile shell from visually overriding a
-           saved Profile Studio canvas after Account Settings publishes it.
-        ============================================================ */
-
-        body.public-custom-profile-mode #default-profile-root {
-            display: none !important;
-        }
-
-        body.public-custom-profile-mode #custom-profile-root {
-            display: block !important;
-        }
-
-        body.public-custom-profile-mode main#default-profile-root {
-            display: none !important;
-        }
-
         @media (max-width: 860px) {
             header {
                 flex-direction: column;
@@ -1559,6 +1540,14 @@
             canModerateTarget
         } from "./permissions.js?v=3";
 
+        const publicStudioFontFamilies = {
+            "Arial": "Arial",
+            "Georgia": "Georgia",
+            "Verdana": "Verdana",
+            "Trebuchet MS": "Trebuchet MS",
+            "Courier New": "Courier New"
+        };
+
         setupMessageBadge();
 
         const currentUser = await requireBetaAccess();
@@ -1708,43 +1697,34 @@
             const defaultRoot = document.getElementById("default-profile-root");
             const customRoot = document.getElementById("custom-profile-root");
             const customLayout = getResponsiveProfileLayout(profile.profile_custom_layout, profile);
-            const useCustom = isPublicCustomLayoutUsable(customLayout, profile);
+
+            const hasSavedCustomLayout = hasVisibleCustomObjects(customLayout);
+            const customWasChosen = profile.profile_layout_mode === "custom";
+            const customWasPublished = customLayout.published === true || customLayout.sourceWasPublished === true;
+
+            const useCustom = hasSavedCustomLayout && (customWasChosen || customWasPublished);
 
             /*
-                Public profile rule:
-                Account Settings is the source of truth. If a saved Studio
-                layout has visible objects, profile.html should render it.
-                Default is only a safety fallback if the custom canvas fails.
+                Render the normal profile first so the page never goes blank.
+                Then, if Account Settings has a usable custom layout bundle,
+                swap to the custom canvas after it successfully builds.
             */
-            document.body.classList.remove("public-custom-profile-mode");
-            defaultRoot.style.setProperty("display", "block", "important");
-            customRoot.style.setProperty("display", "none", "important");
+            defaultRoot.style.display = "block";
+            customRoot.style.display = "none";
             customRoot.classList.remove("public-custom-profile-active");
             renderDefaultProfile(profile);
-
-            console.info("[Nullverse Profile] render decision", {
-                profile_layout_mode: profile.profile_layout_mode || "",
-                useCustom,
-                selectedLayout: customLayout?.layoutMode || "none",
-                visibleObjects: getPublicCustomObjectCount(customLayout),
-                published: customLayout?.published === true,
-                sourceWasPublished: customLayout?.sourceWasPublished === true,
-                usedResponsiveFallback: customLayout?.usedResponsiveFallback === true
-            });
 
             if (useCustom) {
                 try {
                     renderCustomProfile(profile, customLayout);
-                    document.body.classList.add("public-custom-profile-mode");
-                    defaultRoot.style.setProperty("display", "none", "important");
-                    customRoot.style.setProperty("display", "block", "important");
+                    defaultRoot.style.display = "none";
+                    customRoot.style.display = "block";
                 } catch (customProfileError) {
                     console.error("Custom profile render failed. Falling back to default profile.", customProfileError);
-                    document.body.classList.remove("public-custom-profile-mode");
                     customRoot.innerHTML = "";
-                    customRoot.style.setProperty("display", "none", "important");
+                    customRoot.style.display = "none";
                     customRoot.classList.remove("public-custom-profile-active");
-                    defaultRoot.style.setProperty("display", "block", "important");
+                    defaultRoot.style.display = "block";
                 }
             }
 
@@ -1939,22 +1919,21 @@
                 layout.objects.some(object => object && object.visible !== false);
         }
 
-        function getPublicCustomObjectCount(layout) {
-            if (!layout || !Array.isArray(layout.objects)) {
-                return 0;
+        function isPublicCustomLayoutUsable(layout, profileRecord = profile) {
+            if (!layout || !hasVisibleCustomObjects(layout)) {
+                return false;
             }
 
-            return layout.objects.filter(object => object && object.visible !== false).length;
-        }
-
-        function isPublicCustomLayoutUsable(layout, profileRecord = profile) {
             /*
-                Account Settings already controls whether a creator is building
-                a custom layout. Public profile should not reject a saved canvas
-                just because a stale profile_layout_mode or published flag lags
-                behind. Visible Studio objects are enough to render custom.
+                Account Settings stores a responsive bundle:
+                profile_custom_layout = { version: 4, layouts: { desktop, mobile } }.
+                A layout is public if it was explicitly published, or if the
+                profile is already in custom mode and the layout has visible
+                objects from an older save.
             */
-            return !!layout && hasVisibleCustomObjects(layout);
+            return layout.published === true ||
+                profileRecord?.profile_layout_mode === "custom" ||
+                layout.sourceWasPublished === true;
         }
 
         function getResponsiveProfileLayout(layout, profileRecord = profile) {
@@ -1964,37 +1943,35 @@
             const fallbackMode = preferredMode === "mobile" ? "desktop" : "mobile";
 
             const candidates = [
-                {
-                    mode: preferredMode,
-                    layout: bundle[preferredMode]
-                },
-                {
-                    mode: fallbackMode,
-                    layout: bundle[fallbackMode]
-                }
-            ].filter(candidate => candidate.layout);
+                bundle[preferredMode],
+                bundle[fallbackMode]
+            ].filter(Boolean);
 
-            const visibleCandidate = candidates.find(candidate => hasVisibleCustomObjects(candidate.layout));
+            const explicitlyUsable = candidates.find(candidate =>
+                hasVisibleCustomObjects(candidate) &&
+                (
+                    candidate.published === true ||
+                    candidate.sourceWasPublished === true ||
+                    profileRecord?.profile_layout_mode === "custom"
+                )
+            );
 
-            if (visibleCandidate) {
-                visibleCandidate.layout.usedResponsiveFallback = visibleCandidate.mode !== preferredMode;
-                visibleCandidate.layout.selectedResponsiveMode = visibleCandidate.mode;
+            if (explicitlyUsable) {
+                explicitlyUsable.usedResponsiveFallback = explicitlyUsable.layoutMode !== preferredMode;
+                return explicitlyUsable;
+            }
 
-                /*
-                    Force the layout into a public-renderable state inside
-                    profile.html only. This does not mutate Supabase; it just
-                    prevents the default page from overriding the custom canvas.
-                */
-                visibleCandidate.layout.published = true;
-                visibleCandidate.layout.publicForcedRender = true;
+            const anyVisible = candidates.find(candidate => hasVisibleCustomObjects(candidate));
 
-                return visibleCandidate.layout;
+            if (anyVisible) {
+                anyVisible.usedResponsiveFallback = anyVisible.layoutMode !== preferredMode;
+                anyVisible.published = profileRecord?.profile_layout_mode === "custom" || anyVisible.published === true;
+                return anyVisible;
             }
 
             const empty = normalizeLayout(null, preferredMode);
             empty.published = false;
             empty.usedResponsiveFallback = false;
-            empty.selectedResponsiveMode = preferredMode;
             return empty;
         }
 
@@ -2244,13 +2221,10 @@
             return `<span class="custom-gallery-description-pill">${escapeHtml(description)}</span>`;
         }
 
-        const publicStudioFontFamilies = {
-            "Arial": "Arial",
-            "Georgia": "Georgia",
-            "Verdana": "Verdana",
-            "Trebuchet MS": "Trebuchet MS",
-            "Courier New": "Courier New"
-        };
+
+        // publicStudioFontFamilies is declared near the top of the module so
+        // custom profile rendering can use it before the rest of the file
+        // finishes initializing.
 
         function normalizePublicStudioFontFamily(value) {
             const firstFamily = String(value || "")
