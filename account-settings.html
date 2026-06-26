@@ -2940,56 +2940,54 @@
                 opacity: 1 !important;
             }
 
+
         /* ============================================================
            PROFILE STUDIO AUTHORITATIVE LOCK MODEL
-           Locked layers are true canvas pass-through layers:
-           no click, select, drag, resize, rotate, edit, delete,
-           duplicate, or marquee selection until unlocked from UI.
+           Procreate-style layer locking: locked layers cannot be
+           touched on the canvas, but Layers/Inspector control state.
         ============================================================ */
 
-        .canvas-object.locked-object,
-        .canvas-object.locked-object *,
-        .canvas-object.text-box-object.locked-object,
-        .canvas-object.text-box-object.locked-object * {
+        #studio-canvas .canvas-object.locked-object,
+        #studio-canvas .canvas-object.locked-object *,
+        #studio-canvas .canvas-object.text-box-object.locked-object,
+        #studio-canvas .canvas-object.text-box-object.locked-object * {
             pointer-events: none !important;
-            cursor: default !important;
             user-select: none !important;
             -webkit-user-select: none !important;
+            cursor: default !important;
         }
 
-            .canvas-object.locked-object .resize-handle,
-            .canvas-object.locked-object .rotate-handle {
+            #studio-canvas .canvas-object.locked-object .resize-handle,
+            #studio-canvas .canvas-object.locked-object .rotate-handle {
                 display: none !important;
                 pointer-events: none !important;
             }
 
-            .canvas-object.locked-object.selected,
-            .canvas-object.locked-object.multi-selected {
+            #studio-canvas .canvas-object.locked-object.selected,
+            #studio-canvas .canvas-object.locked-object.multi-selected {
                 outline: 2px dashed rgba(255, 214, 102, .95) !important;
                 outline-offset: 7px !important;
             }
 
-        .layer-item,
-        .layer-select-button,
+        .layer-item.locked {
+            border-color: rgba(255, 214, 102, .62) !important;
+            color: #ffe7aa !important;
+            background: rgba(255, 214, 102, .13) !important;
+        }
+
+            .layer-item.locked.active {
+                border-color: rgba(255, 214, 102, .92) !important;
+                background: rgba(255, 214, 102, .20) !important;
+            }
+
         .layer-lock-toggle,
         .studio-lock-action-button {
             pointer-events: auto !important;
         }
 
-            .layer-item.locked {
-                border-color: rgba(255, 214, 102, .62) !important;
-                background: rgba(255, 214, 102, .12) !important;
-                color: #ffe7aa !important;
-            }
-
-                .layer-item.locked.active {
-                    border-color: rgba(255, 214, 102, .88) !important;
-                    background: rgba(255, 214, 102, .20) !important;
-                }
-
             .layer-lock-toggle.locked,
             .studio-lock-action-button.locked {
-                border-color: rgba(255, 214, 102, .72) !important;
+                border-color: rgba(255, 214, 102, .68) !important;
                 background: rgba(255, 214, 102, .16) !important;
                 color: #ffe7aa !important;
                 opacity: 1 !important;
@@ -2997,62 +2995,11 @@
 
             .layer-lock-toggle.unlocked,
             .studio-lock-action-button.unlocked {
-                border-color: rgba(180, 220, 255, .34) !important;
+                border-color: rgba(180, 220, 255, .36) !important;
                 background: rgba(120, 190, 255, .08) !important;
                 color: #eaf3ff !important;
                 opacity: 1 !important;
             }
-
-
-
-        /* ============================================================
-           PROFILE STUDIO LAYER REORDER CONTROLS
-           Layers shelf now supports bring-forward / send-backward
-           without changing the Procreate-style lock behavior.
-        ============================================================ */
-
-        .layer-order-controls {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            flex-shrink: 0;
-        }
-
-        .layer-order-button {
-            width: 27px !important;
-            min-width: 27px !important;
-            height: 26px !important;
-            min-height: 26px !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            border-radius: 8px !important;
-            border: 1px solid rgba(255, 255, 255, .12) !important;
-            background: rgba(255, 255, 255, .045) !important;
-            color: #eaf3ff !important;
-            box-shadow: none !important;
-            font-size: .72rem !important;
-            font-weight: 900 !important;
-            line-height: 1 !important;
-            transform: none !important;
-        }
-
-            .layer-order-button:hover:not(:disabled) {
-                transform: none !important;
-                border-color: rgba(180, 220, 255, .36) !important;
-                background: rgba(120, 190, 255, .08) !important;
-                box-shadow: none !important;
-            }
-
-            .layer-order-button:disabled {
-                opacity: .28 !important;
-                cursor: not-allowed !important;
-                transform: none !important;
-            }
-
-        .layer-item.locked .layer-order-button:not(:disabled) {
-            border-color: rgba(255, 214, 102, .26) !important;
-            color: #ffe7aa !important;
-        }
     </style>
 </head>
 <body>
@@ -3548,27 +3495,16 @@
                 return;
             }
 
-            /*
-                The object itself is now the only source of truth.
-                Earlier versions also used studioLockedObjectIds, but that let
-                stale IDs re-lock layers after the UI said they were unlocked.
-            */
             object.locked = locked === true;
         }
 
         function syncStudioLockSetFromLayout(layout) {
-            studioLockedObjectIds.clear();
-
             if (!layout || !Array.isArray(layout.objects)) {
                 return;
             }
 
             layout.objects.forEach(object => {
                 object.locked = object.locked === true;
-
-                if (object.locked && object.id) {
-                    studioLockedObjectIds.add(object.id);
-                }
             });
         }
 
@@ -3589,67 +3525,59 @@
             return false;
         }
 
+        function findStudioObjectById(objectId, layout = studioLayout) {
+            const id = String(objectId || "");
+
+            if (!id || !layout || !Array.isArray(layout.objects)) {
+                return null;
+            }
+
+            return layout.objects.find(item => item.id === id) || null;
+        }
+
         function setStudioObjectLock(objectId, locked) {
-            const object = studioLayout?.objects?.find(item => item.id === objectId);
+            const id = String(objectId || "");
+            const nextLocked = locked === true || locked === "true" || locked === 1 || locked === "1";
+            const object = findStudioObjectById(id);
 
             if (!object) {
-                setStudioStatus("Layer could not be found. Refresh Studio and try again.");
+                setStudioStatus("Layer could not be found. Select it from Layers and try again.");
                 return;
             }
 
-            const nextLocked = locked === true;
             const currentlyLocked = isObjectLocked(object);
 
             if (currentlyLocked !== nextLocked) {
                 pushStudioHistory();
             }
 
-            /*
-                FINAL LOCK MODEL:
-                - object.locked is the only source of truth.
-                - locked canvas objects receive pointer-events:none through CSS.
-                - canvas clicks pass through locked objects to the workspace.
-                - Layers + Inspector are the only places that can lock/unlock.
-            */
-            object.locked = nextLocked;
+            setObjectLockedState(object, nextLocked);
 
-            selectedObjectId = object.id;
-            selectedObjectIds = [object.id];
+            if (studioLayouts?.[activeStudioLayout]) {
+                const bundledObject = findStudioObjectById(id, studioLayouts[activeStudioLayout]);
 
-            persistActiveStudioLayoutReference();
-
-            if (studioLayouts && studioLayout) {
-                studioLayouts[activeStudioLayout] = studioLayout;
+                if (bundledObject) {
+                    setObjectLockedState(bundledObject, nextLocked);
+                }
             }
 
+            selectedObjectId = id;
+            selectedObjectIds = [id];
+            persistActiveStudioLayoutReference();
+
             renderStudio();
-
-            requestAnimationFrame(() => {
-                const freshObject = studioLayout?.objects?.find(item => item.id === object.id);
-
-                if (freshObject) {
-                    selectedObjectId = freshObject.id;
-                    selectedObjectIds = [freshObject.id];
-                }
-
-                renderLayers();
-                renderInspector();
-                updateRequirementDisplays();
-                applyStudioLockDomState(freshObject || object);
-            });
-
             setStudioStatus(
                 nextLocked
-                    ? "Layer locked. It cannot be clicked, selected, dragged, resized, rotated, edited, deleted, duplicated, or moved from the canvas."
-                    : "Layer unlocked. You can fully edit it again."
+                    ? "Layer locked. It cannot be selected or moved from the canvas. Unlock it from Layers or Inspector."
+                    : "Layer unlocked. Full editing is restored."
             );
         }
 
         function toggleObjectLock(objectId, locked) {
-            const object = studioLayout?.objects?.find(item => item.id === objectId);
+            const object = findStudioObjectById(objectId) || getSelectedObject();
 
             if (!object) {
-                setStudioStatus("Layer could not be found. Refresh Studio and try again.");
+                setStudioStatus("Select a layer first.");
                 return;
             }
 
@@ -3658,7 +3586,7 @@
         }
 
         function toggleSelectedLayerLock(objectId) {
-            const object = studioLayout?.objects?.find(item => item.id === objectId) || getSelectedObject();
+            const object = findStudioObjectById(objectId) || getSelectedObject();
 
             if (!object) {
                 setStudioStatus("Select a layer first.");
@@ -3668,108 +3596,68 @@
             setStudioObjectLock(object.id, !isObjectLocked(object));
         }
 
-        function lockStudioObject(objectId) {
-            setStudioObjectLock(objectId, true);
-        }
+        function bindStudioLockControls(root = document) {
+            root.querySelectorAll?.("[data-studio-lock-control='true']")?.forEach(button => {
+                if (button.dataset.lockBound === "true") {
+                    return;
+                }
 
-        function unlockStudioObject(objectId) {
-            setStudioObjectLock(objectId, false);
-        }
+                button.dataset.lockBound = "true";
 
-        function applyStudioLockDomState(object) {
-            if (!object || !object.id) {
-                return;
-            }
+                button.addEventListener("pointerdown", event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                });
 
-            const locked = isObjectLocked(object);
-            const canvasObject = document.querySelector(`.canvas-object[data-id="${CSS.escape(object.id)}"]`);
+                button.addEventListener("click", event => {
+                    event.preventDefault();
+                    event.stopPropagation();
 
-            if (canvasObject) {
-                canvasObject.dataset.locked = locked ? "true" : "false";
-                canvasObject.classList.toggle("locked-object", locked);
-                canvasObject.classList.toggle("selected", selectedObjectIds.length <= 1 && selectedObjectId === object.id);
-                canvasObject.classList.toggle("multi-selected", selectedObjectIds.length > 1 && selectedObjectIds.includes(object.id));
-            }
+                    const objectId = button.dataset.lockObjectId;
+                    const command = button.dataset.lockCommand;
 
-            document.querySelectorAll(`[data-lock-object-id="${CSS.escape(object.id)}"]`).forEach(button => {
-                button.dataset.lockCommand = locked ? "unlock" : "lock";
-                button.classList.toggle("locked", locked);
-                button.classList.toggle("unlocked", !locked);
-                button.textContent = locked ? "🔒 Locked" : "🔓 Unlocked";
-                button.title = locked ? "Unlock this layer" : "Lock this layer";
-                button.setAttribute("aria-label", locked ? "Unlock this layer" : "Lock this layer");
-            });
+                    if (!objectId) {
+                        setStudioStatus("Layer could not be found. Select it from Layers and try again.");
+                        return;
+                    }
 
-            document.querySelectorAll(`[data-layer-id="${CSS.escape(object.id)}"]`).forEach(row => {
-                row.classList.toggle("locked", locked);
-                row.classList.toggle("active", selectedObjectIds.includes(object.id));
+                    setStudioObjectLock(objectId, command === "lock");
+                });
             });
         }
 
-        function setupStudioLockControlDelegation() {
-            if (window.__nullverseStudioLockControlsReady) {
+        function getTopStudioObjectAtClientPoint(clientX, clientY) {
+            if (!studioLayout || !Array.isArray(studioLayout.objects)) {
+                return null;
+            }
+
+            const point = screenPointToCanvasPoint(clientX, clientY);
+            const objects = [...studioLayout.objects].reverse();
+
+            return objects.find(object => {
+                if (!object || object.visible === false) {
+                    return false;
+                }
+
+                const left = Number(object.x) || 0;
+                const top = Number(object.y) || 0;
+                const right = left + (Number(object.w) || 0);
+                const bottom = top + (Number(object.h) || 0);
+
+                return point.x >= left && point.x <= right && point.y >= top && point.y <= bottom;
+            }) || null;
+        }
+
+        function markLockedTopObjectPointerDown(event) {
+            if (event.target.closest?.(".studio-sidebar") || event.target.closest?.(".studio-inspector") || event.target.closest?.(".studio-topbar")) {
                 return;
             }
 
-            window.__nullverseStudioLockControlsReady = true;
+            const topObject = getTopStudioObjectAtClientPoint(event.clientX, event.clientY);
 
-            function getLockControlFromEvent(event) {
-                const target = event.target?.nodeType === Node.ELEMENT_NODE
-                    ? event.target
-                    : event.target?.parentElement;
-
-                return target?.closest?.("[data-studio-lock-control='true']") || null;
+            if (topObject && isObjectLocked(topObject)) {
+                event.__nullverseLockedTopObject = true;
             }
-
-            document.addEventListener("pointerdown", event => {
-                const button = getLockControlFromEvent(event);
-
-                if (!button || !button.closest("#profile-studio-page")) {
-                    return;
-                }
-
-                event.stopPropagation();
-
-                if (typeof event.stopImmediatePropagation === "function") {
-                    event.stopImmediatePropagation();
-                }
-            }, true);
-
-            document.addEventListener("click", event => {
-                const button = getLockControlFromEvent(event);
-
-                if (!button || !button.closest("#profile-studio-page")) {
-                    return;
-                }
-
-                event.preventDefault();
-                event.stopPropagation();
-
-                if (typeof event.stopImmediatePropagation === "function") {
-                    event.stopImmediatePropagation();
-                }
-
-                const objectId = button.dataset.lockObjectId;
-                const command = button.dataset.lockCommand;
-
-                if (!objectId) {
-                    setStudioStatus("Layer could not be found. Refresh Studio and try again.");
-                    return;
-                }
-
-                if (command === "unlock") {
-                    setStudioObjectLock(objectId, false);
-                    return;
-                }
-
-                if (command === "lock") {
-                    setStudioObjectLock(objectId, true);
-                    return;
-                }
-
-                const object = studioLayout?.objects?.find(item => item.id === objectId);
-                setStudioObjectLock(objectId, !isObjectLocked(object));
-            }, true);
         }
 
 
@@ -4930,6 +4818,7 @@
                 event.preventDefault();
             });
 
+            workspace.addEventListener("pointerdown", markLockedTopObjectPointerDown, true);
             workspace.addEventListener("pointerdown", startWorkspacePan);
             workspace.addEventListener("pointerdown", startWorkspaceSelection);
 
@@ -6734,10 +6623,7 @@
                 return;
             }
 
-            setupStudioLockControlDelegation();
-
-            const objects = studioLayout?.objects || [];
-            const reversed = [...objects].reverse();
+            const reversed = [...(studioLayout?.objects || [])].reverse();
 
             container.innerHTML = reversed.map(object => {
                 const locked = isObjectLocked(object);
@@ -6746,11 +6632,6 @@
                 const lockButtonLabel = locked ? "🔒 Locked" : "🔓 Unlocked";
                 const lockButtonTitle = locked ? "Unlock this layer" : "Lock this layer";
                 const lockCommand = locked ? "unlock" : "lock";
-                const canBringForward = canMoveStudioLayer(object.id, 1);
-                const canSendBackward = canMoveStudioLayer(object.id, -1);
-                const pinned = isPinnedStudioLayer(object);
-                const bringForwardTitle = pinned ? "Official badge layers stay on top" : "Bring this layer forward";
-                const sendBackwardTitle = pinned ? "Official badge layers stay on top" : "Send this layer backward";
                 const visibleLabel = object.visible === false ? `<span class="layer-hidden-label">Hidden</span>` : "";
 
                 return `
@@ -6764,29 +6645,6 @@
 
                                                     <small class="layer-meta">
                                                         ${visibleLabel}
-
-                                                        <span class="layer-order-controls" aria-label="Layer order controls">
-                                                            <button
-                                                                type="button"
-                                                                class="layer-order-button"
-                                                                title="${bringForwardTitle}"
-                                                                aria-label="${bringForwardTitle}"
-                                                                ${canBringForward ? "" : "disabled"}
-                                                                onclick="event.preventDefault(); event.stopPropagation(); moveStudioLayer('${safeId}', 1);">
-                                                                ▲
-                                                            </button>
-
-                                                            <button
-                                                                type="button"
-                                                                class="layer-order-button"
-                                                                title="${sendBackwardTitle}"
-                                                                aria-label="${sendBackwardTitle}"
-                                                                ${canSendBackward ? "" : "disabled"}
-                                                                onclick="event.preventDefault(); event.stopPropagation(); moveStudioLayer('${safeId}', -1);">
-                                                                ▼
-                                                            </button>
-                                                        </span>
-
                                                         <button
                                                             type="button"
                                                             class="layer-lock-toggle ${locked ? "locked" : "unlocked"}"
@@ -6801,8 +6659,9 @@
                                                 </div>
                                             `;
             }).join("");
-        }
 
+            bindStudioLockControls(container);
+        }
         function renderInspector() {
             const box = document.getElementById("studio-inspector");
             const object = getSelectedObject();
@@ -6815,6 +6674,10 @@
 
                                                             <div class="inspector-group">
                                                                 <h4>Canvas</h4>
+
+                                                                <p class="studio-inspector-note" style="margin-bottom:12px;">
+                                                                    The whole profile page below the reference nav bar is customizable. This is not a centered card anymore.
+                                                                </p>
 
                                                                 <label>Background Mode</label>
                                                                 <select onchange="updateCanvasField('backgroundMode', this.value)">
@@ -6873,6 +6736,7 @@
 
             parts.push(renderInspectorLayerActionsGroup(object));
             box.innerHTML = parts.join("");
+            bindStudioLockControls(box);
         }
         function isPlainTextStudioObject(object) {
             return ["text", "display_name", "username_text"].includes(object?.type);
@@ -7210,10 +7074,7 @@
             const lockButtonClass = locked ? "locked" : "unlocked";
             const lockCommand = locked ? "unlock" : "lock";
             const lockTitle = locked ? "Unlock this layer" : "Lock this layer";
-            const canBringForward = canMoveStudioLayer(object.id, 1);
-            const canSendBackward = canMoveStudioLayer(object.id, -1);
-
-            setupStudioLockControlDelegation();
+            const actionDisabled = locked ? "disabled" : "";
 
             return `
                                                         <div class="inspector-group">
@@ -7231,8 +7092,8 @@
                                                                     ${lockButtonLabel}
                                                                 </button>
 
-                                                                <button type="button" class="button-muted" onclick="moveStudioLayer('${safeId}', 1)" ${canBringForward ? "" : "disabled"}>Bring Forward</button>
-                                                                <button type="button" class="button-muted" onclick="moveStudioLayer('${safeId}', -1)" ${canSendBackward ? "" : "disabled"}>Send Backward</button>
+                                                                <button type="button" class="button-muted" onclick="moveSelectedLayer(1)" ${actionDisabled}>Bring Forward</button>
+                                                                <button type="button" class="button-muted" onclick="moveSelectedLayer(-1)" ${actionDisabled}>Send Backward</button>
                                                                 <button type="button" class="button-muted" onclick="duplicateSelectedObject()" ${locked || object.type === "profile_badge" ? "disabled" : ""}>Duplicate</button>
                                                                 <button type="button" class="danger-button" onclick="deleteSelectedObject()" ${locked ? "disabled" : ""} ${isProtected ? "title='Required platform objects may be needed before publishing.'" : ""}>Delete</button>
                                                             </div>
@@ -7605,9 +7466,15 @@
                 bindCanvasTextEditors(el, object);
             }
 
-            el.onpointerdown = null;
-            el.onmousedown = null;
-            el.onclick = null;
+            if (isObjectLocked(object)) {
+                el.onpointerdown = startLockedObjectPointerDown;
+                el.onmousedown = startLockedObjectPointerDown;
+                el.onclick = startLockedObjectPointerDown;
+            } else {
+                el.onpointerdown = null;
+                el.onmousedown = null;
+                el.onclick = null;
+            }
         }
 
         function updateCanvasField(field, value, options = {}) {
@@ -7707,89 +7574,33 @@
             renderStudio();
         }
 
-        function isPinnedStudioLayer(object) {
-            return object?.type === "profile_badge" || object?.forceTopLayer === true;
-        }
-
-        function getStudioLayerMoveTargetIndex(objectId, direction) {
-            const objects = studioLayout?.objects || [];
-            const index = objects.findIndex(item => item.id === objectId);
-
-            if (index < 0) {
-                return -1;
-            }
-
-            const object = objects[index];
-
-            if (isPinnedStudioLayer(object)) {
-                return -1;
-            }
-
-            const step = Number(direction) > 0 ? 1 : -1;
-            const pinnedStartIndex = objects.findIndex(item => isPinnedStudioLayer(item));
-            const maxMovableIndex = pinnedStartIndex === -1 ? objects.length - 1 : pinnedStartIndex - 1;
-            const target = index + step;
-
-            if (target < 0 || target > maxMovableIndex) {
-                return -1;
-            }
-
-            return target;
-        }
-
-        function canMoveStudioLayer(objectId, direction) {
-            return getStudioLayerMoveTargetIndex(objectId, direction) >= 0;
-        }
-
-        function moveStudioLayer(objectId, direction) {
-            const object = findStudioObjectById(objectId) || studioLayout?.objects?.find(item => item.id === objectId);
-
-            if (!object) {
-                setStudioStatus("Layer could not be found. Refresh Studio and try again.");
-                return;
-            }
-
-            if (isPinnedStudioLayer(object)) {
-                setStudioStatus("Official badge layers stay on top and cannot be reordered.");
-                return;
-            }
-
-            const target = getStudioLayerMoveTargetIndex(object.id, direction);
-
-            if (target < 0) {
-                setStudioStatus(Number(direction) > 0 ? "Layer is already as far forward as it can go." : "Layer is already at the back.");
-                return;
-            }
-
-            const index = studioLayout.objects.findIndex(item => item.id === object.id);
-
-            if (index < 0) {
-                setStudioStatus("Layer could not be found. Refresh Studio and try again.");
-                return;
-            }
-
-            pushStudioHistory();
-
-            const [movedObject] = studioLayout.objects.splice(index, 1);
-            studioLayout.objects.splice(target, 0, movedObject);
-
-            selectedObjectId = movedObject.id;
-            selectedObjectIds = [movedObject.id];
-            persistActiveStudioLayoutReference();
-            renderStudio();
-
-            setStudioStatus(Number(direction) > 0 ? "Layer brought forward." : "Layer sent backward.");
-        }
-
         function moveSelectedLayer(direction) {
             const object = getSelectedObject();
 
             if (!object) {
-                setStudioStatus("Select a layer first.");
                 return;
             }
 
-            moveStudioLayer(object.id, direction);
+            if (!guardUnlockedObject(object, "Unlock this layer before changing its order.")) {
+                return;
+            }
+
+            const index = studioLayout.objects.findIndex(item => item.id === selectedObjectId);
+
+            if (index < 0) {
+                return;
+            }
+
+            const target = index + direction;
+
+            if (target < 0 || target >= studioLayout.objects.length) {
+                return;
+            }
+
+            pushStudioHistory();
+            const [movedObject] = studioLayout.objects.splice(index, 1);
+            studioLayout.objects.splice(target, 0, movedObject);
+            renderStudio();
         }
 
         async function uploadStudioObjectImage(input) {
@@ -7867,6 +7678,10 @@
             setStudioStatus("This layer is locked. Select it from the Layers shelf to unlock it.");
         }
         function startObjectMove(event) {
+            if (event.__nullverseLockedTopObject) {
+                return;
+            }
+
             if (event.target.closest(".resize-handle") || event.target.closest(".rotate-handle")) {
                 return;
             }
@@ -7934,6 +7749,10 @@
         }
 
         function startObjectResize(event) {
+            if (event.__nullverseLockedTopObject) {
+                return;
+            }
+
             event.stopPropagation();
             event.preventDefault();
 
@@ -7981,6 +7800,10 @@
         }
 
         function startObjectRotate(event) {
+            if (event.__nullverseLockedTopObject) {
+                return;
+            }
+
             event.stopPropagation();
 
             const el = event.currentTarget.closest(".canvas-object");
@@ -8021,7 +7844,7 @@
 
             const hitCanvasObject = event.target.closest?.(".canvas-object");
 
-            if (hitCanvasObject && !hitCanvasObject.classList.contains("locked-object")) {
+            if (hitCanvasObject && !hitCanvasObject.classList.contains("locked-object") && !event.__nullverseLockedTopObject) {
                 return;
             }
 
@@ -8936,24 +8759,21 @@
         window.undoStudioChange = undoStudioChange;
         window.redoStudioChange = redoStudioChange;
         window.moveSelectedLayer = moveSelectedLayer;
-        window.moveStudioLayer = moveStudioLayer;
         window.toggleObjectArrayValue = toggleObjectArrayValue;
         window.uploadStudioObjectImage = uploadStudioObjectImage;
         window.saveContentPreferences = saveContentPreferences;
-        window.setStudioObjectLock = setStudioObjectLock;
-        window.lockStudioObject = lockStudioObject;
-        window.unlockStudioObject = unlockStudioObject;
-        window.toggleSelectedLayerLock = toggleSelectedLayerLock;
         window.toggleObjectLock = toggleObjectLock;
+        window.setStudioObjectLock = setStudioObjectLock;
+        window.bindStudioLockControls = bindStudioLockControls;
         window.changeEmail = changeEmail;
         window.changePassword = changePassword;
         window.logOut = logOut;
 
-        setupStudioLockControlDelegation();
         setupWorkspacePan();
         checkUserAndLoadProfile();
         window.toggleSelectedLayerLock = toggleSelectedLayerLock;
         window.toggleObjectLock = toggleObjectLock;
+        window.setStudioObjectLock = setStudioObjectLock;
     </script>
 </body>
 </html>
