@@ -233,6 +233,9 @@
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const message = document.getElementById("message");
 
+        const AUTH_REDIRECT_LANDING =
+            hasAuthRedirectParams();
+
         async function withTimeout(promise, ms = 8000) {
             let timeout;
 
@@ -246,6 +249,157 @@
                 return await Promise.race([promise, timeoutPromise]);
             } finally {
                 clearTimeout(timeout);
+            }
+        }
+
+        function getSiteRedirectUrl(path) {
+            const origin =
+                window.location.origin || "https://nullverse.dev";
+
+            return `${origin.replace(/\/$/, "")}/${String(path || "").replace(/^\//, "")}`;
+        }
+
+        function hasAuthRedirectParams() {
+            const hashParams =
+                new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+            const searchParams =
+                new URLSearchParams(window.location.search);
+
+            const authKeys = [
+                "access_token",
+                "refresh_token",
+                "token_hash",
+                "type",
+                "code",
+                "error",
+                "error_description"
+            ];
+
+            return authKeys.some(key =>
+                hashParams.has(key) || searchParams.has(key)
+            );
+        }
+
+        function cleanAuthRedirectUrl() {
+            if (!AUTH_REDIRECT_LANDING) return;
+
+            const cleanUrl =
+                window.location.pathname;
+
+            window.history.replaceState(
+                {},
+                document.title,
+                cleanUrl
+            );
+        }
+
+        function profileNeedsSetup(profile) {
+            return !(
+                profile &&
+                profile.profile_completed &&
+                profile.age_verified &&
+                profile.birth_date &&
+                profile.age_role &&
+                profile.age_role !== "unknown"
+            );
+        }
+
+        async function routeAuthenticatedUser(authUser = null) {
+            let user = authUser;
+
+            if (!user) {
+                const { data: { session }, error: sessionError } =
+                    await withTimeout(
+                        supabaseClient.auth.getSession(),
+                        8000
+                    );
+
+                if (sessionError) {
+                    message.textContent = sessionError.message;
+                    return false;
+                }
+
+                user = session?.user || null;
+            }
+
+            if (!user) {
+                cleanAuthRedirectUrl();
+                message.textContent =
+                    "Verification complete. Please log in to finish setting up your profile.";
+                return false;
+            }
+
+            const { data: profile, error: profileError } =
+                await withTimeout(
+                    supabaseClient
+                        .from("profiles")
+                        .select("id, profile_completed, age_verified, birth_date, age_role")
+                        .eq("id", user.id)
+                        .maybeSingle(),
+                    8000
+                );
+
+            if (profileError) {
+                console.warn("Profile routing check failed:", profileError);
+
+                cleanAuthRedirectUrl();
+
+                message.textContent =
+                    "Login successful. Redirecting to profile setup...";
+                window.location.replace("create-profile.html");
+                return true;
+            }
+
+            cleanAuthRedirectUrl();
+
+            if (profileNeedsSetup(profile)) {
+                message.textContent =
+                    "Login successful. Redirecting to profile setup...";
+                window.location.replace("create-profile.html");
+                return true;
+            }
+
+            message.textContent =
+                "Login successful. Redirecting...";
+            window.location.replace("dashboard.html");
+            return true;
+        }
+
+        async function handleAuthRedirectLanding() {
+            if (!AUTH_REDIRECT_LANDING) return;
+
+            const searchParams =
+                new URLSearchParams(window.location.search);
+
+            const hashParams =
+                new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+            const authError =
+                searchParams.get("error_description") ||
+                hashParams.get("error_description") ||
+                searchParams.get("error") ||
+                hashParams.get("error");
+
+            if (authError) {
+                cleanAuthRedirectUrl();
+                message.textContent = authError;
+                return;
+            }
+
+            message.textContent =
+                "Verification complete. Checking your profile...";
+
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            try {
+                await routeAuthenticatedUser();
+            } catch (error) {
+                console.warn("Verification routing failed:", error);
+                cleanAuthRedirectUrl();
+
+                message.textContent =
+                    "Verification complete. Please log in to finish setting up your profile.";
             }
         }
 
@@ -289,7 +443,7 @@
                         email,
                         password,
                         options: {
-                            emailRedirectTo: "https://nullverse.dev/login.html"
+                            emailRedirectTo: getSiteRedirectUrl("create-profile.html")
                         }
                     }),
                     8000
@@ -300,15 +454,15 @@
                     return;
                 }
 
-                message.innerHTML = `
-                    Account created successfully.<br><br>
-                    A verification email has been sent to your inbox.<br><br>
-                    Open the verification email and complete the verification process.<br><br>
-                    Once your profile setup is complete, return here and log in.
-                `;
-
                 showLogin();
                 document.getElementById("login-email").value = email;
+
+                message.innerHTML = `
+                        Account created successfully.<br><br>
+                        A verification email has been sent to your inbox.<br><br>
+                        Open the verification email and complete the verification process.<br><br>
+                        After verification, Nullverse will send you to profile setup.
+                    `;
 
             } catch (error) {
                 console.warn("Signup connection failed:", error);
@@ -329,7 +483,7 @@
             message.textContent = "Logging in...";
 
             try {
-                const { error } = await withTimeout(
+                const { data, error } = await withTimeout(
                     supabaseClient.auth.signInWithPassword({ email, password }),
                     8000
                 );
@@ -339,8 +493,10 @@
                     return;
                 }
 
-                message.textContent = "Login successful. Redirecting...";
-                window.location.href = "dashboard.html";
+                message.textContent =
+                    "Login successful. Checking your profile...";
+
+                await routeAuthenticatedUser(data?.user || null);
 
             } catch (error) {
                 console.warn("Login connection failed:", error);
@@ -362,7 +518,7 @@
             try {
                 const { error } = await withTimeout(
                     supabaseClient.auth.resetPasswordForEmail(email, {
-                        redirectTo: "https://nullverse.dev/reset-password.html"
+                        redirectTo: getSiteRedirectUrl("reset-password.html")
                     }),
                     8000
                 );
@@ -373,9 +529,9 @@
                 }
 
                 message.innerHTML = `
-                    Password reset email sent.<br><br>
-                    Check your inbox and follow the reset link to create a new password.
-                `;
+                        Password reset email sent.<br><br>
+                        Check your inbox and follow the reset link to create a new password.
+                    `;
 
             } catch (error) {
                 console.warn("Password reset connection failed:", error);
@@ -384,8 +540,7 @@
             }
         }
 
-        // Disabled on purpose so login page cannot get stuck checking an old session.
-        // checkExistingSession();
+        handleAuthRedirectLanding();
     </script>
 </body>
 </html>
