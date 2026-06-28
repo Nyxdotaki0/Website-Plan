@@ -1312,6 +1312,85 @@
                 border-color: transparent !important;
             }
 
+
+
+        /* ============================================================
+           PUBLIC CUSTOM PROFILE COLOR / GRADIENT SUPPORT
+           Mirrors Profile Studio's newer paint system on profile.html
+           without changing layout, publishing, or interaction logic.
+        ============================================================ */
+
+        .public-text-paint-target,
+        .public-button-label {
+            display: inline-block;
+            max-width: 100%;
+            -webkit-box-decoration-break: clone;
+            box-decoration-break: clone;
+        }
+
+        .public-gradient-border {
+            border-color: transparent !important;
+            border-image: none !important;
+            overflow: hidden;
+        }
+
+        .custom-profile-object.public-gradient-border,
+        .custom-action-button.public-gradient-border,
+        .single-action-object.public-gradient-border,
+        .stat-mini.public-gradient-border,
+        .custom-world-card.public-gradient-border,
+        .custom-gallery-item-card.public-gradient-border,
+        .gallery-mini-card.public-gradient-border,
+        .work-mini-card.public-gradient-border,
+        .shape-object.public-gradient-border {
+            position: relative;
+            border-color: transparent !important;
+            border-image: none !important;
+        }
+
+            .custom-profile-object.public-gradient-border::before,
+            .custom-action-button.public-gradient-border::before,
+            .single-action-object.public-gradient-border::before,
+            .stat-mini.public-gradient-border::before,
+            .custom-world-card.public-gradient-border::before,
+            .custom-gallery-item-card.public-gradient-border::before,
+            .gallery-mini-card.public-gradient-border::before,
+            .work-mini-card.public-gradient-border::before,
+            .shape-object.public-gradient-border::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                z-index: 8;
+                border-radius: var(--public-surface-radius, inherit);
+                padding: var(--public-border-width, 1px);
+                background: var(--public-border-paint, transparent);
+                pointer-events: none;
+                -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+                -webkit-mask-composite: xor;
+                mask-composite: exclude;
+            }
+
+            .custom-profile-object.public-gradient-border > .custom-object-inner,
+            .custom-action-button.public-gradient-border > *,
+            .single-action-object.public-gradient-border > *,
+            .stat-mini.public-gradient-border > *,
+            .custom-world-card.public-gradient-border > *,
+            .custom-gallery-item-card.public-gradient-border > *,
+            .gallery-mini-card.public-gradient-border > *,
+            .work-mini-card.public-gradient-border > *,
+            .shape-object.public-gradient-border > * {
+                position: relative;
+                z-index: 9;
+            }
+
+        .public-custom-profile-active .custom-profile-object.public-gradient-border[data-public-has-border="true"] {
+            border-color: transparent !important;
+        }
+
+        .custom-profile-canvas .custom-profile-object.public-gradient-border {
+            position: absolute !important;
+        }
+
         @media (max-width: 860px) {
             header {
                 flex-direction: column;
@@ -2132,9 +2211,9 @@
         }
 
 
-        function applyCanvasBackground(el, canvas) {
+        function applyCanvasBackground(el, canvas = {}) {
             if (canvas.backgroundMode === "color") {
-                el.style.background = normalizePaint(canvas.backgroundColor, "#09090b");
+                el.style.background = getPublicResolvedPaintValue(canvas, "backgroundColor", "#09090b");
                 return;
             }
 
@@ -2143,7 +2222,7 @@
                 return;
             }
 
-            el.style.background = canvas.backgroundGradient || "#09090b";
+            el.style.background = getPublicResolvedPaintValue(canvas, "backgroundGradient", canvas.backgroundGradient || "#09090b");
         }
 
 
@@ -2157,6 +2236,193 @@
             return text;
         }
 
+        function isPublicGradientPaint(value) {
+            return /linear-gradient|radial-gradient/i.test(String(value || ""));
+        }
+
+        function clampPublicPaintAlpha(value) {
+            const number = Number(value);
+
+            if (!Number.isFinite(number)) {
+                return 1;
+            }
+
+            return Math.max(0, Math.min(1, number));
+        }
+
+        function publicHexToRgb(hex) {
+            const fallback = { r: 255, g: 255, b: 255 };
+            let clean = String(hex || "").trim();
+
+            if (!clean) {
+                return fallback;
+            }
+
+            if (clean.startsWith("#")) {
+                clean = clean.slice(1);
+            }
+
+            if (clean.length === 3) {
+                clean = clean.split("").map(char => char + char).join("");
+            }
+
+            if (!/^[0-9a-fA-F]{6}$/.test(clean)) {
+                return fallback;
+            }
+
+            return {
+                r: parseInt(clean.slice(0, 2), 16),
+                g: parseInt(clean.slice(2, 4), 16),
+                b: parseInt(clean.slice(4, 6), 16)
+            };
+        }
+
+        function publicRgbToHex(r, g, b) {
+            return "#" + [r, g, b].map(value => {
+                const number = Math.max(0, Math.min(255, Number(value) || 0));
+                return number.toString(16).padStart(2, "0");
+            }).join("");
+        }
+
+        function getPublicColorInputValue(value, fallback = "#ffffff") {
+            const text = String(value || "").trim();
+
+            if (/^#[0-9a-fA-F]{3}$/.test(text)) {
+                return "#" + text.slice(1).split("").map(char => char + char).join("");
+            }
+
+            if (/^#[0-9a-fA-F]{6}$/.test(text)) {
+                return text;
+            }
+
+            const rgbMatch = text.match(/rgba?\(([^)]+)\)/i);
+
+            if (rgbMatch) {
+                const parts = rgbMatch[1]
+                    .split(",")
+                    .map(part => Number(String(part).trim().replace("%", "")));
+
+                if (parts.length >= 3 && parts.slice(0, 3).every(part => Number.isFinite(part))) {
+                    return publicRgbToHex(parts[0], parts[1], parts[2]);
+                }
+            }
+
+            const fallbackText = String(fallback || "#ffffff").trim();
+
+            if (fallbackText !== text) {
+                return getPublicColorInputValue(fallbackText, "#ffffff");
+            }
+
+            return "#ffffff";
+        }
+
+        function publicRgbaFromHex(hex, alpha = 1) {
+            const rgb = publicHexToRgb(hex);
+            return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${clampPublicPaintAlpha(alpha)})`;
+        }
+
+        function getPublicPaintAlpha(value, fallback = 1) {
+            const text = String(value || "").trim();
+
+            if (!text) {
+                return fallback;
+            }
+
+            if (text === "transparent") {
+                return 0;
+            }
+
+            const alphaMatch = text.match(/rgba?\(([^)]+)\)/i);
+
+            if (!alphaMatch) {
+                return fallback;
+            }
+
+            const parts = alphaMatch[1].split(",").map(part => part.trim());
+
+            if (parts.length >= 4) {
+                return clampPublicPaintAlpha(parts[3]);
+            }
+
+            return 1;
+        }
+
+        function getPublicPaintFallbackColor(fallback, defaultColor = "#ffffff") {
+            const text = String(fallback || "").trim();
+
+            if (!text || text === "transparent") {
+                return defaultColor;
+            }
+
+            return getPublicColorInputValue(text, defaultColor);
+        }
+
+        function getPublicPaintColorStops(value, fallbackA = "#111111", fallbackB = "#ffffff") {
+            const text = String(value || "");
+            const matches = text.match(/#[0-9a-fA-F]{3,6}\b|rgba?\([^)]*\)/g) || [];
+
+            return {
+                first: getPublicColorInputValue(matches[0] || fallbackA, fallbackA),
+                second: getPublicColorInputValue(matches[1] || fallbackB, fallbackB)
+            };
+        }
+
+        function getPublicLinearGradientDirection(value, fallback = "135deg") {
+            const text = String(value || "");
+            const match = text.match(/linear-gradient\(([^,]+),/i);
+            return match ? match[1].trim() : fallback;
+        }
+
+        function makePublicGradientPaint(direction, firstColor, secondColor, alpha = 1) {
+            return `linear-gradient(${direction || "135deg"}, ${publicRgbaFromHex(firstColor, alpha)}, ${publicRgbaFromHex(secondColor, alpha)})`;
+        }
+
+        function hasPublicPaintMetadata(source = {}, field = "") {
+            return [
+                `${field}PaintMode`,
+                `${field}PaintOpacity`,
+                `${field}SolidColor`,
+                `${field}GradientDirection`,
+                `${field}GradientA`,
+                `${field}GradientB`
+            ].some(key => source[key] !== undefined && source[key] !== null && source[key] !== "");
+        }
+
+        function getPublicResolvedPaintValue(source = {}, field, fallback = "transparent") {
+            if (!source || !field) {
+                return fallback;
+            }
+
+            const current = normalizePaint(source[field], fallback);
+            const hasMeta = hasPublicPaintMetadata(source, field);
+
+            if (!hasMeta) {
+                return current || fallback;
+            }
+
+            const mode = source[`${field}PaintMode`] || (isPublicGradientPaint(current) ? "gradient" : "solid");
+            const alpha = source[`${field}PaintOpacity`] !== undefined && source[`${field}PaintOpacity`] !== null && source[`${field}PaintOpacity`] !== ""
+                ? clampPublicPaintAlpha(source[`${field}PaintOpacity`])
+                : getPublicPaintAlpha(current, 1);
+            const fallbackColor = getPublicPaintFallbackColor(fallback, field === "background" || field === "actionButtonBg" || field === "backgroundColor" ? "#000000" : "#ffffff");
+
+            if (mode === "gradient" || isPublicGradientPaint(current)) {
+                const stops = getPublicPaintColorStops(current, source[`${field}GradientA`] || fallbackColor || "#111111", source[`${field}GradientB`] || "#ffffff");
+                const direction = source[`${field}GradientDirection`] || getPublicLinearGradientDirection(current, "135deg");
+                const firstColor = getPublicColorInputValue(source[`${field}GradientA`] || stops.first || fallbackColor || "#111111", fallbackColor || "#111111");
+                const secondColor = getPublicColorInputValue(source[`${field}GradientB`] || stops.second || "#ffffff", "#ffffff");
+
+                return makePublicGradientPaint(direction, firstColor, secondColor, alpha);
+            }
+
+            if (current === "transparent" || alpha <= 0) {
+                return "rgba(0, 0, 0, 0)";
+            }
+
+            const solidColor = getPublicColorInputValue(source[`${field}SolidColor`] || current || fallbackColor, fallbackColor || "#ffffff");
+            return publicRgbaFromHex(solidColor, alpha);
+        }
+
         function normalizeCssColorToken(value) {
             return String(value || "")
                 .trim()
@@ -2165,21 +2431,8 @@
                 .replace(/^rgba\((\d+),(\d+),(\d+),0?\.(\d+)\)$/, "rgba($1,$2,$3,.$4)");
         }
 
-        function hasExplicitPublicBorder(styles = {}) {
-            const rawColor = String(styles.borderColor || "").trim();
-
-            if (!rawColor) {
-                return false;
-            }
-
-            const token = normalizeCssColorToken(rawColor);
-
-            /*
-                Account Settings gives objects a faint editor-style border by
-                default. On profile.html that reads like a guideline outline, so
-                only keep borders that are clearly intentional. Buttons keep
-                their own inner borders separately.
-            */
+        function isPublicDefaultBorderToken(value) {
+            const token = normalizeCssColorToken(value);
             const editorGuideColors = new Set([
                 "transparent",
                 "rgba(0,0,0,0)",
@@ -2192,13 +2445,246 @@
                 "rgba(255,255,255,.12)"
             ]);
 
-            return !editorGuideColors.has(token);
+            return editorGuideColors.has(token);
+        }
+
+        function hasExplicitPublicBorder(styles = {}) {
+            const rawColor = String(styles.borderColor || "").trim();
+
+            if (!rawColor) {
+                return false;
+            }
+
+            if (styles.borderColorPaintMode === "gradient" || isPublicGradientPaint(rawColor)) {
+                return true;
+            }
+
+            return !isPublicDefaultBorderToken(rawColor);
+        }
+
+        function hasExplicitPublicBorderPaint(styles = {}, field = "borderColor", paint = "") {
+            if (styles[`${field}PaintMode`] === "gradient" || isPublicGradientPaint(paint || styles[field])) {
+                return true;
+            }
+
+            const rawColor = String(paint || styles[field] || "").trim();
+
+            if (!rawColor) {
+                return false;
+            }
+
+            return !isPublicDefaultBorderToken(rawColor);
         }
 
         function getPublicObjectBorderColor(styles = {}) {
             return hasExplicitPublicBorder(styles)
-                ? normalizePaint(styles.borderColor, "transparent")
+                ? getPublicResolvedPaintValue(styles, "borderColor", "transparent")
                 : "transparent";
+        }
+
+        function applyPublicBorderPaintToElement(element, paint, fallback = "rgba(255,255,255,.10)", radius = 18) {
+            if (!element) {
+                return;
+            }
+
+            const value = String(paint || fallback || "rgba(255,255,255,.10)").trim();
+            const safeRadius = Number(radius ?? 18);
+
+            element.style.borderStyle = "solid";
+            element.style.borderWidth = element.style.borderWidth || "1px";
+            element.style.borderImageSource = "none";
+            element.style.borderImageSlice = "";
+            element.style.borderImageWidth = "";
+            element.style.borderImageOutset = "";
+            element.style.borderImageRepeat = "";
+            element.style.setProperty("--public-surface-radius", safeRadius + "px");
+
+            if (isPublicGradientPaint(value)) {
+                element.classList.add("public-gradient-border");
+                element.style.borderColor = "transparent";
+                element.style.setProperty("--public-border-paint", value);
+                return;
+            }
+
+            element.classList.remove("public-gradient-border");
+            element.style.removeProperty("--public-border-paint");
+            element.style.borderColor = value || fallback;
+        }
+
+        function applyPublicTextPaintToElement(element, paint, fallback = "#ffffff") {
+            if (!element) {
+                return;
+            }
+
+            const value = String(paint || fallback || "#ffffff").trim();
+
+            element.classList.add("public-text-paint-target");
+
+            if (isPublicGradientPaint(value)) {
+                element.style.background = value;
+                element.style.backgroundClip = "text";
+                element.style.webkitBackgroundClip = "text";
+                element.style.color = "transparent";
+                element.style.webkitTextFillColor = "transparent";
+                return;
+            }
+
+            element.style.background = "transparent";
+            element.style.backgroundClip = "border-box";
+            element.style.webkitBackgroundClip = "border-box";
+            element.style.color = value;
+            element.style.webkitTextFillColor = value;
+        }
+
+        function getPublicTextPaintInlineStyle(paint, fallback = "#ffffff") {
+            const value = String(paint || fallback || "#ffffff").trim();
+
+            if (isPublicGradientPaint(value)) {
+                return [
+                    `background:${value}`,
+                    "background-clip:text",
+                    "-webkit-background-clip:text",
+                    "color:transparent",
+                    "-webkit-text-fill-color:transparent",
+                    "display:inline-block"
+                ].join(";");
+            }
+
+            return [
+                `color:${value}`,
+                `-webkit-text-fill-color:${value}`,
+                "background:transparent"
+            ].join(";");
+        }
+
+        function getPublicActionTextPaint(object = {}) {
+            return getPublicResolvedPaintValue(object.styles || {}, "actionButtonText", "#ffffff");
+        }
+
+        function getPublicSingleButtonTextPaint(object = {}) {
+            return getPublicResolvedPaintValue(object.styles || {}, "textColor", "#ffffff");
+        }
+
+        function applyPublicObjectTextPaint(root, object) {
+            if (!root || !object) {
+                return;
+            }
+
+            const styles = object.styles || {};
+            const baseTextPaint = getPublicResolvedPaintValue(styles, "textColor", "#ffffff");
+
+            if (object.type === "profile_actions") {
+                const actionTextPaint = getPublicResolvedPaintValue(styles, "actionButtonText", "#ffffff");
+                root.querySelectorAll(".custom-action-button .public-button-label").forEach(target => {
+                    applyPublicTextPaintToElement(target, actionTextPaint, "#ffffff");
+                });
+                return;
+            }
+
+            if (["follow_button", "message_button", "block_button", "report_button"].includes(object.type)) {
+                root.querySelectorAll(".single-action-object .public-button-label").forEach(target => {
+                    applyPublicTextPaintToElement(target, baseTextPaint, "#ffffff");
+                });
+                return;
+            }
+
+            const textSelectors = [
+                ".identity-object h2",
+                ".identity-object p",
+                ".display-name-object",
+                ".username-object",
+                ".text-object",
+                ".bio-object",
+                ".bio-object h3",
+                ".bio-object p",
+                ".section-object",
+                ".section-object h3",
+                ".section-object p",
+                ".featured-object",
+                ".featured-object h3",
+                ".featured-object p",
+                ".system-stat-object strong",
+                ".system-stat-object span",
+                ".stats-object strong",
+                ".stats-object span",
+                ".custom-world-body h3",
+                ".custom-world-body p"
+            ].join(",");
+
+            root.querySelectorAll(textSelectors).forEach(target => {
+                if (target.closest(".profile-world-credit-pill") || target.closest(".custom-gallery-credit-pill") || target.closest(".custom-gallery-description-pill")) {
+                    return;
+                }
+
+                applyPublicTextPaintToElement(target, baseTextPaint, "#ffffff");
+            });
+        }
+
+        function applyPublicSurfacePaintToElement(element, backgroundPaint, borderPaint, radius = 18, forceBorder = true) {
+            if (!element) {
+                return;
+            }
+
+            const safeRadius = Number(radius ?? 18);
+            element.style.background = backgroundPaint;
+            element.style.backgroundClip = "border-box";
+            element.style.backgroundOrigin = "border-box";
+            element.style.borderRadius = safeRadius + "px";
+            element.style.setProperty("--public-surface-radius", safeRadius + "px");
+
+            if (forceBorder) {
+                applyPublicBorderPaintToElement(element, borderPaint, "rgba(255,255,255,.10)", safeRadius);
+            }
+        }
+
+        function applyPublicObjectChildSurfacePaints(root, object) {
+            if (!root || !object) {
+                return;
+            }
+
+            const styles = object.styles || {};
+            const backgroundPaint = getPublicResolvedPaintValue(styles, "background", "transparent");
+            const borderPaint = getPublicResolvedPaintValue(styles, "borderColor", "rgba(255,255,255,.10)");
+            const radius = Number(styles.radius ?? 18);
+
+            if (["follow_button", "message_button", "block_button", "report_button"].includes(object.type)) {
+                const buttonBackground = getPublicResolvedPaintValue(styles, "background", "linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.045))");
+                const buttonBorder = getPublicResolvedPaintValue(styles, "borderColor", "rgba(255,255,255,.18)");
+                const buttonRadius = Number(styles.radius ?? 14);
+
+                root.querySelectorAll(".single-action-object").forEach(target => {
+                    applyPublicSurfacePaintToElement(target, buttonBackground, buttonBorder, buttonRadius, true);
+                    target.style.fontFamily = root.style.fontFamily || "Arial";
+                    target.style.fontSize = root.style.fontSize || "15px";
+                    target.style.lineHeight = String(styles.lineHeight ?? 1.05);
+                    target.style.textAlign = styles.textAlign || "center";
+                });
+            }
+
+            if (object.type === "stats") {
+                root.querySelectorAll(".stat-mini").forEach(target => {
+                    applyPublicSurfacePaintToElement(target, backgroundPaint, borderPaint, Number(styles.radius ?? 14), true);
+                });
+            }
+
+            if (["world_card", "gallery_item"].includes(object.type)) {
+                root.querySelectorAll(".custom-world-card, .custom-gallery-item-card").forEach(target => {
+                    applyPublicSurfacePaintToElement(target, backgroundPaint, borderPaint, radius, true);
+                });
+            }
+
+            if (["shape", "circle", "star"].includes(object.type)) {
+                root.querySelectorAll(".shape-object").forEach(target => {
+                    const shapeRadius = object.shapeType === "rectangle" || object.type === "shape" ? 0 : radius;
+                    applyPublicSurfacePaintToElement(target, backgroundPaint, borderPaint, shapeRadius, true);
+                });
+            }
+
+            if (["creator_gallery", "creator_works"].includes(object.type)) {
+                root.querySelectorAll(".gallery-mini-card, .work-mini-card").forEach(target => {
+                    applyPublicSurfacePaintToElement(target, backgroundPaint, borderPaint, Number(styles.radius ?? 12), true);
+                });
+            }
         }
 
         function formatCreditType(type) {
@@ -2353,13 +2839,19 @@
             const fontSize = Number(styles.fontSize ?? 16);
             const lineHeight = Number(styles.lineHeight ?? 1.16);
             const isTextObject = ["text", "display_name", "username_text"].includes(object.type);
+            const isSingleButton = ["follow_button", "message_button", "block_button", "report_button"].includes(object.type);
             const shapeType = object.shapeType || (object.type === "circle" ? "circle" : object.type === "star" ? "star" : object.type === "shape" ? "rectangle" : "");
             const isRectangle = object.type === "shape" || shapeType === "rectangle";
             const radius = isRectangle ? 0 : Number(styles.radius ?? 18);
-            const hasPublicBorder = !isTextObject && hasExplicitPublicBorder(styles);
-            const borderColor = hasPublicBorder
-                ? getPublicObjectBorderColor(styles)
-                : "transparent";
+            const backgroundPaint = isSingleButton
+                ? "transparent"
+                : getPublicResolvedPaintValue(styles, "background", "transparent");
+            const textPaint = getPublicResolvedPaintValue(styles, "textColor", "#ffffff");
+            const borderPaint = isTextObject || isSingleButton
+                ? "transparent"
+                : getPublicResolvedPaintValue(styles, "borderColor", "rgba(255,255,255,.10)");
+            const hasPublicBorder = !isTextObject && !isSingleButton && hasExplicitPublicBorderPaint(styles, "borderColor", borderPaint);
+            const visibleBorderPaint = hasPublicBorder ? borderPaint : "transparent";
 
             el.className = "custom-profile-object" + (object.type === "profile_badge" ? " profile-badge-object" : "");
             el.dataset.id = object.id || "";
@@ -2367,16 +2859,18 @@
             el.dataset.shapeType = shapeType;
             el.dataset.locked = object.locked === true ? "true" : "false";
             el.dataset.publicHasBorder = hasPublicBorder ? "true" : "false";
-            el.style.setProperty("--public-custom-object-border-color", borderColor);
+            el.style.setProperty("--public-custom-object-border-color", isPublicGradientPaint(visibleBorderPaint) ? "transparent" : visibleBorderPaint);
             el.style.left = Number(object.x || 0) + "px";
             el.style.top = publicY + "px";
             el.style.width = Number(object.w || 200) + "px";
             el.style.height = Number(object.h || 120) + "px";
             el.style.transform = `rotate(${Number(object.rotation || 0)}deg)`;
-            el.style.background = normalizePaint(styles.background, "transparent");
-            el.style.color = normalizePaint(styles.textColor, "#ffffff");
+            el.style.background = backgroundPaint;
+            el.style.backgroundClip = "border-box";
+            el.style.backgroundOrigin = "border-box";
+            el.style.color = isPublicGradientPaint(textPaint) ? "#ffffff" : textPaint;
             el.style.borderRadius = radius + "px";
-            el.style.border = `1px solid ${borderColor}`;
+            el.style.border = "1px solid transparent";
             el.style.opacity = styles.opacity ?? 1;
             el.style.fontSize = fontSize + "px";
             el.style.fontFamily = getPublicStudioCssFontFamily(fontFamily);
@@ -2385,6 +2879,11 @@
             el.style.setProperty("--custom-object-font-family", getPublicStudioCssFontFamily(fontFamily));
             el.style.setProperty("--custom-object-font-size", fontSize + "px");
             el.style.setProperty("--custom-object-line-height", String(lineHeight));
+            el.style.setProperty("--public-surface-radius", radius + "px");
+
+            if (hasPublicBorder) {
+                applyPublicBorderPaintToElement(el, visibleBorderPaint, "transparent", radius);
+            }
 
             const inner = document.createElement("div");
             inner.className = "custom-object-inner";
@@ -2395,6 +2894,8 @@
             inner.innerHTML = renderCustomObjectContent(profile, object);
 
             el.appendChild(inner);
+            applyPublicObjectChildSurfacePaints(el, object);
+            applyPublicObjectTextPaint(el, object);
             return el;
         }
 
@@ -2408,23 +2909,23 @@
 
             if (object.type === "profile_identity") {
                 return `
-                                            <div class="identity-object">
-                                                <img src="${escapeHtml(avatar)}" alt="">
-                                                <div>
-                                                    <h2>${displayName}</h2>
-                                                    <p>@${username}</p>
-                                                    <p>${status}</p>
+                                                <div class="identity-object">
+                                                    <img src="${escapeHtml(avatar)}" alt="">
+                                                    <div>
+                                                        <h2>${displayName}</h2>
+                                                        <p>@${username}</p>
+                                                        <p>${status}</p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        `;
+                                            `;
             }
 
             if (object.type === "profile_avatar") {
                 return `
-                                            <div class="avatar-circle-object">
-                                                <img src="${escapeHtml(avatar)}" alt="">
-                                            </div>
-                                        `;
+                                                <div class="avatar-circle-object">
+                                                    <img src="${escapeHtml(avatar)}" alt="">
+                                                </div>
+                                            `;
             }
 
             if (object.type === "display_name") {
@@ -2445,21 +2946,21 @@
 
             if (["followers_box", "following_box", "works_count_box"].includes(object.type)) {
                 return `
-                                            <div class="system-stat-object" data-system-stat="${escapeHtml(object.type)}">
-                                                <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
-                                                <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
-                                            </div>
-                                        `;
+                                                <div class="system-stat-object" data-system-stat="${escapeHtml(object.type)}">
+                                                    <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
+                                                    <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
+                                                </div>
+                                            `;
             }
 
             if (object.type === "stats") {
                 return `
-                                            <div class="stats-object">
-                                                <div class="stat-mini"><strong>${followCounts.followers || 0}</strong><span>Followers</span></div>
-                                                <div class="stat-mini"><strong>${followCounts.following || 0}</strong><span>Following</span></div>
-                                                <div class="stat-mini"><strong>${profileWorlds.length || 0}</strong><span>Works</span></div>
-                                            </div>
-                                        `;
+                                                <div class="stats-object">
+                                                    <div class="stat-mini"><strong>${followCounts.followers || 0}</strong><span>Followers</span></div>
+                                                    <div class="stat-mini"><strong>${followCounts.following || 0}</strong><span>Following</span></div>
+                                                    <div class="stat-mini"><strong>${profileWorlds.length || 0}</strong><span>Works</span></div>
+                                                </div>
+                                            `;
             }
 
             if (object.type === "creator_gallery") {
@@ -2473,12 +2974,12 @@
                 const title = item?.title || item?.name || "Gallery image";
 
                 return `
-                                            <a class="custom-gallery-item-card" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
-                                                ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
-                                                ${buildGalleryDescriptionPill(item)}
-                                                ${buildGalleryCreditPill(item)}
-                                            </a>
-                                        `;
+                                                <a class="custom-gallery-item-card" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
+                                                    ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
+                                                    ${buildGalleryDescriptionPill(item)}
+                                                    ${buildGalleryCreditPill(item)}
+                                                </a>
+                                            `;
             }
 
             if (object.type === "creator_works") {
@@ -2487,11 +2988,11 @@
 
             if (object.type === "bio") {
                 return `
-                                            <div class="bio-object">
-                                                <h3>${escapeHtml(object.title || "About")}</h3>
-                                                <p>${bio}</p>
-                                            </div>
-                                        `;
+                                                <div class="bio-object">
+                                                    <h3>${escapeHtml(object.title || "About")}</h3>
+                                                    <p>${bio}</p>
+                                                </div>
+                                            `;
             }
 
             if (object.type === "text") {
@@ -2500,33 +3001,33 @@
 
             if (object.type === "section" || object.type === "featured") {
                 return `
-                                            <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
-                                                <h3>${escapeHtml(object.title || "Section")}</h3>
-                                                <p>${escapeHtml(object.text || "")}</p>
-                                            </div>
-                                        `;
+                                                <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
+                                                    <h3>${escapeHtml(object.title || "Section")}</h3>
+                                                    <p>${escapeHtml(object.text || "")}</p>
+                                                </div>
+                                            `;
             }
 
             if (object.type === "image" || object.type === "banner") {
                 const image = object.imageUrl || banner;
 
                 return `
-                                            <div class="image-object" style="width:100%;height:100%;background-image:url('${safeCssUrl(image)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};background-position:center;"></div>
-                                        `;
+                                                <div class="image-object" style="width:100%;height:100%;background-image:url('${safeCssUrl(image)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};background-position:center;"></div>
+                                            `;
             }
 
             if (object.type === "image_text") {
                 const image = object.imageUrl || banner;
 
                 return `
-                                            <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
-                                                <div class="image-object" style="background-image:url('${safeCssUrl(image)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};background-position:center;"></div>
-                                                <div class="section-object">
-                                                    <h3>${escapeHtml(object.title || "Image + Text")}</h3>
-                                                    <p>${escapeHtml(object.text || "")}</p>
+                                                <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
+                                                    <div class="image-object" style="background-image:url('${safeCssUrl(image)}');background-size:${escapeHtml(object.styles?.objectFit || "cover")};background-position:center;"></div>
+                                                    <div class="section-object">
+                                                        <h3>${escapeHtml(object.title || "Image + Text")}</h3>
+                                                        <p>${escapeHtml(object.text || "")}</p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        `;
+                                            `;
             }
 
             if (["shape", "circle", "star"].includes(object.type)) {
@@ -2549,17 +3050,17 @@
                 const summary = selectedWorld?.summary || "This creator can feature one of their published works here.";
 
                 return `
-                                            <a class="custom-world-card" href="${selectedWorld ? getWorldLink(selectedWorld) : '#'}">
-                                                <div class="custom-world-cover">
-                                                    ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
-                                                    ${buildWorldCreditPill(selectedWorld)}
-                                                </div>
-                                                <div class="custom-world-body">
-                                                    <h3>${escapeHtml(title)}</h3>
-                                                    <p>${escapeHtml(summary)}</p>
-                                                </div>
-                                            </a>
-                                        `;
+                                                <a class="custom-world-card" href="${selectedWorld ? getWorldLink(selectedWorld) : '#'}">
+                                                    <div class="custom-world-cover">
+                                                        ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" style="object-fit:${escapeHtml(object.styles?.objectFit || "cover")};">` : ""}
+                                                        ${buildWorldCreditPill(selectedWorld)}
+                                                    </div>
+                                                    <div class="custom-world-body">
+                                                        <h3>${escapeHtml(title)}</h3>
+                                                        <p>${escapeHtml(summary)}</p>
+                                                    </div>
+                                                </a>
+                                            `;
             }
 
             if (object.type === "profile_badge") {
@@ -2576,14 +3077,16 @@
 
         function buildCustomActions(profile, object = {}) {
             const inlineStyle = getActionButtonInlineStyle(object);
+            const buttonClass = getActionButtonClassName(object);
+            const textPaintStyle = getPublicTextPaintInlineStyle(getPublicActionTextPaint(object), "#ffffff");
             const gap = Number(object.styles?.actionButtonGap ?? 10);
 
             if (currentUser.id === profile.id) {
                 return `
-                                            <div class="actions-object" style="gap:${gap}px;">
-                                                <a class="custom-action-button" style="${inlineStyle}" href="account-settings.html">Edit Profile</a>
-                                            </div>
-                                        `;
+                                                <div class="actions-object" style="gap:${gap}px;">
+                                                    <a class="${buttonClass}" style="${inlineStyle}" href="account-settings.html"><span class="public-button-label" style="${textPaintStyle}">Edit Profile</span></a>
+                                                </div>
+                                            `;
             }
 
             const followLabel = isFollowingProfile ? "Following" : "Follow";
@@ -2591,22 +3094,24 @@
             const messageTitle = canMessageProfile ? "Message this creator" : "Messaging requires both creators to follow each other.";
 
             return `
-                                        <div class="actions-object" style="gap:${gap}px;">
-                                            <button class="custom-action-button ${isFollowingProfile ? "following" : ""}" style="${inlineStyle}" data-custom-action="follow" aria-pressed="${isFollowingProfile ? "true" : "false"}">${followLabel}</button>
-                                            <button class="custom-action-button" style="${inlineStyle}" data-custom-action="message" title="${escapeHtml(messageTitle)}" ${messageDisabled}>Message</button>
-                                            <button class="custom-action-button" style="${inlineStyle}" data-custom-action="block">Block</button>
-                                            <button class="custom-action-button" style="${inlineStyle}" data-custom-action="report">Report</button>
-                                        </div>
-                                    `;
+                                            <div class="actions-object" style="gap:${gap}px;">
+                                                <button class="${buttonClass} ${isFollowingProfile ? "following" : ""}" style="${inlineStyle}" data-custom-action="follow" aria-pressed="${isFollowingProfile ? "true" : "false"}"><span class="public-button-label" style="${textPaintStyle}">${followLabel}</span></button>
+                                                <button class="${buttonClass}" style="${inlineStyle}" data-custom-action="message" title="${escapeHtml(messageTitle)}" ${messageDisabled}><span class="public-button-label" style="${textPaintStyle}">Message</span></button>
+                                                <button class="${buttonClass}" style="${inlineStyle}" data-custom-action="block"><span class="public-button-label" style="${textPaintStyle}">Block</span></button>
+                                                <button class="${buttonClass}" style="${inlineStyle}" data-custom-action="report"><span class="public-button-label" style="${textPaintStyle}">Report</span></button>
+                                            </div>
+                                        `;
         }
 
         function buildSingleCustomAction(profile, object) {
+            const textPaintStyle = getPublicTextPaintInlineStyle(getPublicSingleButtonTextPaint(object), "#ffffff");
+
             if (currentUser.id === profile.id) {
                 if (object.type === "follow_button") {
-                    return `<a class="single-action-object" href="account-settings.html">Edit Profile</a>`;
+                    return `<a class="single-action-object" href="account-settings.html"><span class="public-button-label" style="${textPaintStyle}">Edit Profile</span></a>`;
                 }
 
-                return `<div class="single-action-object" style="opacity:.55;">${escapeHtml(getSingleActionLabel(object.type))}</div>`;
+                return `<div class="single-action-object" style="opacity:.55;"><span class="public-button-label" style="${textPaintStyle}">${escapeHtml(getSingleActionLabel(object.type))}</span></div>`;
             }
 
             const actionName = getSingleActionName(object.type);
@@ -2616,7 +3121,7 @@
             const disabled = object.type === "message_button" && !canMessageProfile;
             const title = disabled ? "Messaging requires both creators to follow each other." : "";
 
-            return `<button class="single-action-object ${object.type === "follow_button" && isFollowingProfile ? "following" : ""}" data-custom-action="${escapeHtml(actionName)}" aria-pressed="${object.type === "follow_button" && isFollowingProfile ? "true" : "false"}" title="${escapeHtml(title)}" ${disabled ? "disabled" : ""}>${escapeHtml(label)}</button>`;
+            return `<button class="single-action-object ${object.type === "follow_button" && isFollowingProfile ? "following" : ""}" data-custom-action="${escapeHtml(actionName)}" aria-pressed="${object.type === "follow_button" && isFollowingProfile ? "true" : "false"}" title="${escapeHtml(title)}" ${disabled ? "disabled" : ""}><span class="public-button-label" style="${textPaintStyle}">${escapeHtml(label)}</span></button>`;
         }
 
         function getSingleActionLabel(type) {
@@ -2650,16 +3155,36 @@
             return "";
         }
 
+        function getActionButtonClassName(object, extra = "") {
+            const styles = object.styles || {};
+            const border = getPublicResolvedPaintValue(styles, "actionButtonBorder", "rgba(255,255,255,.18)");
+            const classes = ["custom-action-button"];
+
+            if (isPublicGradientPaint(border)) {
+                classes.push("public-gradient-border");
+            }
+
+            if (extra) {
+                classes.push(extra);
+            }
+
+            return classes.join(" ");
+        }
+
         function getActionButtonInlineStyle(object) {
             const styles = object.styles || {};
-            const bg = styles.actionButtonBg || "linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.045))";
-            const border = styles.actionButtonBorder || "rgba(255,255,255,.18)";
+            const bg = getPublicResolvedPaintValue(styles, "actionButtonBg", "linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.045))");
+            const border = getPublicResolvedPaintValue(styles, "actionButtonBorder", "rgba(255,255,255,.18)");
+            const textPaint = getPublicResolvedPaintValue(styles, "actionButtonText", "#ffffff");
+            const radius = Number(styles.actionButtonRadius ?? 14);
 
             return [
                 `background:${bg}`,
-                `color:${styles.actionButtonText || "#ffffff"}`,
-                `border-color:${border}`,
-                `border-radius:${Number(styles.actionButtonRadius ?? 14)}px`,
+                `color:${isPublicGradientPaint(textPaint) ? "#ffffff" : textPaint}`,
+                `border-color:${isPublicGradientPaint(border) ? "transparent" : border}`,
+                `--public-border-paint:${isPublicGradientPaint(border) ? border : "transparent"}`,
+                `--public-surface-radius:${radius}px`,
+                `border-radius:${radius}px`,
                 `padding:${Number(styles.actionButtonPaddingY ?? 10)}px ${Number(styles.actionButtonPaddingX ?? 13)}px`,
                 `font-size:${Number(styles.actionButtonFontSize ?? 15)}px`,
                 `box-shadow:0 0 18px rgba(255,255,255,.10), inset 0 1px 0 rgba(255,255,255,.12)`,
@@ -2719,12 +3244,12 @@
             }
 
             return items.map(item => `
-                                                                                                    <a class="gallery-mini-card profile-gallery-tile" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
-                                                                                                        <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title || "Gallery item")}">
-                                                                                                        ${buildGalleryDescriptionPill(item)}
-                                                                                                        ${buildGalleryCreditPill(item)}
-                                                                                                    </a>
-                                                                                                `).join("");
+                                                                                                        <a class="gallery-mini-card profile-gallery-tile" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
+                                                                                                            <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title || "Gallery item")}">
+                                                                                                            ${buildGalleryDescriptionPill(item)}
+                                                                                                            ${buildGalleryCreditPill(item)}
+                                                                                                        </a>
+                                                                                                    `).join("");
         }
 
         function renderWorksMini(worlds, object = null) {
@@ -2745,17 +3270,17 @@
             return items.map(world => {
                 const cover = world.cover_image_url || world.cover_url || "";
                 return `
-                                                                                                    <a class="work-mini-card custom-world-card" href="${getWorldLink(world)}">
-                                                                                                        <div class="custom-world-cover">
-                                                                                                            ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">` : ""}
-                                                                                                            ${buildWorldCreditPill(world)}
-                                                                                                        </div>
-                                                                                                        <div class="custom-world-body">
-                                                                                                            <h3>${escapeHtml(world.title || "Untitled")}</h3>
-                                                                                                            <p>${escapeHtml(world.summary || world.content_type || world.type || "World")}</p>
-                                                                                                        </div>
-                                                                                                    </a>
-                                                                                                `;
+                                                                                                        <a class="work-mini-card custom-world-card" href="${getWorldLink(world)}">
+                                                                                                            <div class="custom-world-cover">
+                                                                                                                ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">` : ""}
+                                                                                                                ${buildWorldCreditPill(world)}
+                                                                                                            </div>
+                                                                                                            <div class="custom-world-body">
+                                                                                                                <h3>${escapeHtml(world.title || "Untitled")}</h3>
+                                                                                                                <p>${escapeHtml(world.summary || world.content_type || world.type || "World")}</p>
+                                                                                                            </div>
+                                                                                                        </a>
+                                                                                                    `;
             }).join("");
         }
 
@@ -2767,18 +3292,18 @@
             return worlds.map(world => {
                 const cover = world.cover_image_url || world.cover_url || "";
                 return `
-                                                                                                    <div class="card">
-                                                                                                        ${cover ? `
-                                                                                                            <div class="custom-world-cover" style="height:150px;border-radius:14px;margin-bottom:14px;">
-                                                                                                                <img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">
-                                                                                                                ${buildWorldCreditPill(world)}
-                                                                                                            </div>
-                                                                                                        ` : ""}
-                                                                                                        <p class="empty">${escapeHtml(world.content_type || world.type || "World")}</p>
-                                                                                                        <h3><a href="${getWorldLink(world)}">${escapeHtml(world.title || "Untitled")}</a></h3>
-                                                                                                        <p>${escapeHtml(world.summary || "No summary yet.")}</p>
-                                                                                                    </div>
-                                                                                                `;
+                                                                                                        <div class="card">
+                                                                                                            ${cover ? `
+                                                                                                                <div class="custom-world-cover" style="height:150px;border-radius:14px;margin-bottom:14px;">
+                                                                                                                    <img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">
+                                                                                                                    ${buildWorldCreditPill(world)}
+                                                                                                                </div>
+                                                                                                            ` : ""}
+                                                                                                            <p class="empty">${escapeHtml(world.content_type || world.type || "World")}</p>
+                                                                                                            <h3><a href="${getWorldLink(world)}">${escapeHtml(world.title || "Untitled")}</a></h3>
+                                                                                                            <p>${escapeHtml(world.summary || "No summary yet.")}</p>
+                                                                                                        </div>
+                                                                                                    `;
             }).join("");
         }
 
@@ -2800,11 +3325,11 @@
             const { data, error } = await supabase
                 .from("creator_proof_gallery")
                 .select(`
-                                                                                                        *,
-                                                                                                        creator_gallery_likes (
-                                                                                                            user_id
-                                                                                                        )
-                                                                                                    `)
+                                                                                                            *,
+                                                                                                            creator_gallery_likes (
+                                                                                                                user_id
+                                                                                                            )
+                                                                                                        `)
                 .eq("owner_id", profileId)
                 .eq("visibility", "public");
 
@@ -2916,13 +3441,13 @@
             }
 
             container.innerHTML = `
-                                                                                                    <button
-                                                                                                        id="follow-button"
-                                                                                                        class="button follow-button ${isFollowing ? "following" : ""}"
-                                                                                                        aria-pressed="${isFollowing ? "true" : "false"}">
-                                                                                                        ${isFollowing ? "Following" : "Follow"}
-                                                                                                    </button>
-                                                                                                `;
+                                                                                                        <button
+                                                                                                            id="follow-button"
+                                                                                                            class="button follow-button ${isFollowing ? "following" : ""}"
+                                                                                                            aria-pressed="${isFollowing ? "true" : "false"}">
+                                                                                                            ${isFollowing ? "Following" : "Follow"}
+                                                                                                        </button>
+                                                                                                    `;
 
             document.getElementById("follow-button")?.addEventListener("click", () => {
                 toggleFollowProfile(profileId);
@@ -3026,8 +3551,8 @@
             }
 
             document.getElementById("block-button-container").innerHTML = `
-                                                                                                    <button id="block-user-btn" class="button secondary">Block</button>
-                                                                                                `;
+                                                                                                        <button id="block-user-btn" class="button secondary">Block</button>
+                                                                                                    `;
 
             document.getElementById("block-user-btn").addEventListener("click", () => {
                 document.getElementById("block-modal").style.display = "flex";
@@ -3043,10 +3568,10 @@
             const title = disabled ? "Messaging requires both creators to follow each other." : "Message this creator";
 
             document.getElementById("message-button-container").innerHTML = `
-                                                                                                    <button id="message-user-btn" class="button" title="${escapeHtml(title)}" ${disabled ? "disabled" : ""}>
-                                                                                                        Message
-                                                                                                    </button>
-                                                                                                `;
+                                                                                                        <button id="message-user-btn" class="button" title="${escapeHtml(title)}" ${disabled ? "disabled" : ""}>
+                                                                                                            Message
+                                                                                                        </button>
+                                                                                                    `;
 
             document.getElementById("message-user-btn").addEventListener("click", () => {
                 if (!canMessageProfile) {
@@ -3116,8 +3641,8 @@
             }
 
             document.getElementById("report-button-container").innerHTML = `
-                                                                                                    <button id="report-user-btn" class="button secondary">Report</button>
-                                                                                                `;
+                                                                                                        <button id="report-user-btn" class="button secondary">Report</button>
+                                                                                                    `;
 
             document.getElementById("report-user-btn").addEventListener("click", () => {
                 document.getElementById("report-modal").style.display = "flex";
@@ -3208,10 +3733,10 @@
                     : "Permanent";
 
             document.getElementById("moderation-status-display").innerHTML = `
-                                                                                                    <strong>Current Status:</strong> ${escapeHtml(profile.account_status || "active")}<br>
-                                                                                                    <strong>Expires:</strong> ${escapeHtml(expires)}<br>
-                                                                                                    <strong>Reason:</strong> ${escapeHtml(profile.moderation_reason || "None")}
-                                                                                                `;
+                                                                                                        <strong>Current Status:</strong> ${escapeHtml(profile.account_status || "active")}<br>
+                                                                                                        <strong>Expires:</strong> ${escapeHtml(expires)}<br>
+                                                                                                        <strong>Reason:</strong> ${escapeHtml(profile.moderation_reason || "None")}
+                                                                                                    `;
         }
 
         async function loadModerationHistory() {
@@ -3220,12 +3745,12 @@
             const { data, error } = await supabase
                 .from("moderation_logs")
                 .select(`
-                                                                                                        *,
-                                                                                                        moderator:profiles!moderation_logs_moderator_id_fkey(
-                                                                                                            username,
-                                                                                                            display_name
-                                                                                                        )
-                                                                                                    `)
+                                                                                                            *,
+                                                                                                            moderator:profiles!moderation_logs_moderator_id_fkey(
+                                                                                                                username,
+                                                                                                                display_name
+                                                                                                            )
+                                                                                                        `)
                 .eq("target_user_id", profile.id)
                 .order("created_at", { ascending: false })
                 .limit(20);
@@ -3241,13 +3766,13 @@
             }
 
             container.innerHTML = data.map(log => `
-                                                                                                    <div style="border-bottom:1px solid var(--border-color);padding-bottom:10px;margin-bottom:10px;">
-                                                                                                        <strong>${escapeHtml(log.action)}</strong><br>
-                                                                                                        By: ${escapeHtml(log.moderator?.display_name || log.moderator?.username || "Unknown")}<br>
-                                                                                                        Reason: ${escapeHtml(log.reason || "None")}<br>
-                                                                                                        ${new Date(log.created_at).toLocaleString()}
-                                                                                                    </div>
-                                                                                                `).join("");
+                                                                                                        <div style="border-bottom:1px solid var(--border-color);padding-bottom:10px;margin-bottom:10px;">
+                                                                                                            <strong>${escapeHtml(log.action)}</strong><br>
+                                                                                                            By: ${escapeHtml(log.moderator?.display_name || log.moderator?.username || "Unknown")}<br>
+                                                                                                            Reason: ${escapeHtml(log.reason || "None")}<br>
+                                                                                                            ${new Date(log.created_at).toLocaleString()}
+                                                                                                        </div>
+                                                                                                    `).join("");
         }
 
         window.toggleModerationDrawer = function () {
