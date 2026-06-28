@@ -1351,9 +1351,9 @@
             const safe = normalizeImagePlacement(placement);
 
             return `
-                                        object-fit:${safe.fit || "cover"};
-                                        transform:${getImagePlacementTransform(safe)};
-                                    `;
+                                            object-fit:${safe.fit || "cover"};
+                                            transform:${getImagePlacementTransform(safe)};
+                                        `;
         }
 
         const NV_WORLD_RICH_TEXT_SNAPSHOT_PREFIX = "NV_LITERATURE_RICH_TEXT_V2:";
@@ -2554,9 +2554,9 @@
 
             if (literature.cover_image_url) {
                 coverWrap.innerHTML = `
-                                                <img src="${escapeHtml(literature.cover_image_url)}" alt="" style="${getImagePlacementStyle(coverPlacement)}">
-                                                ${coverCredit}
-                                            `;
+                                                    <img src="${escapeHtml(literature.cover_image_url)}" alt="" style="${getImagePlacementStyle(coverPlacement)}">
+                                                    ${coverCredit}
+                                                `;
             } else {
                 coverWrap.innerHTML = `<div class="cover-placeholder">No cover image yet</div>`;
             }
@@ -2709,13 +2709,19 @@
 
             const chapterSearchCache = new Map();
 
+            function decodeChapterSearchEntities(value) {
+                const textarea = document.createElement("textarea");
+                textarea.innerHTML = String(value || "");
+                return textarea.value;
+            }
+
             function normalizeChapterIndexSearch(value) {
-                return String(value || "")
+                return decodeChapterSearchEntities(value)
                     .normalize("NFD")
                     .replace(/[\u0300-\u036f]/g, "")
                     .toLowerCase()
-                    .replace(/&amp;/g, " and ")
-                    .replace(/['’‘"`]/g, "")
+                    .replace(/&/g, " and ")
+                    .replace(/['’‘"`´]/g, "")
                     .replace(/[^a-z0-9]+/g, " ")
                     .replace(/\s+/g, " ")
                     .trim();
@@ -2725,58 +2731,102 @@
                 return normalizeChapterIndexSearch(value).replace(/\s+/g, "");
             }
 
-            function getChapterIndexSearchTokens(value) {
+            function tokenizeChapterIndexSearch(value) {
                 return normalizeChapterIndexSearch(value)
                     .split(" ")
                     .map(token => token.trim())
                     .filter(Boolean);
             }
 
+            function safeChapterPlainText(value) {
+                try {
+                    return getPlainTextFromHtml(value || "");
+                } catch (error) {
+                    console.error("Chapter search text extraction error:", error);
+                    return String(value || "")
+                        .replace(/<!--[\s\S]*?-->/g, " ")
+                        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+                        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+                        .replace(/<[^>]+>/g, " ");
+                }
+            }
+
+            function getChapterTitleForSearch(chapter) {
+                return (
+                    chapter?.title ||
+                    chapter?.name ||
+                    chapter?.chapter_title ||
+                    chapter?.display_title ||
+                    ""
+                );
+            }
+
+            function getChapterSubtitleForSearch(chapter) {
+                return (
+                    chapter?.subtitle ||
+                    chapter?.description ||
+                    chapter?.summary ||
+                    ""
+                );
+            }
+
+            function buildChapterIndexSearchField(label, value, weight, includeForNumeric = true) {
+                const raw = String(value || "");
+                const normalized = normalizeChapterIndexSearch(raw);
+                const compact = normalized.replace(/\s+/g, "");
+                const tokens = normalized
+                    .split(" ")
+                    .map(token => token.trim())
+                    .filter(Boolean);
+
+                return {
+                    label,
+                    raw,
+                    normalized,
+                    compact,
+                    tokens,
+                    weight,
+                    includeForNumeric
+                };
+            }
+
             function buildChapterIndexSearchRecord(chapter, index) {
                 const chapterNumber = index + 1;
+                const chapterNumberText = String(chapterNumber);
+                const title = getChapterTitleForSearch(chapter);
+                const subtitle = getChapterSubtitleForSearch(chapter);
+                const bodyText = safeChapterPlainText(chapter?.body || chapter?.content || "");
+                const authorNote = chapter?.author_note || "";
 
-                const title =
-                    chapter.title ||
-                    chapter.name ||
-                    chapter.chapter_title ||
-                    chapter.display_title ||
-                    "Untitled";
-
-                const subtitle =
-                    chapter.subtitle ||
-                    chapter.description ||
-                    "";
-
-                const bodyText =
-                    getPlainTextFromHtml(chapter.body || chapter.content || "");
-
-                const authorNote =
-                    chapter.author_note ||
-                    "";
-
-                const fields = [
-                    chapterNumber,
+                const numberAliases = [
+                    chapterNumberText,
                     `chapter ${chapterNumber}`,
                     `chap ${chapterNumber}`,
                     `ch ${chapterNumber}`,
                     `#${chapterNumber}`,
-                    `chapter ${chapterNumber} ${title}`,
-                    title,
-                    subtitle,
-                    bodyText,
-                    authorNote
+                    `chapter ${chapterNumberText.padStart(2, "0")}`,
+                    `chap ${chapterNumberText.padStart(2, "0")}`,
+                    `ch ${chapterNumberText.padStart(2, "0")}`
                 ];
 
-                const rawText = fields
-                    .map(value => String(value || ""))
+                const fields = [
+                    buildChapterIndexSearchField("number", numberAliases.join(" "), 130, true),
+                    buildChapterIndexSearchField("title", title, 110, true),
+                    buildChapterIndexSearchField("subtitle", subtitle, 80, true),
+                    buildChapterIndexSearchField("author note", authorNote, 45, true),
+                    buildChapterIndexSearchField("body", bodyText, 22, false)
+                ].filter(field => field.normalized || field.compact);
+
+                const allNormalized = fields
+                    .map(field => field.normalized)
+                    .filter(Boolean)
                     .join(" ");
 
-                const normalizedText = normalizeChapterIndexSearch(rawText);
-                const compactText = normalizedText.replace(/\s+/g, "");
-                const tokens = normalizedText
-                    .split(" ")
-                    .map(token => token.trim())
-                    .filter(Boolean);
+                const allCompact = allNormalized.replace(/\s+/g, "");
+
+                const tokens = [...new Set(
+                    fields.flatMap(field => field.tokens)
+                )];
 
                 const titleInitials = normalizeChapterIndexSearch(title)
                     .split(" ")
@@ -2784,17 +2834,26 @@
                     .join("");
 
                 return {
-                    normalizedText,
-                    compactText,
+                    index,
+                    chapterNumber,
+                    chapterNumberText,
+                    fields,
+                    allNormalized,
+                    allCompact,
                     tokens,
                     titleInitials
                 };
             }
 
             function getChapterIndexSearchRecord(chapter, index) {
-                const cacheKey =
-                    chapter?.id ||
-                    `${index}-${chapter?.updated_at || ""}-${chapter?.title || ""}`;
+                const cacheKey = [
+                    chapter?.id || index,
+                    chapter?.updated_at || "",
+                    chapter?.title || "",
+                    chapter?.subtitle || "",
+                    chapter?.author_note || "",
+                    chapter?.body || chapter?.content || ""
+                ].join("::");
 
                 if (!chapterSearchCache.has(cacheKey)) {
                     chapterSearchCache.set(
@@ -2806,85 +2865,334 @@
                 return chapterSearchCache.get(cacheKey);
             }
 
-            function chapterIndexTextMatches(record, query) {
-                const normalizedQuery = normalizeChapterIndexSearch(query);
-                const compactQuery = compactChapterIndexSearch(query);
+            function levenshteinDistance(a, b) {
+                a = String(a || "");
+                b = String(b || "");
 
-                if (!normalizedQuery && !compactQuery) {
-                    return true;
-                }
+                if (a === b) return 0;
+                if (!a.length) return b.length;
+                if (!b.length) return a.length;
 
-                if (record.normalizedText.includes(normalizedQuery)) {
-                    return true;
-                }
+                const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+                const current = new Array(b.length + 1);
 
-                if (compactQuery && record.compactText.includes(compactQuery)) {
-                    return true;
-                }
+                for (let i = 1; i <= a.length; i++) {
+                    current[0] = i;
 
-                if (compactQuery && record.titleInitials.includes(compactQuery)) {
-                    return true;
-                }
+                    for (let j = 1; j <= b.length; j++) {
+                        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
 
-                const queryTokens = getChapterIndexSearchTokens(query);
-
-                if (!queryTokens.length) {
-                    return true;
-                }
-
-                return queryTokens.every(queryToken => {
-                    const compactToken = compactChapterIndexSearch(queryToken);
-
-                    return record.tokens.some(searchableToken => {
-                        return (
-                            searchableToken === queryToken ||
-                            searchableToken.includes(queryToken) ||
-                            queryToken.includes(searchableToken) ||
-                            searchableToken.startsWith(queryToken) ||
-                            (compactToken && searchableToken.includes(compactToken))
+                        current[j] = Math.min(
+                            previous[j] + 1,
+                            current[j - 1] + 1,
+                            previous[j - 1] + cost
                         );
-                    });
-                });
+                    }
+
+                    for (let j = 0; j <= b.length; j++) {
+                        previous[j] = current[j];
+                    }
+                }
+
+                return previous[b.length];
             }
 
-            function chapterMatchesIndexSearch(chapter, index, query) {
+            function isChapterSearchSubsequence(needle, haystack) {
+                needle = String(needle || "");
+                haystack = String(haystack || "");
+
+                if (needle.length < 4 || haystack.length < needle.length) {
+                    return false;
+                }
+
+                let needleIndex = 0;
+
+                for (const character of haystack) {
+                    if (character === needle[needleIndex]) {
+                        needleIndex++;
+                    }
+
+                    if (needleIndex >= needle.length) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            function scoreChapterSearchToken(queryToken, searchableToken) {
+                if (!queryToken || !searchableToken) {
+                    return 0;
+                }
+
+                if (/^\d+$/.test(queryToken)) {
+                    return searchableToken.includes(queryToken) ? 100 : 0;
+                }
+
+                if (searchableToken === queryToken) {
+                    return 100;
+                }
+
+                if (searchableToken.startsWith(queryToken)) {
+                    return 82;
+                }
+
+                if (searchableToken.includes(queryToken)) {
+                    return 68;
+                }
+
+                if (queryToken.length >= 3 && searchableToken.includes(queryToken.slice(0, -1))) {
+                    return 48;
+                }
+
+                if (queryToken.length >= 4 && searchableToken.length >= 4) {
+                    const distance = levenshteinDistance(queryToken, searchableToken);
+                    const allowedDistance = queryToken.length >= 7 ? 2 : 1;
+
+                    if (distance <= allowedDistance) {
+                        return 42 - (distance * 10);
+                    }
+
+                    if (isChapterSearchSubsequence(queryToken, searchableToken)) {
+                        return 28;
+                    }
+                }
+
+                return 0;
+            }
+
+            function scoreChapterSearchField(field, normalizedQuery, compactQuery, queryTokens, numericOnly) {
+                if (!field || (!field.normalized && !field.compact)) {
+                    return 0;
+                }
+
+                if (numericOnly && !field.includeForNumeric) {
+                    return 0;
+                }
+
+                let score = 0;
+
+                if (normalizedQuery && field.normalized === normalizedQuery) {
+                    score += field.weight * 5;
+                } else if (normalizedQuery && field.normalized.startsWith(normalizedQuery)) {
+                    score += field.weight * 4;
+                } else if (normalizedQuery && field.normalized.includes(normalizedQuery)) {
+                    score += field.weight * 3;
+                }
+
+                if (
+                    compactQuery &&
+                    compactQuery.length >= 2 &&
+                    field.compact &&
+                    field.compact.includes(compactQuery)
+                ) {
+                    score += field.weight * 2;
+                }
+
+                for (const queryToken of queryTokens) {
+                    let bestTokenScore = 0;
+
+                    for (const searchableToken of field.tokens) {
+                        bestTokenScore = Math.max(
+                            bestTokenScore,
+                            scoreChapterSearchToken(queryToken, searchableToken)
+                        );
+                    }
+
+                    if (bestTokenScore > 0) {
+                        score += Math.round((bestTokenScore / 100) * field.weight);
+                    }
+                }
+
+                return score;
+            }
+
+            function scoreChapterIndexRecord(record, query) {
+                const normalizedQuery = normalizeChapterIndexSearch(query);
+                const compactQuery = compactChapterIndexSearch(query);
+                const queryTokens = tokenizeChapterIndexSearch(query);
+                const numericOnly = !!compactQuery && /^\d+$/.test(compactQuery);
+                const shortLetterQuery =
+                    !numericOnly &&
+                    compactQuery.length > 0 &&
+                    compactQuery.length < 3;
+
+                if (!normalizedQuery && !compactQuery && !queryTokens.length) {
+                    return 1;
+                }
+
+                if (numericOnly) {
+                    let numericScore = 0;
+
+                    if (record.chapterNumberText.includes(compactQuery)) {
+                        numericScore += 1000;
+                    }
+
+                    for (const field of record.fields) {
+                        if (!field.includeForNumeric) {
+                            continue;
+                        }
+
+                        if (field.normalized.includes(compactQuery) || field.compact.includes(compactQuery)) {
+                            numericScore += scoreChapterSearchField(
+                                field,
+                                normalizedQuery,
+                                compactQuery,
+                                queryTokens,
+                                true
+                            );
+                        }
+                    }
+
+                    return numericScore;
+                }
+
+                const activeFields = shortLetterQuery
+                    ? record.fields.filter(field => field.label !== "body")
+                    : record.fields;
+
+                const activeNormalized = activeFields
+                    .map(field => field.normalized)
+                    .filter(Boolean)
+                    .join(" ");
+
+                const activeCompact = activeNormalized.replace(/\s+/g, "");
+
+                const activeTokens = [...new Set(
+                    activeFields.flatMap(field => field.tokens)
+                )];
+
+                let score = 0;
+                let phraseMatched = false;
+
+                if (normalizedQuery && activeNormalized.includes(normalizedQuery)) {
+                    phraseMatched = true;
+                    score += 120;
+                }
+
+                if (
+                    compactQuery &&
+                    compactQuery.length >= 2 &&
+                    activeCompact.includes(compactQuery)
+                ) {
+                    phraseMatched = true;
+                    score += 90;
+                }
+
+                if (
+                    compactQuery &&
+                    compactQuery.length >= 2 &&
+                    record.titleInitials &&
+                    record.titleInitials.includes(compactQuery)
+                ) {
+                    phraseMatched = true;
+                    score += 75;
+                }
+
+                const tokenMatches = queryTokens.map(queryToken => {
+                    let best = 0;
+
+                    for (const searchableToken of activeTokens) {
+                        best = Math.max(best, scoreChapterSearchToken(queryToken, searchableToken));
+                    }
+
+                    return best;
+                });
+
+                const allTokensMatched =
+                    queryTokens.length > 0 &&
+                    tokenMatches.every(value => value > 0);
+
+                if (!phraseMatched && !allTokensMatched) {
+                    return 0;
+                }
+
+                for (const field of activeFields) {
+                    score += scoreChapterSearchField(
+                        field,
+                        normalizedQuery,
+                        compactQuery,
+                        queryTokens,
+                        false
+                    );
+                }
+
+                score += tokenMatches.reduce((sum, value) => sum + value, 0);
+
+                return score;
+            }
+
+            function getChapterSearchResults(query) {
                 const rawQuery = String(query || "").trim();
 
                 if (!rawQuery) {
-                    return true;
+                    return chapters.map((chapter, index) => ({
+                        chapter,
+                        index,
+                        score: 1
+                    }));
                 }
 
-                const record = getChapterIndexSearchRecord(chapter, index);
+                return chapters
+                    .map((chapter, index) => {
+                        const record = getChapterIndexSearchRecord(chapter, index);
+                        return {
+                            chapter,
+                            index,
+                            score: scoreChapterIndexRecord(record, rawQuery)
+                        };
+                    })
+                    .filter(result => result.score > 0)
+                    .sort((a, b) => {
+                        if (b.score !== a.score) {
+                            return b.score - a.score;
+                        }
 
-                return chapterIndexTextMatches(record, rawQuery);
+                        return a.index - b.index;
+                    });
+            }
+
+            function getChapterSearchSnippet(chapter) {
+                return (
+                    chapter.subtitle ||
+                    chapter.description ||
+                    chapter.author_note ||
+                    "Read chapter"
+                );
             }
 
             function draw() {
                 const query = search.value || "";
+                const results = getChapterSearchResults(query);
 
-                const filtered = chapters.filter((chapter, index) =>
-                    chapterMatchesIndexSearch(chapter, index, query)
-                );
+                count.textContent = `${results.length} ${results.length === 1 ? "Chapter" : "Chapters"}`;
 
-                count.textContent = `${filtered.length} ${filtered.length === 1 ? "Chapter" : "Chapters"}`;
-
-                if (!filtered.length) {
+                if (!results.length) {
                     links.innerHTML = `<p class="empty">No chapters match this search.</p>`;
                     return;
                 }
 
-                links.innerHTML = filtered.map(chapter => {
-                    const realIndex = chapters.indexOf(chapter);
+                links.innerHTML = results.map(result => {
+                    const chapter = result.chapter;
+                    const realIndex = result.index;
+                    const title = getChapterTitleForSearch(chapter) || "Untitled";
+                    const snippet = getChapterSearchSnippet(chapter);
+
                     return `
-                                                    <a class="chapter-nav-link" href="#chapter-${realIndex + 1}">
-                                                        <span>Chapter ${realIndex + 1}: ${escapeHtml(chapter.title || "Untitled")}</span>
-                                                        <small>${escapeHtml(chapter.subtitle || "Read chapter")}</small>
-                                                    </a>
-                                                `;
+                            <a class="chapter-nav-link" href="#chapter-${realIndex + 1}">
+                                <span>Chapter ${realIndex + 1}: ${escapeHtml(title)}</span>
+                                <small>${escapeHtml(snippet)}</small>
+                            </a>
+                        `;
                 }).join("");
             }
 
             search.oninput = draw;
+            search.onkeyup = draw;
+            search.onchange = draw;
+            search.onsearch = draw;
+            search.addEventListener("compositionend", draw);
+
             draw();
         }
 
@@ -2906,10 +3214,10 @@
             const chapterLabel = chapters.length === 1 ? "chapter" : "chapters";
 
             meta.innerHTML = `
-                                            <span>${chapters.length} ${chapterLabel}</span>
-                                            <span>${totalWords.toLocaleString()} words</span>
-                                            <span>${minutes} min read</span>
-                                        `;
+                                                <span>${chapters.length} ${chapterLabel}</span>
+                                                <span>${totalWords.toLocaleString()} words</span>
+                                                <span>${minutes} min read</span>
+                                            `;
         }
 
         window.scrollToFirstChapter = function () {
@@ -3127,33 +3435,33 @@
             const visualBottom = buildChapterHeaderImage(chapter, "bottom");
 
             return `
-                                            <article id="chapter-${chapterNumber}"
-                                                     class="literature-chapter"
-                                                     style="${buildChapterCardStyle(chapter)} ${buildChapterWritingStyle(chapter)}">
-                                                <div class="chapter-title-row">
-                                                    <div class="chapter-eyebrow">Chapter ${chapterNumber} · ${getChapterReadTime(chapter)} min read</div>
-                                                    <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
-                                                    ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
-                                                </div>
-
-                                                ${visualTop}
-
-                                                <div class="chapter-main-text rich-chapter-content">
-                                                    ${visualLeftRight}
-                                                    ${buildChapterBodyHtml(chapter.body || "No chapter text yet.")}
-                                                </div>
-
-                                                ${visualBottom}
-
-                                                ${chapter.author_note ? `
-                                                    <div class="author-note">
-                                                        <strong>Author Note</strong>
-                                                        <br><br>
-                                                        ${escapeHtml(chapter.author_note)}
+                                                <article id="chapter-${chapterNumber}"
+                                                         class="literature-chapter"
+                                                         style="${buildChapterCardStyle(chapter)} ${buildChapterWritingStyle(chapter)}">
+                                                    <div class="chapter-title-row">
+                                                        <div class="chapter-eyebrow">Chapter ${chapterNumber} · ${getChapterReadTime(chapter)} min read</div>
+                                                        <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
+                                                        ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
                                                     </div>
-                                                ` : ""}
 
-                                                ${chapter.theme_card_style === "image" && chapter.theme_card_image_url ? buildCreditPill({
+                                                    ${visualTop}
+
+                                                    <div class="chapter-main-text rich-chapter-content">
+                                                        ${visualLeftRight}
+                                                        ${buildChapterBodyHtml(chapter.body || "No chapter text yet.")}
+                                                    </div>
+
+                                                    ${visualBottom}
+
+                                                    ${chapter.author_note ? `
+                                                        <div class="author-note">
+                                                            <strong>Author Note</strong>
+                                                            <br><br>
+                                                            ${escapeHtml(chapter.author_note)}
+                                                        </div>
+                                                    ` : ""}
+
+                                                    ${chapter.theme_card_style === "image" && chapter.theme_card_image_url ? buildCreditPill({
                 type: chapter.card_credit_type,
                 name: chapter.card_credit_name,
                 username: chapter.card_credit_nullverse_username,
@@ -3162,8 +3470,8 @@
                 ownerUsername: currentLiterature.ownerProfile?.username,
                 context: "Chapter Card Image"
             }) : ""}
-                                            </article>
-                                        `;
+                                                </article>
+                                            `;
         }
 
         function buildChapterHeaderImage(chapter, requestedPosition) {
@@ -3194,11 +3502,11 @@
             ].filter(Boolean).join(" ");
 
             return `
-                                            <div class="${classes}">
-                                                <img src="${escapeHtml(chapter.image_url)}" alt="" style="${getImagePlacementStyle(chapter.image_placement)}">
-                                                ${credit}
-                                            </div>
-                                        `;
+                                                <div class="${classes}">
+                                                    <img src="${escapeHtml(chapter.image_url)}" alt="" style="${getImagePlacementStyle(chapter.image_placement)}">
+                                                    ${credit}
+                                                </div>
+                                            `;
         }
 
         function buildChapterCardStyle(chapter) {
@@ -3219,14 +3527,14 @@
             const placement = normalizeImagePlacement(chapter.theme_card_image_placement);
 
             return `
-                                            --chapter-card-background:${background};
-                                            --chapter-card-text:${chapter.theme_card_text_color || "#f5f5f5"};
-                                            --chapter-card-image:${image};
-                                            --chapter-card-image-size:${getImagePlacementFit(placement)};
-                                            --chapter-card-image-transform:${getImagePlacementTransform(placement)};
-                                            --chapter-card-image-opacity:${chapter.theme_card_opacity ?? .85};
-                                            --chapter-card-overlay:${chapter.theme_card_overlay ?? .35};
-                                        `;
+                                                --chapter-card-background:${background};
+                                                --chapter-card-text:${chapter.theme_card_text_color || "#f5f5f5"};
+                                                --chapter-card-image:${image};
+                                                --chapter-card-image-size:${getImagePlacementFit(placement)};
+                                                --chapter-card-image-transform:${getImagePlacementTransform(placement)};
+                                                --chapter-card-image-opacity:${chapter.theme_card_opacity ?? .85};
+                                                --chapter-card-overlay:${chapter.theme_card_overlay ?? .35};
+                                            `;
         }
 
         function buildChapterWritingStyle(chapter) {
@@ -3240,11 +3548,11 @@
             const spacing = spacingMap[chapter.spacing_type || "comfortable"] || spacingMap.comfortable;
 
             return `
-                                            --chapter-text-color:${chapter.text_color || "#f5f5f5"};
-                                            --chapter-panel-background:${chapter.chapter_panel_color || "#141416"};
-                                            --chapter-line-height:${spacing[0]};
-                                            --chapter-letter-spacing:${spacing[1]};
-                                        `;
+                                                --chapter-text-color:${chapter.text_color || "#f5f5f5"};
+                                                --chapter-panel-background:${chapter.chapter_panel_color || "#141416"};
+                                                --chapter-line-height:${spacing[0]};
+                                                --chapter-letter-spacing:${spacing[1]};
+                                            `;
         }
 
         function renderTags(literature) {
@@ -3264,51 +3572,51 @@
 
             if (currentUser && currentUser.id === literature.owner_id) {
                 html += `
-                                                <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
-                                                    Edit Literature
-                                                </a>
-                                            `;
+                                                    <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
+                                                        Edit Literature
+                                                    </a>
+                                                `;
             }
 
             if (canModerateWorlds(currentPermissions) && canModerateContentOwner(currentProfile, literature.ownerProfile)) {
                 html += `
-                                                <div style="margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
-                                    <strong>Literature Moderation</strong>
+                                                    <div style="margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
+                                        <strong>Literature Moderation</strong>
 
-                                    <p class="empty">
-                                        Status: ${escapeHtml(literature.moderation_status || "visible")}
-                                    </p>
+                                        <p class="empty">
+                                            Status: ${escapeHtml(literature.moderation_status || "visible")}
+                                        </p>
 
-                                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                                        <button class="button" onclick="setLiteratureModerationStatus('visible')">
-                                            Restore Literature
-                                        </button>
+                                        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                                            <button class="button" onclick="setLiteratureModerationStatus('visible')">
+                                                Restore Literature
+                                            </button>
 
-                                        <div style="width:100%;margin-top:10px;">
-                                            <label class="empty">Reason for hiding</label>
+                                            <div style="width:100%;margin-top:10px;">
+                                                <label class="empty">Reason for hiding</label>
 
-                                            <input id="literature-hide-reason"
-                                                   placeholder="Reason shown to creator..."
-                                                   style="
-                                                       width:100%;
-                                                       box-sizing:border-box;
-                                                       margin-top:8px;
-                                                       padding:10px;
-                                                       border-radius:10px;
-                                                       border:1px solid var(--border-color);
-                                                       background:rgba(0,0,0,.28);
-                                                       color:var(--text-primary);
-                                                   ">
+                                                <input id="literature-hide-reason"
+                                                       placeholder="Reason shown to creator..."
+                                                       style="
+                                                           width:100%;
+                                                           box-sizing:border-box;
+                                                           margin-top:8px;
+                                                           padding:10px;
+                                                           border-radius:10px;
+                                                           border:1px solid var(--border-color);
+                                                           background:rgba(0,0,0,.28);
+                                                           color:var(--text-primary);
+                                                       ">
+                                            </div>
+
+                                            <button class="button" onclick="setLiteratureModerationStatus('hidden')">
+                                                Hide Literature
+                                            </button>
                                         </div>
 
-                                        <button class="button" onclick="setLiteratureModerationStatus('hidden')">
-                                            Hide Literature
-                                        </button>
-                                    </div>
-
-                                    <p id="literature-moderation-message" class="empty"></p>
+                                        <p id="literature-moderation-message" class="empty"></p>
 </div>
-                                            `;
+                                                `;
             }
 
             container.innerHTML = html;
@@ -3489,27 +3797,27 @@
 
         function showHiddenNotice(literature) {
             document.querySelector("main").innerHTML = `
-                                        <section class="content-warning-panel">
-                                            <h1>Literature Hidden by Moderation</h1>
+                                            <section class="content-warning-panel">
+                                                <h1>Literature Hidden by Moderation</h1>
 
-                                            <p class="empty">
-                                                This literature is currently hidden from the public by Nullverse moderation.
-                                            </p>
+                                                <p class="empty">
+                                                    This literature is currently hidden from the public by Nullverse moderation.
+                                                </p>
 
-                                            <p class="empty">
-                                                <strong>Reason:</strong>
-                                                ${escapeHtml(literature.moderation_reason || "No reason provided.")}
-                                            </p>
+                                                <p class="empty">
+                                                    <strong>Reason:</strong>
+                                                    ${escapeHtml(literature.moderation_reason || "No reason provided.")}
+                                                </p>
 
-                                            <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                                                <a class="button" href="dashboard.html">Back to Dashboard</a>
+                                                <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                                                    <a class="button" href="dashboard.html">Back to Dashboard</a>
 
-                                                <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
-                                                    Edit Literature
-                                                </a>
-                                            </div>
-                                        </section>
-                                    `;
+                                                    <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
+                                                        Edit Literature
+                                                    </a>
+                                                </div>
+                                            </section>
+                                        `;
         }
 
         function showNotFound(message) {
@@ -3524,36 +3832,36 @@
 
         function showContentBlocked(literature) {
             document.querySelector("main").innerHTML = `
-                                            <section class="content-warning-panel">
-                                                <h1>Content Hidden</h1>
-                                                <p class="empty">This literature is hidden by your content safety settings.</p>
-                                                <div class="warning-list">
-                                                    ${(literature.content_warnings || []).map(warning => `
-                                                        <span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>
-                                                    `).join("")}
-                                                </div>
-                                                <a class="button" href="explore.html">Back to Explore</a>
-                                            </section>
-                                        `;
+                                                <section class="content-warning-panel">
+                                                    <h1>Content Hidden</h1>
+                                                    <p class="empty">This literature is hidden by your content safety settings.</p>
+                                                    <div class="warning-list">
+                                                        ${(literature.content_warnings || []).map(warning => `
+                                                            <span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>
+                                                        `).join("")}
+                                                    </div>
+                                                    <a class="button" href="explore.html">Back to Explore</a>
+                                                </section>
+                                            `;
         }
 
         function showContentWarning(literature) {
             document.querySelector("main").innerHTML = `
-                                            <section class="content-warning-panel">
-                                                <h1>Content Warning</h1>
-                                                <p class="empty">This literature may contain sensitive or mature content.</p>
-                                                <div class="warning-list">
-                                                    ${literature.content_rating === "adult" ? `<span class="warning-pill">Adult 18+</span>` : ""}
-                                                    ${(literature.content_warnings || []).map(warning => `
-                                                        <span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>
-                                                    `).join("")}
-                                                </div>
-                                                <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                                                    <button id="continue-warning-button" class="button">Continue Anyway</button>
-                                                    <a class="button" href="explore.html">Go Back</a>
-                                                </div>
-                                            </section>
-                                        `;
+                                                <section class="content-warning-panel">
+                                                    <h1>Content Warning</h1>
+                                                    <p class="empty">This literature may contain sensitive or mature content.</p>
+                                                    <div class="warning-list">
+                                                        ${literature.content_rating === "adult" ? `<span class="warning-pill">Adult 18+</span>` : ""}
+                                                        ${(literature.content_warnings || []).map(warning => `
+                                                            <span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>
+                                                        `).join("")}
+                                                    </div>
+                                                    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                                                        <button id="continue-warning-button" class="button">Continue Anyway</button>
+                                                        <a class="button" href="explore.html">Go Back</a>
+                                                    </div>
+                                                </section>
+                                            `;
 
             document.getElementById("continue-warning-button").addEventListener("click", () => {
                 window.location.href = `literature.html?id=${encodeURIComponent(literature.id)}&contentOk=${encodeURIComponent(literature.id)}`;
@@ -3601,31 +3909,31 @@
             }
 
             const tooltipContent = `
-                                            <strong>${escapeHtml(context)} Credit</strong>
-                                            <br>
-                                            Source: ${escapeHtml(name || username || ownerUsername || formatCreditType(type))}
-                                            ${note ? `<br><br>${escapeHtml(note)}` : ""}
-                                        `;
+                                                <strong>${escapeHtml(context)} Credit</strong>
+                                                <br>
+                                                Source: ${escapeHtml(name || username || ownerUsername || formatCreditType(type))}
+                                                ${note ? `<br><br>${escapeHtml(note)}` : ""}
+                                            `;
 
             const tooltip = `<span class="credit-tooltip">${tooltipContent}</span>`;
 
             if (href) {
                 return `
-                                                <a class="credit-pill"
-                                                   href="${escapeHtml(href)}"
-                                                   ${href.startsWith("http") ? 'target="_blank"' : ""}>
-                                                    ${escapeHtml(label)}
-                                                    ${tooltip}
-                                                </a>
-                                            `;
+                                                    <a class="credit-pill"
+                                                       href="${escapeHtml(href)}"
+                                                       ${href.startsWith("http") ? 'target="_blank"' : ""}>
+                                                        ${escapeHtml(label)}
+                                                        ${tooltip}
+                                                    </a>
+                                                `;
             }
 
             return `
-                                            <span class="credit-pill">
-                                                ${escapeHtml(label)}
-                                                ${tooltip}
-                                            </span>
-                                        `;
+                                                <span class="credit-pill">
+                                                    ${escapeHtml(label)}
+                                                    ${tooltip}
+                                                </span>
+                                            `;
         }
 
         window.logOut = async function () {
