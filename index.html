@@ -723,8 +723,61 @@
         setupMessageBadge();
 
         const currentUser = await requireBetaAccess();
+
+        const profileSetupComplete =
+            await ensureProfileSetupComplete();
+
+        if (!profileSetupComplete) {
+            await new Promise(() => { });
+        }
+
         setupNotificationBadge();
         let blockedUserIds = [];
+
+        function redirectToProfileSetup() {
+            const currentPage =
+                window.location.pathname.split("/").pop() ||
+                "dashboard.html";
+
+            const nextPage =
+                encodeURIComponent(
+                    `${currentPage}${window.location.search || ""}`
+                );
+
+            window.location.replace(
+                `profile-setup.html?next=${nextPage}`
+            );
+        }
+
+        async function ensureProfileSetupComplete() {
+            const { data: profile, error } = await supabase
+                .from("profiles")
+                .select("id, username, display_name, profile_completed, age_verified, birth_date, age_role")
+                .eq("id", currentUser.id)
+                .maybeSingle();
+
+            if (error) {
+                console.error("Profile setup check error:", error);
+                redirectToProfileSetup();
+                return false;
+            }
+
+            const setupComplete = Boolean(
+                profile &&
+                profile.profile_completed &&
+                profile.age_verified &&
+                profile.birth_date &&
+                profile.age_role &&
+                profile.age_role !== "unknown"
+            );
+
+            if (!setupComplete) {
+                redirectToProfileSetup();
+                return false;
+            }
+
+            return true;
+        }
 
         async function loadBlockedUsers() {
             const { data, error } = await supabase
@@ -1104,13 +1157,13 @@
             }
 
             container.innerHTML = visibleWorlds.map(world => `
-        <div class="mini-card">
-            <a href="${getContentUrl(world)}">
-                ${escapeHtml(world.title || "Untitled World")}
-            </a>
-            <p>Recently updated</p>
-        </div>
-    `).join("");
+            <div class="mini-card">
+                <a href="${getContentUrl(world)}">
+                    ${escapeHtml(world.title || "Untitled World")}
+                </a>
+                <p>Recently updated</p>
+            </div>
+        `).join("");
         }
 
         async function loadFollowingMiniList() {
@@ -1147,13 +1200,13 @@
             }
 
             container.innerHTML = profiles.map(profile => `
-                        <div class="mini-card">
-                            <a href="profile.html?user=${encodeURIComponent(profile.username || "")}">
-                                ${escapeHtml(profile.display_name || profile.username || "Creator")}
-                            </a>
-                            <p>@${escapeHtml(profile.username || "creator")}</p>
-                        </div>
-                    `).join("");
+                            <div class="mini-card">
+                                <a href="profile.html?user=${encodeURIComponent(profile.username || "")}">
+                                    ${escapeHtml(profile.display_name || profile.username || "Creator")}
+                                </a>
+                                <p>@${escapeHtml(profile.username || "creator")}</p>
+                            </div>
+                        `).join("");
         }
 
         function getContentUrl(world) {
@@ -1184,43 +1237,43 @@
                 world.creator?.username || "";
 
             return `
-        <article class="world-card">
-            <div class="world-cover-wrap">
-                <a href="${getContentUrl(world)}"
-                   class="world-cover">
-                    <img
-                        src="${escapeHtml(coverImage)}"
-                        alt="${escapeHtml(world.title || "World cover")}"
-                    >
-                </a>
+            <article class="world-card">
+                <div class="world-cover-wrap">
+                    <a href="${getContentUrl(world)}"
+                       class="world-cover">
+                        <img
+                            src="${escapeHtml(coverImage)}"
+                            alt="${escapeHtml(world.title || "World cover")}"
+                        >
+                    </a>
 
-                ${buildWorldCardCreditPill(world)}
-            </div>
+                    ${buildWorldCardCreditPill(world)}
+                </div>
 
-            <div class="world-body">
-                <div class="world-meta">
-                    By ${username
+                <div class="world-body">
+                    <div class="world-meta">
+                        By ${username
                     ? `<a style="color:#bdbdca;" href="profile.html?user=${encodeURIComponent(username)}">${escapeHtml(creatorName)}</a>`
                     : escapeHtml(creatorName)}
-                    ${world.like_count ? ` • ${world.like_count} likes` : ""}
+                        ${world.like_count ? ` • ${world.like_count} likes` : ""}
+                    </div>
+
+                    <h3>
+                        <a href="${getContentUrl(world)}">
+                            ${escapeHtml(world.title || "Untitled World")}
+                        </a>
+                    </h3>
+
+                    <p>${escapeHtml(world.summary || "No summary yet.")}</p>
+
+                    <div>
+                        ${renderTags(world)}
+                    </div>
                 </div>
-
-                <h3>
-                    <a href="${getContentUrl(world)}">
-                        ${escapeHtml(world.title || "Untitled World")}
-                    </a>
-                </h3>
-
-                <p>${escapeHtml(world.summary || "No summary yet.")}</p>
-
-                <div>
-                    ${renderTags(world)}
-                </div>
-            </div>
-        </article>
-    `;
+            </article>
+        `;
         }
-        
+
 
         function buildWorldCardCreditPill(world) {
             const type = world.overview_card_credit_type || "no_credit_needed";
@@ -1257,37 +1310,37 @@
             const shortLabel = `Image Credit: ${source}`;
 
             const tooltip = `
-        <span class="world-card-credit-tooltip">
-            <strong>Overview Image Credit</strong>
-            <br>
-            Source: ${escapeHtml(source)}
-            ${world.overview_card_credit_note
+            <span class="world-card-credit-tooltip">
+                <strong>Overview Image Credit</strong>
+                <br>
+                Source: ${escapeHtml(source)}
+                ${world.overview_card_credit_note
                     ? `<br><br>${escapeHtml(world.overview_card_credit_note)}`
                     : ""}
-        </span>
-    `;
+            </span>
+        `;
 
             if (!href) {
                 return `
-            <span class="world-card-credit-pill">
+                <span class="world-card-credit-pill">
+                    <span class="world-card-credit-label">
+                        ${escapeHtml(shortLabel)}
+                    </span>
+                    ${tooltip}
+                </span>
+            `;
+            }
+
+            return `
+            <a class="world-card-credit-pill"
+               href="${escapeHtml(href)}"
+               ${href.startsWith("http") ? 'target="_blank"' : ""}>
                 <span class="world-card-credit-label">
                     ${escapeHtml(shortLabel)}
                 </span>
                 ${tooltip}
-            </span>
+            </a>
         `;
-            }
-
-            return `
-        <a class="world-card-credit-pill"
-           href="${escapeHtml(href)}"
-           ${href.startsWith("http") ? 'target="_blank"' : ""}>
-            <span class="world-card-credit-label">
-                ${escapeHtml(shortLabel)}
-            </span>
-            ${tooltip}
-        </a>
-    `;
         }
 
         function renderTags(world) {
