@@ -1803,6 +1803,61 @@
             };
         }
 
+        const STANDARD_CONTENT_WARNINGS = [
+            "violence",
+            "gore",
+            "horror",
+            "body_horror",
+            "sexual_content",
+            "substance_use",
+            "abuse",
+            "self_harm",
+            "disturbing_imagery"
+        ];
+
+        function normalizeWarningKey(value) {
+            return String(value || "")
+                .trim()
+                .toLowerCase()
+                .replace(/&/g, " and ")
+                .replace(/\s+/g, "_")
+                .replace(/-+/g, "_")
+                .replace(/[^a-z0-9_]/g, "")
+                .replace(/_+/g, "_")
+                .replace(/^_+|_+$/g, "");
+        }
+
+        function normalizeWarningList(value) {
+            let list = value;
+
+            if (typeof list === "string") {
+                const raw = list.trim();
+
+                if (!raw) {
+                    list = [];
+                } else {
+                    try {
+                        list = JSON.parse(raw);
+                    } catch {
+                        if (raw.startsWith("{") && raw.endsWith("}")) {
+                            list = raw
+                                .slice(1, -1)
+                                .split(",")
+                                .map(item => item.replace(/^"|"$/g, ""));
+                        } else {
+                            list = raw.split(",");
+                        }
+                    }
+                }
+            }
+
+            return [...new Set(
+                (Array.isArray(list) ? list : [])
+                    .map(normalizeWarningKey)
+                    .filter(Boolean)
+            )];
+        }
+
         function getImagePlacement(key) {
             return normalizeImagePlacement(imagePlacementData[key]);
         }
@@ -1841,15 +1896,15 @@
 
         function buildImagePlacementButton(key, label, existingUrl = "") {
             return `
-                        <div class="image-fit-launch-row">
-                            <button type="button" class="button" onclick="openImagePlacementStudioForKey('${key}')">
-                                Adjust Image Placement
-                            </button>
-                            <span class="muted" style="align-self:center;">
-                                ${label}${existingUrl ? " · existing image detected" : ""}
-                            </span>
-                        </div>
-                    `;
+                            <div class="image-fit-launch-row">
+                                <button type="button" class="button" onclick="openImagePlacementStudioForKey('${key}')">
+                                    Adjust Image Placement
+                                </button>
+                                <span class="muted" style="align-self:center;">
+                                    ${label}${existingUrl ? " · existing image detected" : ""}
+                                </span>
+                            </div>
+                        `;
         }
 
         function getImagePlacementConfig(key) {
@@ -1983,9 +2038,9 @@
             document.getElementById("image-placement-frame-width").value = config.width;
             document.getElementById("image-placement-frame-height").value = config.height;
             document.getElementById("image-placement-meta").innerHTML = `
-                        <strong>Visible frame:</strong> ${config.width}px × ${config.height}px<br>
-                        <strong>Tip:</strong> Drag the image to reposition it, pull the corner handle to resize, or use the top handle/slider to rotate.
-                    `;
+                            <strong>Visible frame:</strong> ${config.width}px × ${config.height}px<br>
+                            <strong>Tip:</strong> Drag the image to reposition it, pull the corner handle to resize, or use the top handle/slider to rotate.
+                        `;
 
             syncImagePlacementControls();
             updateImagePlacementPreview();
@@ -2249,11 +2304,58 @@
         window.searchCreditUsers = async function (prefix = "image") { const input = document.getElementById(`${prefix}-credit-nullverse-username`), results = document.getElementById(`${prefix}-credit-user-results`), search = input.value.trim().replace("@", ""); if (!search) { results.innerHTML = `<p class="message">Type a username or display name first.</p>`; return } results.innerHTML = `<p class="message">Searching creators...</p>`; const { data, error } = await supabase.from("profiles").select("id,username,display_name,role,role_name").or(`username.ilike.%${search}%,display_name.ilike.%${search}%`).order("username", { ascending: true }).limit(8); if (error) { results.innerHTML = `<p class="message">${escapeHtml(error.message)}</p>`; return } if (!data?.length) { results.innerHTML = `<p class="message">No Nullverse creators found.</p>`; return } results.innerHTML = data.map(profile => `<div style="border:1px solid var(--border-color);border-radius:14px;padding:12px;margin-bottom:10px;background:rgba(255,255,255,.035);"><strong>${escapeHtml(profile.display_name || "Unnamed Creator")}</strong><div class="message" style="margin:4px 0 10px;">@${escapeHtml(profile.username || "no-username")}</div><button type="button" class="button" onclick="selectCreditUser('${prefix}','${escapeHtml(profile.username || "")}','${escapeHtml(profile.display_name || "")}')">Use This Creator</button></div>`).join("") };
         window.searchPageCreditUsers = async function (pageId) { const input = document.getElementById(`page-credit-username-${pageId}`), results = document.getElementById(`page-credit-results-${pageId}`), search = input.value.trim().replace("@", ""); if (!search) { results.innerHTML = `<p class="message">Type a username or display name first.</p>`; return } results.innerHTML = `<p class="message">Searching creators...</p>`; const { data, error } = await supabase.from("profiles").select("id,username,display_name,role,role_name").or(`username.ilike.%${search}%,display_name.ilike.%${search}%`).order("username", { ascending: true }).limit(8); if (error) { results.innerHTML = `<p class="message">${escapeHtml(error.message)}</p>`; return } if (!data?.length) { results.innerHTML = `<p class="message">No Nullverse creators found.</p>`; return } results.innerHTML = data.map(profile => `<div style="border:1px solid var(--border-color);border-radius:14px;padding:12px;margin-bottom:10px;background:rgba(255,255,255,.035);"><strong>${escapeHtml(profile.display_name || "Unnamed Creator")}</strong><div class="message" style="margin:4px 0 10px;">@${escapeHtml(profile.username || "no-username")}</div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="button" onclick="selectPageCreditUser('${pageId}','${escapeHtml(profile.username || "")}')">Use This Creator</button><a class="button" href="profile.html?user=${encodeURIComponent(profile.username || "")}" target="_blank">View Profile</a></div></div>`).join("") }; window.selectPageCreditUser = function (pageId, username) { document.getElementById(`page-credit-username-${pageId}`).value = username || ""; document.getElementById(`page-credit-type-${pageId}`).value = "nullverse_creator"; document.getElementById(`page-credit-results-${pageId}`).innerHTML = `<p class="message">Selected @${escapeHtml(username)}</p>`; updatePageCreditFields(pageId) }; window.selectCreditUser = function (prefix, username, displayName) { document.getElementById(`${prefix}-credit-nullverse-username`).value = username || ""; const nameInput = document.getElementById(`${prefix}-credit-name`); if (nameInput && displayName) nameInput.value = displayName; document.getElementById(`${prefix}-credit-type`).value = "nullverse_creator"; document.getElementById(`${prefix}-credit-user-results`).innerHTML = `<p class="message">Selected @${escapeHtml(username)}</p>`; updateCreditFieldsForPrefix(prefix); updateCreditPreview(prefix) };
         function renderGenreTags() { const c = document.getElementById("genre-tags"); if (!c) return; c.innerHTML = genreTags.map((tag, i) => `<div class="tag-pill">${escapeHtml(tag)}<button onclick="removeGenreTag(${i})">✕</button></div>`).join("") } function renderThemeTags() { const c = document.getElementById("theme-tags"); if (!c) return; c.innerHTML = themeTags.map((tag, i) => `<div class="tag-pill">${escapeHtml(tag)}<button onclick="removeThemeTag(${i})">✕</button></div>`).join("") } window.addGenreTag = function () { const input = document.getElementById("genre-input"), value = input.value.trim(); if (!value) return; genreTags.push(value); input.value = ""; renderGenreTags() }; window.addThemeTag = function () { const input = document.getElementById("theme-input"), value = input.value.trim(); if (!value) return; themeTags.push(value); input.value = ""; renderThemeTags() }; window.removeGenreTag = function (i) { genreTags.splice(i, 1); renderGenreTags() }; window.removeThemeTag = function (i) { themeTags.splice(i, 1); renderThemeTags() };
-        function renderWarningSetup() { const saved = currentComic.content_warnings || [], standard = ["violence", "gore", "horror", "body_horror", "sexual_content", "substance_use", "abuse", "self_harm", "disturbing_imagery"]; document.querySelectorAll(".warning-choice-grid input").forEach(box => { box.checked = saved.includes(box.value) }); warningTags = saved.filter(tag => !standard.includes(tag)); renderWarningTags() } function renderWarningTags() { const c = document.getElementById("warning-tags"); if (!c) return; c.innerHTML = warningTags.map((tag, i) => `<span class="warning-tag">${escapeHtml(tag.replaceAll("_", " "))}<button type="button" onclick="removeWarningTag(${i})">×</button></span>`).join("") } window.addWarningTag = function () { const input = document.getElementById("warning-input"), value = input.value.trim().toLowerCase().replace(/\s+/g, "_"); if (!value) return; if (!warningTags.includes(value)) warningTags.push(value); input.value = ""; renderWarningTags() }; window.removeWarningTag = function (i) { warningTags.splice(i, 1); renderWarningTags() };
+        function renderWarningSetup() {
+            const saved = normalizeWarningList(currentComic.content_warnings);
+            const standard = STANDARD_CONTENT_WARNINGS;
+
+            document.querySelectorAll(".warning-choice-grid input").forEach(box => {
+                box.checked = saved.includes(normalizeWarningKey(box.value));
+            });
+
+            warningTags = saved.filter(tag => !standard.includes(tag));
+            renderWarningTags();
+        }
+
+        function renderWarningTags() {
+            const c = document.getElementById("warning-tags");
+            if (!c) return;
+
+            c.innerHTML = warningTags
+                .map((tag, i) => `<span class="warning-tag">${escapeHtml(formatWarningLabel(tag))}<button type="button" onclick="removeWarningTag(${i})">×</button></span>`)
+                .join("");
+        }
+
+        function formatWarningLabel(value) {
+            return String(value || "")
+                .replaceAll("_", " ")
+                .replace(/\b\w/g, letter => letter.toUpperCase());
+        }
+
+        window.addWarningTag = function () {
+            const input = document.getElementById("warning-input");
+            const value = normalizeWarningKey(input?.value || "");
+
+            if (!value) return;
+
+            if (!warningTags.includes(value)) {
+                warningTags.push(value);
+            }
+
+            if (input) {
+                input.value = "";
+            }
+
+            renderWarningTags();
+        };
+
+        window.removeWarningTag = function (i) {
+            warningTags.splice(i, 1);
+            renderWarningTags();
+        };
         async function uploadImage(file, bucket, suffix, maxWidth = 1600, maxHeight = 1000) { const optimized = await optimizeImage(file, { maxWidth, maxHeight, quality: .82 }); const path = `${user.id}/${Date.now()}-${suffix}.webp`; const { error } = await supabase.storage.from(bucket).upload(path, optimized, { upsert: true }); if (error) throw error; const { data } = supabase.storage.from(bucket).getPublicUrl(path); return data.publicUrl }
         window.removeCoverImage = function () { currentComic.cover_image_url = null; currentComic.remove_cover_image = true; setImagePlacement("cover", getDefaultImagePlacement()); const input = document.getElementById("cover-image-input"); if (input) input.value = ""; updateCoverPreview("") }; window.removeIndexImage = function () { currentComic.theme_index_image_url = null; currentComic.remove_index_image = true; setImagePlacement("index", getDefaultImagePlacement()); const input = document.getElementById("theme-index-image-input"), styleInput = document.getElementById("theme-index-style"); if (input) input.value = ""; if (styleInput) styleInput.value = "default"; setImageCreditVisible("index", false); initializeIndexAppearanceControls() }; window.removeBackgroundImage = function () { currentComic.theme_background_image_url = null; currentComic.remove_background_image = true; setImagePlacement("background", getDefaultImagePlacement()); const input = document.getElementById("comic-background-input"), styleInput = document.getElementById("theme-background-style"); if (input) input.value = ""; if (styleInput) styleInput.value = "default"; setImageCreditVisible("background", false); initializeReaderAppearanceControls() };
         window.revertReaderThemeToDefault = function () { document.getElementById("theme-background-style").value = "default"; document.getElementById("theme-background-color-1").value = "#050505"; document.getElementById("theme-background-color-2").value = "#000000"; document.getElementById("theme-background-position-x").value = 50; document.getElementById("theme-background-position-y").value = 50; document.getElementById("theme-background-zoom").value = 100; document.getElementById("theme-background-image-opacity").value = .35; document.getElementById("theme-background-image-blur").value = 0; document.getElementById("theme-background-overlay-strength").value = .35; document.getElementById("theme-background-image-size").value = "cover"; document.getElementById("theme-background-image-repeat").value = "no-repeat"; const input = document.getElementById("comic-background-input"); if (input) input.value = ""; currentComic.theme_background_image_url = null; currentComic.remove_background_image = true; setImagePlacement("background", getDefaultImagePlacement()); setImageCreditVisible("background", false); initializeReaderAppearanceControls() };
-        window.saveComicSettings = async function () { const title = document.getElementById("comic-title").value.trim(), summary = document.getElementById("comic-summary").value.trim(), genres = genreTags.join(", "), themes = themeTags.join(", "), visibility = document.getElementById("comic-visibility").value, featured = document.getElementById("comic-featured").checked, contentRating = document.getElementById("comic-content-rating").value, contentType = document.getElementById("comic-content-type").value, readingMode = document.getElementById("comic-reading-mode").value, pageDirection = document.getElementById("comic-page-direction").value; const standardWarnings = [...document.querySelectorAll(".warning-choice-grid input:checked")].map(b => b.value), contentWarnings = [...new Set([...standardWarnings, ...warningTags])]; if (!title) { document.getElementById("message").textContent = "Title is required."; return } const coverInput = document.getElementById("cover-image-input"), coverFile = coverInput ? coverInput.files[0] : null; let coverImageUrl = currentComic.cover_image_url || null; if (currentComic.remove_cover_image) coverImageUrl = null; if (coverFile) coverImageUrl = await uploadImage(coverFile, "world-covers", "comic-cover", 1600, 900); const indexInput = document.getElementById("theme-index-image-input"), indexFile = indexInput ? indexInput.files[0] : null; let indexImageUrl = currentComic.theme_index_image_url || null; if (currentComic.remove_index_image) indexImageUrl = null; if (indexFile) indexImageUrl = await uploadImage(indexFile, "world-index-images", "comic-index", 1600, 1000); const indexStyle = document.getElementById("theme-index-style").value, coverCredit = getCreditData("cover"), indexCredit = getCreditData("index"); if (!validateImageCredit("cover", "Cover image", !!coverImageUrl)) return; if (!validateImageCredit("index", "Index image", indexStyle === "image" && !!indexImageUrl)) return; const update = { title, summary, genres, themes, visibility, featured, content_type: contentType, comic_reading_mode: readingMode, comic_page_direction: pageDirection, content_rating: contentRating, content_warnings: contentWarnings, cover_image_url: coverImageUrl, theme_index_style: indexStyle, theme_index_color_1: document.getElementById("theme-index-color-1").value, theme_index_color_2: document.getElementById("theme-index-color-2").value, theme_index_text_color: document.getElementById("theme-index-text-color").value, theme_index_image_url: indexStyle === "image" ? indexImageUrl : null, theme_index_opacity: Number(document.getElementById("theme-index-opacity").value), theme_index_overlay: Number(document.getElementById("theme-index-overlay").value), cover_image_placement: getImagePlacement("cover"), theme_index_image_placement: getImagePlacement("index"), cover_credit_type: coverCredit.type, cover_credit_name: coverCredit.name, cover_credit_url: coverCredit.url, cover_credit_note: coverCredit.note, cover_credit_no_ai: coverCredit.no_ai, cover_credit_nullverse_username: coverCredit.nullverse_username, index_credit_type: indexCredit.type, index_credit_name: indexCredit.name, index_credit_url: indexCredit.url, index_credit_note: indexCredit.note, index_credit_no_ai: indexCredit.no_ai, index_credit_nullverse_username: indexCredit.nullverse_username, updated_at: new Date().toISOString() }; const { error } = await supabase.from("worlds").update(update).eq("id", comicId).eq("owner_id", user.id); if (error) { document.getElementById("message").textContent = error.message; return } currentComic = { ...currentComic, ...update }; document.getElementById("comic-name").textContent = title; document.getElementById("editor-title").textContent = title; document.getElementById("message").textContent = "Comic settings saved." };
+        window.saveComicSettings = async function () { const title = document.getElementById("comic-title").value.trim(), summary = document.getElementById("comic-summary").value.trim(), genres = genreTags.join(", "), themes = themeTags.join(", "), visibility = document.getElementById("comic-visibility").value, featured = document.getElementById("comic-featured").checked, contentRating = document.getElementById("comic-content-rating").value, contentType = document.getElementById("comic-content-type").value, readingMode = document.getElementById("comic-reading-mode").value, pageDirection = document.getElementById("comic-page-direction").value; const standardWarnings = [...document.querySelectorAll(".warning-choice-grid input:checked")].map(b => normalizeWarningKey(b.value)), contentWarnings = normalizeWarningList([...standardWarnings, ...warningTags]); if (!title) { document.getElementById("message").textContent = "Title is required."; return } const coverInput = document.getElementById("cover-image-input"), coverFile = coverInput ? coverInput.files[0] : null; let coverImageUrl = currentComic.cover_image_url || null; if (currentComic.remove_cover_image) coverImageUrl = null; if (coverFile) coverImageUrl = await uploadImage(coverFile, "world-covers", "comic-cover", 1600, 900); const indexInput = document.getElementById("theme-index-image-input"), indexFile = indexInput ? indexInput.files[0] : null; let indexImageUrl = currentComic.theme_index_image_url || null; if (currentComic.remove_index_image) indexImageUrl = null; if (indexFile) indexImageUrl = await uploadImage(indexFile, "world-index-images", "comic-index", 1600, 1000); const indexStyle = document.getElementById("theme-index-style").value, coverCredit = getCreditData("cover"), indexCredit = getCreditData("index"); if (!validateImageCredit("cover", "Cover image", !!coverImageUrl)) return; if (!validateImageCredit("index", "Index image", indexStyle === "image" && !!indexImageUrl)) return; const update = { title, summary, genres, themes, visibility, featured, content_type: contentType, comic_reading_mode: readingMode, comic_page_direction: pageDirection, content_rating: contentRating, content_warnings: contentWarnings, cover_image_url: coverImageUrl, theme_index_style: indexStyle, theme_index_color_1: document.getElementById("theme-index-color-1").value, theme_index_color_2: document.getElementById("theme-index-color-2").value, theme_index_text_color: document.getElementById("theme-index-text-color").value, theme_index_image_url: indexStyle === "image" ? indexImageUrl : null, theme_index_opacity: Number(document.getElementById("theme-index-opacity").value), theme_index_overlay: Number(document.getElementById("theme-index-overlay").value), cover_image_placement: getImagePlacement("cover"), theme_index_image_placement: getImagePlacement("index"), cover_credit_type: coverCredit.type, cover_credit_name: coverCredit.name, cover_credit_url: coverCredit.url, cover_credit_note: coverCredit.note, cover_credit_no_ai: coverCredit.no_ai, cover_credit_nullverse_username: coverCredit.nullverse_username, index_credit_type: indexCredit.type, index_credit_name: indexCredit.name, index_credit_url: indexCredit.url, index_credit_note: indexCredit.note, index_credit_no_ai: indexCredit.no_ai, index_credit_nullverse_username: indexCredit.nullverse_username, updated_at: new Date().toISOString() }; const { error } = await supabase.from("worlds").update(update).eq("id", comicId).eq("owner_id", user.id); if (error) { document.getElementById("message").textContent = error.message; return } currentComic = { ...currentComic, ...update }; document.getElementById("comic-name").textContent = title; document.getElementById("editor-title").textContent = title; document.getElementById("message").textContent = "Comic settings saved." };
         window.saveAppearanceSettings = async function () { const backgroundInput = document.getElementById("comic-background-input"), backgroundFile = backgroundInput ? backgroundInput.files[0] : null, backgroundStyle = document.getElementById("theme-background-style").value; let backgroundImageUrl = currentComic.theme_background_image_url || null; if (currentComic.remove_background_image) backgroundImageUrl = null; if (backgroundFile) backgroundImageUrl = await uploadImage(backgroundFile, "world-backgrounds", "comic-background", 2200, 2200); const backgroundCredit = getCreditData("background"); if (!validateImageCredit("background", "Reader background", backgroundStyle === "image" && !!backgroundImageUrl)) return; const update = { theme_name: document.getElementById("theme-name").value.trim(), theme_background_style: backgroundStyle, theme_background_color_1: document.getElementById("theme-background-color-1").value, theme_background_color_2: document.getElementById("theme-background-color-2").value, theme_background_image_url: backgroundStyle === "image" ? backgroundImageUrl : null, theme_background_image_opacity: Number(document.getElementById("theme-background-image-opacity").value), theme_background_image_blur: Number(document.getElementById("theme-background-image-blur").value), theme_background_overlay_strength: Number(document.getElementById("theme-background-overlay-strength").value), theme_background_position_x: Number(document.getElementById("theme-background-position-x").value), theme_background_position_y: Number(document.getElementById("theme-background-position-y").value), theme_background_zoom: Number(document.getElementById("theme-background-zoom").value), theme_background_image_size: document.getElementById("theme-background-image-size").value, theme_background_image_repeat: document.getElementById("theme-background-image-repeat").value, theme_background_image_placement: getImagePlacement("background"), background_credit_type: backgroundCredit.type, background_credit_name: backgroundCredit.name, background_credit_url: backgroundCredit.url, background_credit_note: backgroundCredit.note, background_credit_no_ai: backgroundCredit.no_ai, background_credit_nullverse_username: backgroundCredit.nullverse_username, updated_at: new Date().toISOString() }; const { error } = await supabase.from("worlds").update(update).eq("id", comicId).eq("owner_id", user.id); if (error) { document.getElementById("message").textContent = error.message; return } currentComic = { ...currentComic, ...update }; document.getElementById("message").textContent = "Reader appearance saved." };
         window.createChapter = async function () { const nextOrder = allChapters.length ? Math.max(...allChapters.map(ch => Number(ch.display_order) || 0)) + 1 : 1; const { data, error } = await supabase.from("comic_chapters").insert({ world_id: comicId, comic_id: comicId, owner_id: user.id, title: "Untitled", display_order: nextOrder, visibility: "draft" }).select().single(); if (error || !data) { alert(error?.message || "Failed to create chapter."); return } await loadChapters(); openChapter(data.id) }; window.saveCurrentChapter = async function () { if (!currentChapter) return false; const update = { title: document.getElementById("chapter-title").value.trim() || "Untitled", subtitle: document.getElementById("chapter-subtitle").value.trim(), visibility: document.getElementById("chapter-visibility").value, author_note: document.getElementById("chapter-note").value, updated_at: new Date().toISOString() }; const { error } = await supabase.from("comic_chapters").update(update).eq("id", currentChapter.id).eq("world_id", comicId).eq("owner_id", user.id); if (error) { document.getElementById("message").textContent = error.message; return false } currentChapter = { ...currentChapter, ...update }; allChapters = allChapters.map(ch => ch.id === currentChapter.id ? currentChapter : ch); renderChapters(); document.getElementById(`chapter-${currentChapter.id}`)?.classList.add("active"); document.getElementById("message").textContent = "Chapter saved."; renderComicReaderPreview(); updatePageStudioHeading(); return true };
         async function notifyCredit(credit, worldId, message) { if (credit.type !== "nullverse_creator" || !credit.nullverse_username) return; const { data: profile } = await supabase.from("profiles").select("id,username").ilike("username", credit.nullverse_username).single(); if (profile && profile.id !== user.id) { await createNotification({ recipientId: profile.id, actorId: user.id, worldId, type: "image_credit", message, link: `comic.html?id=${encodeURIComponent(worldId)}` }) } }

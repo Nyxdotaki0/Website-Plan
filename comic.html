@@ -518,6 +518,48 @@
             padding: 7px 11px
         }
 
+        body.content-safety-mode main {
+            display: grid;
+            place-items: center;
+            max-width: none;
+            width: 100%;
+            min-height: calc(100vh - 120px);
+            padding: 48px 24px 80px;
+            box-sizing: border-box;
+        }
+
+        body.content-safety-mode .content-warning-panel {
+            width: min(540px, 100%);
+            max-width: 540px;
+            margin: 0;
+            padding: 34px;
+            box-sizing: border-box;
+            text-align: left;
+        }
+
+        body.content-safety-mode .warning-list {
+            justify-content: flex-start;
+        }
+
+        body.content-safety-mode .content-warning-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        @media(max-width:900px) {
+            body.content-safety-mode main {
+                min-height: calc(100vh - 168px);
+                padding: 34px 18px 70px;
+            }
+
+            body.content-safety-mode .content-warning-panel {
+                width: 100%;
+                padding: 26px 22px;
+            }
+        }
+
         .credit-pill {
             position: absolute;
             left: 14px;
@@ -1287,42 +1329,135 @@
             return data && data.length > 0;
         }
 
+        function normalizeContentExperience(value) {
+            const normalized = String(value || "")
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, "_");
+
+            if (["safe", "strict"].includes(normalized)) return "safe";
+            if (["open", "adult", "all", "unfiltered", "full"].includes(normalized)) return "open";
+            return "balanced";
+        }
+
+        function normalizeAgeRole(value) {
+            const normalized = String(value || "")
+                .trim()
+                .toLowerCase();
+
+            if (normalized === "minor") return "minor";
+            if (normalized === "adult") return "adult";
+            if (normalized === "blocked") return "blocked";
+            return "unknown";
+        }
+
+        function normalizeContentRating(value) {
+            const normalized = String(value || "")
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, "_");
+
+            if (normalized === "adult" || normalized === "18_plus" || normalized === "18+") return "adult";
+            if (normalized === "mature") return "mature";
+            if (normalized === "teen") return "teen";
+            return "general";
+        }
+
+        function normalizeWarningKey(value) {
+            return String(value || "")
+                .trim()
+                .toLowerCase()
+                .replace(/&/g, " and ")
+                .replace(/\s+/g, "_")
+                .replace(/-+/g, "_")
+                .replace(/[^a-z0-9_]/g, "")
+                .replace(/_+/g, "_")
+                .replace(/^_+|_+$/g, "");
+        }
+
+        function normalizeWarningList(value) {
+            let list = value;
+
+            if (typeof list === "string") {
+                const raw = list.trim();
+
+                if (!raw) {
+                    list = [];
+                } else {
+                    try {
+                        list = JSON.parse(raw);
+                    } catch {
+                        if (raw.startsWith("{") && raw.endsWith("}")) {
+                            list = raw
+                                .slice(1, -1)
+                                .split(",")
+                                .map(item => item.replace(/^"|"$/g, ""));
+                        } else {
+                            list = raw.split(",");
+                        }
+                    }
+                }
+            }
+
+            return [...new Set(
+                (Array.isArray(list) ? list : [])
+                    .map(normalizeWarningKey)
+                    .filter(Boolean)
+            )];
+        }
+
         async function loadViewerContentPreferences() {
-            const { data: profile } = await supabase
+            const { data: profile, error } = await supabase
                 .from("profiles")
                 .select("content_experience,blocked_content_warnings,age_role")
                 .eq("id", currentUser.id)
                 .single();
-            if (!profile) return;
-            contentExperience = profile.content_experience || "balanced";
-            blockedContentWarnings = profile.blocked_content_warnings || [];
-            ageRole = profile.age_role || "unknown";
+
+            if (error || !profile) {
+                console.warn("Content preference load skipped:", error?.message || "No profile found.");
+                return;
+            }
+
+            ageRole = normalizeAgeRole(profile.age_role);
+            contentExperience = normalizeContentExperience(profile.content_experience);
+            blockedContentWarnings = normalizeWarningList(profile.blocked_content_warnings);
+
+            if (ageRole === "minor") {
+                contentExperience = "safe";
+            }
         }
 
         function getContentSafetyInfo(item) {
-            const safeWarnings = ["gore", "sexual_content", "disturbing_imagery"];
-            const warnings = item.content_warnings || [];
-            const rating = item.content_rating || "general";
-            const hasHardBlockedWarning = warnings.some(warning => blockedContentWarnings.includes(warning));
-            const hasSafeWarning = warnings.some(warning => safeWarnings.includes(warning));
+            const warnings = normalizeWarningList(item?.content_warnings);
+            const rating = normalizeContentRating(item?.content_rating);
+            const blockedWarningSet = new Set(normalizeWarningList(blockedContentWarnings));
+            const hasHardBlockedWarning = warnings.some(warning => blockedWarningSet.has(warning));
+            const hasContentWarning = warnings.length > 0;
+            const isMature = rating === "mature";
             const isAdult = rating === "adult";
-            return { warnings, rating, hasHardBlockedWarning, hasSafeWarning, isAdult };
+
+            return { warnings, rating, hasHardBlockedWarning, hasContentWarning, isMature, isAdult };
         }
 
         function shouldBlockContent(item) {
             const info = getContentSafetyInfo(item);
-            if (ageRole === "minor") return info.isAdult || info.hasSafeWarning;
+
+            if (ageRole === "minor") return info.isAdult || info.isMature || info.hasContentWarning;
             if (info.hasHardBlockedWarning) return true;
-            if (contentExperience === "safe") return info.isAdult || info.hasSafeWarning;
+            if (contentExperience === "open") return false;
+            if (contentExperience === "safe") return info.isAdult || info.isMature || info.hasContentWarning;
+
             return false;
         }
 
         function shouldWarnContent(item) {
             const info = getContentSafetyInfo(item);
+
             if (contentExperience !== "balanced") return false;
             if (ageRole === "minor") return false;
             if (info.hasHardBlockedWarning) return false;
-            return info.isAdult || info.hasSafeWarning;
+
+            return info.isAdult || info.isMature || info.hasContentWarning;
         }
 
         async function loadComic(id) {
@@ -1350,13 +1485,13 @@
                 return;
             }
 
-            if (!ownerAccess && !staffAccess && shouldBlockContent(comic)) {
+            if (!ownerAccess && shouldBlockContent(comic)) {
                 showContentBlocked(comic);
                 return;
             }
 
             const warningAccepted = params.get("contentOk") === comic.id;
-            if (!ownerAccess && !staffAccess && shouldWarnContent(comic) && !warningAccepted) {
+            if (!ownerAccess && shouldWarnContent(comic) && !warningAccepted) {
                 showContentWarning(comic);
                 return;
             }
@@ -1365,6 +1500,8 @@
         }
 
         async function renderLoadedComic(comic) {
+            document.body.classList.remove("content-safety-mode");
+
             const blocked = await areUsersBlocked(currentUser.id, comic.owner_id);
             if (blocked) { showNotFound("This comic is unavailable."); return; }
 
@@ -2764,20 +2901,26 @@ ${page.image_credit_note ? `<br><br>${escapeHtml(page.image_credit_note)}` : ""}
             alert("Report submitted.");
         }
 
+        function showCenteredNotice(markup) {
+            document.body.classList.add("content-safety-mode");
+            document.querySelector("main").innerHTML = markup;
+        }
+
         function showHiddenNotice(comic) {
-            document.querySelector("main").innerHTML = `
+            showCenteredNotice(`
 <section class="content-warning-panel">
 <h1>Comic Hidden by Moderation</h1>
 <p class="empty">This comic is currently hidden from the public by Nullverse moderation.</p>
 <p class="empty"><strong>Reason:</strong> ${escapeHtml(comic.moderation_reason || "No reason provided.")}</p>
-<div style="display:flex;gap:12px;flex-wrap:wrap;">
+<div class="content-warning-actions">
 <a class="button" href="dashboard.html">Back to Dashboard</a>
 <a class="button" href="edit-comic.html?id=${encodeURIComponent(comic.id)}">Edit Comic</a>
 </div>
-</section>`;
+</section>`);
         }
 
         function showNotFound(message) {
+            document.body.classList.remove("content-safety-mode");
             document.getElementById("comic-title").textContent = "Comic not found";
             document.getElementById("comic-creator").textContent = "";
             document.getElementById("comic-summary").textContent = message;
@@ -2787,32 +2930,66 @@ ${page.image_credit_note ? `<br><br>${escapeHtml(page.image_credit_note)}` : ""}
             document.getElementById("like-count").style.display = "none";
         }
 
+        function renderContentWarningPills(comic, includeRating = true) {
+            const warnings = normalizeWarningList(comic?.content_warnings);
+            const rating = normalizeContentRating(comic?.content_rating);
+            const ratingPills = [];
+
+            if (includeRating && rating === "adult") {
+                ratingPills.push(`<span class="warning-pill">Adult 18+</span>`);
+            } else if (includeRating && rating === "mature") {
+                ratingPills.push(`<span class="warning-pill">Mature Content</span>`);
+            }
+
+            return `
+${ratingPills.join("")}
+${warnings.map(warning => `<span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>`).join("")}`;
+        }
+
+        function getContentBlockedMessage(comic) {
+            const info = getContentSafetyInfo(comic);
+
+            if (ageRole === "minor") {
+                return "This comic is not available for your age category.";
+            }
+
+            if (info.hasHardBlockedWarning) {
+                return "This comic matches one of your hard-blocked content warning filters.";
+            }
+
+            if (contentExperience === "safe") {
+                return "Safe Mode hides sensitive or mature content before the page opens.";
+            }
+
+            return "This comic is hidden by your content safety settings.";
+        }
+
         function showContentBlocked(comic) {
-            document.querySelector("main").innerHTML = `
+            showCenteredNotice(`
 <section class="content-warning-panel">
 <h1>Content Hidden</h1>
-<p class="empty">This comic is hidden by your content safety settings.</p>
+<p class="empty">${escapeHtml(getContentBlockedMessage(comic))}</p>
 <div class="warning-list">
-${(comic.content_warnings || []).map(warning => `<span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>`).join("")}
+${renderContentWarningPills(comic)}
 </div>
 <a class="button" href="explore.html">Back to Explore</a>
-</section>`;
+</section>`);
         }
 
         function showContentWarning(comic) {
-            document.querySelector("main").innerHTML = `
+            showCenteredNotice(`
 <section class="content-warning-panel">
 <h1>Content Warning</h1>
-<p class="empty">This comic may contain sensitive or mature content.</p>
+<p class="empty">Balanced Mode lets you continue, but this comic has sensitive or mature content.</p>
 <div class="warning-list">
-${comic.content_rating === "adult" ? `<span class="warning-pill">Adult 18+</span>` : ""}
-${(comic.content_warnings || []).map(warning => `<span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>`).join("")}
+${renderContentWarningPills(comic)}
 </div>
-<div style="display:flex;gap:12px;flex-wrap:wrap;">
+<div class="content-warning-actions">
 <button id="continue-warning-button" class="button">Continue Anyway</button>
 <a class="button" href="explore.html">Go Back</a>
 </div>
-</section>`;
+</section>`);
+
             document.getElementById("continue-warning-button").addEventListener("click", () => {
                 window.location.href = `comic.html?id=${encodeURIComponent(comic.id)}&contentOk=${encodeURIComponent(comic.id)}`;
             });
