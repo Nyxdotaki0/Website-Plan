@@ -21,6 +21,12 @@ function getAgeRoleFromBirthDate(birthDate) {
     return "adult";
 }
 
+function normalizeEmail(email) {
+    return String(email || "")
+        .trim()
+        .toLowerCase();
+}
+
 function clearBrokenSession() {
     Object.keys(localStorage).forEach(key => {
         if (
@@ -86,6 +92,56 @@ function showConnectionError() {
     `;
 }
 
+function showBetaAccessError(email) {
+    const safeEmail = escapeHtml(normalizeEmail(email));
+
+    document.body.innerHTML = `
+        <main style="
+            min-height:100vh;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            background:#05040a;
+            color:white;
+            font-family:Arial,sans-serif;
+            padding:30px;
+            text-align:center;
+        ">
+            <section style="
+                max-width:560px;
+                background:rgba(255,255,255,0.06);
+                border:1px solid rgba(255,255,255,0.12);
+                border-radius:22px;
+                padding:34px;
+                box-shadow:0 20px 60px rgba(0,0,0,0.35);
+            ">
+                <h1 style="margin-top:0;">Beta Access Needed</h1>
+                <p style="color:#c9c9d4; line-height:1.6;">
+                    This account is logged in, but the email is not currently on the Nullverse beta access list.
+                </p>
+                <p style="color:#c9c9d4; line-height:1.6;">
+                    Account email:<br>
+                    <strong style="color:white; word-break:break-word;">${safeEmail || "Unknown email"}</strong>
+                </p>
+                <p style="color:#a8a8b8; line-height:1.6; font-size:.95rem;">
+                    If this should be a beta tester, add this exact email to the <strong>beta_access</strong> table.
+                </p>
+                <button onclick="localStorage.clear(); location.href='/login.html'" style="
+                    margin-top:14px;
+                    padding:12px 16px;
+                    border-radius:12px;
+                    border:1px solid rgba(255,255,255,0.14);
+                    background:#1f1f26;
+                    color:white;
+                    cursor:pointer;
+                ">
+                    Back to Login
+                </button>
+            </section>
+        </main>
+    `;
+}
+
 function redirectTo(path) {
     if (window.location.pathname !== path) {
         window.location.replace(path);
@@ -106,6 +162,15 @@ async function withTimeout(promise, ms = 8000) {
     } finally {
         clearTimeout(timeout);
     }
+}
+
+function escapeHtml(value) {
+    return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
 }
 
 export async function requireBetaAccess(options = {}) {
@@ -150,11 +215,13 @@ export async function requireBetaAccess(options = {}) {
     }
 
     try {
+        const normalizedEmail = normalizeEmail(user.email);
+
         const { data: betaData, error: betaError } = await withTimeout(
             supabase
                 .from("beta_access")
                 .select("role")
-                .eq("email", user.email)
+                .ilike("email", normalizedEmail)
                 .maybeSingle(),
             8000
         );
@@ -162,7 +229,7 @@ export async function requireBetaAccess(options = {}) {
         if (betaError || !betaData) {
             await supabase.auth.signOut();
             clearBrokenSession();
-            redirectTo("/closed-beta.html");
+            showBetaAccessError(normalizedEmail);
             return null;
         }
 
