@@ -503,44 +503,128 @@
     </main>
 
     <script type="module">
-        import { requireBetaAccess } from "./betaGate.js";
         import { supabase } from "./supabaseClient.js";
         import { setupNotificationBadge } from "./notificationBadge.js";
         import { setupMessageBadge } from "./messageBadge.js";
-        setupMessageBadge();
 
-        const user = await requireBetaAccess({ allowRestricted: false });
-        setupNotificationBadge();
+        let user = null;
+        let profile = null;
 
-        document.getElementById("dashboard-email").textContent = "Signed in as: " + user.email;
-
-        const { data: profile, error: profileError } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", user.id)
-            .single();
-
-        if (profileError || !profile) {
-            window.location.href = "profile-setup.html";
+        function safeRedirect(path) {
+            window.location.replace(path);
         }
 
-        if (!profile.profile_completed) {
-            window.location.href = "profile-setup.html";
+        function profileNeedsSetup(profileData) {
+            return !(
+                profileData &&
+                profileData.profile_completed &&
+                profileData.age_verified &&
+                profileData.birth_date &&
+                profileData.age_role &&
+                profileData.age_role !== "unknown"
+            );
         }
 
-        document.getElementById("welcome-title").textContent =
-            "Welcome back, " + (profile.display_name || profile.username || "Creator") + ".";
+        function showDashboardError(title, detail = "") {
+            const titleEl = document.getElementById("welcome-title");
+            const emailEl = document.getElementById("dashboard-email");
+            const worldsEl = document.getElementById("your-worlds");
 
-        if (
-            profile.role === "void_architect" &&
-            profile.account_status === "active"
-        ) {
-            document.getElementById("void-admin-panel").style.display = "block";
+            if (titleEl) {
+                titleEl.textContent = title;
+            }
+
+            if (emailEl) {
+                emailEl.textContent = detail;
+            }
+
+            if (worldsEl) {
+                worldsEl.innerHTML = `
+<p class="muted">
+${escapeHtml(detail || "Refresh the page and try again.")}
+</p>
+`;
+            }
         }
 
-        if (profile.username) {
-            document.getElementById("view-public-profile").href =
-                "profile.html?user=" + encodeURIComponent(profile.username);
+        async function getDashboardSession() {
+            const { data: { session }, error: sessionError } =
+                await supabase.auth.getSession();
+
+            if (sessionError) {
+                showDashboardError("Could not check your login session.", sessionError.message);
+                return null;
+            }
+
+            if (!session || !session.user) {
+                safeRedirect("login.html");
+                return null;
+            }
+
+            user = session.user;
+
+            const { data: profileData, error: profileError } = await supabase
+                .from("profiles")
+                .select("*")
+                .eq("id", user.id)
+                .maybeSingle();
+
+            if (profileError) {
+                showDashboardError("Could not load your creator profile.", profileError.message);
+                return null;
+            }
+
+            if (profileNeedsSetup(profileData)) {
+                safeRedirect("profile-setup.html");
+                return null;
+            }
+
+            profile = profileData;
+
+            if (
+                profile.account_status &&
+                profile.account_status !== "active"
+            ) {
+                await supabase.auth.signOut();
+                safeRedirect("login.html");
+                return null;
+            }
+
+            return {
+                user,
+                profile
+            };
+        }
+
+        async function initDashboard() {
+            const dashboardSession = await getDashboardSession();
+
+            if (!dashboardSession) {
+                return;
+            }
+
+            setupMessageBadge();
+            setupNotificationBadge();
+
+            document.getElementById("dashboard-email").textContent =
+                "Signed in as: " + user.email;
+
+            document.getElementById("welcome-title").textContent =
+                "Welcome back, " + (profile.display_name || profile.username || "Creator") + ".";
+
+            if (
+                profile.role === "void_architect" &&
+                profile.account_status === "active"
+            ) {
+                document.getElementById("void-admin-panel").style.display = "block";
+            }
+
+            if (profile.username) {
+                document.getElementById("view-public-profile").href =
+                    "profile.html?user=" + encodeURIComponent(profile.username);
+            }
+
+            await loadYourWorlds();
         }
 
         async function loadYourWorlds() {
@@ -642,14 +726,14 @@ ${escapeHtml(visibility)}
 
 ${moderationStatus === "hidden" ? `
 <span
-        class="badge"
-        style="
-            border-color:rgba(255,120,80,.35);
-            color:#ffb596;
-            margin-left:8px;
-        "
+            class="badge"
+            style="
+                border-color:rgba(255,120,80,.35);
+                color:#ffb596;
+                margin-left:8px;
+            "
 >
-        Hidden by Moderation
+            Hidden by Moderation
 </span>
 ` : ""}
 
@@ -665,13 +749,13 @@ ${world.featured ? "★ Featured publicly" : "Private spotlight disabled"}
 
 ${moderationStatus === "hidden" ? `
 <p
-        style="
-            color:#ffb596;
-            margin-top:10px;
-            line-height:1.5;
-        "
+            style="
+                color:#ffb596;
+                margin-top:10px;
+                line-height:1.5;
+            "
 >
-        This ${contentLabel} is hidden from public view by moderation.
+            This ${contentLabel} is hidden from public view by moderation.
 <br>
 Reason: ${escapeHtml(world.moderation_reason || "No reason provided.")}
 </p>
@@ -726,7 +810,7 @@ Delete
             window.location.href = "login.html";
         };
 
-        loadYourWorlds();
+        initDashboard();
     </script>
 </body>
 </html>
