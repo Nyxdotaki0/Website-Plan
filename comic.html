@@ -2093,6 +2093,117 @@
                 return score;
             }
 
+
+            function getChapterExactTitlePhraseScore(record, query) {
+                const normalizedQuery = normalizeChapterIndexSearch(query);
+                const compactQuery = compactChapterIndexSearch(query);
+                const queryTokens = tokenizeChapterIndexSearch(query);
+                const numericOnly = !!compactQuery && /^\d+$/.test(compactQuery);
+
+                if (!normalizedQuery || numericOnly) {
+                    return 0;
+                }
+
+                const titleField = record.fields.find(field => field.label === "title");
+                const subtitleField = record.fields.find(field => field.label === "subtitle");
+                const titleNormalized = titleField?.normalized || "";
+                const titleCompact = titleField?.compact || "";
+                const subtitleNormalized = subtitleField?.normalized || "";
+                const subtitleCompact = subtitleField?.compact || "";
+                const numberedTitle = normalizeChapterIndexSearch(`chapter ${record.chapterNumber} ${titleNormalized}`);
+                const numberedTitleCompact = numberedTitle.replace(/\s+/g, "");
+                const longEnoughForStrictPhrase =
+                    queryTokens.length >= 2 ||
+                    compactQuery.length >= 5;
+
+                let score = 0;
+
+                if (titleNormalized && titleNormalized === normalizedQuery) {
+                    score = Math.max(score, 100000);
+                }
+
+                if (titleCompact && compactQuery.length >= 3 && titleCompact === compactQuery) {
+                    score = Math.max(score, 98000);
+                }
+
+                if (numberedTitle && numberedTitle === normalizedQuery) {
+                    score = Math.max(score, 97000);
+                }
+
+                if (numberedTitleCompact && compactQuery.length >= 3 && numberedTitleCompact === compactQuery) {
+                    score = Math.max(score, 96000);
+                }
+
+                if (longEnoughForStrictPhrase && titleNormalized && titleNormalized.includes(normalizedQuery)) {
+                    score = Math.max(score, 93000);
+                }
+
+                if (longEnoughForStrictPhrase && titleCompact && compactQuery.length >= 4 && titleCompact.includes(compactQuery)) {
+                    score = Math.max(score, 92000);
+                }
+
+                if (longEnoughForStrictPhrase && numberedTitle && numberedTitle.includes(normalizedQuery)) {
+                    score = Math.max(score, 91000);
+                }
+
+                if (longEnoughForStrictPhrase && subtitleNormalized && subtitleNormalized === normalizedQuery) {
+                    score = Math.max(score, 87000);
+                }
+
+                if (longEnoughForStrictPhrase && subtitleCompact && compactQuery.length >= 4 && subtitleCompact === compactQuery) {
+                    score = Math.max(score, 86000);
+                }
+
+                if (longEnoughForStrictPhrase && subtitleNormalized && subtitleNormalized.includes(normalizedQuery)) {
+                    score = Math.max(score, 83000);
+                }
+
+                if (longEnoughForStrictPhrase && subtitleCompact && compactQuery.length >= 4 && subtitleCompact.includes(compactQuery)) {
+                    score = Math.max(score, 82000);
+                }
+
+                return score;
+            }
+
+            function getStrictChapterTitlePhraseSearchResults(query) {
+                const rawQuery = String(query || "").trim();
+                const normalizedQuery = normalizeChapterIndexSearch(rawQuery);
+                const compactQuery = compactChapterIndexSearch(rawQuery);
+                const queryTokens = tokenizeChapterIndexSearch(rawQuery);
+                const numericOnly = !!compactQuery && /^\d+$/.test(compactQuery);
+                const strictCandidate =
+                    !numericOnly &&
+                    normalizedQuery &&
+                    (
+                        queryTokens.length >= 2 ||
+                        compactQuery.length >= 5
+                    );
+
+                if (!strictCandidate) {
+                    return null;
+                }
+
+                const strictResults = chapters
+                    .map((chapter, index) => {
+                        const record = getChapterIndexSearchRecord(chapter, index);
+                        return {
+                            chapter,
+                            index,
+                            score: getChapterExactTitlePhraseScore(record, rawQuery)
+                        };
+                    })
+                    .filter(result => result.score > 0)
+                    .sort((a, b) => {
+                        if (b.score !== a.score) {
+                            return b.score - a.score;
+                        }
+
+                        return a.index - b.index;
+                    });
+
+                return strictResults.length ? strictResults : null;
+            }
+
             function getChapterSearchResults(query) {
                 const rawQuery = String(query || "").trim();
 
@@ -2102,6 +2213,12 @@
                         index,
                         score: 1
                     }));
+                }
+
+                const strictTitleResults = getStrictChapterTitlePhraseSearchResults(rawQuery);
+
+                if (strictTitleResults) {
+                    return strictTitleResults;
                 }
 
                 return chapters
