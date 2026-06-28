@@ -1021,6 +1021,54 @@
             transform-origin: center center;
             transform: var(--comic-background-image-transform, scale(1.03));
         }
+
+        /* Buffed Chapter Index Search / Scroll */
+        .chapter-index {
+            height: min(620px, calc(100vh - 124px));
+            max-height: calc(100vh - 124px);
+            min-height: 360px;
+            box-sizing: border-box;
+            border-radius: 24px;
+            overflow: hidden;
+        }
+
+        #chapter-nav-links {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: clamp(210px, calc(100vh - 358px), 410px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 6px;
+            overscroll-behavior: contain;
+            scrollbar-width: thin;
+        }
+
+            #chapter-nav-links::-webkit-scrollbar {
+                width: 8px;
+            }
+
+            #chapter-nav-links::-webkit-scrollbar-track {
+                background: rgba(255,255,255,.035);
+                border-radius: 999px;
+            }
+
+            #chapter-nav-links::-webkit-scrollbar-thumb {
+                background: rgba(255,255,255,.20);
+                border-radius: 999px;
+            }
+
+        @media(max-width:900px) {
+            .chapter-index {
+                height: min(560px, calc(100vh - 132px));
+                max-height: calc(100vh - 132px);
+                min-height: 330px;
+            }
+
+            #chapter-nav-links {
+                max-height: clamp(190px, calc(100vh - 360px), 360px);
+            }
+        }
     </style>
 </head>
 <body>
@@ -1513,8 +1561,6 @@
                 return;
             }
 
-            renderChapterIndex(allChapters);
-
             for (const chapter of allChapters) {
                 const { data: pages, error: pageError } = await supabase
                     .from("comic_pages")
@@ -1526,6 +1572,7 @@
                 allPagesByChapter[chapter.id] = pageError ? [] : (pages || []);
             }
 
+            renderChapterIndex(allChapters);
             renderChapterGalleries();
         }
 
@@ -1534,6 +1581,10 @@
             const links = document.getElementById("chapter-nav-links");
             const search = document.getElementById("chapter-search");
             const count = document.getElementById("chapter-count");
+
+            if (!nav || !links || !search || !count) {
+                return;
+            }
 
             nav.style.display = "block";
 
@@ -1554,32 +1605,570 @@
                 nav.insertAdjacentHTML("beforeend", indexCredit);
             }
 
-            function draw() {
-                const query = (search.value || "").toLowerCase().trim();
-                const filtered = chapters.filter(chapter =>
-                    (chapter.title || "").toLowerCase().includes(query) ||
-                    (chapter.subtitle || "").toLowerCase().includes(query) ||
-                    (chapter.author_note || "").toLowerCase().includes(query)
+            const chapterSearchCache = new Map();
+
+            function decodeChapterSearchEntities(value) {
+                const textarea = document.createElement("textarea");
+                textarea.innerHTML = String(value || "");
+                return textarea.value;
+            }
+
+            function normalizeChapterIndexSearch(value) {
+                return decodeChapterSearchEntities(value)
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .toLowerCase()
+                    .replace(/&/g, " and ")
+                    .replace(/['’‘"`´]/g, "")
+                    .replace(/[^a-z0-9]+/g, " ")
+                    .replace(/\s+/g, " ")
+                    .trim();
+            }
+
+            function compactChapterIndexSearch(value) {
+                return normalizeChapterIndexSearch(value).replace(/\s+/g, "");
+            }
+
+            function tokenizeChapterIndexSearch(value) {
+                return normalizeChapterIndexSearch(value)
+                    .split(" ")
+                    .map(token => token.trim())
+                    .filter(Boolean);
+            }
+
+            function safeChapterPlainText(value) {
+                try {
+                    return decodeChapterSearchEntities(String(value || ""))
+                        .replace(/<!--[\s\S]*?-->/g, " ")
+                        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+                        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+                        .replace(/<[^>]+>/g, " ");
+                } catch (error) {
+                    console.error("Comic chapter search text extraction error:", error);
+                    return String(value || "");
+                }
+            }
+
+            function getChapterTitleForSearch(chapter) {
+                return (
+                    chapter?.title ||
+                    chapter?.name ||
+                    chapter?.chapter_title ||
+                    chapter?.display_title ||
+                    ""
                 );
+            }
 
-                count.textContent = `${filtered.length} ${filtered.length === 1 ? "Chapter" : "Chapters"}`;
+            function getChapterSubtitleForSearch(chapter) {
+                return (
+                    chapter?.subtitle ||
+                    chapter?.description ||
+                    chapter?.summary ||
+                    ""
+                );
+            }
 
-                if (!filtered.length) {
+            function getComicChapterPagesForSearch(chapter) {
+                if (!chapter?.id) {
+                    return [];
+                }
+
+                return allPagesByChapter[chapter.id] || [];
+            }
+
+            function buildComicPageSearchText(chapter) {
+                const pages = getComicChapterPagesForSearch(chapter);
+
+                if (!pages.length) {
+                    return "";
+                }
+
+                return pages.map((page, pageIndex) => {
+                    const pageNumber = pageIndex + 1;
+                    const creditParts = [
+                        page?.image_credit_name,
+                        page?.image_credit_nullverse_username,
+                        page?.image_credit_note,
+                        page?.image_credit_type
+                    ];
+
+                    return [
+                        `page ${pageNumber}`,
+                        `pg ${pageNumber}`,
+                        `p ${pageNumber}`,
+                        `#${pageNumber}`,
+                        page?.title,
+                        page?.name,
+                        page?.caption,
+                        page?.description,
+                        page?.alt_text,
+                        ...creditParts
+                    ].filter(Boolean).join(" ");
+                }).join(" ");
+            }
+
+            function buildChapterIndexSearchField(label, value, weight, includeForNumeric = true) {
+                const raw = String(value || "");
+                const normalized = normalizeChapterIndexSearch(raw);
+                const compact = normalized.replace(/\s+/g, "");
+                const tokens = normalized
+                    .split(" ")
+                    .map(token => token.trim())
+                    .filter(Boolean);
+
+                return {
+                    label,
+                    raw,
+                    normalized,
+                    compact,
+                    tokens,
+                    weight,
+                    includeForNumeric
+                };
+            }
+
+            function buildChapterIndexSearchRecord(chapter, index) {
+                const chapterNumber = index + 1;
+                const chapterNumberText = String(chapterNumber);
+                const title = getChapterTitleForSearch(chapter);
+                const subtitle = getChapterSubtitleForSearch(chapter);
+                const authorNote = safeChapterPlainText(chapter?.author_note || "");
+                const pageSearchText = buildComicPageSearchText(chapter);
+                const pageCount = getComicChapterPagesForSearch(chapter).length;
+
+                const numberAliases = [
+                    chapterNumberText,
+                    `chapter ${chapterNumber}`,
+                    `chap ${chapterNumber}`,
+                    `ch ${chapterNumber}`,
+                    `#${chapterNumber}`,
+                    `chapter ${chapterNumberText.padStart(2, "0")}`,
+                    `chap ${chapterNumberText.padStart(2, "0")}`,
+                    `ch ${chapterNumberText.padStart(2, "0")}`
+                ];
+
+                const fields = [
+                    buildChapterIndexSearchField("number", numberAliases.join(" "), 130, true),
+                    buildChapterIndexSearchField("title", title, 115, true),
+                    buildChapterIndexSearchField("subtitle", subtitle, 85, true),
+                    buildChapterIndexSearchField("author note", authorNote, 55, true),
+                    buildChapterIndexSearchField("page count", pageCount ? `${pageCount} pages ${pageCount} page` : "", 35, false),
+                    buildChapterIndexSearchField("pages", pageSearchText, 28, false)
+                ].filter(field => field.normalized || field.compact);
+
+                const allNormalized = fields
+                    .map(field => field.normalized)
+                    .filter(Boolean)
+                    .join(" ");
+
+                const allCompact = allNormalized.replace(/\s+/g, "");
+
+                const tokens = [...new Set(
+                    fields.flatMap(field => field.tokens)
+                )];
+
+                const titleInitials = normalizeChapterIndexSearch(title)
+                    .split(" ")
+                    .map(word => word[0] || "")
+                    .join("");
+
+                const subtitleInitials = normalizeChapterIndexSearch(subtitle)
+                    .split(" ")
+                    .map(word => word[0] || "")
+                    .join("");
+
+                return {
+                    index,
+                    chapterNumber,
+                    chapterNumberText,
+                    fields,
+                    allNormalized,
+                    allCompact,
+                    tokens,
+                    titleInitials,
+                    subtitleInitials
+                };
+            }
+
+            function getChapterIndexSearchRecord(chapter, index) {
+                const pages = getComicChapterPagesForSearch(chapter);
+                const pageFingerprint = pages
+                    .map((page, pageIndex) => [
+                        pageIndex,
+                        page?.id || "",
+                        page?.updated_at || "",
+                        page?.image_url || "",
+                        page?.title || "",
+                        page?.caption || "",
+                        page?.description || "",
+                        page?.image_credit_name || "",
+                        page?.image_credit_nullverse_username || "",
+                        page?.image_credit_note || ""
+                    ].join("|"))
+                    .join("::");
+
+                const cacheKey = [
+                    chapter?.id || index,
+                    chapter?.updated_at || "",
+                    chapter?.title || "",
+                    chapter?.subtitle || "",
+                    chapter?.author_note || "",
+                    pageFingerprint
+                ].join("::");
+
+                if (!chapterSearchCache.has(cacheKey)) {
+                    chapterSearchCache.set(
+                        cacheKey,
+                        buildChapterIndexSearchRecord(chapter || {}, index)
+                    );
+                }
+
+                return chapterSearchCache.get(cacheKey);
+            }
+
+            function levenshteinDistance(a, b) {
+                a = String(a || "");
+                b = String(b || "");
+
+                if (a === b) return 0;
+                if (!a.length) return b.length;
+                if (!b.length) return a.length;
+
+                const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+                const current = new Array(b.length + 1);
+
+                for (let i = 1; i <= a.length; i++) {
+                    current[0] = i;
+
+                    for (let j = 1; j <= b.length; j++) {
+                        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+
+                        current[j] = Math.min(
+                            previous[j] + 1,
+                            current[j - 1] + 1,
+                            previous[j - 1] + cost
+                        );
+                    }
+
+                    for (let j = 0; j <= b.length; j++) {
+                        previous[j] = current[j];
+                    }
+                }
+
+                return previous[b.length];
+            }
+
+            function isChapterSearchSubsequence(needle, haystack) {
+                needle = String(needle || "");
+                haystack = String(haystack || "");
+
+                if (needle.length < 4 || haystack.length < needle.length) {
+                    return false;
+                }
+
+                let needleIndex = 0;
+
+                for (const character of haystack) {
+                    if (character === needle[needleIndex]) {
+                        needleIndex++;
+                    }
+
+                    if (needleIndex >= needle.length) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            function scoreChapterSearchToken(queryToken, searchableToken) {
+                if (!queryToken || !searchableToken) {
+                    return 0;
+                }
+
+                if (/^\d+$/.test(queryToken)) {
+                    return searchableToken.includes(queryToken) ? 100 : 0;
+                }
+
+                if (searchableToken === queryToken) {
+                    return 100;
+                }
+
+                if (searchableToken.startsWith(queryToken)) {
+                    return 82;
+                }
+
+                if (searchableToken.includes(queryToken)) {
+                    return 68;
+                }
+
+                if (queryToken.length >= 3 && searchableToken.includes(queryToken.slice(0, -1))) {
+                    return 48;
+                }
+
+                if (queryToken.length >= 4 && searchableToken.length >= 4) {
+                    const distance = levenshteinDistance(queryToken, searchableToken);
+                    const allowedDistance = queryToken.length >= 7 ? 2 : 1;
+
+                    if (distance <= allowedDistance) {
+                        return 42 - (distance * 10);
+                    }
+
+                    if (isChapterSearchSubsequence(queryToken, searchableToken)) {
+                        return 28;
+                    }
+                }
+
+                return 0;
+            }
+
+            function scoreChapterSearchField(field, normalizedQuery, compactQuery, queryTokens, numericOnly) {
+                if (!field || (!field.normalized && !field.compact)) {
+                    return 0;
+                }
+
+                if (numericOnly && !field.includeForNumeric) {
+                    return 0;
+                }
+
+                let score = 0;
+
+                if (normalizedQuery && field.normalized === normalizedQuery) {
+                    score += field.weight * 5;
+                } else if (normalizedQuery && field.normalized.startsWith(normalizedQuery)) {
+                    score += field.weight * 4;
+                } else if (normalizedQuery && field.normalized.includes(normalizedQuery)) {
+                    score += field.weight * 3;
+                }
+
+                if (
+                    compactQuery &&
+                    compactQuery.length >= 2 &&
+                    field.compact &&
+                    field.compact.includes(compactQuery)
+                ) {
+                    score += field.weight * 2;
+                }
+
+                for (const queryToken of queryTokens) {
+                    let bestTokenScore = 0;
+
+                    for (const searchableToken of field.tokens) {
+                        bestTokenScore = Math.max(
+                            bestTokenScore,
+                            scoreChapterSearchToken(queryToken, searchableToken)
+                        );
+                    }
+
+                    if (bestTokenScore > 0) {
+                        score += Math.round((bestTokenScore / 100) * field.weight);
+                    }
+                }
+
+                return score;
+            }
+
+            function scoreChapterIndexRecord(record, query) {
+                const normalizedQuery = normalizeChapterIndexSearch(query);
+                const compactQuery = compactChapterIndexSearch(query);
+                const queryTokens = tokenizeChapterIndexSearch(query);
+                const numericOnly = !!compactQuery && /^\d+$/.test(compactQuery);
+                const shortLetterQuery =
+                    !numericOnly &&
+                    compactQuery.length > 0 &&
+                    compactQuery.length < 3;
+
+                if (!normalizedQuery && !compactQuery && !queryTokens.length) {
+                    return 1;
+                }
+
+                if (numericOnly) {
+                    let numericScore = 0;
+
+                    if (record.chapterNumberText.includes(compactQuery)) {
+                        numericScore += 1000;
+                    }
+
+                    for (const field of record.fields) {
+                        if (!field.includeForNumeric) {
+                            continue;
+                        }
+
+                        if (field.normalized.includes(compactQuery) || field.compact.includes(compactQuery)) {
+                            numericScore += scoreChapterSearchField(
+                                field,
+                                normalizedQuery,
+                                compactQuery,
+                                queryTokens,
+                                true
+                            );
+                        }
+                    }
+
+                    return numericScore;
+                }
+
+                const activeFields = shortLetterQuery
+                    ? record.fields.filter(field => field.label !== "pages")
+                    : record.fields;
+
+                const activeNormalized = activeFields
+                    .map(field => field.normalized)
+                    .filter(Boolean)
+                    .join(" ");
+
+                const activeCompact = activeNormalized.replace(/\s+/g, "");
+
+                const activeTokens = [...new Set(
+                    activeFields.flatMap(field => field.tokens)
+                )];
+
+                let score = 0;
+                let phraseMatched = false;
+
+                if (normalizedQuery && activeNormalized.includes(normalizedQuery)) {
+                    phraseMatched = true;
+                    score += 120;
+                }
+
+                if (
+                    compactQuery &&
+                    compactQuery.length >= 2 &&
+                    activeCompact.includes(compactQuery)
+                ) {
+                    phraseMatched = true;
+                    score += 90;
+                }
+
+                if (
+                    compactQuery &&
+                    compactQuery.length >= 2 &&
+                    record.titleInitials &&
+                    record.titleInitials.includes(compactQuery)
+                ) {
+                    phraseMatched = true;
+                    score += 75;
+                }
+
+                if (
+                    compactQuery &&
+                    compactQuery.length >= 2 &&
+                    record.subtitleInitials &&
+                    record.subtitleInitials.includes(compactQuery)
+                ) {
+                    phraseMatched = true;
+                    score += 55;
+                }
+
+                const tokenMatches = queryTokens.map(queryToken => {
+                    let best = 0;
+
+                    for (const searchableToken of activeTokens) {
+                        best = Math.max(best, scoreChapterSearchToken(queryToken, searchableToken));
+                    }
+
+                    return best;
+                });
+
+                const allTokensMatched =
+                    queryTokens.length > 0 &&
+                    tokenMatches.every(value => value > 0);
+
+                if (!phraseMatched && !allTokensMatched) {
+                    return 0;
+                }
+
+                for (const field of activeFields) {
+                    score += scoreChapterSearchField(
+                        field,
+                        normalizedQuery,
+                        compactQuery,
+                        queryTokens,
+                        false
+                    );
+                }
+
+                score += tokenMatches.reduce((sum, value) => sum + value, 0);
+
+                return score;
+            }
+
+            function getChapterSearchResults(query) {
+                const rawQuery = String(query || "").trim();
+
+                if (!rawQuery) {
+                    return chapters.map((chapter, index) => ({
+                        chapter,
+                        index,
+                        score: 1
+                    }));
+                }
+
+                return chapters
+                    .map((chapter, index) => {
+                        const record = getChapterIndexSearchRecord(chapter, index);
+                        return {
+                            chapter,
+                            index,
+                            score: scoreChapterIndexRecord(record, rawQuery)
+                        };
+                    })
+                    .filter(result => result.score > 0)
+                    .sort((a, b) => {
+                        if (b.score !== a.score) {
+                            return b.score - a.score;
+                        }
+
+                        return a.index - b.index;
+                    });
+            }
+
+            function getChapterSearchSnippet(chapter) {
+                const pages = getComicChapterPagesForSearch(chapter);
+                const pageLabel = pages.length
+                    ? `${pages.length} ${pages.length === 1 ? "page" : "pages"}`
+                    : "No public pages";
+
+                return (
+                    chapter.subtitle ||
+                    chapter.description ||
+                    chapter.author_note ||
+                    pageLabel ||
+                    "Open gallery"
+                );
+            }
+
+            function draw() {
+                const query = search.value || "";
+                const results = getChapterSearchResults(query);
+
+                count.textContent = `${results.length} ${results.length === 1 ? "Chapter" : "Chapters"}`;
+
+                if (!results.length) {
                     links.innerHTML = `<p class="empty">No chapters match this search.</p>`;
                     return;
                 }
 
-                links.innerHTML = filtered.map(chapter => {
-                    const realIndex = chapters.indexOf(chapter);
+                links.innerHTML = results.map(result => {
+                    const chapter = result.chapter;
+                    const realIndex = result.index;
+                    const title = getChapterTitleForSearch(chapter) || "Untitled";
+                    const snippet = getChapterSearchSnippet(chapter);
+
                     return `
 <a class="chapter-nav-link" href="#chapter-gallery-${realIndex + 1}">
-<span>Chapter ${realIndex + 1}: ${escapeHtml(chapter.title || "Untitled")}</span>
-<small>${escapeHtml(chapter.subtitle || "Open gallery")}</small>
+<span>Chapter ${realIndex + 1}: ${escapeHtml(title)}</span>
+<small>${escapeHtml(snippet)}</small>
 </a>`;
                 }).join("");
             }
 
-            search.addEventListener("input", draw);
+            search.oninput = draw;
+            search.onkeyup = draw;
+            search.onchange = draw;
+            search.onsearch = draw;
+            search.oncompositionend = draw;
+
             draw();
         }
 
