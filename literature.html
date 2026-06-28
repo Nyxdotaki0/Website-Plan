@@ -463,6 +463,10 @@
         .chapter-index {
             position: relative;
             overflow: hidden;
+            height: min(620px, calc(100vh - 124px));
+            max-height: calc(100vh - 124px);
+            min-height: 360px;
+            box-sizing: border-box;
             padding: 18px;
             padding-bottom: 84px;
             background: var(--literature-index-background, var(--panel-bg));
@@ -538,7 +542,27 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
+            max-height: clamp(210px, calc(100vh - 358px), 410px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 6px;
+            overscroll-behavior: contain;
+            scrollbar-width: thin;
         }
+
+            #chapter-nav-links::-webkit-scrollbar {
+                width: 8px;
+            }
+
+            #chapter-nav-links::-webkit-scrollbar-track {
+                background: rgba(255,255,255,.035);
+                border-radius: 999px;
+            }
+
+            #chapter-nav-links::-webkit-scrollbar-thumb {
+                background: rgba(255,255,255,.20);
+                border-radius: 999px;
+            }
 
         .chapter-nav-link {
             display: block;
@@ -1015,6 +1039,8 @@
 
                 .chapter-index.mobile-open {
                     display: block !important;
+                    height: min(620px, calc(100vh - 142px));
+                    max-height: calc(100vh - 142px);
                 }
 
             .mobile-index-toggle {
@@ -1079,7 +1105,14 @@
             }
 
             .chapter-index {
+                height: min(560px, calc(100vh - 132px));
+                max-height: calc(100vh - 132px);
+                min-height: 330px;
                 padding-bottom: 95px;
+            }
+
+            #chapter-nav-links {
+                max-height: clamp(190px, calc(100vh - 360px), 360px);
             }
 
             .credit-pill {
@@ -1318,9 +1351,9 @@
             const safe = normalizeImagePlacement(placement);
 
             return `
-                            object-fit:${safe.fit || "cover"};
-                            transform:${getImagePlacementTransform(safe)};
-                        `;
+                                object-fit:${safe.fit || "cover"};
+                                transform:${getImagePlacementTransform(safe)};
+                            `;
         }
 
         const NV_WORLD_RICH_TEXT_SNAPSHOT_PREFIX = "NV_LITERATURE_RICH_TEXT_V2:";
@@ -2521,9 +2554,9 @@
 
             if (literature.cover_image_url) {
                 coverWrap.innerHTML = `
-                                    <img src="${escapeHtml(literature.cover_image_url)}" alt="" style="${getImagePlacementStyle(coverPlacement)}">
-                                    ${coverCredit}
-                                `;
+                                        <img src="${escapeHtml(literature.cover_image_url)}" alt="" style="${getImagePlacementStyle(coverPlacement)}">
+                                        ${coverCredit}
+                                    `;
             } else {
                 coverWrap.innerHTML = `<div class="cover-placeholder">No cover image yet</div>`;
             }
@@ -2651,6 +2684,10 @@
             const search = document.getElementById("chapter-search");
             const count = document.getElementById("chapter-count");
 
+            if (!nav || !links || !search || !count) {
+                return;
+            }
+
             nav.style.display = "block";
 
             const oldCredit = nav.querySelector(".credit-pill");
@@ -2670,15 +2707,72 @@
                 nav.insertAdjacentHTML("beforeend", indexCredit);
             }
 
+            function normalizeChapterIndexSearch(value) {
+                return String(value || "")
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, " ")
+                    .trim();
+            }
+
+            function getChapterNumberSearchMatch(query) {
+                const match = String(query || "")
+                    .trim()
+                    .toLowerCase()
+                    .match(/^(?:chapter|chap|ch|#)?\s*(\d+)$/);
+
+                return match ? Number(match[1]) : null;
+            }
+
+            function chapterMatchesIndexSearch(chapter, index, query) {
+                const rawQuery = String(query || "").trim();
+
+                if (!rawQuery) {
+                    return true;
+                }
+
+                const chapterNumber = index + 1;
+                const exactChapterNumber = getChapterNumberSearchMatch(rawQuery);
+
+                if (
+                    Number.isFinite(exactChapterNumber) &&
+                    exactChapterNumber > 0
+                ) {
+                    return chapterNumber === exactChapterNumber;
+                }
+
+                const normalizedQuery = normalizeChapterIndexSearch(rawQuery);
+
+                if (!normalizedQuery) {
+                    return true;
+                }
+
+                const title = chapter.title || "Untitled";
+                const subtitle = chapter.subtitle || "";
+                const bodyText = getPlainTextFromHtml(chapter.body || "");
+
+                const searchableText = normalizeChapterIndexSearch([
+                    chapterNumber,
+                    `chapter ${chapterNumber}`,
+                    `chap ${chapterNumber}`,
+                    `ch ${chapterNumber}`,
+                    `#${chapterNumber}`,
+                    `chapter ${chapterNumber} ${title}`,
+                    title,
+                    subtitle,
+                    bodyText
+                ].join(" "));
+
+                return searchableText.includes(normalizedQuery);
+            }
+
             function draw() {
-                const query = (search.value || "").toLowerCase().trim();
-                const filtered = chapters.filter(chapter => {
-                    return (
-                        (chapter.title || "").toLowerCase().includes(query) ||
-                        (chapter.subtitle || "").toLowerCase().includes(query) ||
-                        getPlainTextFromHtml(chapter.body || "").toLowerCase().includes(query)
-                    );
-                });
+                const query = search.value || "";
+
+                const filtered = chapters.filter((chapter, index) =>
+                    chapterMatchesIndexSearch(chapter, index, query)
+                );
 
                 count.textContent = `${filtered.length} ${filtered.length === 1 ? "Chapter" : "Chapters"}`;
 
@@ -2690,18 +2784,17 @@
                 links.innerHTML = filtered.map(chapter => {
                     const realIndex = chapters.indexOf(chapter);
                     return `
-                                        <a class="chapter-nav-link" href="#chapter-${realIndex + 1}">
-                                            <span>Chapter ${realIndex + 1}: ${escapeHtml(chapter.title || "Untitled")}</span>
-                                            <small>${escapeHtml(chapter.subtitle || "Read chapter")}</small>
-                                        </a>
-                                    `;
+                                            <a class="chapter-nav-link" href="#chapter-${realIndex + 1}">
+                                                <span>Chapter ${realIndex + 1}: ${escapeHtml(chapter.title || "Untitled")}</span>
+                                                <small>${escapeHtml(chapter.subtitle || "Read chapter")}</small>
+                                            </a>
+                                        `;
                 }).join("");
             }
 
-            search.addEventListener("input", draw);
+            search.oninput = draw;
             draw();
         }
-
 
         function getChapterWordCount(chapter) {
             const text = getPlainTextFromHtml(chapter.body || "");
@@ -2721,10 +2814,10 @@
             const chapterLabel = chapters.length === 1 ? "chapter" : "chapters";
 
             meta.innerHTML = `
-                                <span>${chapters.length} ${chapterLabel}</span>
-                                <span>${totalWords.toLocaleString()} words</span>
-                                <span>${minutes} min read</span>
-                            `;
+                                    <span>${chapters.length} ${chapterLabel}</span>
+                                    <span>${totalWords.toLocaleString()} words</span>
+                                    <span>${minutes} min read</span>
+                                `;
         }
 
         window.scrollToFirstChapter = function () {
@@ -2942,33 +3035,33 @@
             const visualBottom = buildChapterHeaderImage(chapter, "bottom");
 
             return `
-                                <article id="chapter-${chapterNumber}"
-                                         class="literature-chapter"
-                                         style="${buildChapterCardStyle(chapter)} ${buildChapterWritingStyle(chapter)}">
-                                    <div class="chapter-title-row">
-                                        <div class="chapter-eyebrow">Chapter ${chapterNumber} · ${getChapterReadTime(chapter)} min read</div>
-                                        <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
-                                        ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
-                                    </div>
-
-                                    ${visualTop}
-
-                                    <div class="chapter-main-text rich-chapter-content">
-                                        ${visualLeftRight}
-                                        ${buildChapterBodyHtml(chapter.body || "No chapter text yet.")}
-                                    </div>
-
-                                    ${visualBottom}
-
-                                    ${chapter.author_note ? `
-                                        <div class="author-note">
-                                            <strong>Author Note</strong>
-                                            <br><br>
-                                            ${escapeHtml(chapter.author_note)}
+                                    <article id="chapter-${chapterNumber}"
+                                             class="literature-chapter"
+                                             style="${buildChapterCardStyle(chapter)} ${buildChapterWritingStyle(chapter)}">
+                                        <div class="chapter-title-row">
+                                            <div class="chapter-eyebrow">Chapter ${chapterNumber} · ${getChapterReadTime(chapter)} min read</div>
+                                            <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
+                                            ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
                                         </div>
-                                    ` : ""}
 
-                                    ${chapter.theme_card_style === "image" && chapter.theme_card_image_url ? buildCreditPill({
+                                        ${visualTop}
+
+                                        <div class="chapter-main-text rich-chapter-content">
+                                            ${visualLeftRight}
+                                            ${buildChapterBodyHtml(chapter.body || "No chapter text yet.")}
+                                        </div>
+
+                                        ${visualBottom}
+
+                                        ${chapter.author_note ? `
+                                            <div class="author-note">
+                                                <strong>Author Note</strong>
+                                                <br><br>
+                                                ${escapeHtml(chapter.author_note)}
+                                            </div>
+                                        ` : ""}
+
+                                        ${chapter.theme_card_style === "image" && chapter.theme_card_image_url ? buildCreditPill({
                 type: chapter.card_credit_type,
                 name: chapter.card_credit_name,
                 username: chapter.card_credit_nullverse_username,
@@ -2977,8 +3070,8 @@
                 ownerUsername: currentLiterature.ownerProfile?.username,
                 context: "Chapter Card Image"
             }) : ""}
-                                </article>
-                            `;
+                                    </article>
+                                `;
         }
 
         function buildChapterHeaderImage(chapter, requestedPosition) {
@@ -3009,11 +3102,11 @@
             ].filter(Boolean).join(" ");
 
             return `
-                                <div class="${classes}">
-                                    <img src="${escapeHtml(chapter.image_url)}" alt="" style="${getImagePlacementStyle(chapter.image_placement)}">
-                                    ${credit}
-                                </div>
-                            `;
+                                    <div class="${classes}">
+                                        <img src="${escapeHtml(chapter.image_url)}" alt="" style="${getImagePlacementStyle(chapter.image_placement)}">
+                                        ${credit}
+                                    </div>
+                                `;
         }
 
         function buildChapterCardStyle(chapter) {
@@ -3034,14 +3127,14 @@
             const placement = normalizeImagePlacement(chapter.theme_card_image_placement);
 
             return `
-                                --chapter-card-background:${background};
-                                --chapter-card-text:${chapter.theme_card_text_color || "#f5f5f5"};
-                                --chapter-card-image:${image};
-                                --chapter-card-image-size:${getImagePlacementFit(placement)};
-                                --chapter-card-image-transform:${getImagePlacementTransform(placement)};
-                                --chapter-card-image-opacity:${chapter.theme_card_opacity ?? .85};
-                                --chapter-card-overlay:${chapter.theme_card_overlay ?? .35};
-                            `;
+                                    --chapter-card-background:${background};
+                                    --chapter-card-text:${chapter.theme_card_text_color || "#f5f5f5"};
+                                    --chapter-card-image:${image};
+                                    --chapter-card-image-size:${getImagePlacementFit(placement)};
+                                    --chapter-card-image-transform:${getImagePlacementTransform(placement)};
+                                    --chapter-card-image-opacity:${chapter.theme_card_opacity ?? .85};
+                                    --chapter-card-overlay:${chapter.theme_card_overlay ?? .35};
+                                `;
         }
 
         function buildChapterWritingStyle(chapter) {
@@ -3055,11 +3148,11 @@
             const spacing = spacingMap[chapter.spacing_type || "comfortable"] || spacingMap.comfortable;
 
             return `
-                                --chapter-text-color:${chapter.text_color || "#f5f5f5"};
-                                --chapter-panel-background:${chapter.chapter_panel_color || "#141416"};
-                                --chapter-line-height:${spacing[0]};
-                                --chapter-letter-spacing:${spacing[1]};
-                            `;
+                                    --chapter-text-color:${chapter.text_color || "#f5f5f5"};
+                                    --chapter-panel-background:${chapter.chapter_panel_color || "#141416"};
+                                    --chapter-line-height:${spacing[0]};
+                                    --chapter-letter-spacing:${spacing[1]};
+                                `;
         }
 
         function renderTags(literature) {
@@ -3079,51 +3172,51 @@
 
             if (currentUser && currentUser.id === literature.owner_id) {
                 html += `
-                                    <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
-                                        Edit Literature
-                                    </a>
-                                `;
+                                        <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
+                                            Edit Literature
+                                        </a>
+                                    `;
             }
 
             if (canModerateWorlds(currentPermissions) && canModerateContentOwner(currentProfile, literature.ownerProfile)) {
                 html += `
-                                    <div style="margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
-                        <strong>Literature Moderation</strong>
+                                        <div style="margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
+                            <strong>Literature Moderation</strong>
 
-                        <p class="empty">
-                            Status: ${escapeHtml(literature.moderation_status || "visible")}
-                        </p>
+                            <p class="empty">
+                                Status: ${escapeHtml(literature.moderation_status || "visible")}
+                            </p>
 
-                        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                            <button class="button" onclick="setLiteratureModerationStatus('visible')">
-                                Restore Literature
-                            </button>
+                            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                                <button class="button" onclick="setLiteratureModerationStatus('visible')">
+                                    Restore Literature
+                                </button>
 
-                            <div style="width:100%;margin-top:10px;">
-                                <label class="empty">Reason for hiding</label>
+                                <div style="width:100%;margin-top:10px;">
+                                    <label class="empty">Reason for hiding</label>
 
-                                <input id="literature-hide-reason"
-                                       placeholder="Reason shown to creator..."
-                                       style="
-                                           width:100%;
-                                           box-sizing:border-box;
-                                           margin-top:8px;
-                                           padding:10px;
-                                           border-radius:10px;
-                                           border:1px solid var(--border-color);
-                                           background:rgba(0,0,0,.28);
-                                           color:var(--text-primary);
-                                       ">
+                                    <input id="literature-hide-reason"
+                                           placeholder="Reason shown to creator..."
+                                           style="
+                                               width:100%;
+                                               box-sizing:border-box;
+                                               margin-top:8px;
+                                               padding:10px;
+                                               border-radius:10px;
+                                               border:1px solid var(--border-color);
+                                               background:rgba(0,0,0,.28);
+                                               color:var(--text-primary);
+                                           ">
+                                </div>
+
+                                <button class="button" onclick="setLiteratureModerationStatus('hidden')">
+                                    Hide Literature
+                                </button>
                             </div>
 
-                            <button class="button" onclick="setLiteratureModerationStatus('hidden')">
-                                Hide Literature
-                            </button>
-                        </div>
-
-                        <p id="literature-moderation-message" class="empty"></p>
+                            <p id="literature-moderation-message" class="empty"></p>
 </div>
-                                `;
+                                    `;
             }
 
             container.innerHTML = html;
@@ -3304,27 +3397,27 @@
 
         function showHiddenNotice(literature) {
             document.querySelector("main").innerHTML = `
-                            <section class="content-warning-panel">
-                                <h1>Literature Hidden by Moderation</h1>
+                                <section class="content-warning-panel">
+                                    <h1>Literature Hidden by Moderation</h1>
 
-                                <p class="empty">
-                                    This literature is currently hidden from the public by Nullverse moderation.
-                                </p>
+                                    <p class="empty">
+                                        This literature is currently hidden from the public by Nullverse moderation.
+                                    </p>
 
-                                <p class="empty">
-                                    <strong>Reason:</strong>
-                                    ${escapeHtml(literature.moderation_reason || "No reason provided.")}
-                                </p>
+                                    <p class="empty">
+                                        <strong>Reason:</strong>
+                                        ${escapeHtml(literature.moderation_reason || "No reason provided.")}
+                                    </p>
 
-                                <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                                    <a class="button" href="dashboard.html">Back to Dashboard</a>
+                                    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                                        <a class="button" href="dashboard.html">Back to Dashboard</a>
 
-                                    <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
-                                        Edit Literature
-                                    </a>
-                                </div>
-                            </section>
-                        `;
+                                        <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
+                                            Edit Literature
+                                        </a>
+                                    </div>
+                                </section>
+                            `;
         }
 
         function showNotFound(message) {
@@ -3339,36 +3432,36 @@
 
         function showContentBlocked(literature) {
             document.querySelector("main").innerHTML = `
-                                <section class="content-warning-panel">
-                                    <h1>Content Hidden</h1>
-                                    <p class="empty">This literature is hidden by your content safety settings.</p>
-                                    <div class="warning-list">
-                                        ${(literature.content_warnings || []).map(warning => `
-                                            <span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>
-                                        `).join("")}
-                                    </div>
-                                    <a class="button" href="explore.html">Back to Explore</a>
-                                </section>
-                            `;
+                                    <section class="content-warning-panel">
+                                        <h1>Content Hidden</h1>
+                                        <p class="empty">This literature is hidden by your content safety settings.</p>
+                                        <div class="warning-list">
+                                            ${(literature.content_warnings || []).map(warning => `
+                                                <span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>
+                                            `).join("")}
+                                        </div>
+                                        <a class="button" href="explore.html">Back to Explore</a>
+                                    </section>
+                                `;
         }
 
         function showContentWarning(literature) {
             document.querySelector("main").innerHTML = `
-                                <section class="content-warning-panel">
-                                    <h1>Content Warning</h1>
-                                    <p class="empty">This literature may contain sensitive or mature content.</p>
-                                    <div class="warning-list">
-                                        ${literature.content_rating === "adult" ? `<span class="warning-pill">Adult 18+</span>` : ""}
-                                        ${(literature.content_warnings || []).map(warning => `
-                                            <span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>
-                                        `).join("")}
-                                    </div>
-                                    <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                                        <button id="continue-warning-button" class="button">Continue Anyway</button>
-                                        <a class="button" href="explore.html">Go Back</a>
-                                    </div>
-                                </section>
-                            `;
+                                    <section class="content-warning-panel">
+                                        <h1>Content Warning</h1>
+                                        <p class="empty">This literature may contain sensitive or mature content.</p>
+                                        <div class="warning-list">
+                                            ${literature.content_rating === "adult" ? `<span class="warning-pill">Adult 18+</span>` : ""}
+                                            ${(literature.content_warnings || []).map(warning => `
+                                                <span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>
+                                            `).join("")}
+                                        </div>
+                                        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                                            <button id="continue-warning-button" class="button">Continue Anyway</button>
+                                            <a class="button" href="explore.html">Go Back</a>
+                                        </div>
+                                    </section>
+                                `;
 
             document.getElementById("continue-warning-button").addEventListener("click", () => {
                 window.location.href = `literature.html?id=${encodeURIComponent(literature.id)}&contentOk=${encodeURIComponent(literature.id)}`;
@@ -3416,31 +3509,31 @@
             }
 
             const tooltipContent = `
-                                <strong>${escapeHtml(context)} Credit</strong>
-                                <br>
-                                Source: ${escapeHtml(name || username || ownerUsername || formatCreditType(type))}
-                                ${note ? `<br><br>${escapeHtml(note)}` : ""}
-                            `;
+                                    <strong>${escapeHtml(context)} Credit</strong>
+                                    <br>
+                                    Source: ${escapeHtml(name || username || ownerUsername || formatCreditType(type))}
+                                    ${note ? `<br><br>${escapeHtml(note)}` : ""}
+                                `;
 
             const tooltip = `<span class="credit-tooltip">${tooltipContent}</span>`;
 
             if (href) {
                 return `
-                                    <a class="credit-pill"
-                                       href="${escapeHtml(href)}"
-                                       ${href.startsWith("http") ? 'target="_blank"' : ""}>
-                                        ${escapeHtml(label)}
-                                        ${tooltip}
-                                    </a>
-                                `;
+                                        <a class="credit-pill"
+                                           href="${escapeHtml(href)}"
+                                           ${href.startsWith("http") ? 'target="_blank"' : ""}>
+                                            ${escapeHtml(label)}
+                                            ${tooltip}
+                                        </a>
+                                    `;
             }
 
             return `
-                                <span class="credit-pill">
-                                    ${escapeHtml(label)}
-                                    ${tooltip}
-                                </span>
-                            `;
+                                    <span class="credit-pill">
+                                        ${escapeHtml(label)}
+                                        ${tooltip}
+                                    </span>
+                                `;
         }
 
         window.logOut = async function () {
