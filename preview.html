@@ -1,0 +1,2271 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <title>Preview - Nullverse</title>
+
+    <script>const savedNullverseTheme = localStorage.getItem("nullverse-theme") || "void";
+        document.documentElement.setAttribute("data-theme", savedNullverseTheme);</script>
+
+    <link rel="stylesheet" href="theme.css?v=25">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@400;500;600;700&family=EB+Garamond:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&family=Lora:wght@400;500;600;700&family=Merriweather:wght@300;400;700;900&family=Nunito:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700;800&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <style id="preview-source-page-style"></style>
+
+    <style>
+        html {
+            min-height: 100%;
+            background: #000;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: #000;
+            color: var(--text-primary, #f5f5f5);
+            font-family: Arial, sans-serif;
+        }
+
+        .preview-loading-screen,
+        .preview-error-screen {
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            box-sizing: border-box;
+            background: radial-gradient(circle at top, rgba(255,255,255,.075), transparent 38%), #050506;
+        }
+
+        .preview-loading-card,
+        .preview-error-card {
+            width: min(620px, 100%);
+            padding: 28px;
+            border-radius: 24px;
+            border: 1px solid rgba(255,255,255,.12);
+            background: linear-gradient(135deg, rgba(255,255,255,.075), rgba(255,255,255,.022)), rgba(8,8,12,.82);
+            box-shadow: 0 24px 70px rgba(0,0,0,.46), inset 0 1px 0 rgba(255,255,255,.05);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+
+            .preview-loading-card h1,
+            .preview-error-card h1 {
+                margin: 0 0 10px;
+                letter-spacing: -.03em;
+            }
+
+            .preview-loading-card p,
+            .preview-error-card p {
+                color: var(--text-secondary, rgba(255,255,255,.72));
+                line-height: 1.65;
+                margin: 0;
+            }
+
+        .preview-mode-banner {
+            position: relative;
+            z-index: 12;
+            width: fit-content;
+            max-width: calc(100vw - 32px);
+            margin: 14px auto 0;
+            padding: 8px 13px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.14);
+            background: rgba(8,8,12,.64);
+            color: rgba(255,255,255,.82);
+            font-size: .82rem;
+            line-height: 1.25;
+            text-align: center;
+            box-shadow: 0 10px 28px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.06);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+
+            .preview-mode-banner strong {
+                color: #fff;
+            }
+
+        .preview-toast {
+            position: fixed;
+            right: 18px;
+            bottom: 18px;
+            z-index: 2147483000;
+            max-width: min(360px, calc(100vw - 36px));
+            padding: 12px 14px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,.16);
+            background: rgba(8,8,12,.92);
+            color: white;
+            box-shadow: 0 18px 46px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.06);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            opacity: 0;
+            transform: translateY(10px);
+            transition: .18s ease;
+            pointer-events: none;
+            font-size: .9rem;
+        }
+
+            .preview-toast.show {
+                opacity: 1;
+                transform: translateY(0);
+            }
+
+        .preview-image-placeholder {
+            min-height: 170px;
+            display: grid;
+            place-items: center;
+            padding: 18px;
+            box-sizing: border-box;
+            border: 1px dashed rgba(255,255,255,.20);
+            border-radius: 16px;
+            background: rgba(255,255,255,.04);
+            color: var(--text-muted, rgba(255,255,255,.58));
+            text-align: center;
+            line-height: 1.55;
+        }
+
+            .preview-image-placeholder strong {
+                display: block;
+                color: var(--text-secondary, rgba(255,255,255,.72));
+                margin-bottom: 4px;
+            }
+
+        .preview-disabled {
+            cursor: pointer;
+        }
+
+        .preview-reader-empty {
+            min-height: 240px;
+            display: grid;
+            place-items: center;
+            padding: 22px;
+            border: 1px dashed rgba(255,255,255,.16);
+            border-radius: 18px;
+            color: rgba(255,255,255,.64);
+            text-align: center;
+            background: rgba(0,0,0,.20);
+        }
+
+        @media (max-width: 700px) {
+            .preview-mode-banner {
+                margin-top: 10px;
+                font-size: .76rem;
+            }
+
+            .preview-toast {
+                right: 12px;
+                bottom: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="preview-root" class="preview-loading-screen">
+        <section class="preview-loading-card">
+            <h1>Loading preview...</h1>
+            <p>Nullverse is preparing your current editor state.</p>
+        </section>
+    </div>
+
+    <div id="preview-toast" class="preview-toast"></div>
+
+    <script>const PREVIEW_PAGE_BY_TYPE = {
+            world: "world.html",
+            literature: "literature.html",
+            comic: "comic.html"
+        };
+
+        const WORLD_EDITOR_FONT_STACKS = {
+            "Georgia": `Georgia, "Times New Roman", Times, serif`,
+            "Merriweather": `"Merriweather", Georgia, "Times New Roman", Times, serif`,
+            "Lora": `"Lora", Georgia, "Times New Roman", Times, serif`,
+            "EB Garamond": `"EB Garamond", Garamond, Georgia, "Times New Roman", serif`,
+            "Times New Roman": `"Times New Roman", Times, Georgia, serif`,
+            "Inter": `"Inter", Arial, Helvetica, sans-serif`,
+            "Arial": `Arial, Helvetica, sans-serif`,
+            "Helvetica": `Helvetica, Arial, sans-serif`,
+            "Open Sans": `"Open Sans", Arial, Helvetica, sans-serif`,
+            "Roboto": `"Roboto", Arial, Helvetica, sans-serif`,
+            "Nunito": `"Nunito", Arial, Helvetica, sans-serif`,
+            "Courier New": `"Courier New", Courier, monospace`,
+            "JetBrains Mono": `"JetBrains Mono", "Courier New", Courier, monospace`,
+            "Alegreya": `"Alegreya", Georgia, "Times New Roman", Times, serif`,
+            "Libre Baskerville": `"Libre Baskerville", Georgia, "Times New Roman", Times, serif`
+        };
+
+        const WORLD_EDITOR_FONT_ALIASES = {
+            "serif": "Georgia",
+            "sans-serif": "Inter",
+            "sans": "Inter",
+            "monospace": "JetBrains Mono",
+            "mono": "JetBrains Mono",
+            "georgia": "Georgia",
+            "merriweather": "Merriweather",
+            "lora": "Lora",
+            "eb garamond": "EB Garamond",
+            "garamond": "EB Garamond",
+            "times": "Times New Roman",
+            "times new roman": "Times New Roman",
+            "inter": "Inter",
+            "arial": "Arial",
+            "helvetica": "Helvetica",
+            "open sans": "Open Sans",
+            "roboto": "Roboto",
+            "nunito": "Nunito",
+            "courier": "Courier New",
+            "courier new": "Courier New",
+            "jetbrains mono": "JetBrains Mono",
+            "alegreya": "Alegreya",
+            "libre baskerville": "Libre Baskerville"
+        };
+
+        const previewParams = new URLSearchParams(window.location.search);
+        const previewKey = previewParams.get("previewKey") || previewParams.get("key") || "";
+        const requestedType = normalizePreviewType(previewParams.get("type"));
+
+        let activePayload = null;
+        let activeType = requestedType;
+        let activeProject = null;
+        let activeOwnerProfile = null;
+        let activeSections = [];
+        let activeChapters = [];
+        let activePagesByChapter = {};
+        let readerChapterIndex = 0;
+        let readerPageIndex = 0;
+        let fullscreenMode = "paged";
+        let toastTimer = null;
+
+        initPreviewPage();
+
+        async function initPreviewPage() {
+            try {
+                activePayload = readPreviewPayload();
+
+                if (!activePayload) {
+                    showPreviewError(
+                        "Preview data was not found.",
+                        "Open this page from one of the editors using the Preview Page button. The editor will create a temporary preview snapshot first."
+                    );
+                    return;
+                }
+
+                activeType = normalizePreviewType(
+                    activePayload.contentType ||
+                    activePayload.type ||
+                    activePayload.previewType ||
+                    activePayload.kind ||
+                    requestedType
+                );
+
+                if (!activeType) {
+                    showPreviewError(
+                        "Preview type missing.",
+                        "The editor needs to send type: world, literature, or comic in the preview payload."
+                    );
+                    return;
+                }
+
+                await injectSourcePageStyle(activeType);
+
+                document.body.classList.remove("preview-world", "preview-literature", "preview-comic");
+                document.body.classList.add(`preview-${activeType}`);
+
+                if (activeType === "world") renderWorldPreview(activePayload);
+                if (activeType === "literature") renderLiteraturePreview(activePayload);
+                if (activeType === "comic") renderComicPreview(activePayload);
+
+                setupPreviewGlobalHandlers();
+                showToast("Preview loaded. Public actions are disabled.");
+            } catch (error) {
+                console.error("Preview render error:", error);
+                showPreviewError("Preview could not load.", error?.message || "Check the browser console for details.");
+            }
+        }
+
+        function readPreviewPayload() {
+            const candidates = [];
+
+            if (previewKey) {
+                candidates.push(previewKey);
+            }
+
+            const routeId = previewParams.get("id") || "draft";
+            if (requestedType) {
+                candidates.push(`nullverse-preview:${requestedType}:${routeId}`);
+                candidates.push(`nullverse-preview-${requestedType}-${routeId}`);
+                candidates.push(`nullverse-preview:${requestedType}`);
+                candidates.push(`nullverse-${requestedType}-preview`);
+            }
+
+            for (const key of [...new Set(candidates.filter(Boolean))]) {
+                const raw = localStorage.getItem(key) || sessionStorage.getItem(key);
+
+                if (!raw) {
+                    continue;
+                }
+
+                try {
+                    const parsed = JSON.parse(raw);
+                    parsed.__previewStorageKey = key;
+                    return parsed;
+                } catch (error) {
+                    console.warn("Preview payload parse failed:", key, error);
+                }
+            }
+
+            const directPayload = previewParams.get("payload");
+            if (directPayload) {
+                try {
+                    return JSON.parse(decodeURIComponent(directPayload));
+                } catch (error) {
+                    console.warn("Direct preview payload parse failed:", error);
+                }
+            }
+
+            return null;
+        }
+
+        function normalizePreviewType(value) {
+            const clean = String(value || "").trim().toLowerCase().replace(/\s+/g, "_");
+            if (["world", "worlds"].includes(clean)) return "world";
+            if (["literature", "lit", "book", "novel"].includes(clean)) return "literature";
+            if (["comic", "manga", "comics"].includes(clean)) return "comic";
+            return "";
+        }
+
+        async function injectSourcePageStyle(type) {
+            const sourcePage = PREVIEW_PAGE_BY_TYPE[type];
+            if (!sourcePage) return;
+
+            try {
+                const response = await fetch(`${sourcePage}?previewStyle=${Date.now()}`, { cache: "no-store" });
+                if (!response.ok) throw new Error(`Could not fetch ${sourcePage}`);
+
+                const html = await response.text();
+                const styleBlocks = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)]
+                    .map(match => match[1])
+                    .join("\n\n");
+
+                document.getElementById("preview-source-page-style").textContent = styleBlocks;
+            } catch (error) {
+                console.warn("Preview style fetch failed. Using fallback styles only.", error);
+            }
+        }
+
+        function commonHeader() {
+            return `
+                <div class="nullverse-stars"></div>
+                <header>
+                    <div class="logo">
+                        <a href="#" data-preview-action="Home">
+                            <img src="Nullverse-3.png" alt="Nullverse" class="site-logo">
+                        </a>
+                    </div>
+                    <nav>
+                        <a href="#" data-preview-action="Home">Home</a>
+                        <a href="#" data-preview-action="Notifications">Notifications</a>
+                        <a href="#" data-preview-action="Explore">Explore</a>
+                        <a href="#" data-preview-action="Profile">Profile</a>
+                        <a href="#" data-preview-action="Dashboard">Dashboard</a>
+                        <a href="#" data-preview-action="Messages">Messages</a>
+                        <button type="button" data-preview-action="Log Out">Log Out</button>
+                    </nav>
+                </header>
+                <div class="preview-mode-banner">
+                    <strong>Preview Mode</strong> — this version is not public yet. Public actions are disabled.
+                </div>
+            `;
+        }
+
+        function renderWorldPreview(payload) {
+            activeProject = normalizeProject(payload, "world");
+            activeOwnerProfile = normalizeOwnerProfile(payload, activeProject);
+            activeProject.ownerProfile = activeOwnerProfile;
+            activeSections = sortByDisplayOrder(
+                payload.sections ||
+                payload.worldSections ||
+                payload.world_sections ||
+                payload.chapters ||
+                []
+            );
+
+            document.title = `${activeProject.title || "World"} Preview - Nullverse`;
+            document.getElementById("preview-root").className = "";
+            document.getElementById("preview-root").innerHTML = `
+                ${commonHeader()}
+                <div id="world-background-layer" class="world-background-layer">
+                    <div id="world-background-image" class="world-background-image"></div>
+                    <div id="world-gradient-layer" class="world-gradient-layer"></div>
+                    <div id="world-background-overlay" class="world-background-overlay"></div>
+                </div>
+                <main>
+                    <aside class="left-sidebar">
+                        <section id="section-nav" class="section-nav" style="display:none;">
+                            <div class="index-header">
+                                <h2>Search This World</h2>
+                                <p>Jump between sections instantly</p>
+                            </div>
+                            <input id="section-search" class="section-search" type="text" placeholder="Search sections...">
+                            <div id="section-type-filter" class="section-filters"></div>
+                            <div id="section-count" class="section-count"></div>
+                            <div id="section-nav-links"></div>
+                        </section>
+                    </aside>
+                    <div class="content-column">
+                        <section class="hero">
+                            <div id="world-tags" class="tag-row"></div>
+                            <h1 id="world-title"></h1>
+                            <p id="world-creator" class="creator"></p>
+                            <div id="world-summary" class="summary"></div>
+                            <div class="like-row">
+                                <button id="like-button" class="like-button preview-disabled" data-preview-action="Like">♡ Like</button>
+                                <span id="like-count" class="like-count">0 Likes</span>
+                                <a class="button preview-disabled" href="#" data-preview-action="Comments">Comments</a>
+                                <a class="button preview-disabled" href="#" data-preview-action="Q&A">Q&A</a>
+                                <a class="button preview-disabled" href="#" data-preview-action="Community">Community</a>
+                                <button class="button preview-disabled" type="button" data-preview-action="Report">Report</button>
+                            </div>
+                            <div id="owner-actions" class="owner-actions"></div>
+                        </section>
+                        <section id="sections-container"></section>
+                    </div>
+                </main>
+                <div id="section-image-lightbox" class="section-image-lightbox" aria-hidden="true">
+                    <div class="section-image-lightbox-side left" data-local-control="close-section-lightbox" title="Close image"></div>
+                    <div class="section-image-lightbox-side right" data-local-control="close-section-lightbox" title="Close image"></div>
+                    <div class="section-image-lightbox-hint">Click the sides or press Esc to close</div>
+                    <button class="section-image-lightbox-close" type="button" data-local-control="close-section-lightbox" title="Close image">×</button>
+                    <div class="section-image-lightbox-shell">
+                        <img id="section-image-lightbox-image" class="section-image-lightbox-image" src="" alt="">
+                    </div>
+                </div>
+            `;
+
+            applyWorldTheme(activeProject);
+            document.getElementById("world-title").textContent = activeProject.title || "Untitled World";
+            document.getElementById("world-summary").textContent = activeProject.summary || "No summary provided.";
+            document.getElementById("world-creator").innerHTML = buildCreatorLine(activeOwnerProfile);
+            renderWorldTags(activeProject);
+
+            const hero = document.querySelector(".hero");
+            hero.insertAdjacentHTML(
+                "afterbegin",
+                buildPlacedImageStage(getImageUrl(activeProject, ["theme_overview_card_image_url", "overview_card_image_url"]), activeProject.theme_overview_card_image_placement, "hero-placed-image")
+            );
+            hero.insertAdjacentHTML("beforeend", buildCreditPill({
+                type: activeProject.overview_card_credit_type,
+                name: activeProject.overview_card_credit_name,
+                username: activeProject.overview_card_credit_nullverse_username,
+                url: activeProject.overview_card_credit_url,
+                note: activeProject.overview_card_credit_note,
+                ownerUsername: activeOwnerProfile?.username,
+                context: "Overview Image"
+            }));
+
+            const backgroundCredit = buildCreditPill({
+                type: activeProject.background_credit_type,
+                name: activeProject.background_credit_name,
+                username: activeProject.background_credit_nullverse_username,
+                url: activeProject.background_credit_url,
+                note: activeProject.background_credit_note,
+                ownerUsername: activeOwnerProfile?.username,
+                context: "Background Image"
+            });
+
+            if (backgroundCredit) {
+                document.getElementById("world-background-layer")?.insertAdjacentHTML("beforeend", backgroundCredit);
+            }
+
+            renderWorldSections(activeSections);
+            renderWorldSectionNav(activeSections);
+            setupWorldPreviewLightbox();
+        }
+
+        function renderLiteraturePreview(payload) {
+            activeProject = normalizeProject(payload, "literature");
+            activeOwnerProfile = normalizeOwnerProfile(payload, activeProject);
+            activeProject.ownerProfile = activeOwnerProfile;
+            activeChapters = sortByDisplayOrder(
+                payload.chapters ||
+                payload.literatureChapters ||
+                payload.literature_chapters ||
+                []
+            );
+
+            document.title = `${activeProject.title || "Literature"} Preview - Nullverse`;
+            document.getElementById("preview-root").className = "";
+            document.getElementById("preview-root").innerHTML = `
+                <div id="reading-progress" class="reading-progress"></div>
+                ${commonHeader()}
+                <div id="literature-background-layer" class="literature-background-layer">
+                    <div id="literature-background-base" class="literature-background-base"></div>
+                    <div id="literature-background-image" class="literature-background-image"></div>
+                    <div id="literature-background-overlay" class="literature-background-overlay"></div>
+                </div>
+                <main>
+                    <aside class="left-sidebar">
+                        <section id="chapter-index" class="chapter-index" style="display:none;">
+                            <div class="index-header">
+                                <h2>Chapter Index</h2>
+                                <p>Search and jump between chapters instantly.</p>
+                            </div>
+                            <input id="chapter-search" class="chapter-search" type="text" placeholder="Search chapters...">
+                            <div id="chapter-count" class="chapter-count"></div>
+                            <div id="chapter-nav-links"></div>
+                        </section>
+                    </aside>
+                    <div class="content-column">
+                        <section class="book-hero">
+                            <div class="book-layout">
+                                <div id="book-cover-wrap" class="cover-wrap"></div>
+                                <div>
+                                    <div id="book-tags" class="tag-row"></div>
+                                    <h1 id="book-title"></h1>
+                                    <p id="book-creator" class="creator"></p>
+                                    <div id="reading-meta" class="reading-meta"></div>
+                                    <div id="book-summary" class="summary"></div>
+                                    <div class="action-row">
+                                        <button id="like-button" class="like-button preview-disabled" type="button" data-preview-action="Like">♡ Like</button>
+                                        <span id="like-count" class="like-count">0 Likes</span>
+                                        <a class="button preview-disabled" href="#" data-preview-action="Comments">Comments</a>
+                                        <a class="button preview-disabled" href="#" data-preview-action="Q&A">Q&A</a>
+                                        <button class="button preview-disabled" type="button" data-preview-action="Report">Report</button>
+                                    </div>
+                                    <div id="owner-actions" class="owner-actions"></div>
+                                </div>
+                            </div>
+                        </section>
+                        <section class="reader-tools" id="reader-tools" style="display:none;">
+                            <div class="reader-tools-left">
+                                <button class="reader-tool-button mobile-index-toggle" type="button" data-local-control="toggle-mobile-index">Chapters</button>
+                                <button class="reader-tool-button" type="button" data-local-control="start-reading">Start Reading</button>
+                                <button class="reader-tool-button" type="button" data-local-control="toggle-focus">Focus</button>
+                            </div>
+                            <div class="reader-tools-right">
+                                <button class="reader-tool-button" type="button" data-local-control="large-text">Text +</button>
+                                <button class="reader-tool-button" type="button" data-local-control="wide-reader">Wide</button>
+                                <button class="reader-tool-button" type="button" data-local-control="center-headings">Center Titles</button>
+                            </div>
+                        </section>
+                        <section id="chapters-container"></section>
+                    </div>
+                </main>
+            `;
+
+            applyLiteratureTheme(activeProject);
+            renderLiteratureHero(activeProject, activeOwnerProfile);
+            renderLiteratureChapters(activeChapters);
+            renderGenericChapterIndex(activeChapters, "literature");
+            setupLiteratureReaderTools();
+            setupReaderScrollTracking();
+        }
+
+        function renderComicPreview(payload) {
+            activeProject = normalizeProject(payload, "comic");
+            activeOwnerProfile = normalizeOwnerProfile(payload, activeProject);
+            activeProject.ownerProfile = activeOwnerProfile;
+            activeChapters = sortByDisplayOrder(payload.chapters || payload.comicChapters || payload.comic_chapters || []);
+            activePagesByChapter = normalizePagesByChapter(payload);
+            fullscreenMode = activeProject.comic_reading_mode || activeProject.reading_mode || "paged";
+
+            document.title = `${activeProject.title || "Comic"} Preview - Nullverse`;
+            document.getElementById("preview-root").className = "";
+            document.getElementById("preview-root").innerHTML = `
+                ${commonHeader()}
+                <div id="comic-background-layer" class="comic-background-layer">
+                    <div id="comic-background-base" class="comic-background-base"></div>
+                    <div id="comic-background-image" class="comic-background-image"></div>
+                    <div id="comic-background-overlay" class="comic-background-overlay"></div>
+                </div>
+                <main>
+                    <aside class="left-sidebar">
+                        <section id="chapter-index" class="chapter-index" style="display:none;">
+                            <div class="index-header">
+                                <h2>Chapter Index</h2>
+                                <p>Search and jump between chapters instantly.</p>
+                            </div>
+                            <input id="chapter-search" class="chapter-search" type="text" placeholder="Search chapters...">
+                            <div id="chapter-count" class="chapter-count"></div>
+                            <div id="chapter-nav-links"></div>
+                        </section>
+                    </aside>
+                    <div class="content-column">
+                        <section class="comic-hero">
+                            <div class="comic-layout">
+                                <div id="comic-cover-wrap" class="cover-wrap"></div>
+                                <div>
+                                    <div id="comic-tags" class="tag-row"></div>
+                                    <h1 id="comic-title"></h1>
+                                    <p id="comic-creator" class="creator"></p>
+                                    <div id="comic-summary" class="summary"></div>
+                                    <div class="action-row">
+                                        <button id="like-button" class="like-button preview-disabled" type="button" data-preview-action="Like">♡ Like</button>
+                                        <span id="like-count" class="like-count">0 Likes</span>
+                                        <a class="button preview-disabled" href="#" data-preview-action="Comments">Comments</a>
+                                        <a class="button preview-disabled" href="#" data-preview-action="Q&A">Q&A</a>
+                                        <a class="button preview-disabled" href="#" data-preview-action="Community">Community</a>
+                                        <button class="button preview-disabled" type="button" data-preview-action="Report">Report</button>
+                                    </div>
+                                    <div id="owner-actions" class="owner-actions"></div>
+                                </div>
+                            </div>
+                        </section>
+                        <section id="chapters-gallery-container"></section>
+                    </div>
+                </main>
+                <div id="reader-overlay" class="reader-overlay">
+                    <div id="reader-bg-base" class="reader-bg-base"></div>
+                    <div id="reader-bg-image" class="reader-bg-image"></div>
+                    <div id="reader-bg-overlay" class="reader-bg-overlay"></div>
+                    <div id="reader-ui" class="reader-ui">
+                        <div class="reader-topbar">
+                            <div class="reader-title">
+                                <strong id="reader-title">Comic Reader</strong>
+                                <span id="reader-subtitle">Choose a page to begin</span>
+                            </div>
+                            <div class="reader-actions">
+                                <button id="reader-mode-paged" class="reader-action" type="button" data-local-control="reader-paged">Paged</button>
+                                <button id="reader-mode-webtoon" class="reader-action" type="button" data-local-control="reader-webtoon">Webtoon</button>
+                                <button class="reader-action" type="button" data-local-control="reader-close">Close</button>
+                            </div>
+                        </div>
+                        <div id="reader-stage" class="reader-stage">
+                            <div class="tap-zone tap-left" data-local-control="reader-back"></div>
+                            <div class="tap-zone tap-right" data-local-control="reader-forward"></div>
+                            <button class="reader-arrow left" type="button" data-local-control="reader-back">‹</button>
+                            <button class="reader-arrow right" type="button" data-local-control="reader-forward">›</button>
+                            <div id="reader-content"></div>
+                            <button id="reader-credit-mobile-btn" class="reader-credit-mobile-btn" type="button" data-local-control="credit-sheet">?</button>
+                            <div id="reader-credit-desktop" class="reader-credit-desktop"></div>
+                        </div>
+                        <div id="reader-bottombar" class="reader-bottombar"></div>
+                    </div>
+                </div>
+                <div id="reader-credit-sheet" class="reader-credit-sheet"></div>
+            `;
+
+            applyComicTheme(activeProject);
+            renderComicHero(activeProject, activeOwnerProfile);
+            renderGenericChapterIndex(activeChapters, "comic");
+            renderComicChapterGalleries();
+            setupComicReaderControls();
+        }
+
+        function normalizeProject(payload, type) {
+            const possible = [
+                payload[type],
+                payload.project,
+                payload.item,
+                payload.world,
+                payload.literature,
+                payload.comic,
+                payload.data
+            ].find(value => value && typeof value === "object" && !Array.isArray(value));
+
+            return possible || {};
+        }
+
+        function normalizeOwnerProfile(payload, project) {
+            return (
+                payload.ownerProfile ||
+                payload.profile ||
+                payload.creator ||
+                project.ownerProfile ||
+                project.profile ||
+                project.creator ||
+                {
+                    username: project.owner_username || project.username || "creator",
+                    display_name: project.owner_display_name || project.display_name || project.owner_name || "Creator"
+                }
+            );
+        }
+
+        function normalizePagesByChapter(payload) {
+            const pagesByChapter = payload.pagesByChapter || payload.pages_by_chapter || payload.comicPagesByChapter || {};
+
+            if (pagesByChapter && typeof pagesByChapter === "object" && !Array.isArray(pagesByChapter)) {
+                return Object.fromEntries(
+                    Object.entries(pagesByChapter).map(([key, pages]) => [key, sortByDisplayOrder(pages || [])])
+                );
+            }
+
+            const flatPages = payload.pages || payload.comicPages || payload.comic_pages || [];
+            const grouped = {};
+
+            flatPages.forEach(page => {
+                const chapterId = page.chapter_id || page.comic_chapter_id || page.chapterId || "default";
+                if (!grouped[chapterId]) grouped[chapterId] = [];
+                grouped[chapterId].push(page);
+            });
+
+            Object.keys(grouped).forEach(key => {
+                grouped[key] = sortByDisplayOrder(grouped[key]);
+            });
+
+            return grouped;
+        }
+
+        function sortByDisplayOrder(items) {
+            return [...(Array.isArray(items) ? items : [])].sort((a, b) => {
+                const aOrder = Number(a?.display_order ?? a?.order_index ?? a?.sort_order ?? a?.position);
+                const bOrder = Number(b?.display_order ?? b?.order_index ?? b?.sort_order ?? b?.position);
+                const aHas = Number.isFinite(aOrder);
+                const bHas = Number.isFinite(bOrder);
+
+                if (aHas && bHas && aOrder !== bOrder) return aOrder - bOrder;
+                if (aHas && !bHas) return -1;
+                if (!aHas && bHas) return 1;
+
+                const aDate = new Date(a?.created_at || 0).getTime();
+                const bDate = new Date(b?.created_at || 0).getTime();
+                return aDate - bDate;
+            });
+        }
+
+        function setupPreviewGlobalHandlers() {
+            document.addEventListener("click", event => {
+                const previewAction = event.target.closest("[data-preview-action]");
+
+                if (previewAction) {
+                    event.preventDefault();
+                    showToast(`${previewAction.dataset.previewAction || "This action"} is disabled in preview mode.`);
+                    return;
+                }
+
+                const pill = event.target.closest(".credit-pill");
+                if (pill) {
+                    event.preventDefault();
+                    document.querySelectorAll(".credit-pill").forEach(item => {
+                        if (item !== pill) item.classList.remove("show-tooltip");
+                    });
+                    pill.classList.toggle("show-tooltip");
+                }
+            });
+
+            document.addEventListener("keydown", event => {
+                if (event.key === "Escape") {
+                    closeSectionImageLightbox();
+                    closeReader();
+                    closeCreditSheet();
+                }
+
+                const readerOpen = document.getElementById("reader-overlay")?.classList.contains("open");
+                if (readerOpen && activeType === "comic") {
+                    if (event.key === "ArrowRight") readerForward();
+                    if (event.key === "ArrowLeft") readerBack();
+                    if (event.key.toLowerCase() === "w") setFullscreenMode("webtoon");
+                    if (event.key.toLowerCase() === "p") setFullscreenMode("paged");
+                }
+            });
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById("preview-toast");
+            if (!toast) return;
+
+            toast.textContent = message;
+            toast.classList.add("show");
+
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                toast.classList.remove("show");
+            }, 2800);
+        }
+
+        function showPreviewError(title, message) {
+            document.getElementById("preview-root").className = "preview-error-screen";
+            document.getElementById("preview-root").innerHTML = `
+                <section class="preview-error-card">
+                    <h1>${escapeHtml(title)}</h1>
+                    <p>${escapeHtml(message)}</p>
+                </section>
+            `;
+        }
+
+        function getImageUrl(source, keys) {
+            for (const key of keys) {
+                const value = source?.[key];
+                const normalized = normalizeImageValue(value);
+                if (normalized) return normalized;
+            }
+            return "";
+        }
+
+        function normalizeImageValue(value) {
+            if (!value) return "";
+
+            if (typeof value === "object") {
+                if (value.previewUnavailable || value.unsaved || value.needsSave) return "";
+                return normalizeImageValue(value.url || value.src || value.previewUrl || value.preview_url || value.savedUrl || value.saved_url);
+            }
+
+            const raw = String(value || "").trim();
+            if (!raw) return "";
+            if (raw.startsWith("__UNSAVED") || raw === "unsaved" || raw === "needs_save") return "";
+
+            return raw;
+        }
+
+        function buildUnavailableImagePlaceholder(label = "Image") {
+            return `
+                <div class="preview-image-placeholder">
+                    <span>
+                        <strong>${escapeHtml(label)} needs saving first.</strong>
+                        Preview will still show your text, colors, layout, and saved images.
+                    </span>
+                </div>
+            `;
+        }
+
+        function normalizeImagePlacement(value) {
+            let parsed = value;
+            if (typeof parsed === "string") {
+                try { parsed = JSON.parse(parsed); } catch { parsed = null; }
+            }
+
+            return {
+                x: 0,
+                y: 0,
+                scale: 1,
+                rotation: 0,
+                fit: "cover",
+                ...(parsed && typeof parsed === "object" ? parsed : {})
+            };
+        }
+
+        function getImagePlacementTransform(placement, includeDefaultScale = false) {
+            const safe = normalizeImagePlacement(placement);
+            const baseScale = includeDefaultScale ? 1.03 : 1;
+            const finalScale = (Number(safe.scale) || 1) * baseScale;
+            return `translate(${Number(safe.x) || 0}px, ${Number(safe.y) || 0}px) rotate(${Number(safe.rotation) || 0}deg) scale(${finalScale})`;
+        }
+
+        function getImagePlacementFit(placement) {
+            return normalizeImagePlacement(placement).fit || "cover";
+        }
+
+        function getImagePlacementStyle(placement) {
+            const safe = normalizeImagePlacement(placement);
+            return `object-fit:${escapeHtml(safe.fit || "cover")}; transform:${escapeHtml(getImagePlacementTransform(safe))}; transform-origin:center center;`;
+        }
+
+        function buildPlacedImageStage(url, placement, className = "") {
+            if (!url) return "";
+            const safe = normalizeImagePlacement(placement);
+            return `
+                <div class="placed-image-stage ${escapeHtml(className)}">
+                    <img src="${escapeHtml(url)}" alt="" style="object-fit:${escapeHtml(safe.fit || "cover")}; transform:${escapeHtml(getImagePlacementTransform(safe))};">
+                </div>
+            `;
+        }
+
+        function buildCreatorLine(profile) {
+            if (!profile || (!profile.username && !profile.display_name)) return "by Unknown Creator";
+            const name = profile.display_name || profile.username || "Creator";
+            const username = profile.username || "creator";
+            return `by <a href="#" data-preview-action="Creator Profile">${escapeHtml(name)} (@${escapeHtml(username)})</a>`;
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        function escapeAttr(value) {
+            return escapeHtml(value).replaceAll("`", "&#096;");
+        }
+
+        function formatCreditType(value) {
+            return String(value || "")
+                .replaceAll("_", " ")
+                .replace(/\b\w/g, letter => letter.toUpperCase());
+        }
+
+        function buildCreditPill({ type, name, username, url, note, ownerUsername, context = "Image" }) {
+            type = type || "no_credit_needed";
+            if (type === "no_credit_needed") return "";
+
+            let label = "";
+            let source = name || username || ownerUsername || formatCreditType(type);
+
+            if (type === "own_work") {
+                label = `${context} Credit: @${ownerUsername || "creator"}`;
+                source = ownerUsername || source;
+            } else if (type === "nullverse_creator" && username) {
+                label = `${context} Credit: @${username}`;
+                source = username;
+            } else {
+                label = `${context} Credit: ${name || formatCreditType(type)}`;
+            }
+
+            const tooltipContent = `
+                <strong>${escapeHtml(context)} Credit</strong>
+                <br>
+                Source: ${escapeHtml(source)}
+                ${note ? `<br><br>${escapeHtml(note)}` : ""}
+                ${url ? `<br><br>External link disabled in preview.` : ""}
+            `;
+
+            return `
+                <span class="credit-pill">
+                    ${escapeHtml(label)}
+                    <span class="credit-tooltip">${tooltipContent}</span>
+                </span>
+            `;
+        }
+
+        function splitTags(value) {
+            if (Array.isArray(value)) return value.map(String);
+            return String(value || "")
+                .split(",")
+                .map(tag => tag.trim())
+                .filter(Boolean);
+        }
+
+        function getCombinedTags(project, label) {
+            return [
+                label,
+                ...splitTags(project.genres),
+                ...splitTags(project.themes),
+                ...splitTags(project.tags)
+            ].filter(Boolean);
+        }
+
+        function renderWorldTags(world) {
+            const container = document.getElementById("world-tags");
+            if (!container) return;
+            const tags = getCombinedTags(world, "World");
+            container.innerHTML = tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
+        }
+
+        function renderLiteratureTags(literature) {
+            const container = document.getElementById("book-tags");
+            if (!container) return;
+            const tags = getCombinedTags(literature, "Literature");
+            container.innerHTML = tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
+        }
+
+        function renderComicTags(comic) {
+            const container = document.getElementById("comic-tags");
+            if (!container) return;
+            const tags = getCombinedTags(comic, String(comic.content_type || "Comic").toLowerCase() === "manga" ? "Manga" : "Comic");
+            container.innerHTML = tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
+        }
+
+        function applyWorldTheme(world) {
+            const root = document.documentElement;
+            const backgroundImage = getImageUrl(world, ["theme_background_image_url", "background_image_url"]);
+            const imageLayer = document.getElementById("world-background-image");
+            const gradientLayer = document.getElementById("world-gradient-layer");
+            const overlayLayer = document.getElementById("world-background-overlay");
+
+            let buttonBackground = "linear-gradient(180deg,#2a2a2f,#0d0d10)";
+            if (world.theme_button_style === "solid") buttonBackground = world.theme_button_color_1 || buttonBackground;
+            if (world.theme_button_style === "gradient") buttonBackground = `linear-gradient(180deg, ${world.theme_button_color_1 || "#2a2a2f"}, ${world.theme_button_color_2 || "#0d0d10"})`;
+
+            root.style.setProperty("--world-button-background", buttonBackground);
+            root.style.setProperty("--world-button-text", world.theme_button_text_color || "#f5f5f5");
+
+            let heroBackground = "linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.02))";
+            if (world.theme_overview_card_style === "solid") heroBackground = world.theme_overview_card_color_1 || "#141416";
+            if (["gradient", "image"].includes(world.theme_overview_card_style)) {
+                heroBackground = `linear-gradient(135deg, ${world.theme_overview_card_color_1 || "#141416"}, ${world.theme_overview_card_color_2 || "#0b0b0d"})`;
+            }
+            root.style.setProperty("--hero-background", heroBackground);
+            root.style.setProperty("--hero-text-color", world.theme_overview_card_text_color || "#f5f5f5");
+            root.style.setProperty("--hero-image", "none");
+            root.style.setProperty("--hero-image-opacity", world.theme_overview_card_opacity ?? .85);
+            root.style.setProperty("--hero-overlay", world.theme_overview_card_overlay ?? .35);
+
+            let indexBackground = "linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.02))";
+            if (world.theme_index_style === "solid") indexBackground = world.theme_index_color_1 || "#141416";
+            if (["gradient", "image"].includes(world.theme_index_style)) {
+                indexBackground = `linear-gradient(135deg, ${world.theme_index_color_1 || "#141416"}, ${world.theme_index_color_2 || "#0b0b0d"})`;
+            }
+            root.style.setProperty("--world-index-background", indexBackground);
+            root.style.setProperty("--world-index-text", world.theme_index_text_color || "#f5f5f5");
+            root.style.setProperty("--world-index-image", "none");
+            root.style.setProperty("--world-index-opacity", world.theme_index_opacity ?? .85);
+            root.style.setProperty("--world-index-overlay", world.theme_index_overlay ?? .35);
+
+            let indexButtonBackground = "rgba(0,0,0,0.18)";
+            if (world.theme_index_button_style === "solid") indexButtonBackground = world.theme_index_button_color_1 || indexButtonBackground;
+            if (world.theme_index_button_style === "gradient") indexButtonBackground = `linear-gradient(180deg, ${world.theme_index_button_color_1 || "#2a2a2f"}, ${world.theme_index_button_color_2 || "#0d0d10"})`;
+            root.style.setProperty("--world-index-button-background", indexButtonBackground);
+            root.style.setProperty("--world-index-button-text", world.theme_index_button_text_color || "#f5f5f5");
+
+            if (imageLayer) {
+                imageLayer.style.backgroundImage = backgroundImage ? `url("${backgroundImage}")` : "none";
+                imageLayer.style.opacity = backgroundImage ? (world.theme_background_image_opacity ?? .35) : "0";
+                imageLayer.style.filter = `blur(${world.theme_background_image_blur || 0}px)`;
+                imageLayer.style.backgroundRepeat = world.theme_background_image_repeat || "no-repeat";
+                imageLayer.style.backgroundPosition = `${world.theme_background_position_x || 50}% ${world.theme_background_position_y || 50}%`;
+                imageLayer.style.backgroundSize = getImagePlacementFit(world.theme_background_image_placement) === "contain" ? "contain" : (world.theme_background_image_size || "cover");
+                imageLayer.style.transform = getImagePlacementTransform(world.theme_background_image_placement);
+                imageLayer.style.transformOrigin = "center center";
+            }
+
+            let gradientBackground = backgroundImage ? "transparent" : "var(--page-bg)";
+            if (world.theme_gradient_enabled) {
+                gradientBackground = `linear-gradient(${world.theme_gradient_direction || "180deg"}, ${world.theme_gradient_color_1 || "#050505"}, ${world.theme_gradient_color_2 || "#000000"})`;
+            }
+            if (gradientLayer) gradientLayer.style.background = gradientBackground;
+            if (overlayLayer) overlayLayer.style.background = `rgba(0,0,0,${world.theme_background_overlay_strength ?? .35})`;
+        }
+
+        function buildSectionCardStyle(section) {
+            let cardBackground = "linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.012))";
+            if (section.theme_card_style === "solid") cardBackground = section.theme_card_color_1 || "#141416";
+            if (["gradient", "image"].includes(section.theme_card_style)) {
+                cardBackground = `linear-gradient(135deg, ${section.theme_card_color_1 || "#141416"}, ${section.theme_card_color_2 || "#0b0b0d"})`;
+            }
+
+            return `
+                --section-card-background:${cardBackground};
+                --section-card-text:${section.theme_card_text_color || "#f5f5f5"};
+                --section-card-image:none;
+                --section-card-image-opacity:${section.theme_card_opacity ?? .85};
+                --section-card-overlay:${section.theme_card_overlay ?? .35};
+            `;
+        }
+
+        function getSectionImageStage(section) {
+            const imageUrl = getImageUrl(section, ["image_url", "section_image_url"]);
+            if (!imageUrl) return "";
+
+            const isFull = section.image_position === "full";
+            const width = isFull ? "100%" : "320px";
+            const height = isFull ? "360px" : "260px";
+            const safe = normalizeImagePlacement(section.image_placement);
+
+            return `
+                <div class="section-image-stage section-image-zoomable"
+                     role="button"
+                     tabindex="0"
+                     aria-label="Open section image"
+                     data-section-image-src="${escapeAttr(imageUrl)}"
+                     data-section-image-alt="${escapeAttr(section.title || "Section image")}"
+                     style="width:${width}; max-width:100%; height:${height}; display:block; float:${section.image_position === "left" ? "left" : section.image_position === "right" ? "right" : "none"}; margin-right:${section.image_position === "left" ? "22px" : "0"}; margin-left:${section.image_position === "right" ? "22px" : "0"};">
+                    <img src="${escapeAttr(imageUrl)}" alt="" style="object-fit:${escapeHtml(safe.fit || "cover")}; transform:${escapeHtml(getImagePlacementTransform(safe))};">
+                </div>
+            `;
+        }
+
+        function renderWorldSections(sections) {
+            const container = document.getElementById("sections-container");
+            if (!container) return;
+
+            if (!sections.length) {
+                container.innerHTML = `<p class="empty">This preview does not have any sections yet.</p>`;
+                document.getElementById("section-nav").style.display = "none";
+                return;
+            }
+
+            container.innerHTML = sections.map((section, index) => {
+                const cardImageUrl = getImageUrl(section, ["theme_card_image_url", "card_image_url"]);
+                const sectionImageUrl = getImageUrl(section, ["image_url", "section_image_url"]);
+                return `
+                    <article id="section-${index}" class="world-section" style="${buildSectionCardStyle(section)}">
+                        ${buildPlacedImageStage(cardImageUrl, section.theme_card_image_placement, "section-card-placed-image")}
+                        <h2>${escapeHtml(section.title || "Untitled Section")}</h2>
+                        <div class="section-type">${escapeHtml(section.section_type || section.type || "Section")}</div>
+                        ${getSectionImageStage(section)}
+                        ${sectionImageUrl ? `
+                            <div class="section-image-credit-under">
+                                ${buildCreditPill({
+                                    type: section.image_credit_type,
+                                    name: section.image_credit_name,
+                                    username: section.image_credit_nullverse_username,
+                                    url: section.image_credit_url,
+                                    note: section.image_credit_note,
+                                    ownerUsername: activeOwnerProfile?.username,
+                                    context: "Section Image"
+                                })}
+                            </div>` : ""}
+                        <div class="section-content rich-section-content" data-world-section-content-index="${index}">
+                            ${formatRichContent(section.content || section.body || section.description || "No content yet.")}
+                        </div>
+                        ${buildCreditPill({
+                            type: section.card_credit_type,
+                            name: section.card_credit_name,
+                            username: section.card_credit_nullverse_username,
+                            url: section.card_credit_url,
+                            note: section.card_credit_note,
+                            ownerUsername: activeOwnerProfile?.username,
+                            context: "Section Card Image"
+                        })}
+                    </article>
+                `;
+            }).join("");
+
+            container.querySelectorAll(".rich-section-content").forEach(normalizeRenderedRichText);
+        }
+
+        function renderWorldSectionNav(sections) {
+            const nav = document.getElementById("section-nav");
+            const links = document.getElementById("section-nav-links");
+            const search = document.getElementById("section-search");
+            const filters = document.getElementById("section-type-filter");
+            const count = document.getElementById("section-count");
+            if (!nav || !links || !search || !filters || !count) return;
+
+            if (!sections.length) {
+                nav.style.display = "none";
+                return;
+            }
+
+            nav.style.display = "block";
+
+            const indexImageUrl = getImageUrl(activeProject, ["theme_index_image_url", "index_image_url"]);
+            nav.insertAdjacentHTML("afterbegin", buildPlacedImageStage(indexImageUrl, activeProject.theme_index_image_placement, "index-placed-image"));
+            nav.insertAdjacentHTML("beforeend", buildCreditPill({
+                type: activeProject.index_credit_type,
+                name: activeProject.index_credit_name,
+                username: activeProject.index_credit_nullverse_username,
+                url: activeProject.index_credit_url,
+                note: activeProject.index_credit_note,
+                ownerUsername: activeOwnerProfile?.username,
+                context: "Index Image"
+            }));
+
+            const types = [...new Set(sections.map(section => String(section.section_type || section.type || "Section").trim()).filter(Boolean))];
+            filters.innerHTML = `<button class="filter-chip active" type="button" data-section-type="All">All</button>` +
+                types.map(type => `<button class="filter-chip" type="button" data-section-type="${escapeAttr(type)}">${escapeHtml(type)}</button>`).join("");
+
+            let activeType = "All";
+
+            function paint() {
+                const query = normalizeSearch(search.value || "");
+                const filtered = sections.map((section, index) => ({ section, index })).filter(({ section }) => {
+                    const type = String(section.section_type || section.type || "Section").trim() || "Section";
+                    const text = normalizeSearch(`${section.title || ""} ${type} ${plainTextFromRich(section.content || section.body || "")}`);
+                    const typeOk = activeType === "All" || type === activeType;
+                    const searchOk = !query || text.includes(query);
+                    return typeOk && searchOk;
+                });
+
+                count.textContent = `${filtered.length} of ${sections.length} section${sections.length === 1 ? "" : "s"}`;
+                links.innerHTML = filtered.map(({ section, index }) => `
+                    <a href="#section-${index}" data-local-control="section-link" data-target="section-${index}">
+                        <span>${escapeHtml(section.title || `Section ${index + 1}`)}</span>
+                        <small>${escapeHtml(section.section_type || section.type || "Section")}</small>
+                    </a>
+                `).join("") || `<p class="empty">No matching sections.</p>`;
+            }
+
+            filters.addEventListener("click", event => {
+                const chip = event.target.closest("[data-section-type]");
+                if (!chip) return;
+                activeType = chip.dataset.sectionType;
+                filters.querySelectorAll(".filter-chip").forEach(item => item.classList.remove("active"));
+                chip.classList.add("active");
+                paint();
+            });
+
+            search.addEventListener("input", paint);
+            links.addEventListener("click", event => {
+                const link = event.target.closest("[data-target]");
+                if (!link) return;
+                event.preventDefault();
+                document.getElementById(link.dataset.target)?.scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+
+            paint();
+        }
+
+        function setupWorldPreviewLightbox() {
+            document.querySelectorAll(".section-image-zoomable").forEach(stage => {
+                stage.addEventListener("click", () => openSectionImageLightbox(stage.dataset.sectionImageSrc || "", stage.dataset.sectionImageAlt || "Section image"));
+                stage.addEventListener("keydown", event => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    openSectionImageLightbox(stage.dataset.sectionImageSrc || "", stage.dataset.sectionImageAlt || "Section image");
+                });
+            });
+
+            document.querySelectorAll("[data-local-control='close-section-lightbox']").forEach(button => {
+                button.addEventListener("click", closeSectionImageLightbox);
+            });
+        }
+
+        function openSectionImageLightbox(imageUrl, altText = "Section image") {
+            if (!imageUrl) return;
+            const lightbox = document.getElementById("section-image-lightbox");
+            const image = document.getElementById("section-image-lightbox-image");
+            if (!lightbox || !image) return;
+            image.src = imageUrl;
+            image.alt = altText || "Section image";
+            lightbox.classList.add("open");
+            lightbox.setAttribute("aria-hidden", "false");
+            document.body.classList.add("section-image-lightbox-open");
+        }
+
+        function closeSectionImageLightbox() {
+            const lightbox = document.getElementById("section-image-lightbox");
+            const image = document.getElementById("section-image-lightbox-image");
+            if (!lightbox) return;
+            lightbox.classList.remove("open");
+            lightbox.setAttribute("aria-hidden", "true");
+            document.body.classList.remove("section-image-lightbox-open");
+            if (image) image.src = "";
+        }
+
+        function applyLiteratureTheme(literature) {
+            const root = document.documentElement;
+            const baseLayer = document.getElementById("literature-background-base");
+            const imageLayer = document.getElementById("literature-background-image");
+            const overlayLayer = document.getElementById("literature-background-overlay");
+            const style = literature.theme_background_style || "default";
+            const backgroundUrl = getImageUrl(literature, ["theme_background_image_url", "background_image_url"]);
+
+            if (baseLayer) baseLayer.style.background = "var(--page-bg)";
+            if (imageLayer) {
+                imageLayer.style.backgroundImage = "none";
+                imageLayer.style.opacity = "0";
+            }
+
+            if (style === "solid" && baseLayer) baseLayer.style.background = literature.theme_background_color_1 || "#050505";
+            if (style === "gradient" && baseLayer) baseLayer.style.background = `linear-gradient(135deg, ${literature.theme_background_color_1 || "#050505"}, ${literature.theme_background_color_2 || "#000000"})`;
+
+            if (style === "image" && backgroundUrl && imageLayer) {
+                if (baseLayer) baseLayer.style.background = `linear-gradient(135deg, ${literature.theme_background_color_1 || "#050505"}, ${literature.theme_background_color_2 || "#000000"})`;
+                imageLayer.style.backgroundImage = `url("${backgroundUrl}")`;
+                imageLayer.style.opacity = literature.theme_background_image_opacity ?? .35;
+                imageLayer.style.filter = `blur(${literature.theme_background_image_blur || 0}px)`;
+                imageLayer.style.backgroundRepeat = literature.theme_background_image_repeat || "no-repeat";
+                imageLayer.style.backgroundPosition = `${literature.theme_background_position_x || 50}% ${literature.theme_background_position_y || 50}%`;
+                imageLayer.style.backgroundSize = getImagePlacementFit(literature.theme_background_image_placement);
+                imageLayer.style.transform = getImagePlacementTransform(literature.theme_background_image_placement, true);
+                imageLayer.style.transformOrigin = "center center";
+            }
+
+            if (overlayLayer) overlayLayer.style.background = `rgba(0,0,0,${literature.theme_background_overlay_strength ?? .35})`;
+
+            let indexBackground = "linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.02))";
+            if (literature.theme_index_style === "solid") indexBackground = literature.theme_index_color_1 || "#141416";
+            if (["gradient", "image"].includes(literature.theme_index_style)) {
+                indexBackground = `linear-gradient(135deg, ${literature.theme_index_color_1 || "#141416"}, ${literature.theme_index_color_2 || "#0b0b0d"})`;
+            }
+            const indexUrl = getImageUrl(literature, ["theme_index_image_url", "index_image_url"]);
+            root.style.setProperty("--literature-index-background", indexBackground);
+            root.style.setProperty("--literature-index-text", literature.theme_index_text_color || "#f5f5f5");
+            root.style.setProperty("--literature-index-image", literature.theme_index_style === "image" && indexUrl ? `url("${indexUrl}")` : "none");
+            root.style.setProperty("--literature-index-image-size", getImagePlacementFit(literature.theme_index_image_placement));
+            root.style.setProperty("--literature-index-image-transform", getImagePlacementTransform(literature.theme_index_image_placement));
+            root.style.setProperty("--literature-index-opacity", literature.theme_index_opacity ?? .85);
+            root.style.setProperty("--literature-index-overlay", literature.theme_index_overlay ?? .35);
+            root.style.setProperty("--literature-index-button-text", literature.theme_index_button_text_color || literature.theme_index_text_color || "#f5f5f5");
+        }
+
+        function renderLiteratureHero(literature, profile) {
+            document.getElementById("book-title").textContent = literature.title || "Untitled Literature";
+            document.getElementById("book-summary").textContent = literature.summary || "No description provided.";
+            document.getElementById("book-creator").innerHTML = buildCreatorLine(profile);
+            renderLiteratureTags(literature);
+
+            const coverWrap = document.getElementById("book-cover-wrap");
+            const coverUrl = getImageUrl(literature, ["cover_image_url", "cover_url"]);
+            const coverCredit = buildCreditPill({
+                type: literature.cover_credit_type,
+                name: literature.cover_credit_name,
+                username: literature.cover_credit_nullverse_username,
+                url: literature.cover_credit_url,
+                note: literature.cover_credit_note,
+                ownerUsername: profile?.username,
+                context: "Cover Image"
+            });
+
+            coverWrap.classList.toggle("has-credit", !!coverCredit);
+            coverWrap.classList.toggle("placed-cover", !!literature.cover_image_placement);
+
+            if (coverUrl) {
+                coverWrap.innerHTML = `<img src="${escapeAttr(coverUrl)}" alt="" style="${getImagePlacementStyle(literature.cover_image_placement)}">${coverCredit}`;
+            } else {
+                coverWrap.innerHTML = `<div class="cover-placeholder">No cover image yet</div>`;
+            }
+
+            const backgroundCredit = buildCreditPill({
+                type: literature.background_credit_type,
+                name: literature.background_credit_name,
+                username: literature.background_credit_nullverse_username,
+                url: literature.background_credit_url,
+                note: literature.background_credit_note,
+                ownerUsername: profile?.username,
+                context: "Reader Background"
+            });
+            if (backgroundCredit) document.getElementById("literature-background-layer")?.insertAdjacentHTML("beforeend", backgroundCredit);
+
+            updateReadingMeta(activeChapters);
+        }
+
+        function updateReadingMeta(chapters) {
+            const meta = document.getElementById("reading-meta");
+            if (!meta) return;
+            const chapterCount = chapters.length;
+            const wordCount = chapters.reduce((total, chapter) => total + countWords(plainTextFromRich(chapter.body || chapter.content || "")), 0);
+            const minutes = Math.max(1, Math.ceil(wordCount / 220));
+            meta.innerHTML = `
+                <span>${chapterCount} chapter${chapterCount === 1 ? "" : "s"}</span>
+                <span>${wordCount.toLocaleString()} words</span>
+                <span>${minutes} min read</span>
+            `;
+        }
+
+        function renderLiteratureChapters(chapters) {
+            const container = document.getElementById("chapters-container");
+            if (!container) return;
+            document.getElementById("reader-tools").style.display = chapters.length ? "flex" : "none";
+
+            if (!chapters.length) {
+                container.innerHTML = `<p class="empty">This preview does not have any chapters yet.</p>`;
+                return;
+            }
+
+            container.innerHTML = chapters.map((chapter, index) => buildLiteratureChapterArticle(chapter, index)).join("");
+            container.querySelectorAll(".chapter-main-text.rich-chapter-content").forEach(normalizeRenderedRichText);
+        }
+
+        function buildLiteratureChapterArticle(chapter, index) {
+            const chapterNumber = index + 1;
+            const visualTop = buildLiteratureChapterHeaderImage(chapter, "top");
+            const visualLeftRight = ["left", "right"].includes(chapter.image_position) ? buildLiteratureChapterHeaderImage(chapter, chapter.image_position) : "";
+            const visualBottom = buildLiteratureChapterHeaderImage(chapter, "bottom");
+
+            return `
+                <article id="chapter-${chapterNumber}" class="literature-chapter" style="${buildLiteratureChapterCardStyle(chapter)} ${buildLiteratureChapterWritingStyle(chapter)}">
+                    <div class="chapter-title-row">
+                        <div class="chapter-eyebrow">Chapter ${chapterNumber} · ${getChapterReadTime(chapter)} min read</div>
+                        <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
+                        ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
+                    </div>
+                    ${visualTop}
+                    <div class="chapter-main-text rich-chapter-content">
+                        ${visualLeftRight}
+                        ${formatRichContent(chapter.body || chapter.content || "No chapter text yet.")}
+                    </div>
+                    ${visualBottom}
+                    ${chapter.author_note ? `<div class="author-note"><strong>Author Note</strong><br><br>${escapeHtml(chapter.author_note)}</div>` : ""}
+                    ${chapter.theme_card_style === "image" && getImageUrl(chapter, ["theme_card_image_url"]) ? buildCreditPill({
+                        type: chapter.card_credit_type,
+                        name: chapter.card_credit_name,
+                        username: chapter.card_credit_nullverse_username,
+                        url: chapter.card_credit_url,
+                        note: chapter.card_credit_note,
+                        ownerUsername: activeOwnerProfile?.username,
+                        context: "Chapter Card Image"
+                    }) : ""}
+                </article>
+            `;
+        }
+
+        function buildLiteratureChapterHeaderImage(chapter, requestedPosition) {
+            const imageUrl = getImageUrl(chapter, ["image_url", "chapter_image_url", "header_image_url"]);
+            if (!imageUrl) return "";
+
+            const savedPosition = chapter.image_position || "top";
+            const isLeftRight = savedPosition === "left" || savedPosition === "right";
+            if (requestedPosition === "top" && !(savedPosition === "top" || savedPosition === "full")) return "";
+            if (requestedPosition === "bottom" && savedPosition !== "bottom") return "";
+            if ((requestedPosition === "left" || requestedPosition === "right") && savedPosition !== requestedPosition) return "";
+
+            const credit = buildCreditPill({
+                type: chapter.image_credit_type,
+                name: chapter.image_credit_name,
+                username: chapter.image_credit_nullverse_username,
+                url: chapter.image_credit_url,
+                note: chapter.image_credit_note,
+                ownerUsername: activeOwnerProfile?.username,
+                context: "Chapter Image"
+            });
+            const classes = ["chapter-header-image-wrap", savedPosition === "full" ? "full" : savedPosition, isLeftRight ? `float-${savedPosition}` : "", credit ? "has-credit" : ""].filter(Boolean).join(" ");
+            return `<div class="${classes}"><img src="${escapeAttr(imageUrl)}" alt="" style="${getImagePlacementStyle(chapter.image_placement)}">${credit}</div>`;
+        }
+
+        function buildLiteratureChapterCardStyle(chapter) {
+            let background = "linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.012))";
+            if (chapter.theme_card_style === "solid") background = chapter.theme_card_color_1 || "#141416";
+            if (["gradient", "image"].includes(chapter.theme_card_style)) background = `linear-gradient(135deg, ${chapter.theme_card_color_1 || "#141416"}, ${chapter.theme_card_color_2 || "#0b0b0d"})`;
+
+            const imageUrl = getImageUrl(chapter, ["theme_card_image_url"]);
+            const image = chapter.theme_card_style === "image" && imageUrl ? `url("${imageUrl}")` : "none";
+
+            return `
+                --chapter-card-background:${background};
+                --chapter-card-text:${chapter.theme_card_text_color || "#f5f5f5"};
+                --chapter-card-image:${image};
+                --chapter-card-image-size:${getImagePlacementFit(chapter.theme_card_image_placement)};
+                --chapter-card-image-transform:${getImagePlacementTransform(chapter.theme_card_image_placement)};
+                --chapter-card-image-opacity:${chapter.theme_card_opacity ?? .85};
+                --chapter-card-overlay:${chapter.theme_card_overlay ?? .35};
+            `;
+        }
+
+        function buildLiteratureChapterWritingStyle(chapter) {
+            const spacingMap = {
+                compact: ["1.45", "0px"],
+                comfortable: ["1.8", "0px"],
+                airy: ["2.15", ".02em"],
+                manuscript: ["2", ".01em"]
+            };
+            const spacing = spacingMap[chapter.spacing_type || "comfortable"] || spacingMap.comfortable;
+            return `
+                --chapter-text-color:${chapter.text_color || "#f5f5f5"};
+                --chapter-panel-background:${chapter.chapter_panel_color || "#141416"};
+                --chapter-line-height:${spacing[0]};
+                --chapter-letter-spacing:${spacing[1]};
+            `;
+        }
+
+        function getChapterReadTime(chapter) {
+            return Math.max(1, Math.ceil(countWords(plainTextFromRich(chapter.body || chapter.content || "")) / 220));
+        }
+
+        function setupLiteratureReaderTools() {
+            document.querySelectorAll("[data-local-control]").forEach(button => {
+                button.addEventListener("click", event => {
+                    const control = event.currentTarget.dataset.localControl;
+                    if (control === "toggle-mobile-index") document.getElementById("chapter-index")?.classList.toggle("mobile-open");
+                    if (control === "start-reading") scrollToFirstChapter();
+                    if (control === "toggle-focus") document.body.classList.toggle("reader-focus");
+                    if (control === "large-text") document.body.classList.toggle("reader-large-text");
+                    if (control === "wide-reader") document.body.classList.toggle("reader-wide");
+                    if (control === "center-headings") document.body.classList.toggle("reader-center-headings");
+                });
+            });
+        }
+
+        function scrollToFirstChapter() {
+            document.getElementById("chapter-1")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
+        function setupReaderScrollTracking() {
+            const progress = document.getElementById("reading-progress");
+            if (!progress) return;
+
+            function update() {
+                const scrollTop = window.scrollY || document.documentElement.scrollTop;
+                const scrollHeight = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+                progress.style.width = `${Math.min(100, Math.max(0, (scrollTop / scrollHeight) * 100))}%`;
+            }
+
+            update();
+            window.addEventListener("scroll", update, { passive: true });
+        }
+
+        function renderGenericChapterIndex(chapters, mode) {
+            const nav = document.getElementById("chapter-index");
+            const links = document.getElementById("chapter-nav-links");
+            const search = document.getElementById("chapter-search");
+            const count = document.getElementById("chapter-count");
+            if (!nav || !links || !search || !count) return;
+
+            if (!chapters.length) {
+                nav.style.display = "none";
+                return;
+            }
+
+            nav.style.display = "block";
+
+            const indexCredit = buildCreditPill({
+                type: activeProject.index_credit_type,
+                name: activeProject.index_credit_name,
+                username: activeProject.index_credit_nullverse_username,
+                url: activeProject.index_credit_url,
+                note: activeProject.index_credit_note,
+                ownerUsername: activeOwnerProfile?.username,
+                context: "Index Image"
+            });
+            if (indexCredit) nav.insertAdjacentHTML("beforeend", indexCredit);
+
+            function paint() {
+                const query = normalizeSearch(search.value || "");
+                const filtered = chapters.map((chapter, index) => ({ chapter, index })).filter(({ chapter }) => {
+                    const text = normalizeSearch(`${chapter.title || ""} ${chapter.subtitle || ""} ${plainTextFromRich(chapter.body || chapter.content || chapter.author_note || "")}`);
+                    return !query || text.includes(query);
+                });
+
+                count.textContent = `${filtered.length} of ${chapters.length} chapter${chapters.length === 1 ? "" : "s"}`;
+                links.innerHTML = filtered.map(({ chapter, index }) => {
+                    const target = mode === "comic" ? `comic-chapter-${index}` : `chapter-${index + 1}`;
+                    const small = mode === "comic"
+                        ? `${(activePagesByChapter[chapter.id] || []).length} page${(activePagesByChapter[chapter.id] || []).length === 1 ? "" : "s"}`
+                        : `${getChapterReadTime(chapter)} min read`;
+                    return `
+                        <a href="#${target}" class="chapter-nav-link" data-local-control="chapter-link" data-target="${target}">
+                            <span>Chapter ${index + 1}: ${escapeHtml(chapter.title || "Untitled")}</span>
+                            <small>${escapeHtml(chapter.subtitle || small)}</small>
+                        </a>
+                    `;
+                }).join("") || `<p class="empty">No matching chapters.</p>`;
+            }
+
+            search.addEventListener("input", paint);
+            links.addEventListener("click", event => {
+                const link = event.target.closest("[data-target]");
+                if (!link) return;
+                event.preventDefault();
+                document.getElementById(link.dataset.target)?.scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+
+            paint();
+        }
+
+        function applyComicTheme(comic) {
+            const root = document.documentElement;
+            const baseLayer = document.getElementById("comic-background-base");
+            const imageLayer = document.getElementById("comic-background-image");
+            const overlayLayer = document.getElementById("comic-background-overlay");
+            const style = comic.theme_background_style || "default";
+            const backgroundUrl = getImageUrl(comic, ["theme_background_image_url", "background_image_url"]);
+
+            if (baseLayer) baseLayer.style.background = "var(--page-bg)";
+            if (imageLayer) {
+                imageLayer.style.backgroundImage = "none";
+                imageLayer.style.opacity = "0";
+            }
+
+            if (style === "solid" && baseLayer) baseLayer.style.background = comic.theme_background_color_1 || "#050505";
+            if (style === "gradient" && baseLayer) baseLayer.style.background = `linear-gradient(135deg, ${comic.theme_background_color_1 || "#050505"}, ${comic.theme_background_color_2 || "#000000"})`;
+
+            if (style === "image" && backgroundUrl && imageLayer) {
+                if (baseLayer) baseLayer.style.background = `linear-gradient(135deg, ${comic.theme_background_color_1 || "#050505"}, ${comic.theme_background_color_2 || "#000000"})`;
+                imageLayer.style.backgroundImage = `url("${backgroundUrl}")`;
+                imageLayer.style.opacity = comic.theme_background_image_opacity ?? .35;
+                imageLayer.style.filter = `blur(${comic.theme_background_image_blur || 0}px)`;
+                imageLayer.style.backgroundRepeat = comic.theme_background_image_repeat || "no-repeat";
+                imageLayer.style.backgroundPosition = `${comic.theme_background_position_x || 50}% ${comic.theme_background_position_y || 50}%`;
+                imageLayer.style.backgroundSize = getImagePlacementFit(comic.theme_background_image_placement);
+                imageLayer.style.transform = getImagePlacementTransform(comic.theme_background_image_placement, true);
+                imageLayer.style.transformOrigin = "center center";
+            }
+
+            if (overlayLayer) overlayLayer.style.background = `rgba(0,0,0,${comic.theme_background_overlay_strength ?? .35})`;
+
+            let indexBackground = "linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.02))";
+            if (comic.theme_index_style === "solid") indexBackground = comic.theme_index_color_1 || "#141416";
+            if (["gradient", "image"].includes(comic.theme_index_style)) indexBackground = `linear-gradient(135deg, ${comic.theme_index_color_1 || "#141416"}, ${comic.theme_index_color_2 || "#0b0b0d"})`;
+            const indexUrl = getImageUrl(comic, ["theme_index_image_url", "index_image_url"]);
+            root.style.setProperty("--comic-index-background", indexBackground);
+            root.style.setProperty("--comic-index-text", comic.theme_index_text_color || "#f5f5f5");
+            root.style.setProperty("--comic-index-image", comic.theme_index_style === "image" && indexUrl ? `url("${indexUrl}")` : "none");
+            root.style.setProperty("--comic-index-image-size", getImagePlacementFit(comic.theme_index_image_placement));
+            root.style.setProperty("--comic-index-image-transform", getImagePlacementTransform(comic.theme_index_image_placement));
+            root.style.setProperty("--comic-index-opacity", comic.theme_index_opacity ?? .85);
+            root.style.setProperty("--comic-index-overlay", comic.theme_index_overlay ?? .35);
+            root.style.setProperty("--comic-index-button-text", comic.theme_index_button_text_color || comic.theme_index_text_color || "#f5f5f5");
+
+            const readerBase = document.getElementById("reader-bg-base");
+            const readerImage = document.getElementById("reader-bg-image");
+            const readerOverlay = document.getElementById("reader-bg-overlay");
+            if (readerBase) readerBase.style.background = baseLayer?.style.background || "#000";
+            if (readerImage) {
+                readerImage.style.setProperty("--reader-bg-image", style === "image" && backgroundUrl ? `url("${backgroundUrl}")` : "none");
+                readerImage.style.setProperty("--reader-bg-opacity", comic.theme_background_image_opacity ?? .22);
+                readerImage.style.setProperty("--reader-bg-blur", `${comic.theme_background_image_blur || 0}px`);
+                readerImage.style.setProperty("--reader-bg-position", "center");
+                readerImage.style.setProperty("--reader-bg-repeat", comic.theme_background_image_repeat || "no-repeat");
+                readerImage.style.setProperty("--reader-bg-size", getImagePlacementFit(comic.theme_background_image_placement));
+                readerImage.style.setProperty("--comic-background-image-transform", getImagePlacementTransform(comic.theme_background_image_placement, true));
+            }
+            if (readerOverlay) readerOverlay.style.setProperty("--reader-bg-overlay", .7);
+        }
+
+        function renderComicHero(comic, profile) {
+            document.getElementById("comic-title").textContent = comic.title || "Untitled Comic";
+            document.getElementById("comic-summary").textContent = comic.summary || "No description provided.";
+            document.getElementById("comic-creator").innerHTML = buildCreatorLine(profile);
+            renderComicTags(comic);
+
+            const coverWrap = document.getElementById("comic-cover-wrap");
+            const coverUrl = getImageUrl(comic, ["cover_image_url", "cover_url"]);
+            const coverCredit = buildCreditPill({
+                type: comic.cover_credit_type,
+                name: comic.cover_credit_name,
+                username: comic.cover_credit_nullverse_username,
+                url: comic.cover_credit_url,
+                note: comic.cover_credit_note,
+                ownerUsername: profile?.username,
+                context: "Cover Image"
+            });
+            coverWrap.classList.toggle("has-credit", !!coverCredit);
+            coverWrap.innerHTML = coverUrl
+                ? `<img class="placed-image" src="${escapeAttr(coverUrl)}" alt="" style="${getImagePlacementStyle(comic.cover_image_placement)}">${coverCredit}`
+                : `<div class="cover-placeholder">No cover image yet</div>`;
+
+            const backgroundCredit = buildCreditPill({
+                type: comic.background_credit_type,
+                name: comic.background_credit_name,
+                username: comic.background_credit_nullverse_username,
+                url: comic.background_credit_url,
+                note: comic.background_credit_note,
+                ownerUsername: profile?.username,
+                context: "Reader Background"
+            });
+            if (backgroundCredit) document.getElementById("comic-background-layer")?.insertAdjacentHTML("beforeend", backgroundCredit);
+        }
+
+        function renderComicChapterGalleries() {
+            const container = document.getElementById("chapters-gallery-container");
+            if (!container) return;
+
+            if (!activeChapters.length) {
+                container.innerHTML = `<p class="empty">This preview does not have any comic chapters yet.</p>`;
+                return;
+            }
+
+            container.innerHTML = activeChapters.map((chapter, chapterIndex) => {
+                const pages = activePagesByChapter[chapter.id] || activePagesByChapter[String(chapter.id)] || [];
+                return `
+                    <section class="comic-gallery-panel" id="comic-chapter-${chapterIndex}">
+                        <div class="gallery-top">
+                            <div>
+                                <div class="chapter-eyebrow">Chapter ${chapterIndex + 1}</div>
+                                <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
+                                ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
+                            </div>
+                            ${pages.length ? `<button class="button" type="button" data-local-control="open-reader" data-chapter-index="${chapterIndex}" data-page-index="0">Start Reading</button>` : ""}
+                        </div>
+                        ${chapter.author_note ? `<div class="author-note">${escapeHtml(chapter.author_note)}</div>` : ""}
+                        ${pages.length ? `
+                            <div class="chapter-gallery-grid">
+                                ${pages.map((page, pageIndex) => buildComicPageThumb(page, chapterIndex, pageIndex)).join("")}
+                            </div>
+                        ` : `<p class="empty">No pages in this chapter yet.</p>`}
+                    </section>
+                `;
+            }).join("");
+        }
+
+        function buildComicPageThumb(page, chapterIndex, pageIndex) {
+            const imageUrl = getImageUrl(page, ["image_url", "page_image_url", "src"]);
+            const hasCredit = !!buildPageCreditText(page);
+            return `
+                <div class="page-thumb" role="button" tabindex="0" data-local-control="open-reader" data-chapter-index="${chapterIndex}" data-page-index="${pageIndex}">
+                    ${imageUrl
+                        ? `<img src="${escapeAttr(imageUrl)}" alt="${escapeAttr(page.title || `Page ${pageIndex + 1}`)}" style="${getImagePlacementStyle(page.image_placement || page.placement)}">`
+                        : buildUnavailableImagePlaceholder(`Page ${pageIndex + 1}`)}
+                    <div class="page-thumb-footer">
+                        <span>Page ${pageIndex + 1}</span>
+                        ${hasCredit ? `<span class="credit-dot">i</span>` : ""}
+                    </div>
+                </div>
+            `;
+        }
+
+        function setupComicReaderControls() {
+            document.querySelectorAll("[data-local-control]").forEach(control => {
+                control.addEventListener("click", event => {
+                    const button = event.currentTarget;
+                    const action = button.dataset.localControl;
+
+                    if (action === "open-reader") {
+                        openReader(Number(button.dataset.chapterIndex) || 0, Number(button.dataset.pageIndex) || 0);
+                    }
+                    if (action === "reader-close") closeReader();
+                    if (action === "reader-paged") setFullscreenMode("paged");
+                    if (action === "reader-webtoon") setFullscreenMode("webtoon");
+                    if (action === "reader-back") readerBack();
+                    if (action === "reader-forward") readerForward();
+                    if (action === "credit-sheet") toggleCreditSheet();
+                });
+            });
+        }
+
+        function openReader(chapterIndex, pageIndex) {
+            readerChapterIndex = Math.max(0, Math.min(activeChapters.length - 1, chapterIndex));
+            const pages = getCurrentReaderPages();
+            readerPageIndex = Math.max(0, Math.min(Math.max(0, pages.length - 1), pageIndex));
+            document.getElementById("reader-overlay")?.classList.add("open");
+            document.body.classList.add("reader-open");
+            renderReader();
+        }
+
+        function closeReader() {
+            document.getElementById("reader-overlay")?.classList.remove("open");
+            document.body.classList.remove("reader-open");
+            closeCreditSheet();
+        }
+
+        function setFullscreenMode(mode) {
+            fullscreenMode = mode === "webtoon" ? "webtoon" : "paged";
+            renderReader();
+        }
+
+        function getCurrentReaderPages() {
+            const chapter = activeChapters[readerChapterIndex];
+            return chapter ? (activePagesByChapter[chapter.id] || activePagesByChapter[String(chapter.id)] || []) : [];
+        }
+
+        function renderReader() {
+            const overlay = document.getElementById("reader-overlay");
+            if (!overlay?.classList.contains("open")) return;
+
+            const chapter = activeChapters[readerChapterIndex] || {};
+            const pages = getCurrentReaderPages();
+            const page = pages[readerPageIndex] || pages[0] || null;
+            const stage = document.getElementById("reader-stage");
+            const content = document.getElementById("reader-content");
+            const desktopCredit = document.getElementById("reader-credit-desktop");
+            const mobileCredit = document.getElementById("reader-credit-sheet");
+
+            document.getElementById("reader-title").textContent = activeProject.title || "Comic Reader";
+            document.getElementById("reader-subtitle").textContent = `Chapter ${readerChapterIndex + 1}: ${chapter.title || "Untitled"}`;
+            document.getElementById("reader-mode-paged")?.classList.toggle("active", fullscreenMode === "paged");
+            document.getElementById("reader-mode-webtoon")?.classList.toggle("active", fullscreenMode === "webtoon");
+            stage?.classList.toggle("webtoon", fullscreenMode === "webtoon");
+
+            if (!pages.length) {
+                content.innerHTML = `<div class="preview-reader-empty">No pages are available in this chapter yet.</div>`;
+                document.getElementById("reader-bottombar").textContent = "No pages";
+                if (desktopCredit) desktopCredit.innerHTML = "";
+                if (mobileCredit) mobileCredit.innerHTML = "";
+                return;
+            }
+
+            if (fullscreenMode === "webtoon") {
+                content.innerHTML = `
+                    <div class="reader-webtoon-stack">
+                        ${pages.map((readerPage, index) => {
+                            const url = getImageUrl(readerPage, ["image_url", "page_image_url", "src"]);
+                            return url
+                                ? `<img src="${escapeAttr(url)}" alt="Page ${index + 1}" data-reader-page-index="${index}" style="${getImagePlacementStyle(readerPage.image_placement || readerPage.placement)}">`
+                                : buildUnavailableImagePlaceholder(`Page ${index + 1}`);
+                        }).join("")}
+                    </div>
+                `;
+                document.getElementById("reader-bottombar").textContent = `${pages.length} page${pages.length === 1 ? "" : "s"} · Webtoon mode`;
+            } else {
+                const url = getImageUrl(page, ["image_url", "page_image_url", "src"]);
+                content.innerHTML = url
+                    ? `<img class="reader-page" src="${escapeAttr(url)}" alt="Page ${readerPageIndex + 1}" style="${getImagePlacementStyle(page.image_placement || page.placement)}">`
+                    : buildUnavailableImagePlaceholder(`Page ${readerPageIndex + 1}`);
+                document.getElementById("reader-bottombar").textContent = `Page ${readerPageIndex + 1} of ${pages.length}`;
+            }
+
+            const creditHtml = buildReaderCreditHtml(fullscreenMode === "webtoon" ? pages[readerPageIndex] || pages[0] : page);
+            if (desktopCredit) desktopCredit.innerHTML = creditHtml;
+            if (mobileCredit) mobileCredit.innerHTML = `<strong>Page Credit</strong><br><br>${creditHtml || "No credit listed for this page."}`;
+        }
+
+        function readerForward() {
+            const pages = getCurrentReaderPages();
+            if (!pages.length) return;
+
+            if (readerPageIndex < pages.length - 1) {
+                readerPageIndex += 1;
+            } else if (readerChapterIndex < activeChapters.length - 1) {
+                readerChapterIndex += 1;
+                readerPageIndex = 0;
+            }
+
+            renderReader();
+        }
+
+        function readerBack() {
+            if (readerPageIndex > 0) {
+                readerPageIndex -= 1;
+            } else if (readerChapterIndex > 0) {
+                readerChapterIndex -= 1;
+                const pages = getCurrentReaderPages();
+                readerPageIndex = Math.max(0, pages.length - 1);
+            }
+
+            renderReader();
+        }
+
+        function toggleCreditSheet() {
+            document.getElementById("reader-credit-sheet")?.classList.toggle("open");
+        }
+
+        function closeCreditSheet() {
+            document.getElementById("reader-credit-sheet")?.classList.remove("open");
+        }
+
+        function buildReaderCreditHtml(page) {
+            if (!page) return "";
+            const text = buildPageCreditText(page);
+            if (!text) return "";
+            const note = page.image_credit_note || page.credit_note;
+            return `${escapeHtml(text)}${note ? `<br>${escapeHtml(note)}` : ""}`;
+        }
+
+        function buildPageCreditText(page) {
+            const type = page.image_credit_type || page.credit_type || "no_credit_needed";
+            if (!type || type === "no_credit_needed") return "";
+            if (type === "own_work") return `Credit: @${activeOwnerProfile?.username || "creator"}`;
+            if (type === "nullverse_creator" && page.image_credit_nullverse_username) return `Credit: @${page.image_credit_nullverse_username}`;
+            return `Credit: ${page.image_credit_name || page.credit_name || formatCreditType(type)}`;
+        }
+
+        function formatRichContent(value) {
+            const rawInput = String(value ?? "").trim();
+            if (!rawInput) return "No content yet.";
+
+            try {
+                const snapshot = extractRichTextSnapshot(rawInput);
+                if (snapshot) {
+                    const rendered = renderRichTextSnapshot(snapshot);
+                    if (rendered && rendered.trim()) return rendered;
+                }
+
+                const withoutSnapshot = removeRichTextSnapshotComment(rawInput);
+                const normalized = normalizeSavedRichText(withoutSnapshot);
+
+                if (textLooksLikeRichHtml(normalized)) {
+                    const cleaned = sanitizeRichHtml(normalized);
+                    if (cleaned && cleaned.trim()) return cleaned;
+                }
+
+                return renderPlainText(normalized);
+            } catch (error) {
+                console.error("Preview rich text render error:", error);
+                return renderPlainText(plainTextFromRich(rawInput));
+            }
+        }
+
+        function extractRichTextSnapshot(value) {
+            const raw = String(value ?? "");
+            const match = raw.match(/<!--\s*NV_(?:WORLD|LITERATURE)_RICH_TEXT_V2:([A-Za-z0-9+/=]+)\s*-->/);
+            if (!match) return null;
+
+            try {
+                const json = decodeURIComponent(escape(atob(match[1])));
+                const snapshot = JSON.parse(json);
+                if (!snapshot || snapshot.version !== 2 || !Array.isArray(snapshot.blocks)) return null;
+                return snapshot;
+            } catch (error) {
+                console.error("Preview rich text snapshot decode error:", error);
+                return null;
+            }
+        }
+
+        function removeRichTextSnapshotComment(value) {
+            return String(value ?? "").replace(/<!--\s*NV_(?:WORLD|LITERATURE)_RICH_TEXT_V2:[A-Za-z0-9+/=]+\s*-->/g, "").trim();
+        }
+
+        function renderRichTextSnapshot(snapshot) {
+            return (snapshot.blocks || []).map(renderRichTextSnapshotBlock).filter(Boolean).join("");
+        }
+
+        function renderRichTextSnapshotBlock(block) {
+            const tag = normalizeRichTextTag(block?.tag || "p");
+            const style = renderRichTextStyle(block?.style || {}, "block");
+
+            if (tag === "ul" || tag === "ol") {
+                const items = Array.isArray(block.items) ? block.items : [];
+                const html = items.map(item => {
+                    const itemStyle = renderRichTextStyle(item?.style || {}, "block");
+                    const runs = renderRichTextRuns(item?.runs || []);
+                    return `<li data-nv-world-rich-block="true" data-nv-literature-rich-block="true"${itemStyle ? ` style="${itemStyle}"` : ""}>${runs}</li>`;
+                }).join("");
+                return `<${tag} data-nv-world-rich-block="true" data-nv-literature-rich-block="true"${style ? ` style="${style}"` : ""}>${html}</${tag}>`;
+            }
+
+            const runs = renderRichTextRuns(block?.runs || []);
+            if (!runs.trim()) return "";
+            return `<${tag} data-nv-world-rich-block="true" data-nv-literature-rich-block="true"${style ? ` style="${style}"` : ""}>${runs}</${tag}>`;
+        }
+
+        function renderRichTextRuns(runs) {
+            return (Array.isArray(runs) ? runs : []).map(run => {
+                if (run?.break) return "<br>";
+                const text = String(run?.text ?? "");
+                if (!text) return "";
+                const style = renderRichTextStyle(run?.style || {}, "run");
+                return `<span data-nv-world-rich-run="true" data-nv-literature-rich-run="true"${style ? ` style="${style}"` : ""}>${escapeHtml(text)}</span>`;
+            }).join("");
+        }
+
+        function normalizeRichTextTag(value) {
+            const tag = String(value || "p").toLowerCase();
+            const allowed = new Set(["p", "div", "h1", "h2", "h3", "h4", "blockquote", "ul", "ol", "li"]);
+            return allowed.has(tag) ? tag : "p";
+        }
+
+        function renderRichTextStyle(styleMap, kind = "run") {
+            const rules = [];
+            function add(prop, value) {
+                if (value) rules.push(`${prop}: ${escapeHtml(value)} !important`);
+            }
+            if (styleMap.fontFamily) add("font-family", getTrustedFontStack(styleMap.fontFamily));
+            if (styleMap.fontSize) add("font-size", normalizeFontSize(styleMap.fontSize));
+            if (styleMap.color) add("color", normalizeCssColor(styleMap.color));
+            if (styleMap.backgroundColor) {
+                const bg = normalizeCssColor(styleMap.backgroundColor);
+                if (bg && !/transparent|rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/i.test(bg)) add("background-color", bg);
+            }
+            if (styleMap.fontWeight) add("font-weight", normalizeFontWeight(styleMap.fontWeight));
+            if (styleMap.fontStyle) add("font-style", normalizeFontStyle(styleMap.fontStyle));
+            if (styleMap.textDecoration) add("text-decoration", normalizeTextDecoration(styleMap.textDecoration));
+            if (styleMap.lineHeight) add("line-height", normalizeLineHeight(styleMap.lineHeight));
+            if (kind === "block") {
+                if (styleMap.textAlign) add("text-align", normalizeTextAlign(styleMap.textAlign));
+                if (styleMap.marginBottom) add("margin-bottom", normalizeSafeLength(styleMap.marginBottom, -120, 160));
+            }
+            return rules.join("; ");
+        }
+
+        function sanitizeRichHtml(html) {
+            const template = document.createElement("template");
+            template.innerHTML = normalizeSavedRichText(html);
+            expandEscapedRichTextNodes(template.content);
+            convertLegacyFontTags(template.content);
+
+            const allowedTags = new Set(["P", "BR", "DIV", "SPAN", "MARK", "STRONG", "B", "EM", "I", "U", "S", "STRIKE", "SUP", "SUB", "H1", "H2", "H3", "H4", "UL", "OL", "LI", "BLOCKQUOTE", "A", "HR"]);
+            const removedTags = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "IMG", "VIDEO", "AUDIO", "SVG", "MATH"]);
+            const allowedAttrs = new Set(["href", "target", "rel", "style", "data-nv-font-family", "data-nv-font-size", "data-nv-rich-text"]);
+
+            function clean(node) {
+                [...node.childNodes].forEach(child => {
+                    if (child.nodeType === Node.COMMENT_NODE) { child.remove(); return; }
+                    if (child.nodeType === Node.TEXT_NODE) return;
+                    if (child.nodeType !== Node.ELEMENT_NODE) { child.remove(); return; }
+
+                    if (removedTags.has(child.tagName)) { child.remove(); return; }
+                    if (!allowedTags.has(child.tagName)) {
+                        clean(child);
+                        child.replaceWith(...child.childNodes);
+                        return;
+                    }
+
+                    [...child.attributes].forEach(attr => {
+                        const name = attr.name.toLowerCase();
+                        if (!allowedAttrs.has(name)) { child.removeAttribute(attr.name); return; }
+                        if (name === "style") {
+                            const safeStyle = sanitizeInlineStyle(child.getAttribute("style") || "");
+                            if (safeStyle) child.setAttribute("style", safeStyle); else child.removeAttribute("style");
+                        }
+                        if (name === "data-nv-font-family") {
+                            const trusted = getTrustedFontStack(child.getAttribute("data-nv-font-family") || "");
+                            if (trusted) child.style.fontFamily = trusted; else child.removeAttribute("data-nv-font-family");
+                        }
+                        if (name === "data-nv-font-size") {
+                            const size = normalizeFontSize(child.getAttribute("data-nv-font-size") || "");
+                            if (size) child.style.fontSize = size; else child.removeAttribute("data-nv-font-size");
+                        }
+                        if (name === "href") {
+                            const href = child.getAttribute("href") || "";
+                            if (!/^https?:\/\//i.test(href) && !href.startsWith("#")) child.removeAttribute("href");
+                            child.setAttribute("data-preview-action", "Link");
+                        }
+                    });
+
+                    if (child.tagName === "A") {
+                        child.setAttribute("target", "_blank");
+                        child.setAttribute("rel", "noopener noreferrer");
+                    }
+
+                    clean(child);
+                    removeEmptyInlineShell(child);
+                });
+            }
+
+            clean(template.content);
+            return template.innerHTML;
+        }
+
+        function normalizeRenderedRichText(root) {
+            if (!root) return;
+            root.querySelectorAll("b,strong").forEach(element => element.style.setProperty("font-weight", element.style.fontWeight || "700", "important"));
+            root.querySelectorAll("i,em").forEach(element => element.style.setProperty("font-style", element.style.fontStyle || "italic", "important"));
+            root.querySelectorAll("u").forEach(element => element.style.setProperty("text-decoration", element.style.textDecoration || "underline", "important"));
+            root.querySelectorAll("s,strike").forEach(element => element.style.setProperty("text-decoration", element.style.textDecoration || "line-through", "important"));
+            root.querySelectorAll("span,mark,b,strong,i,em,u,s,strike,p,div,li,blockquote,h1,h2,h3,h4").forEach(element => promoteInlineStylePriority(element));
+        }
+
+        function promoteInlineStylePriority(element) {
+            if (!element?.style) return;
+            ["font-family", "font-size", "color", "background-color", "font-weight", "font-style", "text-decoration", "text-decoration-line", "line-height", "text-align", "margin", "margin-top", "margin-right", "margin-bottom", "margin-left", "padding-left", "text-indent", "letter-spacing", "word-spacing"].forEach(prop => {
+                const value = element.style.getPropertyValue(prop);
+                if (value) element.style.setProperty(prop, value, "important");
+            });
+        }
+
+        function renderPlainText(value) {
+            const raw = String(value || "");
+            if (!raw.trim()) return "No content yet.";
+            return raw.split(/\n{2,}/).map(block => `<p>${escapeHtml(block).replaceAll("\n", "<br>")}</p>`).join("");
+        }
+
+        function plainTextFromRich(html) {
+            try {
+                const snapshot = extractRichTextSnapshot(String(html || ""));
+                if (snapshot) {
+                    return (snapshot.blocks || []).map(block => {
+                        if (Array.isArray(block.items)) {
+                            return block.items.map(item => (item.runs || []).map(run => run?.break ? "\n" : String(run?.text || "")).join("")).join("\n");
+                        }
+                        return (block.runs || []).map(run => run?.break ? "\n" : String(run?.text || "")).join("");
+                    }).join("\n");
+                }
+
+                const holder = document.createElement("div");
+                holder.innerHTML = sanitizeRichHtml(removeRichTextSnapshotComment(String(html || "")));
+                return holder.textContent || holder.innerText || String(html || "");
+            } catch {
+                return String(html || "").replace(/<[^>]+>/g, " ");
+            }
+        }
+
+        function normalizeSavedRichText(value) {
+            let text = String(value ?? "").trim();
+            if (!text) return "";
+            text = text.replace(/^\uFEFF/, "").trim();
+            text = decodeBackslashEscapes(text);
+            text = stripOuterStringQuotes(text);
+            text = decodeRichHtmlEntities(text).trim();
+            text = decodeBackslashEscapes(text);
+            text = stripOuterStringQuotes(text);
+            return text.trim();
+        }
+
+        function stripOuterStringQuotes(value) {
+            let text = String(value || "").trim();
+            for (let i = 0; i < 2; i++) {
+                const startsDouble = text.startsWith('"') && text.endsWith('"');
+                const startsSingle = text.startsWith("'") && text.endsWith("'");
+                if (!startsDouble && !startsSingle) break;
+                if (startsDouble) {
+                    try {
+                        const parsed = JSON.parse(text);
+                        if (typeof parsed === "string") { text = parsed.trim(); continue; }
+                    } catch {}
+                }
+                const inner = text.slice(1, -1).trim();
+                if (textLooksLikeRichHtml(inner) || textLooksLikeEscapedRichHtml(inner) || /\\u003c|\\x3c/i.test(inner)) {
+                    text = inner;
+                    continue;
+                }
+                break;
+            }
+            return text;
+        }
+
+        function decodeBackslashEscapes(value) {
+            return String(value || "")
+                .replace(/\\u003c/gi, "<")
+                .replace(/\\u003e/gi, ">")
+                .replace(/\\u0026/gi, "&")
+                .replace(/\\u0022/gi, '"')
+                .replace(/\\u0027/gi, "'")
+                .replace(/\\x3c/gi, "<")
+                .replace(/\\x3e/gi, ">")
+                .replace(/\\"/g, '"')
+                .replace(/\\'/g, "'");
+        }
+
+        function textLooksLikeRichHtml(value) {
+            return /<\s*\/?\s*(p|br|div|span|font|strong|b|em|i|u|s|strike|sup|sub|h1|h2|h3|h4|ul|ol|li|blockquote|a|hr|mark)\b/i.test(String(value || ""));
+        }
+
+        function textLooksLikeEscapedRichHtml(value) {
+            return /&(?:amp;)*lt;\s*\/?\s*(p|br|div|span|font|strong|b|em|i|u|s|strike|sup|sub|h1|h2|h3|h4|ul|ol|li|blockquote|a|hr|mark)\b/i.test(String(value || ""));
+        }
+
+        function decodeRichHtmlEntities(value) {
+            let decoded = String(value || "");
+            if (!textLooksLikeEscapedRichHtml(decoded) && !/&(?:amp;)*(?:quot|#0*34|#x0*22);/i.test(decoded)) return decoded;
+            for (let i = 0; i < 5; i++) {
+                const previous = decoded;
+                const textarea = document.createElement("textarea");
+                textarea.innerHTML = decoded;
+                decoded = textarea.value;
+                if (textLooksLikeRichHtml(decoded)) return decoded;
+                if (decoded === previous || !textLooksLikeEscapedRichHtml(decoded)) break;
+            }
+            return decoded;
+        }
+
+        function expandEscapedRichTextNodes(root) {
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            const textNodes = [];
+            while (walker.nextNode()) textNodes.push(walker.currentNode);
+            textNodes.forEach(textNode => {
+                const text = String(textNode.nodeValue || "");
+                if (!textLooksLikeRichHtml(text) && !textLooksLikeEscapedRichHtml(text)) return;
+                const normalized = normalizeSavedRichText(text);
+                if (!textLooksLikeRichHtml(normalized)) return;
+                const template = document.createElement("template");
+                template.innerHTML = normalized;
+                textNode.replaceWith(...template.content.childNodes);
+            });
+        }
+
+        function convertLegacyFontTags(root) {
+            root.querySelectorAll?.("font").forEach(font => {
+                const span = document.createElement("span");
+                if (font.getAttribute("face")) span.style.fontFamily = getTrustedFontStack(font.getAttribute("face"));
+                if (font.getAttribute("color")) span.style.color = normalizeCssColor(font.getAttribute("color"));
+                if (font.getAttribute("size")) span.style.fontSize = mapLegacyFontSize(font.getAttribute("size"));
+                span.innerHTML = font.innerHTML;
+                font.replaceWith(span);
+            });
+        }
+
+        function mapLegacyFontSize(size) {
+            return ({ "1": "12px", "2": "14px", "3": "16px", "4": "18px", "5": "24px", "6": "32px", "7": "40px" })[String(size).trim()] || "";
+        }
+
+        function sanitizeInlineStyle(styleText) {
+            const safeRules = [];
+            String(styleText || "").split(";").map(rule => rule.trim()).filter(Boolean).forEach(rule => {
+                const separator = rule.indexOf(":");
+                if (separator === -1) return;
+                const prop = rule.slice(0, separator).trim().toLowerCase();
+                const value = rule.slice(separator + 1).trim().replace(/\s*!important\s*$/i, "");
+                const safeValue = sanitizeStyleValue(prop, value);
+                if (prop && safeValue) safeRules.push(`${prop}: ${safeValue}`);
+            });
+            return safeRules.join("; ");
+        }
+
+        function sanitizeStyleValue(prop, value) {
+            if (!prop || !value) return "";
+            if (/url\s*\(|expression\s*\(|javascript:|data:/i.test(value)) return "";
+            if (["color", "background-color", "background"].includes(prop)) return normalizeCssColor(value);
+            if (prop === "font-family") return getTrustedFontStack(value);
+            if (prop === "font-size") return normalizeFontSize(value);
+            if (prop === "line-height") return normalizeLineHeight(value);
+            if (prop === "text-align") return normalizeTextAlign(value);
+            if (prop === "font-weight") return normalizeFontWeight(value);
+            if (prop === "font-style") return normalizeFontStyle(value);
+            if (prop === "text-decoration" || prop === "text-decoration-line") return normalizeTextDecoration(value);
+            if (["margin", "margin-top", "margin-right", "margin-bottom", "margin-left", "padding-left", "text-indent", "letter-spacing", "word-spacing"].includes(prop)) return normalizeSafeLength(value, -120, 160);
+            return "";
+        }
+
+        function decodeFontValue(value) {
+            return String(value || "")
+                .replaceAll("&quot;", '"')
+                .replaceAll("&#034;", '"')
+                .replaceAll("&#34;", '"')
+                .replaceAll("&apos;", "'")
+                .replaceAll("&#039;", "'")
+                .replaceAll("&#39;", "'")
+                .replace(/\\"/g, '"')
+                .replace(/\\'/g, "'")
+                .trim();
+        }
+
+        function getTrustedFontStack(value) {
+            const decoded = decodeFontValue(value);
+            const first = decoded.split(",")[0].trim().replace(/^["']+|["']+$/g, "").replace(/\s+/g, " ");
+            if (!first) return "";
+            const lower = first.toLowerCase();
+            if (WORLD_EDITOR_FONT_ALIASES[lower]) return WORLD_EDITOR_FONT_STACKS[WORLD_EDITOR_FONT_ALIASES[lower]];
+            const direct = Object.keys(WORLD_EDITOR_FONT_STACKS).find(font => font.toLowerCase() === lower);
+            if (direct) return WORLD_EDITOR_FONT_STACKS[direct];
+            const partial = Object.keys(WORLD_EDITOR_FONT_STACKS).find(font => decoded.toLowerCase().includes(font.toLowerCase()));
+            if (partial) return WORLD_EDITOR_FONT_STACKS[partial];
+            const safe = first.replace(/[^a-zA-Z0-9\s\-]/g, "").trim();
+            return safe ? `"${safe}", Arial, Helvetica, sans-serif` : "";
+        }
+
+        function normalizeCssColor(value) {
+            const clean = String(value || "").trim();
+            if (!clean) return "";
+            const probe = document.createElement("span");
+            probe.style.color = clean;
+            if (probe.style.color) return probe.style.color;
+            probe.style.backgroundColor = clean;
+            return probe.style.backgroundColor || "";
+        }
+
+        function normalizeFontSize(value) {
+            const raw = String(value || "").trim().toLowerCase();
+            if (!raw) return "";
+            let px = null;
+            if (raw.endsWith("px")) px = Number(raw.replace("px", ""));
+            else if (raw.endsWith("pt")) px = Number(raw.replace("pt", "")) * 1.333;
+            else if (raw.endsWith("em") || raw.endsWith("rem")) px = Number(raw.replace("rem", "").replace("em", "")) * 18;
+            else if (raw.endsWith("%")) px = 18 * (Number(raw.replace("%", "")) / 100);
+            else if (/^\d+(\.\d+)?$/.test(raw)) px = Number(raw);
+            if (!Number.isFinite(px)) return "";
+            return `${Math.round(Math.max(10, Math.min(72, px)) * 100) / 100}px`;
+        }
+
+        function normalizeLineHeight(value) {
+            const raw = String(value || "").trim().toLowerCase();
+            if (/^\d+(\.\d+)?$/.test(raw)) {
+                const number = Number(raw);
+                return number >= 0.8 && number <= 3.5 ? String(number) : "";
+            }
+            if (raw.endsWith("px")) return normalizeSafeLength(raw, 10, 90);
+            if (raw.endsWith("%")) {
+                const percent = Number(raw.replace("%", ""));
+                return percent >= 80 && percent <= 350 ? `${percent}%` : "";
+            }
+            return "";
+        }
+
+        function normalizeSafeLength(value, min, max) {
+            const raw = String(value || "").trim().toLowerCase();
+            let number = null;
+            let unit = "px";
+            if (raw.endsWith("px")) number = Number(raw.replace("px", ""));
+            else if (raw.endsWith("em")) number = Number(raw.replace("em", "")) * 18;
+            else if (raw.endsWith("rem")) number = Number(raw.replace("rem", "")) * 18;
+            else if (/^-?\d+(\.\d+)?$/.test(raw)) number = Number(raw);
+            if (!Number.isFinite(number)) return "";
+            return `${Math.round(Math.max(min, Math.min(max, number)) * 100) / 100}${unit}`;
+        }
+
+        function normalizeFontWeight(value) {
+            const clean = String(value || "").trim().toLowerCase();
+            if (["bold", "normal", "bolder", "lighter"].includes(clean)) return clean;
+            const weight = Number(clean);
+            return weight >= 100 && weight <= 900 ? String(weight) : "";
+        }
+
+        function normalizeFontStyle(value) {
+            const clean = String(value || "").trim().toLowerCase();
+            return ["italic", "normal", "oblique"].includes(clean) ? clean : "";
+        }
+
+        function normalizeTextDecoration(value) {
+            const clean = String(value || "").trim().toLowerCase();
+            if (clean.includes("underline")) return "underline";
+            if (clean.includes("line-through")) return "line-through";
+            if (clean === "none") return "none";
+            return "";
+        }
+
+        function normalizeTextAlign(value) {
+            const clean = String(value || "").trim().toLowerCase();
+            return new Set(["left", "center", "right", "justify", "start", "end"]).has(clean) ? clean : "";
+        }
+
+        function removeEmptyInlineShell(element) {
+            if (!element || !["SPAN", "B", "STRONG", "EM", "I", "U", "S", "MARK"].includes(element.tagName)) return;
+            const text = element.textContent || "";
+            const hasBreak = element.querySelector?.("br,hr");
+            if (!text.trim() && !hasBreak) element.remove();
+        }
+
+        function normalizeSearch(value) {
+            return String(value || "")
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .toLowerCase()
+                .replace(/&/g, " and ")
+                .replace(/['’‘"`´]/g, "")
+                .replace(/[^a-z0-9]+/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+        }
+
+        function countWords(value) {
+            const words = String(value || "").trim().match(/\b[\w'’-]+\b/g);
+            return words ? words.length : 0;
+        }</script>
+</body>
+</html>
