@@ -2094,6 +2094,62 @@
             }
 
 
+
+            function getExactOnlyChapterTitleSearchResults(query) {
+                const rawQuery = String(query || "").trim();
+                const normalizedQuery = normalizeChapterIndexSearch(rawQuery);
+                const compactQuery = compactChapterIndexSearch(rawQuery);
+                const numericOnly = !!compactQuery && /^\d+$/.test(compactQuery);
+
+                if (!normalizedQuery || numericOnly) {
+                    return null;
+                }
+
+                const exactResults = chapters
+                    .map((chapter, index) => {
+                        const record = getChapterIndexSearchRecord(chapter, index);
+                        const titleField = record.fields.find(field => field.label === "title");
+                        const titleNormalized = titleField?.normalized || "";
+                        const titleCompact = titleField?.compact || "";
+                        const numberedTitle = normalizeChapterIndexSearch(`chapter ${record.chapterNumber} ${titleNormalized}`);
+                        const numberedTitleCompact = numberedTitle.replace(/\s+/g, "");
+
+                        let score = 0;
+
+                        if (titleNormalized && titleNormalized === normalizedQuery) {
+                            score = Math.max(score, 200000);
+                        }
+
+                        if (titleCompact && compactQuery && titleCompact === compactQuery) {
+                            score = Math.max(score, 199000);
+                        }
+
+                        if (numberedTitle && numberedTitle === normalizedQuery) {
+                            score = Math.max(score, 198000);
+                        }
+
+                        if (numberedTitleCompact && compactQuery && numberedTitleCompact === compactQuery) {
+                            score = Math.max(score, 197000);
+                        }
+
+                        return {
+                            chapter,
+                            index,
+                            score
+                        };
+                    })
+                    .filter(result => result.score > 0)
+                    .sort((a, b) => {
+                        if (b.score !== a.score) {
+                            return b.score - a.score;
+                        }
+
+                        return a.index - b.index;
+                    });
+
+                return exactResults.length ? exactResults : null;
+            }
+
             function getChapterExactTitlePhraseScore(record, query) {
                 const normalizedQuery = normalizeChapterIndexSearch(query);
                 const compactQuery = compactChapterIndexSearch(query);
@@ -2213,6 +2269,12 @@
                         index,
                         score: 1
                     }));
+                }
+
+                const exactTitleResults = getExactOnlyChapterTitleSearchResults(rawQuery);
+
+                if (exactTitleResults) {
+                    return exactTitleResults;
                 }
 
                 const strictTitleResults = getStrictChapterTitlePhraseSearchResults(rawQuery);
