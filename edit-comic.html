@@ -2027,15 +2027,15 @@
 
         function buildImagePlacementButton(key, label, existingUrl = "") {
             return `
-                                <div class="image-fit-launch-row">
-                                    <button type="button" class="button" onclick="openImagePlacementStudioForKey('${key}')">
-                                        Adjust Image Placement
-                                    </button>
-                                    <span class="muted" style="align-self:center;">
-                                        ${label}${existingUrl ? " · existing image detected" : ""}
-                                    </span>
-                                </div>
-                            `;
+                                    <div class="image-fit-launch-row">
+                                        <button type="button" class="button" onclick="openImagePlacementStudioForKey('${key}')">
+                                            Adjust Image Placement
+                                        </button>
+                                        <span class="muted" style="align-self:center;">
+                                            ${label}${existingUrl ? " · existing image detected" : ""}
+                                        </span>
+                                    </div>
+                                `;
         }
 
         function getImagePlacementConfig(key) {
@@ -2169,9 +2169,9 @@
             document.getElementById("image-placement-frame-width").value = config.width;
             document.getElementById("image-placement-frame-height").value = config.height;
             document.getElementById("image-placement-meta").innerHTML = `
-                                <strong>Visible frame:</strong> ${config.width}px × ${config.height}px<br>
-                                <strong>Tip:</strong> Drag the image to reposition it, pull the corner handle to resize, or use the top handle/slider to rotate.
-                            `;
+                                    <strong>Visible frame:</strong> ${config.width}px × ${config.height}px<br>
+                                    <strong>Tip:</strong> Drag the image to reposition it, pull the corner handle to resize, or use the top handle/slider to rotate.
+                                `;
 
             syncImagePlacementControls();
             updateImagePlacementPreview();
@@ -3235,9 +3235,9 @@
             toast.className = `nv-editor-toast ${type || "success"}`;
             toast.dataset.toastId = String(id);
             toast.innerHTML = `
-                    <strong>${escapeHtml(title || "Saved")}</strong>
-                    ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
-                `;
+                        <strong>${escapeHtml(title || "Saved")}</strong>
+                        ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
+                    `;
             stack.appendChild(toast);
             setTimeout(() => {
                 toast.style.opacity = "0";
@@ -3337,17 +3337,17 @@
             modal.id = "nv-unsaved-modal-backdrop";
             modal.className = "nv-unsaved-modal-backdrop";
             modal.innerHTML = `
-                    <div class="nv-unsaved-modal" role="dialog" aria-modal="true" aria-labelledby="nv-unsaved-title">
-                        <h2 id="nv-unsaved-title">Unsaved changes</h2>
-                        <p id="nv-unsaved-message">
-                            You have unsaved edits. Save before leaving so your latest changes are not lost.
-                        </p>
-                        <div class="nv-unsaved-modal-actions">
-                            <button type="button" class="button" data-unsaved-cancel>Keep Editing</button>
-                            <button type="button" class="button danger-button" data-unsaved-leave>Leave Anyway</button>
+                        <div class="nv-unsaved-modal" role="dialog" aria-modal="true" aria-labelledby="nv-unsaved-title">
+                            <h2 id="nv-unsaved-title">Unsaved changes</h2>
+                            <p id="nv-unsaved-message">
+                                You have unsaved edits. Save before leaving so your latest changes are not lost.
+                            </p>
+                            <div class="nv-unsaved-modal-actions">
+                                <button type="button" class="button" data-unsaved-cancel>Keep Editing</button>
+                                <button type="button" class="button danger-button" data-unsaved-leave>Leave Anyway</button>
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
             document.body.appendChild(modal);
             return modal;
         }
@@ -3456,10 +3456,23 @@
             };
         }
 
-        async function nvSaveProjectWithVisibility(visibility, successTitle, successDetail) {
+        function nvGetCurrentProjectVisibility() {
+            const selector = nvGetProjectVisibilitySelector();
+            return currentComic?.visibility || selector?.value || "draft";
+        }
+
+        async function nvSaveProjectWithVisibility(visibility, successTitle, successDetail, options = {}) {
+            const shouldChangeProjectVisibility = options.changeProjectVisibility !== false;
+            const preservedVisibility = nvGetCurrentProjectVisibility();
+
             try {
                 const selector = nvGetProjectVisibilitySelector();
-                if (selector) selector.value = visibility;
+
+                if (selector) {
+                    selector.value = shouldChangeProjectVisibility
+                        ? visibility
+                        : preservedVisibility;
+                }
 
                 nvSuppressSaveToast = true;
                 const result = await window.saveActiveEditor();
@@ -3472,7 +3485,13 @@
                     return false;
                 }
 
-                await nvSetProjectVisibility(visibility);
+                if (shouldChangeProjectVisibility) {
+                    await nvSetProjectVisibility(visibility);
+                } else {
+                    if (currentComic) currentComic.visibility = preservedVisibility;
+                    if (selector) selector.value = preservedVisibility;
+                }
+
                 nvMarkClean(successTitle);
                 nvShowEditorToast(successTitle, successDetail, "success");
                 return true;
@@ -3485,9 +3504,10 @@
 
         window.saveDraft = function () {
             return nvSaveProjectWithVisibility(
-                "draft",
+                nvGetCurrentProjectVisibility(),
                 "Draft saved",
-                "This project is saved privately and is not published."
+                "Your edits were saved internally. The main public page visibility was left unchanged.",
+                { changeProjectVisibility: false }
             );
         };
 
