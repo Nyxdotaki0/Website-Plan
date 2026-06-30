@@ -7181,6 +7181,80 @@
                         flex: 1;
                     }
         }
+
+
+        /* ============================================================
+           ACCOUNT SETTINGS NOTICE TOASTS
+           Restores the noticeable save/error popups for Profile Studio
+           and main Account Settings without touching canvas transform code.
+        ============================================================ */
+
+        .nv-editor-toast-stack {
+            position: fixed;
+            left: 22px;
+            bottom: 22px;
+            z-index: 2147483200;
+            display: grid;
+            gap: 10px;
+            width: min(420px, calc(100vw - 32px));
+            pointer-events: none;
+        }
+
+        .nv-editor-toast {
+            pointer-events: auto;
+            border: 1px solid rgba(255,255,255,.16);
+            border-radius: 18px;
+            padding: 14px 16px;
+            color: #f5f5f5;
+            background: radial-gradient(circle at 14% 0%, rgba(255,255,255,.12), transparent 28%), linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.025)), rgba(8,8,12,.96);
+            box-shadow: 0 22px 56px rgba(0,0,0,.46), inset 0 1px 0 rgba(255,255,255,.06);
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+            opacity: 0;
+            transform: translateY(12px) scale(.98);
+            animation: nvSettingsToastIn .22s ease forwards;
+        }
+
+            .nv-editor-toast strong {
+                display: block;
+                margin-bottom: 4px;
+                font-size: .95rem;
+            }
+
+            .nv-editor-toast span {
+                display: block;
+                color: rgba(245,245,245,.78);
+                font-size: .88rem;
+                line-height: 1.45;
+            }
+
+            .nv-editor-toast.success {
+                border-color: rgba(132,255,190,.24);
+            }
+
+            .nv-editor-toast.warning {
+                border-color: rgba(255,214,102,.28);
+            }
+
+            .nv-editor-toast.error {
+                border-color: rgba(255,122,122,.32);
+            }
+
+        @keyframes nvSettingsToastIn {
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        @media(max-width: 700px) {
+            .nv-editor-toast-stack {
+                left: 16px;
+                right: 16px;
+                bottom: 16px;
+                width: auto;
+            }
+        }
     </style>
 </head>
 <body>
@@ -7583,6 +7657,8 @@
 
 
 
+    <div id="nv-editor-toast-stack" class="nv-editor-toast-stack" aria-live="polite" aria-atomic="false"></div>
+
     <div id="image-placement-overlay" class="image-placement-overlay" aria-hidden="true">
         <div class="image-placement-topbar">
             <div>
@@ -7592,7 +7668,7 @@
 
             <div class="button-row">
                 <button type="button" class="button" onclick="resetAccountImagePlacementStudio()">Reset</button>
-                <button type="button" class="button" onclick="closeAccountImagePlacementStudio(true)">Cancel</button>
+                <button type="button" class="button" onclick="closeAccountImagePlacementStudio()">Cancel</button>
                 <button id="image-placement-apply-button" type="button" class="button primary-button" onclick="applyAccountImagePlacementStudio()">Save Placement & Continue</button>
             </div>
         </div>
@@ -9407,7 +9483,6 @@
                 ...source.config,
                 sourceUrl: source.sourceUrl,
                 tempObjectUrl: source.tempObjectUrl,
-                hasNewFile: source.hasNewFile,
                 placement: getAccountImagePlacement(source.config.key)
             });
         }
@@ -9437,11 +9512,7 @@
             frame.style.setProperty("--fit-frame-height", `${config.height}px`);
             frame.style.setProperty("--fit-frame-radius", config.radius === 999 ? "999px" : `${config.radius || 18}px`);
 
-            if (String(config.sourceUrl || "").startsWith("blob:") || String(config.sourceUrl || "").startsWith("data:")) {
-                img.removeAttribute("crossorigin");
-            } else {
-                img.crossOrigin = "anonymous";
-            }
+            img.crossOrigin = "anonymous";
             img.src = config.sourceUrl;
             content.innerHTML = config.previewHtml || "";
 
@@ -9516,30 +9587,10 @@
             updateAccountImagePlacementPreview();
         }
 
-        function closeAccountImagePlacementStudio(discardPendingSelection = false) {
-            const closingStudio = accountImagePlacementStudio;
-
-            if (discardPendingSelection && closingStudio?.hasNewFile && closingStudio?.inputId && !pendingAccountImageFiles[closingStudio.inputId]) {
-                const input = document.getElementById(closingStudio.inputId);
-
-                if (input) {
-                    input.value = "";
-                }
-
-                clearPendingAccountImageFile(closingStudio.inputId);
-                setAccountImagePlacement(closingStudio.key, getDefaultAccountImagePlacement());
-
-                const status = document.getElementById(closingStudio.key === "avatar" ? "avatar-image-status" : "banner-image-status");
-                if (status) {
-                    status.textContent = closingStudio.key === "avatar"
-                        ? "Profile picture change canceled. Current image was kept."
-                        : "Banner change canceled. Current image was kept.";
-                }
-            }
-
-            if (closingStudio?.tempObjectUrl && closingStudio.sourceUrl) {
+        function closeAccountImagePlacementStudio() {
+            if (accountImagePlacementStudio?.tempObjectUrl && accountImagePlacementStudio.sourceUrl) {
                 try {
-                    URL.revokeObjectURL(closingStudio.sourceUrl);
+                    URL.revokeObjectURL(accountImagePlacementStudio.sourceUrl);
                 } catch { }
             }
 
@@ -9547,17 +9598,12 @@
             document.getElementById("image-placement-overlay")?.classList.remove("open");
             document.getElementById("image-placement-overlay")?.setAttribute("aria-hidden", "true");
             accountImagePlacementStudio = null;
-            renderAccountImagePlacementPreviews();
         }
 
         function waitForAccountPlacementImage(src) {
             return new Promise((resolve, reject) => {
                 const img = new Image();
-
-                if (!String(src || "").startsWith("blob:") && !String(src || "").startsWith("data:")) {
-                    img.crossOrigin = "anonymous";
-                }
-
+                img.crossOrigin = "anonymous";
                 img.onload = () => resolve(img);
                 img.onerror = () => reject(new Error("Could not load image for placement."));
                 img.src = src;
@@ -9565,13 +9611,7 @@
         }
 
         function canvasToAccountBlob(canvas, type, quality) {
-            return new Promise((resolve, reject) => {
-                try {
-                    canvas.toBlob(blob => resolve(blob), type, quality);
-                } catch (error) {
-                    reject(error);
-                }
-            });
+            return new Promise(resolve => canvas.toBlob(resolve, type, quality));
         }
 
         async function buildPlacedAccountImageFile(studio) {
@@ -9606,18 +9646,12 @@
             ctx.drawImage(sourceImage, -drawW / 2, -drawH / 2, drawW, drawH);
             ctx.restore();
 
-            let blob = null;
+            let blob = await canvasToAccountBlob(canvas, "image/webp", .92);
             let extension = "webp";
 
-            try {
-                blob = await canvasToAccountBlob(canvas, "image/webp", .92);
-
-                if (!blob) {
-                    blob = await canvasToAccountBlob(canvas, "image/png");
-                    extension = "png";
-                }
-            } catch (error) {
-                throw new Error("Could not adjust that saved image because the browser blocked the crop. Re-upload the image, adjust it, then save again.");
+            if (!blob) {
+                blob = await canvasToAccountBlob(canvas, "image/png");
+                extension = "png";
             }
 
             if (!blob) {
@@ -9665,7 +9699,7 @@
                     status.textContent = "Placement ready. Save Public Identity to apply it.";
                 }
 
-                closeAccountImagePlacementStudio(false);
+                closeAccountImagePlacementStudio();
                 renderAccountImagePlacementPreviews();
             } catch (error) {
                 alert(error.message || "Could not apply image placement.");
@@ -9715,25 +9749,12 @@
             const avatarInput = document.getElementById("avatar-file");
             const bannerInput = document.getElementById("banner-file");
 
-            /*
-                The placement studio should open automatically for new files,
-                but saving the rest of the profile should never become stuck
-                because a browser canceled the overlay or a file picker kept a
-                raw file selected. If no adjusted pending file exists, the
-                normal upload path will save the selected image as-is.
-            */
             if (avatarInput?.files?.[0] && !pendingAccountImageFiles["avatar-file"]) {
-                const status = document.getElementById("avatar-image-status");
-                if (status) {
-                    status.textContent = "Saving the selected profile picture without extra placement changes.";
-                }
+                throw new Error("Adjust the new profile picture placement before saving.");
             }
 
             if (bannerInput?.files?.[0] && !pendingAccountImageFiles["banner-file"]) {
-                const status = document.getElementById("banner-image-status");
-                if (status) {
-                    status.textContent = "Saving the selected banner without extra placement changes.";
-                }
+                throw new Error("Adjust the new banner placement before saving.");
             }
         }
 
@@ -9757,11 +9778,7 @@
                             status.textContent = "New image selected. Adjust placement before saving.";
                         }
 
-                        requestAnimationFrame(() => {
-                            if (input.files?.[0]) {
-                                openAccountImagePlacementStudioForKey(key);
-                            }
-                        });
+                        requestAnimationFrame(() => openAccountImagePlacementStudioForKey(key));
                     }
                 });
             });
@@ -9838,14 +9855,36 @@
                 updateAccountImagePlacementPreview();
             });
 
-            function clearAccountImagePlacementDrag() {
+            window.addEventListener("pointerup", () => {
                 if (!accountImagePlacementStudio) return;
                 accountImagePlacementStudio.dragging = null;
                 img.classList.remove("dragging");
+            });
+        }
+
+
+        function showAccountSettingsToast(title, message = "", type = "success") {
+            const stack = document.getElementById("nv-editor-toast-stack");
+
+            if (!stack) {
+                return;
             }
 
-            window.addEventListener("pointerup", clearAccountImagePlacementDrag);
-            window.addEventListener("pointercancel", clearAccountImagePlacementDrag);
+            const toast = document.createElement("div");
+            toast.className = `nv-editor-toast ${type || "success"}`;
+            toast.innerHTML = `
+                    <strong>${escapeHtml(title || "Notice")}</strong>
+                    <span>${escapeHtml(message || "")}</span>
+                `;
+
+            stack.appendChild(toast);
+
+            window.setTimeout(() => {
+                toast.style.opacity = "0";
+                toast.style.transform = "translateY(10px) scale(.98)";
+                toast.style.transition = "opacity .18s ease, transform .18s ease";
+                window.setTimeout(() => toast.remove(), 220);
+            }, 4200);
         }
 
         function getProfilePayload(includeId = true) {
@@ -10030,14 +10069,15 @@
             const progressButton = document.getElementById("save-studio-progress-button");
 
             const enforceCustomRequirements = !!options.enforceCustomRequirements;
+            const isStudioSaveAction = !!(options.saveStudioProgress || options.publishActiveLayout || options.progressUnpublished);
 
             if (!currentUser) {
                 window.location.href = "login.html";
                 return;
             }
 
-            profileMessage.textContent = "Saving profile...";
-            saveBarMessage.textContent = "Saving profile changes...";
+            profileMessage.textContent = isStudioSaveAction ? "Saving custom profile..." : "Saving profile...";
+            saveBarMessage.textContent = isStudioSaveAction ? "Saving Profile Studio changes..." : "Saving profile changes...";
             saveButton.disabled = true;
             studioButton.disabled = true;
             if (progressButton) {
@@ -10090,19 +10130,30 @@
                     }
                 }
 
-                validateAccountImagePlacementBeforeSave();
+                /*
+                    Profile Studio draft/publish saves must never be blocked by
+                    unfinished Account Settings banner/PFP placement. Those image
+                    files only apply when the user presses Save Public Identity.
+                */
+                if (!isStudioSaveAction) {
+                    validateAccountImagePlacementBeforeSave();
+                }
 
-                const avatarUrl = await uploadFileIfSelected("avatar-file", "avatars", currentAvatarUrl, "avatar", {
-                    maxWidth: 512,
-                    maxHeight: 512,
-                    quality: .85
-                });
+                const avatarUrl = isStudioSaveAction
+                    ? currentAvatarUrl
+                    : await uploadFileIfSelected("avatar-file", "avatars", currentAvatarUrl, "avatar", {
+                        maxWidth: 512,
+                        maxHeight: 512,
+                        quality: .85
+                    });
 
-                const bannerUrl = await uploadFileIfSelected("banner-file", "banners", currentBannerUrl, "banner", {
-                    maxWidth: 1600,
-                    maxHeight: 900,
-                    quality: .82
-                });
+                const bannerUrl = isStudioSaveAction
+                    ? currentBannerUrl
+                    : await uploadFileIfSelected("banner-file", "banners", currentBannerUrl, "banner", {
+                        maxWidth: 1600,
+                        maxHeight: 900,
+                        quality: .82
+                    });
 
                 const updatedProfile = {
                     ...getProfilePayload(true),
@@ -10125,11 +10176,13 @@
                     ...updatedProfile
                 };
 
-                document.getElementById("avatar-file").value = "";
-                document.getElementById("banner-file").value = "";
-                clearPendingAccountImageFile("avatar-file");
-                clearPendingAccountImageFile("banner-file");
-                renderAccountImagePlacementPreviews();
+                if (!isStudioSaveAction) {
+                    document.getElementById("avatar-file").value = "";
+                    document.getElementById("banner-file").value = "";
+                    clearPendingAccountImageFile("avatar-file");
+                    clearPendingAccountImageFile("banner-file");
+                    renderAccountImagePlacementPreviews();
+                }
 
                 profileMessage.textContent = options.publishActiveLayout
                     ? `${activeStudioLayout === "mobile" ? "Mobile" : "PC"} custom profile published successfully.`
@@ -10143,6 +10196,15 @@
 
                 saveBarMessage.textContent = profileMessage.textContent;
                 setStudioStatus(profileMessage.textContent);
+
+                if (options.publishActiveLayout) {
+                    showAccountSettingsToast("Published publicly", `${activeStudioLayout === "mobile" ? "Mobile" : "PC"} custom profile is now live on profile.html.`, "success");
+                } else if (options.saveStudioProgress) {
+                    showAccountSettingsToast("Draft saved", "Your Profile Studio progress was saved internally and was not published.", "success");
+                } else {
+                    showAccountSettingsToast("Profile saved", "Your public identity changes were saved.", "success");
+                }
+
                 renderStudio();
                 lastSavedStudioLayoutSignature = getStudioLayoutSignature();
                 return true;
@@ -10150,6 +10212,7 @@
                 profileMessage.textContent = error.message;
                 saveBarMessage.textContent = error.message;
                 setStudioStatus(error.message);
+                showAccountSettingsToast("Could not save", error.message || "Something went wrong while saving.", "error");
                 return false;
             } finally {
                 saveButton.disabled = false;
@@ -19015,14 +19078,8 @@
 
         setupWorkspacePan();
         setupStudioNativeTouchZoomGuard();
-
-        try {
-            setupAccountImagePlacementInputs();
-            bindAccountImagePlacementPointerControls();
-        } catch (error) {
-            console.warn("Account image placement controls could not initialize.", error);
-        }
-
+        setupAccountImagePlacementInputs();
+        bindAccountImagePlacementPointerControls();
         checkUserAndLoadProfile();
         window.toggleSelectedLayerLock = toggleSelectedLayerLock;
         window.toggleObjectLock = toggleObjectLock;
