@@ -733,19 +733,14 @@
 
     <header>
         <div class="logo">
-            <a href="index.html">
+            <a id="logo-link" href="gallery.html">
                 <img src="Nullverse-3.png" alt="Nullverse" class="site-logo">
             </a>
         </div>
 
-        <nav>
-            <a href="index.html">Home</a>
-            <a href="notifications.html">Notifications</a>
-            <a href="explore.html">Explore</a>
-            <a href="profile.html">Profile</a>
-            <a href="dashboard.html">Dashboard</a>
-            <a href="messages.html">Messages</a>
-            <button onclick="logOut()">Log Out</button>
+        <nav id="main-nav">
+            <a href="gallery.html">Creator Gallery</a>
+            <a href="login.html">Beta Login</a>
         </nav>
     </header>
 
@@ -1064,16 +1059,11 @@
     </main>
 
     <script type="module">
-        import { requireBetaAccess } from "./betaGate.js";
         import { supabase } from "./supabaseClient.js";
-        import { setupNotificationBadge } from "./notificationBadge.js";
-        import { setupMessageBadge } from "./messageBadge.js";
         import { optimizeImage } from "./imageUtils.js";
 
-        const currentUser = await requireBetaAccess();
-
-        setupNotificationBadge();
-        setupMessageBadge();
+        let currentUser = await getOptionalBetaUser();
+        renderNavigation();
 
         const params = new URLSearchParams(window.location.search);
         const usernameFromUrl = params.get("user");
@@ -1090,8 +1080,95 @@
 
         const galleryUploadBucket = "creator-gallery";
 
-        if (!usernameFromUrl) {
-            window.location.href = "profile.html";
+        function normalizeEmail(email) {
+            return String(email || "")
+                .trim()
+                .toLowerCase();
+        }
+
+        async function getOptionalBetaUser() {
+            try {
+                const { data: sessionData } = await supabase.auth.getSession();
+                const user = sessionData?.session?.user || null;
+
+                if (!user) return null;
+
+                const normalizedEmail = normalizeEmail(user.email);
+
+                const { data: betaData, error: betaError } = await supabase
+                    .from("beta_access")
+                    .select("role")
+                    .ilike("email", normalizedEmail)
+                    .maybeSingle();
+
+                if (betaError || !betaData) {
+                    await supabase.auth.signOut();
+                    return null;
+                }
+
+                return user;
+            } catch (error) {
+                console.warn("Optional gallery auth check failed:", error);
+                return null;
+            }
+        }
+
+        function renderNavigation() {
+            const nav = document.getElementById("main-nav");
+            const logoLink = document.getElementById("logo-link");
+
+            if (!nav) return;
+
+            if (currentUser) {
+                if (logoLink) logoLink.href = "index.html";
+
+                nav.innerHTML = `
+                        <a href="index.html">Home</a>
+                        <a href="notifications.html">Notifications</a>
+                        <a href="explore.html">Explore</a>
+                        <a href="profile.html">Profile</a>
+                        <a href="dashboard.html">Dashboard</a>
+                        <a href="messages.html">Messages</a>
+                        <button onclick="logOut()">Log Out</button>
+                    `;
+                return;
+            }
+
+            if (logoLink) logoLink.href = "gallery.html";
+
+            nav.innerHTML = `
+                    <a href="gallery.html">Creator Gallery</a>
+                    <a href="login.html">Beta Login</a>
+                `;
+        }
+
+        function showCreatorLinkNeeded() {
+            document.title = "Creator Gallery - Nullverse";
+
+            document.getElementById("gallery-title").textContent =
+                "Nullverse Creator Gallery";
+
+            document.getElementById("gallery-subtitle").textContent =
+                "This public showcase is open for viewing, but individual creator galleries need a creator link for now.";
+
+            document.getElementById("back-profile-link").style.display = "none";
+            document.getElementById("add-gallery-button").style.display = "none";
+
+            document.getElementById("filter-row").innerHTML = "";
+            document.getElementById("gallery-count").textContent =
+                "Public creator discovery will be added later in the Gallery 2.0 rollout.";
+
+            document.getElementById("gallery-grid").innerHTML = `
+                    <p class="empty">
+                        Open a creator gallery using a link like
+                        <strong>gallery.html?user=username</strong>.
+                        Full Nullverse access is still invite-only while the beta stays protected.
+                    </p>
+                `;
+        }
+
+        function showPublicBetaNotice() {
+            alert("Nullverse is currently invite-only. Public visitors can view gallery work, but likes, uploads, edits, messages, profiles, and dashboard tools are beta-only.");
         }
 
         document.addEventListener("keydown", event => {
@@ -1127,7 +1204,11 @@
 
         setupImagePlacementPointerControls();
 
-        await loadCreatorGallery();
+        if (usernameFromUrl) {
+            await loadCreatorGallery();
+        } else {
+            showCreatorLinkNeeded();
+        }
 
         async function loadCreatorGallery() {
             const { data: profileData, error: profileError } = await supabase
@@ -1152,21 +1233,30 @@
             document.getElementById("gallery-subtitle").textContent =
                 profile.bio || "A showcase of creative process, artwork, sketches, notes, and finished pieces.";
 
-            document.getElementById("back-profile-link").href =
-                `profile.html?user=${encodeURIComponent(profile.username)}`;
+            const backProfileLink = document.getElementById("back-profile-link");
 
-            const isGalleryOwner = currentUser.id === profile.id;
+            if (backProfileLink) {
+                if (currentUser) {
+                    backProfileLink.href =
+                        `profile.html?user=${encodeURIComponent(profile.username)}`;
+                    backProfileLink.style.display = "inline-block";
+                } else {
+                    backProfileLink.style.display = "none";
+                }
+            }
+
+            const isGalleryOwner = !!currentUser && currentUser.id === profile.id;
             document.getElementById("add-gallery-button").style.display =
                 isGalleryOwner ? "inline-block" : "none";
 
             let galleryQuery = supabase
                 .from("creator_proof_gallery")
                 .select(`
-                *,
-                creator_gallery_likes (
-                    user_id
-                )
-            `)
+                    *,
+                    creator_gallery_likes (
+                        user_id
+                    )
+                `)
                 .eq("owner_id", profile.id)
                 .order("created_at", { ascending: false });
 
@@ -1174,7 +1264,26 @@
                 galleryQuery = galleryQuery.eq("visibility", "public");
             }
 
-            const { data, error } = await galleryQuery;
+            let { data, error } = await galleryQuery;
+
+            if (error && !currentUser) {
+                console.warn("Public gallery like-count query failed, retrying without likes:", error);
+
+                const fallbackResult = await supabase
+                    .from("creator_proof_gallery")
+                    .select("*")
+                    .eq("owner_id", profile.id)
+                    .eq("visibility", "public")
+                    .order("created_at", { ascending: false });
+
+                data = fallbackResult.data || [];
+                error = fallbackResult.error || null;
+
+                data = data.map(item => ({
+                    ...item,
+                    creator_gallery_likes: []
+                }));
+            }
 
             if (error) {
                 showError(error.message);
@@ -1197,16 +1306,16 @@
             )];
 
             container.innerHTML = `
-                        <button class="filter-chip active" data-type="all">
-                            All
-                        </button>
-
-                        ${types.map(type => `
-                            <button class="filter-chip" data-type="${escapeHtml(type)}">
-                                ${escapeHtml(formatGalleryType(type))}
+                            <button class="filter-chip active" data-type="all">
+                                All
                             </button>
-                        `).join("")}
-                    `;
+
+                            ${types.map(type => `
+                                <button class="filter-chip" data-type="${escapeHtml(type)}">
+                                    ${escapeHtml(formatGalleryType(type))}
+                                </button>
+                            `).join("")}
+                        `;
 
             container.querySelectorAll(".filter-chip").forEach(button => {
                 button.addEventListener("click", () => {
@@ -1240,39 +1349,40 @@
 
             grid.innerHTML = filtered.map(item => {
                 const likes = item.creator_gallery_likes || [];
-                const likedByMe = likes.some(like => like.user_id === currentUser.id);
+                const likedByMe = !!currentUser && likes.some(like => like.user_id === currentUser.id);
 
                 return `
-                    <article class="gallery-card" onclick="openGalleryLightbox('${item.id}')">
-                        <div class="gallery-image-frame">
-                            <img
-                                src="${escapeHtml(item.image_url)}"
-                                alt="${escapeHtml(item.title || "Creator gallery item")}"
-                                style="${getImagePlacementStyle(item.image_placement)}">
-                        </div>
+                        <article class="gallery-card" onclick="openGalleryLightbox('${item.id}')">
+                            <div class="gallery-image-frame">
+                                <img
+                                    src="${escapeHtml(item.image_url)}"
+                                    alt="${escapeHtml(item.title || "Creator gallery item")}"
+                                    style="${getImagePlacementStyle(item.image_placement)}">
+                            </div>
 
-                        <div class="gallery-overlay">
-                            <span class="gallery-pill">
-                                ${escapeHtml(item.title || "Untitled")}
-                            </span>
+                            <div class="gallery-overlay">
+                                <span class="gallery-pill">
+                                    ${escapeHtml(item.title || "Untitled")}
+                                </span>
 
-                            <span class="gallery-pill">
-                                ${escapeHtml(formatGalleryType(item.proof_type))}
-                            </span>
-                        </div>
+                                <span class="gallery-pill">
+                                    ${escapeHtml(formatGalleryType(item.proof_type))}
+                                </span>
+                            </div>
 
-                        ${currentUser.id === item.owner_id && item.visibility === "private" ? `
-                            <span class="gallery-private-pill">Private</span>
-                        ` : ""}
+                            ${currentUser && currentUser.id === item.owner_id && item.visibility === "private" ? `
+                                <span class="gallery-private-pill">Private</span>
+                            ` : ""}
 
-                        <button
-                            class="button gallery-like-button"
-                            data-id="${item.id}"
-                            onclick="event.stopPropagation(); toggleGalleryLike('${item.id}')">
-                            ${likedByMe ? "♥" : "♡"} ${likes.length}
-                        </button>
-                    </article>
-                `;
+                            <button
+                                class="button gallery-like-button"
+                                data-id="${item.id}"
+                                title="${currentUser ? "Like this gallery work" : "Beta testers can like gallery work"}"
+                                onclick="event.stopPropagation(); toggleGalleryLike('${item.id}')">
+                                ${likedByMe ? "♥" : "♡"} ${likes.length}
+                            </button>
+                        </article>
+                    `;
             }).join("");
         }
 
@@ -1284,7 +1394,7 @@
             activeLightboxItemId = itemId;
 
             const likes = item.creator_gallery_likes || [];
-            const likedByMe = likes.some(like => like.user_id === currentUser.id);
+            const likedByMe = !!currentUser && likes.some(like => like.user_id === currentUser.id);
 
             document.getElementById("lightbox-image").src = item.image_url;
             document.getElementById("lightbox-image").alt =
@@ -1304,8 +1414,14 @@
 
             const likeText = `${likedByMe ? "♥" : "♡"} ${likes.length}`;
 
-            document.getElementById("lightbox-like-button").textContent = likeText;
-            document.getElementById("lightbox-floating-like-button").textContent = likeText;
+            const lightboxLikeButton = document.getElementById("lightbox-like-button");
+            const floatingLikeButton = document.getElementById("lightbox-floating-like-button");
+
+            lightboxLikeButton.textContent = likeText;
+            floatingLikeButton.textContent = likeText;
+
+            lightboxLikeButton.style.display = currentUser ? "inline-block" : "none";
+            floatingLikeButton.style.display = currentUser ? "inline-flex" : "none";
 
             document.getElementById("gallery-lightbox").style.display = "flex";
 
@@ -1313,13 +1429,13 @@
 
             if (editButton) {
                 editButton.style.display =
-                    currentUser.id === item.owner_id ? "inline-block" : "none";
+                    currentUser && currentUser.id === item.owner_id ? "inline-block" : "none";
             }
         };
 
         window.openEditGalleryWorkModal = function () {
             const item = allItems.find(entry => entry.id === activeLightboxItemId);
-            if (!item || currentUser.id !== item.owner_id) return;
+            if (!item || !currentUser || currentUser.id !== item.owner_id) return;
 
             document.getElementById("edit-gallery-title").value = item.title || "";
             document.getElementById("edit-gallery-description").value = item.description || "";
@@ -1337,7 +1453,7 @@
             const message = document.getElementById("edit-gallery-message");
 
             const item = allItems.find(entry => entry.id === activeLightboxItemId);
-            if (!item || currentUser.id !== item.owner_id) {
+            if (!item || !currentUser || currentUser.id !== item.owner_id) {
                 message.textContent = "You can only edit your own gallery work.";
                 return;
             }
@@ -1370,6 +1486,11 @@
         };
 
         window.toggleLightboxLike = async function () {
+            if (!currentUser) {
+                showPublicBetaNotice();
+                return;
+            }
+
             if (!activeLightboxItemId) return;
 
             await toggleGalleryLike(activeLightboxItemId);
@@ -1412,13 +1533,13 @@
             const safe = normalizeImagePlacement(placement);
 
             return `
-                        object-fit:${safe.fit || "cover"};
-                        transform:translate(${Number(safe.x) || 0}px, ${Number(safe.y) || 0}px) rotate(${Number(safe.rotation) || 0}deg) scale(${Number(safe.scale) || 1});
-                    `;
+                            object-fit:${safe.fit || "cover"};
+                            transform:translate(${Number(safe.x) || 0}px, ${Number(safe.y) || 0}px) rotate(${Number(safe.rotation) || 0}deg) scale(${Number(safe.scale) || 1});
+                        `;
         }
 
         function isCurrentGalleryOwner() {
-            return !!profile && currentUser.id === profile.id;
+            return !!profile && !!currentUser && currentUser.id === profile.id;
         }
 
         function resetAddGalleryForm() {
@@ -1640,9 +1761,9 @@
             document.getElementById("image-placement-frame-width").value = config.width;
             document.getElementById("image-placement-frame-height").value = config.height;
             document.getElementById("image-placement-meta").innerHTML = `
-                        <strong>Visible frame:</strong> ${config.width}px × ${config.height}px<br>
-                        <strong>Tip:</strong> Drag the image to reposition it, pull the corner handle to resize, or use the top handle/slider to rotate.
-                    `;
+                            <strong>Visible frame:</strong> ${config.width}px × ${config.height}px<br>
+                            <strong>Tip:</strong> Drag the image to reposition it, pull the corner handle to resize, or use the top handle/slider to rotate.
+                        `;
 
             syncImagePlacementControls();
             updateImagePlacementPreview();
@@ -1849,6 +1970,10 @@
         };
 
         async function toggleGalleryLike(galleryId) {
+            if (!currentUser) {
+                showPublicBetaNotice();
+                return;
+            }
 
             const existing =
                 allItems
