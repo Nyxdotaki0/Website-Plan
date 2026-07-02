@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery Showcase - Nullverse</title>
+    <title>OC / Gallery Showcase - Nullverse</title>
     <link rel="icon" type="image/png" href="favicon.png">
-    <script>const savedNullverseTheme = localStorage.getItem("nullverse-theme") || "void";
+    <script>
+    const savedNullverseTheme = localStorage.getItem("nullverse-theme") || "void";
         document.documentElement.setAttribute("data-theme", savedNullverseTheme);</script>
     <link rel="stylesheet" href="theme.css?v=25">
     <style>
@@ -240,6 +241,29 @@
             box-shadow: 0 0 18px rgba(135,210,255,.22);
         }
 
+
+        .system-page-button {
+            width: 100%;
+            height: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            border-radius: inherit;
+            color: inherit;
+            background: transparent;
+            border: 0;
+            text-decoration: none;
+            font-weight: 850;
+            letter-spacing: .015em;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .custom-object.required-object {
+            z-index: 99999 !important;
+        }
+
         .shape-object {
             width: 100%;
             height: 100%;
@@ -361,174 +385,248 @@
         <a id="customize-link" class="button" href="#">Customize Showcase</a>
         <a id="back-link" class="button" href="creator-gallery.html">Back to Gallery</a>
     </div>
-    <script type="module">import { supabase } from "./supabaseClient.js";
+    <script type="module">
+    import { supabase } from "./supabaseClient.js";
 
-    const params = new URLSearchParams(location.search);
-    const itemId = params.get("id") || params.get("item") || "";
-    let currentUser = await getOptionalBetaUser();
-    let item = null;
-    let profile = null;
-    let layoutBundle = null;
+        const params = new URLSearchParams(location.search);
+        const itemId = params.get("id") || params.get("item") || "";
+        let currentUser = await getOptionalBetaUser();
+        let item = null;
+        let profile = null;
+        let layoutBundle = null;
 
-    renderNav();
-    await init();
+        renderNav();
+        await init();
 
-    async function init() {
-        if (!itemId) { showError("No gallery item was selected."); return; }
-        await loadItem();
-        if (!item) { showError("This gallery item is not public, approved, or available."); return; }
-        await loadProfile();
-        await loadLayout();
-        renderPage();
-        renderOwnerActions();
-    }
-
-    async function getOptionalBetaUser() {
-        try {
-            const { data: sessionData } = await supabase.auth.getSession();
-            const user = sessionData?.session?.user || null;
-            if (!user) return null;
-            const { data: betaData } = await supabase.from("beta_access").select("role").ilike("email", String(user.email || '').trim().toLowerCase()).maybeSingle();
-            if (!betaData) { await supabase.auth.signOut(); return null; }
-            return user;
-        } catch { return null; }
-    }
-
-    function renderNav() {
-        const nav = document.getElementById("main-nav");
-        const logo = document.getElementById("logo-link");
-        if (currentUser) {
-            logo.href = "index.html";
-            nav.innerHTML = `<a href="index.html">Home</a><a href="notifications.html">Notifications</a><a href="explore.html">Explore</a><a href="profile.html">Profile</a><a href="dashboard.html">Dashboard</a><a href="messages.html">Messages</a><button onclick="logOut()">Log Out</button>`;
-        } else {
-            logo.href = "creator-gallery.html";
-            nav.innerHTML = `<a href="creator-gallery.html">Creator Gallery</a><a href="login.html">Beta Login</a>`;
+        async function init() {
+            if (!itemId) { showError("No gallery item was selected."); return; }
+            await loadItem();
+            if (!item) { showError("This gallery item is not public, approved, or available."); return; }
+            await loadProfile();
+            await loadLayout();
+            renderPage();
+            renderOwnerActions();
         }
-    }
 
-    window.logOut = async function () { await supabase.auth.signOut(); location.href = "login.html"; };
-
-    async function loadItem() {
-        const { data: publicItem } = await supabase.from("public_creator_gallery_items").select("*").eq("id", itemId).maybeSingle();
-        if (publicItem) { item = publicItem; return; }
-        if (currentUser) {
-            const { data: ownItem } = await supabase.from("creator_proof_gallery").select("*").eq("id", itemId).eq("owner_id", currentUser.id).maybeSingle();
-            if (ownItem) item = ownItem;
+        async function getOptionalBetaUser() {
+            try {
+                const { data: sessionData } = await supabase.auth.getSession();
+                const user = sessionData?.session?.user || null;
+                if (!user) return null;
+                const { data: betaData } = await supabase.from("beta_access").select("role").ilike("email", String(user.email || '').trim().toLowerCase()).maybeSingle();
+                if (!betaData) { await supabase.auth.signOut(); return null; }
+                return user;
+            } catch { return null; }
         }
-    }
 
-    async function loadProfile() {
-        if (!item?.owner_id) return;
-        const { data } = await supabase.from("public_creator_profiles").select("id, username, display_name, bio, avatar_url").eq("id", item.owner_id).maybeSingle();
-        profile = data || null;
-    }
-
-    async function loadLayout() {
-        const { data } = await supabase.from("public_creator_gallery_item_layouts").select("published_layout_json").eq("gallery_item_id", item.id).maybeSingle();
-        layoutBundle = data?.published_layout_json || null;
-        if (!layoutBundle && currentUser?.id === item.owner_id) {
-            const { data: own } = await supabase.from("creator_gallery_item_layouts").select("published_layout_json").eq("gallery_item_id", item.id).maybeSingle();
-            layoutBundle = own?.published_layout_json || null;
+        function renderNav() {
+            const nav = document.getElementById("main-nav");
+            const logo = document.getElementById("logo-link");
+            if (currentUser) {
+                logo.href = "index.html";
+                nav.innerHTML = `<a href="index.html">Home</a><a href="notifications.html">Notifications</a><a href="explore.html">Explore</a><a href="profile.html">Profile</a><a href="dashboard.html">Dashboard</a><a href="messages.html">Messages</a><button onclick="logOut()">Log Out</button>`;
+            } else {
+                logo.href = "creator-gallery.html";
+                nav.innerHTML = `<a href="creator-gallery.html">Creator Gallery</a><a href="login.html">Beta Login</a>`;
+            }
         }
-    }
 
-    function renderPage() {
-        document.title = `${item.title || 'Gallery Showcase'} - Nullverse`;
-        const layout = chooseLayout(layoutBundle);
-        if (layout) renderCustom(layout); else renderDefault();
-    }
+        window.logOut = async function () { await supabase.auth.signOut(); location.href = "login.html"; };
+        window.openReportPlaceholder = function () {
+            alert("Report tools for gallery showcases will be added soon.");
+        };
 
-    function chooseLayout(bundle) {
-        if (!bundle?.layouts) return null;
-        const wantMobile = matchMedia("(max-width: 700px)").matches;
-        return wantMobile ? (bundle.layouts.mobile || bundle.layouts.desktop || null) : (bundle.layouts.desktop || bundle.layouts.mobile || null);
-    }
-
-    function renderDefault() {
-        document.getElementById("page-root").innerHTML = `<section class="default-shell"><div class="default-card"><div class="default-layout"><div><img class="default-image" src="${escapeAttr(item.image_url || '')}" alt="${escapeAttr(item.title || '')}"></div><div><p class="muted">${escapeHtml(profile?.display_name || profile?.username || 'Nullverse Creator')}</p><h1>${escapeHtml(item.title || 'Untitled')}</h1><p class="muted">${escapeHtml(formatType(item.proof_type))}</p><p class="muted">${escapeHtml(item.description || 'No description provided.')}</p><a class="button" href="creator-gallery.html?user=${encodeURIComponent(profile?.username || '')}">Back to Creator Gallery</a></div></div></div></section>`;
-    }
-
-    function renderCustom(layout) {
-        layout = normalizeLayout(layout);
-        const root = document.getElementById("page-root");
-        root.innerHTML = `<section class="custom-shell"><div id="custom-canvas" class="custom-canvas"></div></section>`;
-        const canvas = document.getElementById("custom-canvas");
-        canvas.style.width = layout.canvas.width + "px";
-        canvas.style.height = layout.canvas.height + "px";
-        canvas.style.minHeight = layout.canvas.height + "px";
-        canvas.style.background = layout.canvas.backgroundMode === "solid" ? layout.canvas.backgroundColor : layout.canvas.backgroundGradient;
-        canvas.style.fontFamily = layout.canvas.fontFamily || "Arial";
-        layout.objects.filter(o => o.visible !== false).forEach(obj => canvas.appendChild(renderObject(obj)));
-        scaleCanvas(canvas, layout);
-    }
-
-    function scaleCanvas(canvas, layout) {
-        if (layout.layoutMode === "mobile") {
-            const scale = Math.min(1, innerWidth / layout.canvas.width);
-            canvas.style.transform = `scale(${scale})`;
-            canvas.parentElement.style.minHeight = (layout.canvas.height * scale) + "px";
-            return;
+        async function loadItem() {
+            const { data: publicItem } = await supabase.from("public_creator_gallery_items").select("*").eq("id", itemId).maybeSingle();
+            if (publicItem) { item = publicItem; return; }
+            if (currentUser) {
+                const { data: ownItem } = await supabase.from("creator_proof_gallery").select("*").eq("id", itemId).eq("owner_id", currentUser.id).maybeSingle();
+                if (ownItem) item = ownItem;
+            }
         }
-        canvas.style.transform = "none";
-        canvas.parentElement.style.overflowX = "auto";
-    }
 
-    function normalizeLayout(layout) {
-        const mode = layout.layoutMode === "mobile" ? "mobile" : "desktop";
-        const width = mode === "mobile" ? 430 : 1600;
-        const height = Number(layout.canvas?.height || (mode === "mobile" ? 1450 : 2200));
-        return { ...layout, layoutMode: mode, canvas: { width, height, backgroundMode:"gradient", backgroundColor:"#09090b", backgroundGradient:"linear-gradient(135deg,#050506,#14141b)", fontFamily:"Arial", ...(layout.canvas || {}) }, objects: Array.isArray(layout.objects) ? layout.objects : [] };
-    }
-
-    function renderObject(obj) {
-        const el = document.createElement("article");
-        el.className = `custom-object ${obj.styles?.borderGradient ? 'public-gradient-border' : ''}`;
-        Object.assign(el.style, objectStyle(obj));
-        el.style.setProperty("--border-width", `${Number(obj.styles?.borderWidth || 1)}px`);
-        el.style.setProperty("--border-paint", obj.styles?.borderGradient || "transparent");
-        const inner = document.createElement("div");
-        inner.className = "custom-inner";
-        inner.innerHTML = renderObjectInner(obj);
-        el.appendChild(inner);
-        return el;
-    }
-
-    function objectStyle(obj) {
-        const s = obj.styles || {};
-        return { left:(obj.x||0)+"px", top:(obj.y||0)+"px", width:(obj.w||100)+"px", height:(obj.h||100)+"px", transform:`rotate(${obj.rotation||0}deg)`, background:s.background||"transparent", color:s.textColor||"#fff", borderColor:s.borderGradient?"transparent":(s.borderColor||"transparent"), borderWidth:Number(s.borderWidth||0)+"px", borderStyle:"solid", borderRadius:Number(s.radius||0)+"px", opacity:String(s.opacity ?? 1), fontSize:Number(s.fontSize||18)+"px", fontFamily:s.fontFamily||"Arial", textAlign:s.textAlign||"left", lineHeight:String(s.lineHeight||1.16) };
-    }
-
-    function renderObjectInner(obj) {
-        const s = obj.styles || {};
-        const fit = `object-fit:${escapeAttr(s.objectFit || 'cover')};`;
-        if (obj.type === "art_hero") return `<div class="art-hero"><img src="${escapeAttr(item.image_url || '')}" style="${fit}" alt=""><span class="pill">${escapeHtml(item.title || 'Artwork')}</span></div>`;
-        if (obj.type === "art_card") return `<div class="art-card"><img src="${escapeAttr(item.image_url || '')}" style="${fit}" alt=""><div class="art-card-body"><h3>${escapeHtml(item.title || 'Untitled')}</h3><p>${escapeHtml(item.description || 'No description provided.')}</p></div></div>`;
-        if (obj.type === "title") return `<div class="title-object">${escapeHtml(obj.text || item.title || 'Untitled')}</div>`;
-        if (obj.type === "description") return `<div class="description-object">${escapeHtml(obj.text || item.description || 'No description provided.')}</div>`;
-        if (obj.type === "type_badge") return `<div class="type-badge">${escapeHtml(obj.text || formatType(item.proof_type))}</div>`;
-        if (obj.type === "credit_badge") return `<div class="credit-badge">${escapeHtml(obj.text || 'Creator credited')}</div>`;
-        if (obj.type === "noai_badge") return `<div class="noai-badge">${escapeHtml(obj.text || 'Human-made / No AI')}</div>`;
-        if (obj.type === "text") return `<div class="text-object">${escapeHtml(obj.text || '')}</div>`;
-        if (obj.type === "image_box") return `<div class="image-object">${obj.imageUrl ? `<img src="${escapeAttr(obj.imageUrl)}" style="${fit}" alt="">` : ''}</div>`;
-        if (["shape","circle","star"].includes(obj.type)) return `<div class="shape-object ${obj.type === 'circle' ? 'circle' : obj.type === 'star' ? 'star' : ''}"></div>`;
-        if (obj.type === "divider") return `<div class="divider-object"></div>`;
-        return "";
-    }
-
-    function renderOwnerActions() {
-        const actions = document.getElementById("owner-actions");
-        const customize = document.getElementById("customize-link");
-        const back = document.getElementById("back-link");
-        if (profile?.username) back.href = `creator-gallery.html?user=${encodeURIComponent(profile.username)}`;
-        if (currentUser && item && currentUser.id === item.owner_id) {
-            customize.href = `creator-gallery-studio.html?item=${encodeURIComponent(item.id)}`;
-            actions.classList.add("show");
+        async function loadProfile() {
+            if (!item?.owner_id) return;
+            const { data } = await supabase.from("public_creator_profiles").select("id, username, display_name, bio, avatar_url").eq("id", item.owner_id).maybeSingle();
+            profile = data || null;
         }
-    }
 
-    function showError(message) { document.getElementById("page-root").innerHTML = `<section class="default-shell"><div class="default-card"><h1>Gallery Showcase Unavailable</h1><p class="muted">${escapeHtml(message)}</p><a class="button" href="creator-gallery.html">Back to Creator Gallery</a></div></section>`; }
-    function formatType(v) { return String(v || 'other').replaceAll('_',' ').replace(/\b\w/g, l => l.toUpperCase()); }
-    function escapeHtml(v) { return String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
-    function escapeAttr(v) { return escapeHtml(v); }</script>
+        async function loadLayout() {
+            const { data } = await supabase.from("public_creator_gallery_item_layouts").select("published_layout_json").eq("gallery_item_id", item.id).maybeSingle();
+            layoutBundle = data?.published_layout_json || null;
+            if (!layoutBundle && currentUser?.id === item.owner_id) {
+                const { data: own } = await supabase.from("creator_gallery_item_layouts").select("published_layout_json").eq("gallery_item_id", item.id).maybeSingle();
+                layoutBundle = own?.published_layout_json || null;
+            }
+        }
+
+        function renderPage() {
+            document.title = `${item.title || 'Gallery Showcase'} - Nullverse`;
+            const layout = chooseLayout(layoutBundle);
+            if (layout) renderCustom(layout); else renderDefault();
+        }
+
+        function chooseLayout(bundle) {
+            if (!bundle?.layouts) return null;
+            const wantMobile = isMobileGalleryViewer();
+            const chosen = wantMobile ? bundle.layouts.mobile : bundle.layouts.desktop;
+            if (!chosen || chosen.published !== true) return null;
+            return chosen;
+        }
+
+        function isMobileGalleryViewer() {
+            const ua = navigator.userAgent || "";
+            const phoneUA = /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(ua);
+            const narrowTouch = matchMedia("(max-width: 700px) and (any-pointer: coarse)").matches;
+            return phoneUA || narrowTouch;
+        }
+
+        function renderDefault() {
+            document.getElementById("page-root").innerHTML = `<section class="default-shell"><div class="default-card"><div class="default-layout"><div><img class="default-image" src="${escapeAttr(item.image_url || '')}" alt="${escapeAttr(item.title || '')}"></div><div><p class="muted">${escapeHtml(profile?.display_name || profile?.username || 'Nullverse Creator')}</p><h1>${escapeHtml(item.title || 'Untitled')}</h1><p class="muted">${escapeHtml(formatType(item.proof_type))}</p><p class="muted">${escapeHtml(item.description || 'No description provided.')}</p><a class="button" href="creator-gallery.html?user=${encodeURIComponent(profile?.username || '')}">Back to Creator Gallery</a><button class="button" type="button" onclick="openReportPlaceholder()">Report</button></div></div></div></section>`;
+        }
+
+        function renderCustom(layout) {
+            layout = normalizeLayout(layout);
+            const root = document.getElementById("page-root");
+            root.innerHTML = `<section class="custom-shell"><div id="custom-canvas" class="custom-canvas"></div></section>`;
+            const canvas = document.getElementById("custom-canvas");
+            canvas.style.width = layout.canvas.width + "px";
+            canvas.style.height = layout.canvas.height + "px";
+            canvas.style.minHeight = layout.canvas.height + "px";
+            canvas.style.background = layout.canvas.backgroundMode === "solid" ? layout.canvas.backgroundColor : layout.canvas.backgroundGradient;
+            canvas.style.fontFamily = layout.canvas.fontFamily || "Arial";
+            layout.objects
+                .filter(o => o.visible !== false)
+                .sort((a, b) => (isRequiredType(a.type) ? 1 : 0) - (isRequiredType(b.type) ? 1 : 0))
+                .forEach(obj => canvas.appendChild(renderObject(obj)));
+            scaleCanvas(canvas, layout);
+        }
+
+        function scaleCanvas(canvas, layout) {
+            if (layout.layoutMode === "mobile") {
+                const scale = Math.min(1, innerWidth / layout.canvas.width);
+                canvas.style.transform = `scale(${scale})`;
+                canvas.parentElement.style.minHeight = (layout.canvas.height * scale) + "px";
+                return;
+            }
+            canvas.style.transform = "none";
+            canvas.parentElement.style.overflowX = "auto";
+        }
+
+        function normalizeLayout(layout) {
+            const mode = layout.layoutMode === "mobile" ? "mobile" : "desktop";
+            const width = mode === "mobile" ? 430 : 1600;
+            const height = Number(layout.canvas?.height || (mode === "mobile" ? 1450 : 2200));
+            const normalized = { ...layout, layoutMode: mode, canvas: { width, height, backgroundMode: "gradient", backgroundColor: "#09090b", backgroundGradient: "linear-gradient(135deg,#050506,#14141b)", fontFamily: "Arial", ...(layout.canvas || {}) }, objects: Array.isArray(layout.objects) ? layout.objects : [] };
+            ensureRequiredObjects(normalized);
+            return normalized;
+        }
+
+        const requiredObjectTypes = ["back_gallery_button", "report_button"];
+
+        function isRequiredType(type) {
+            return requiredObjectTypes.includes(type);
+        }
+
+        function ensureRequiredObjects(layout) {
+            if (!layout || !Array.isArray(layout.objects)) return;
+            const mobile = layout.layoutMode === "mobile";
+            const defaults = {
+                back_gallery_button: mobile
+                    ? { x: 24, y: 860, w: 210, h: 46 }
+                    : { x: 90, y: 60, w: 260, h: 50 },
+                report_button: mobile
+                    ? { x: 250, y: 860, w: 120, h: 46 }
+                    : { x: 1280, y: 60, w: 150, h: 50 }
+            };
+            requiredObjectTypes.forEach(type => {
+                let obj = layout.objects.find(item => item.type === type);
+                if (!obj) {
+                    const base = defaults[type];
+                    obj = {
+                        id: `${type}_required`,
+                        type,
+                        name: type === "back_gallery_button" ? "Back to Creator Gallery" : "Report",
+                        text: type === "back_gallery_button" ? "Back to Creator Gallery" : "Report",
+                        x: base.x,
+                        y: base.y,
+                        w: base.w,
+                        h: base.h,
+                        rotation: 0,
+                        visible: true,
+                        required: true,
+                        styles: {
+                            background: type === "report_button" ? "rgba(90,20,20,.42)" : "rgba(0,0,0,.58)",
+                            textColor: "#ffffff",
+                            borderColor: type === "report_button" ? "rgba(255,120,120,.28)" : "rgba(255,255,255,.20)",
+                            borderWidth: 1,
+                            radius: 999,
+                            opacity: 1,
+                            fontSize: mobile ? 14 : 16,
+                            fontFamily: "Arial",
+                            lineHeight: 1.16,
+                            textAlign: "center"
+                        }
+                    };
+                    layout.objects.push(obj);
+                }
+                obj.required = true;
+                obj.visible = true;
+            });
+            layout.objects.sort((a, b) => (isRequiredType(a.type) ? 1 : 0) - (isRequiredType(b.type) ? 1 : 0));
+        }
+
+        function renderObject(obj) {
+            const el = document.createElement("article");
+            el.className = `custom-object ${isRequiredType(obj.type) ? 'required-object' : ''} ${obj.styles?.borderGradient ? 'public-gradient-border' : ''}`;
+            Object.assign(el.style, objectStyle(obj));
+            el.style.setProperty("--border-width", `${Number(obj.styles?.borderWidth || 1)}px`);
+            el.style.setProperty("--border-paint", obj.styles?.borderGradient || "transparent");
+            const inner = document.createElement("div");
+            inner.className = "custom-inner";
+            inner.innerHTML = renderObjectInner(obj);
+            el.appendChild(inner);
+            return el;
+        }
+
+        function objectStyle(obj) {
+            const s = obj.styles || {};
+            return { left: (obj.x || 0) + "px", top: (obj.y || 0) + "px", width: (obj.w || 100) + "px", height: (obj.h || 100) + "px", transform: `rotate(${obj.rotation || 0}deg)`, background: s.background || "transparent", color: s.textColor || "#fff", borderColor: s.borderGradient ? "transparent" : (s.borderColor || "transparent"), borderWidth: Number(s.borderWidth || 0) + "px", borderStyle: "solid", borderRadius: Number(s.radius || 0) + "px", opacity: String(s.opacity ?? 1), fontSize: Number(s.fontSize || 18) + "px", fontFamily: s.fontFamily || "Arial", textAlign: s.textAlign || "left", lineHeight: String(s.lineHeight || 1.16) };
+        }
+
+        function renderObjectInner(obj) {
+            const s = obj.styles || {};
+            const fit = `object-fit:${escapeAttr(s.objectFit || 'cover')};`;
+            if (obj.type === "art_hero") return `<div class="art-hero"><img src="${escapeAttr(item.image_url || '')}" style="${fit}" alt=""><span class="pill">${escapeHtml(item.title || 'Artwork')}</span></div>`;
+            if (obj.type === "art_card") return `<div class="art-card"><img src="${escapeAttr(item.image_url || '')}" style="${fit}" alt=""><div class="art-card-body"><h3>${escapeHtml(item.title || 'Untitled')}</h3><p>${escapeHtml(item.description || 'No description provided.')}</p></div></div>`;
+            if (obj.type === "title") return `<div class="title-object">${escapeHtml(obj.text || item.title || 'Untitled')}</div>`;
+            if (obj.type === "description") return `<div class="description-object">${escapeHtml(obj.text || item.description || 'No description provided.')}</div>`;
+            if (obj.type === "type_badge") return `<div class="type-badge">${escapeHtml(obj.text || formatType(item.proof_type))}</div>`;
+            if (obj.type === "credit_badge") return `<div class="credit-badge">${escapeHtml(obj.text || 'Creator credited')}</div>`;
+            if (obj.type === "noai_badge") return `<div class="noai-badge">${escapeHtml(obj.text || 'Human-made / No AI')}</div>`;
+            if (obj.type === "back_gallery_button") return `<a class="system-page-button" href="creator-gallery.html?user=${encodeURIComponent(profile?.username || '')}">${escapeHtml(obj.text || 'Back to Creator Gallery')}</a>`;
+            if (obj.type === "report_button") return `<button class="system-page-button" type="button" onclick="openReportPlaceholder()">${escapeHtml(obj.text || 'Report')}</button>`;
+            if (obj.type === "text") return `<div class="text-object">${escapeHtml(obj.text || '')}</div>`;
+            if (obj.type === "image_box") return `<div class="image-object">${obj.imageUrl ? `<img src="${escapeAttr(obj.imageUrl)}" style="${fit}" alt="">` : ''}</div>`;
+            if (["shape", "circle", "star"].includes(obj.type)) return `<div class="shape-object ${obj.type === 'circle' ? 'circle' : obj.type === 'star' ? 'star' : ''}"></div>`;
+            if (obj.type === "divider") return `<div class="divider-object"></div>`;
+            return "";
+        }
+
+        function renderOwnerActions() {
+            const actions = document.getElementById("owner-actions");
+            const customize = document.getElementById("customize-link");
+            const back = document.getElementById("back-link");
+            if (profile?.username) back.href = `creator-gallery.html?user=${encodeURIComponent(profile.username)}`;
+            if (currentUser && item && currentUser.id === item.owner_id) {
+                customize.href = `creator-gallery-studio.html?item=${encodeURIComponent(item.id)}`;
+                actions.classList.add("show");
+            }
+        }
+
+        function showError(message) { document.getElementById("page-root").innerHTML = `<section class="default-shell"><div class="default-card"><h1>Gallery Showcase Unavailable</h1><p class="muted">${escapeHtml(message)}</p><a class="button" href="creator-gallery.html">Back to Creator Gallery</a></div></section>`; }
+        function formatType(v) { return String(v || 'other').replaceAll('_', ' ').replace(/\b\w/g, l => l.toUpperCase()); }
+        function escapeHtml(v) { return String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }
+        function escapeAttr(v) { return escapeHtml(v); }</script>
 </body>
 </html>

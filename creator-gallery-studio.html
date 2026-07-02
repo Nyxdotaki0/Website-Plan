@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Gallery Item Studio - Nullverse</title>
+    <title>OC / Gallery Item Studio - Nullverse</title>
     <link rel="icon" type="image/png" href="favicon.png">
-    <script>const savedNullverseTheme = localStorage.getItem("nullverse-theme") || "void";
+    <script>
+    const savedNullverseTheme = localStorage.getItem("nullverse-theme") || "void";
         document.documentElement.setAttribute("data-theme", savedNullverseTheme);</script>
     <link rel="stylesheet" href="theme.css?v=25">
     <style>
@@ -878,6 +879,56 @@
                 z-index: 4;
             }
 
+
+        .system-page-button {
+            width: 100%;
+            height: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            border-radius: inherit;
+            color: inherit;
+            background: transparent;
+            border: 0;
+            text-decoration: none;
+            font-weight: 850;
+            letter-spacing: .015em;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .canvas-object.required-object {
+            box-shadow: 0 0 0 1px rgba(255,214,102,.18), 0 12px 30px rgba(0,0,0,.22);
+        }
+
+            .canvas-object.required-object::after {
+                content: "Required";
+                position: absolute;
+                right: 8px;
+                top: -32px;
+                z-index: 60;
+                display: none;
+                padding: 5px 9px;
+                border-radius: 999px;
+                border: 1px solid rgba(255,214,102,.34);
+                background: rgba(0,0,0,.72);
+                color: #ffe7aa;
+                font-size: .72rem;
+                font-weight: 800;
+                pointer-events: none;
+                white-space: nowrap;
+            }
+
+            .canvas-object.required-object.selected::after,
+            .canvas-object.required-object.multi-selected::after {
+                display: inline-flex;
+            }
+
+        .shape-object.rectangle {
+            border-radius: 0;
+        }
+
         .studio-modal {
             position: fixed;
             inset: 0;
@@ -1036,7 +1087,7 @@
     <div class="studio-page" id="studio-page">
         <div class="studio-topbar">
             <div class="studio-title">
-                <strong>Gallery Item Studio</strong>
+                <strong>OC / Gallery Item Studio</strong>
                 <span id="studio-title-detail">Loading your gallery work...</span>
             </div>
             <div class="button-row">
@@ -1048,6 +1099,7 @@
                     <button id="free-btn" type="button" class="active" onclick="setSnapMode('free')">Free</button>
                     <button id="snap-btn" type="button" onclick="setSnapMode('snap')">Snap</button>
                 </div>
+                <button type="button" onclick="copyPcLayoutToMobile()">Copy PC → Mobile</button>
                 <button type="button" onclick="togglePanel('tools')">Tools</button>
                 <button type="button" onclick="togglePanel('inspector')">Inspector</button>
                 <button type="button" onclick="undoStudio()">Undo</button>
@@ -1080,6 +1132,8 @@
                         <button class="tool-button" onclick="addObject('type_badge')">Type Badge</button>
                         <button class="tool-button" onclick="addObject('credit_badge')">Credit Badge</button>
                         <button class="tool-button" onclick="addObject('noai_badge')">No-AI Badge</button>
+                        <button class="tool-button" onclick="addObject('back_gallery_button')">Back Button</button>
+                        <button class="tool-button" onclick="addObject('report_button')">Report Button</button>
                         <button class="tool-button" onclick="addObject('text')">Text Box</button>
                         <button class="tool-button" onclick="addObject('image_box')">Image Box</button>
                         <button class="tool-button" onclick="addObject('shape')">Rectangle</button>
@@ -1108,859 +1162,1047 @@
     <div id="start-modal" class="studio-modal">
         <div class="modal-card">
             <h2>Pick a gallery item</h2>
-            <p>Each uploaded OC/artwork gets its own customizable public showcase screen. Choose the work you want to design.</p>
+            <p>Each uploaded OC/artwork gets its own fully customizable public showcase screen. Choose the work you want to design.</p>
             <div id="start-picker" class="studio-picker-list"></div>
         </div>
     </div>
-    <script type="module">import { requireBetaAccess } from "./betaGate.js";
-    import { supabase } from "./supabaseClient.js";
+    <script type="module">
+    import { requireBetaAccess } from "./betaGate.js";
+        import { supabase } from "./supabaseClient.js";
 
-    const currentUser = await requireBetaAccess();
-    const params = new URLSearchParams(location.search);
-    const initialItemId = params.get("item") || "";
-    const bucket = "creator-gallery";
+        const currentUser = await requireBetaAccess();
+        const params = new URLSearchParams(location.search);
+        const initialItemId = params.get("item") || "";
+        const bucket = "creator-gallery";
 
-    let galleryItems = [];
-    let activeItem = null;
-    let activeLayoutMode = "desktop";
-    let layoutBundle = createLayoutBundle(null);
-    let layout = layoutBundle.layouts.desktop;
-    let publishedBundle = null;
-    let selectedIds = [];
-    let zoom = 1;
-    let panX = 0;
-    let panY = 0;
-    let interaction = null;
-    let history = [];
-    let redo = [];
-    let historyLocked = false;
-    let touchPointers = new Map();
-    let touchState = null;
-    let imageTargetId = null;
+        let galleryItems = [];
+        let activeItem = null;
+        let activeLayoutMode = "desktop";
+        let layoutBundle = null;
+        let layout = null;
+        let publishedBundle = null;
+        let selectedIds = [];
+        let zoom = 1;
+        let panX = 0;
+        let panY = 0;
+        let interaction = null;
+        let history = [];
+        let redo = [];
+        let historyLocked = false;
+        let touchPointers = new Map();
+        let touchState = null;
+        let imageTargetId = null;
 
-    const objectLabels = {
-        art_hero: "Artwork Hero",
-        art_card: "Artwork Card",
-        title: "Title",
-        description: "Description",
-        type_badge: "Type Badge",
-        credit_badge: "Credit Badge",
-        noai_badge: "No-AI Badge",
-        text: "Text Box",
-        image_box: "Image Box",
-        shape: "Rectangle",
-        circle: "Circle",
-        star: "Star",
-        divider: "Divider"
-    };
-
-    const objectRules = {
-        art_hero: { minW: 120, minH: 120, maxW: 1600, maxH: 1800 },
-        art_card: { minW: 180, minH: 220, maxW: 900, maxH: 1100 },
-        title: { minW: 80, minH: 30, maxW: 1400, maxH: 300 },
-        description: { minW: 160, minH: 70, maxW: 1400, maxH: 700 },
-        type_badge: { minW: 90, minH: 34, maxW: 600, maxH: 120 },
-        credit_badge: { minW: 120, minH: 34, maxW: 700, maxH: 120 },
-        noai_badge: { minW: 120, minH: 34, maxW: 700, maxH: 120 },
-        text: { minW: 40, minH: 24, maxW: 1500, maxH: 900 },
-        image_box: { minW: 100, minH: 100, maxW: 1500, maxH: 1500 },
-        shape: { minW: 40, minH: 40, maxW: 1600, maxH: 1600 },
-        circle: { minW: 40, minH: 40, maxW: 1600, maxH: 1600 },
-        star: { minW: 40, minH: 40, maxW: 1600, maxH: 1600 },
-        divider: { minW: 80, minH: 12, maxW: 1600, maxH: 80 }
-    };
-
-    const canvas = document.getElementById("studio-canvas");
-    const wrap = document.getElementById("canvas-wrap");
-    const workspace = document.getElementById("workspace");
-    const hiddenImageInput = document.getElementById("hidden-image-input");
-
-    window.switchLayout = switchLayout;
-    window.setSnapMode = setSnapMode;
-    window.togglePanel = togglePanel;
-    window.addObject = addObject;
-    window.saveDraft = saveDraft;
-    window.publishLayout = publishLayout;
-    window.undoStudio = undoStudio;
-    window.redoStudio = redoStudio;
-    window.enterPreviewMode = enterPreviewMode;
-    window.exitPreviewMode = exitPreviewMode;
-    window.centerView = centerView;
-    window.updateCanvasField = updateCanvasField;
-    window.updateObjectField = updateObjectField;
-    window.updateObjectStyle = updateObjectStyle;
-    window.selectObject = selectObject;
-    window.toggleObjectLock = toggleObjectLock;
-    window.toggleObjectVisibility = toggleObjectVisibility;
-    window.moveLayer = moveLayer;
-    window.deleteSelected = deleteSelected;
-    window.duplicateSelected = duplicateSelected;
-    window.pickImageForSelected = pickImageForSelected;
-    window.chooseItem = chooseItem;
-
-    await init();
-
-    async function init() {
-        await loadItems();
-        setupWorkspaceEvents();
-        setupKeyboard();
-        setupImageInput();
-
-        if (!galleryItems.length) {
-            setStatus("You have not uploaded any Creator Gallery items yet. Add one from your creator gallery first.");
-            renderAll();
-            return;
-        }
-
-        const target = galleryItems.find(item => item.id === initialItemId) || galleryItems[0];
-        await chooseItem(target.id, { replaceUrl: !initialItemId });
-    }
-
-    async function loadItems() {
-        const { data, error } = await supabase
-            .from("creator_proof_gallery")
-            .select("id, owner_id, image_url, image_placement, title, description, proof_type, visibility, moderation_status, created_at")
-            .eq("owner_id", currentUser.id)
-            .order("created_at", { ascending: false });
-
-        if (error) {
-            setStatus(error.message);
-            return;
-        }
-
-        galleryItems = data || [];
-        renderItemPickers();
-    }
-
-    function renderItemPickers() {
-        const markup = galleryItems.length ? galleryItems.map(item => itemPickerMarkup(item)).join("") : `<p class="status">No gallery items found.</p>`;
-        document.getElementById("item-picker").innerHTML = markup;
-        document.getElementById("start-picker").innerHTML = markup;
-    }
-
-    function itemPickerMarkup(item) {
-        const active = activeItem?.id === item.id ? "active" : "";
-        return `
-            <button type="button" class="picker-item ${active}" onclick="chooseItem('${escapeAttr(item.id)}')">
-                <img class="picker-thumb" src="${escapeAttr(item.image_url || '')}" alt="">
-                <span><strong>${escapeHtml(item.title || 'Untitled')}</strong><span>${escapeHtml(formatType(item.proof_type))} · ${escapeHtml(item.visibility || 'public')}</span></span>
-            </button>`;
-    }
-
-    async function chooseItem(itemId, options = {}) {
-        const item = galleryItems.find(entry => entry.id === itemId);
-        if (!item) return;
-
-        activeItem = item;
-        selectedIds = [];
-        history = [];
-        redo = [];
-
-        if (options.replaceUrl) {
-            const url = new URL(location.href);
-            url.searchParams.set("item", item.id);
-            history.replaceState({}, "", url);
-        }
-
-        document.getElementById("back-gallery-link").href = `creator-gallery.html?user=${encodeURIComponent(await getMyUsername())}`;
-        document.getElementById("studio-title-detail").textContent = `${item.title || 'Untitled'} · custom ${activeLayoutMode === 'mobile' ? 'mobile' : 'PC'} showcase`;
-        await loadLayoutForItem(item.id);
-        renderItemPickers();
-        renderAll();
-        requestAnimationFrame(centerView);
-    }
-
-    async function getMyUsername() {
-        if (getMyUsername.cached) return getMyUsername.cached;
-        const { data } = await supabase.from("profiles").select("username").eq("id", currentUser.id).maybeSingle();
-        getMyUsername.cached = data?.username || "";
-        return getMyUsername.cached;
-    }
-
-    async function loadLayoutForItem(itemId) {
-        const { data, error } = await supabase
-            .from("creator_gallery_item_layouts")
-            .select("draft_layout_json, published_layout_json")
-            .eq("gallery_item_id", itemId)
-            .maybeSingle();
-
-        if (error) {
-            setStatus(error.message);
-        }
-
-        layoutBundle = createLayoutBundle(data?.draft_layout_json || null);
-        publishedBundle = data?.published_layout_json || null;
-        layout = layoutBundle.layouts[activeLayoutMode] || createBlankLayout(activeLayoutMode);
-        layoutBundle.layouts[activeLayoutMode] = layout;
-        normalizeBundle();
-    }
-
-    function createLayoutBundle(value) {
-        let parsed = value;
-        if (typeof parsed === "string") {
-            try { parsed = JSON.parse(parsed); } catch { parsed = null; }
-        }
-        const bundle = { version: 1, layouts: { desktop: createBlankLayout("desktop"), mobile: createBlankLayout("mobile") } };
-        if (parsed?.layouts) {
-            bundle.layouts.desktop = normalizeLayout(parsed.layouts.desktop, "desktop");
-            bundle.layouts.mobile = normalizeLayout(parsed.layouts.mobile, "mobile");
-        }
-        return bundle;
-    }
-
-    function createBlankLayout(mode = "desktop") {
-        const mobile = mode === "mobile";
-        return {
-            version: 1,
-            layoutMode: mobile ? "mobile" : "desktop",
-            canvas: {
-                width: mobile ? 430 : 1600,
-                height: mobile ? 1450 : 2200,
-                backgroundMode: "gradient",
-                backgroundColor: "#09090b",
-                backgroundGradient: "radial-gradient(circle at 20% 10%, rgba(255,255,255,.10), transparent 30%), linear-gradient(135deg, #050506, #14141b)",
-                showGrid: true,
-                snapMode: "free",
-                fontFamily: "Arial"
-            },
-            objects: defaultObjectsForMode(mobile ? "mobile" : "desktop")
+        const objectLabels = {
+            art_hero: "Artwork Hero",
+            art_card: "Artwork Card",
+            title: "Title",
+            description: "Description",
+            type_badge: "Type Badge",
+            credit_badge: "Credit Badge",
+            noai_badge: "No-AI Badge",
+            back_gallery_button: "Back to Creator Gallery",
+            report_button: "Report",
+            text: "Text Box",
+            image_box: "Image Box",
+            shape: "Rectangle",
+            circle: "Circle",
+            star: "Star",
+            divider: "Divider"
         };
-    }
 
-    function defaultObjectsForMode(mode) {
-        if (mode === "mobile") {
+        const objectRules = {
+            art_hero: { minW: 120, minH: 120, maxW: 1600, maxH: 1800 },
+            art_card: { minW: 180, minH: 220, maxW: 900, maxH: 1100 },
+            title: { minW: 80, minH: 30, maxW: 1400, maxH: 300 },
+            description: { minW: 160, minH: 70, maxW: 1400, maxH: 700 },
+            type_badge: { minW: 90, minH: 34, maxW: 600, maxH: 120 },
+            credit_badge: { minW: 120, minH: 34, maxW: 700, maxH: 120 },
+            noai_badge: { minW: 120, minH: 34, maxW: 700, maxH: 120 },
+            back_gallery_button: { minW: 140, minH: 42, maxW: 700, maxH: 160 },
+            report_button: { minW: 90, minH: 42, maxW: 500, maxH: 160 },
+            text: { minW: 40, minH: 24, maxW: 1500, maxH: 900 },
+            image_box: { minW: 100, minH: 100, maxW: 1500, maxH: 1500 },
+            shape: { minW: 40, minH: 40, maxW: 1600, maxH: 1600 },
+            circle: { minW: 40, minH: 40, maxW: 1600, maxH: 1600 },
+            star: { minW: 40, minH: 40, maxW: 1600, maxH: 1600 },
+            divider: { minW: 80, minH: 12, maxW: 1600, maxH: 80 }
+        };
+
+        const requiredObjectTypes = ["back_gallery_button", "report_button"];
+
+        function isRequiredType(type) {
+            return requiredObjectTypes.includes(type);
+        }
+
+        const canvas = document.getElementById("studio-canvas");
+        const wrap = document.getElementById("canvas-wrap");
+        const workspace = document.getElementById("workspace");
+        const hiddenImageInput = document.getElementById("hidden-image-input");
+
+        layoutBundle = createLayoutBundle(null);
+        layout = layoutBundle.layouts.desktop;
+
+        window.switchLayout = switchLayout;
+        window.setSnapMode = setSnapMode;
+        window.togglePanel = togglePanel;
+        window.addObject = addObject;
+        window.saveDraft = saveDraft;
+        window.publishLayout = publishLayout;
+        window.undoStudio = undoStudio;
+        window.redoStudio = redoStudio;
+        window.enterPreviewMode = enterPreviewMode;
+        window.exitPreviewMode = exitPreviewMode;
+        window.centerView = centerView;
+        window.copyPcLayoutToMobile = copyPcLayoutToMobile;
+        window.updateCanvasField = updateCanvasField;
+        window.updateObjectField = updateObjectField;
+        window.updateObjectStyle = updateObjectStyle;
+        window.selectObject = selectObject;
+        window.toggleObjectLock = toggleObjectLock;
+        window.toggleObjectVisibility = toggleObjectVisibility;
+        window.moveLayer = moveLayer;
+        window.deleteSelected = deleteSelected;
+        window.duplicateSelected = duplicateSelected;
+        window.pickImageForSelected = pickImageForSelected;
+        window.chooseItem = chooseItem;
+
+        await init();
+
+        async function init() {
+            await loadItems();
+            setupWorkspaceEvents();
+            setupKeyboard();
+            setupImageInput();
+
+            if (!galleryItems.length) {
+                setStatus("You have not uploaded any Creator Gallery items yet. Add one from your creator gallery first.");
+                renderAll();
+                return;
+            }
+
+            const target = galleryItems.find(item => item.id === initialItemId) || galleryItems[0];
+            await chooseItem(target.id, { replaceUrl: !initialItemId });
+        }
+
+        async function loadItems() {
+            const { data, error } = await supabase
+                .from("creator_proof_gallery")
+                .select("id, owner_id, image_url, image_placement, title, description, proof_type, visibility, moderation_status, created_at")
+                .eq("owner_id", currentUser.id)
+                .order("created_at", { ascending: false });
+
+            if (error) {
+                setStatus(error.message);
+                return;
+            }
+
+            galleryItems = data || [];
+            renderItemPickers();
+        }
+
+        function renderItemPickers() {
+            const markup = galleryItems.length ? galleryItems.map(item => itemPickerMarkup(item)).join("") : `<p class="status">No gallery items found.</p>`;
+            document.getElementById("item-picker").innerHTML = markup;
+            document.getElementById("start-picker").innerHTML = markup;
+        }
+
+        function itemPickerMarkup(item) {
+            const active = activeItem?.id === item.id ? "active" : "";
+            return `
+                <button type="button" class="picker-item ${active}" onclick="chooseItem('${escapeAttr(item.id)}')">
+                    <img class="picker-thumb" src="${escapeAttr(item.image_url || '')}" alt="">
+                    <span><strong>${escapeHtml(item.title || 'Untitled')}</strong><span>${escapeHtml(formatType(item.proof_type))} · ${escapeHtml(item.visibility || 'public')}</span></span>
+                </button>`;
+        }
+
+        async function chooseItem(itemId, options = {}) {
+            const item = galleryItems.find(entry => entry.id === itemId);
+            if (!item) return;
+
+            activeItem = item;
+            selectedIds = [];
+            history = [];
+            redo = [];
+
+            if (options.replaceUrl) {
+                const url = new URL(location.href);
+                url.searchParams.set("item", item.id);
+                history.replaceState({}, "", url);
+            }
+
+            document.getElementById("back-gallery-link").href = `creator-gallery.html?user=${encodeURIComponent(await getMyUsername())}`;
+            document.getElementById("studio-title-detail").textContent = `${item.title || 'Untitled'} · custom ${activeLayoutMode === 'mobile' ? 'mobile' : 'PC'} showcase`;
+            await loadLayoutForItem(item.id);
+            renderItemPickers();
+            renderAll();
+            requestAnimationFrame(centerView);
+        }
+
+        async function getMyUsername() {
+            if (getMyUsername.cached) return getMyUsername.cached;
+            const { data } = await supabase.from("profiles").select("username").eq("id", currentUser.id).maybeSingle();
+            getMyUsername.cached = data?.username || "";
+            return getMyUsername.cached;
+        }
+
+        async function loadLayoutForItem(itemId) {
+            const { data, error } = await supabase
+                .from("creator_gallery_item_layouts")
+                .select("draft_layout_json, published_layout_json")
+                .eq("gallery_item_id", itemId)
+                .maybeSingle();
+
+            if (error) {
+                setStatus(error.message);
+            }
+
+            layoutBundle = createLayoutBundle(data?.draft_layout_json || null);
+            publishedBundle = data?.published_layout_json || null;
+            layout = layoutBundle.layouts[activeLayoutMode] || createBlankLayout(activeLayoutMode);
+            layoutBundle.layouts[activeLayoutMode] = layout;
+            normalizeBundle();
+        }
+
+        function createLayoutBundle(value) {
+            let parsed = value;
+            if (typeof parsed === "string") {
+                try { parsed = JSON.parse(parsed); } catch { parsed = null; }
+            }
+            const bundle = { version: 1, layouts: { desktop: createBlankLayout("desktop"), mobile: createBlankLayout("mobile") } };
+            if (parsed?.layouts) {
+                bundle.layouts.desktop = normalizeLayout(parsed.layouts.desktop, "desktop");
+                bundle.layouts.mobile = normalizeLayout(parsed.layouts.mobile, "mobile");
+            }
+            return bundle;
+        }
+
+        function createBlankLayout(mode = "desktop") {
+            const mobile = mode === "mobile";
+            return {
+                version: 1,
+                layoutMode: mobile ? "mobile" : "desktop",
+                canvas: {
+                    width: mobile ? 430 : 1600,
+                    height: mobile ? 1450 : 2200,
+                    backgroundMode: "gradient",
+                    backgroundColor: "#09090b",
+                    backgroundGradient: "radial-gradient(circle at 20% 10%, rgba(255,255,255,.10), transparent 30%), linear-gradient(135deg, #050506, #14141b)",
+                    showGrid: true,
+                    snapMode: "free",
+                    fontFamily: "Arial"
+                },
+                objects: defaultObjectsForMode(mobile ? "mobile" : "desktop")
+            };
+        }
+
+        function defaultObjectsForMode(mode) {
+            if (mode === "mobile") {
+                return [
+                    makeObject("art_hero", { x: 24, y: 90, w: 382, h: 382, locked: true, name: "Main Artwork" }),
+                    makeObject("title", { x: 24, y: 500, w: 360, h: 60, styles: { fontSize: 34, textColor: "#ffffff" } }),
+                    makeObject("description", { x: 24, y: 585, w: 382, h: 165, styles: { fontSize: 16, textColor: "rgba(255,255,255,.82)" } }),
+                    makeObject("noai_badge", { x: 24, y: 780, w: 190, h: 42 }),
+                    makeObject("back_gallery_button", { x: 24, y: 860, w: 210, h: 46 }),
+                    makeObject("report_button", { x: 250, y: 860, w: 120, h: 46 })
+                ];
+            }
             return [
-                makeObject("art_hero", { x: 24, y: 90, w: 382, h: 382, locked: true, name: "Main Artwork" }),
-                makeObject("title", { x: 24, y: 500, w: 360, h: 60, styles: { fontSize: 34, textColor: "#ffffff" } }),
-                makeObject("description", { x: 24, y: 585, w: 382, h: 165, styles: { fontSize: 16, textColor: "rgba(255,255,255,.82)" } }),
-                makeObject("noai_badge", { x: 24, y: 780, w: 190, h: 42, locked: true })
+                makeObject("art_hero", { x: 110, y: 170, w: 680, h: 680, locked: true, name: "Main Artwork" }),
+                makeObject("title", { x: 850, y: 220, w: 610, h: 90, styles: { fontSize: 64, textColor: "#ffffff" } }),
+                makeObject("description", { x: 850, y: 340, w: 560, h: 220, styles: { fontSize: 22, textColor: "rgba(255,255,255,.82)" } }),
+                makeObject("type_badge", { x: 850, y: 610, w: 210, h: 48 }),
+                makeObject("noai_badge", { x: 1080, y: 610, w: 230, h: 48 }),
+                makeObject("back_gallery_button", { x: 90, y: 60, w: 260, h: 50 }),
+                makeObject("report_button", { x: 1280, y: 60, w: 150, h: 50 })
             ];
         }
-        return [
-            makeObject("art_hero", { x: 110, y: 170, w: 680, h: 680, locked: true, name: "Main Artwork" }),
-            makeObject("title", { x: 850, y: 220, w: 610, h: 90, styles: { fontSize: 64, textColor: "#ffffff" } }),
-            makeObject("description", { x: 850, y: 340, w: 560, h: 220, styles: { fontSize: 22, textColor: "rgba(255,255,255,.82)" } }),
-            makeObject("type_badge", { x: 850, y: 610, w: 210, h: 48 }),
-            makeObject("noai_badge", { x: 1080, y: 610, w: 230, h: 48, locked: true })
-        ];
-    }
 
-    function normalizeBundle() {
-        layoutBundle.layouts.desktop = normalizeLayout(layoutBundle.layouts.desktop, "desktop");
-        layoutBundle.layouts.mobile = normalizeLayout(layoutBundle.layouts.mobile, "mobile");
-        layout = layoutBundle.layouts[activeLayoutMode];
-    }
-
-    function normalizeLayout(value, mode = "desktop") {
-        let parsed = value;
-        if (typeof parsed === "string") {
-            try { parsed = JSON.parse(parsed); } catch { parsed = null; }
+        function normalizeBundle() {
+            layoutBundle.layouts.desktop = normalizeLayout(layoutBundle.layouts.desktop, "desktop");
+            layoutBundle.layouts.mobile = normalizeLayout(layoutBundle.layouts.mobile, "mobile");
+            ensureRequiredObjects(layoutBundle.layouts.desktop);
+            ensureRequiredObjects(layoutBundle.layouts.mobile);
+            layout = layoutBundle.layouts[activeLayoutMode];
+            keepRequiredObjectsOnTop(layout);
         }
-        const blank = createBlankLayout(mode);
-        if (!parsed || typeof parsed !== "object") parsed = blank;
-        const mobile = mode === "mobile";
-        parsed.version = 1;
-        parsed.layoutMode = mobile ? "mobile" : "desktop";
-        parsed.canvas = { ...blank.canvas, ...(parsed.canvas || {}), width: mobile ? 430 : 1600, height: mobile ? 1450 : 2200 };
-        parsed.canvas.snapMode = parsed.canvas.snapMode === "snap" || parsed.canvas.snapMode === "snapgrid" ? "snap" : "free";
-        parsed.objects = Array.isArray(parsed.objects) ? parsed.objects : [];
-        parsed.objects = parsed.objects.map(obj => {
-            const next = { ...makeObject(obj.type || "text"), ...obj };
-            next.id = next.id || uid();
-            next.name = next.name || objectLabels[next.type] || "Layer";
-            next.visible = next.visible !== false;
-            next.locked = next.locked === true;
-            next.rotation = num(next.rotation, 0);
-            next.styles = normalizeStyles(next.styles || {});
-            const rule = objectRules[next.type] || objectRules.text;
-            next.w = clamp(num(next.w, rule.minW), rule.minW, rule.maxW);
-            next.h = clamp(num(next.h, rule.minH), rule.minH, rule.maxH);
-            next.x = clamp(num(next.x, 40), 0, parsed.canvas.width - next.w);
-            next.y = clamp(num(next.y, 40), 0, parsed.canvas.height - next.h);
-            return next;
-        });
-        return parsed;
-    }
 
-    function makeObject(type, props = {}) {
-        const mobile = activeLayoutMode === "mobile";
-        const base = {
-            id: uid(), type, name: objectLabels[type] || "Layer",
-            x: mobile ? 35 : 140, y: mobile ? 130 : 180,
-            w: 300, h: 160, rotation: 0, visible: true, locked: false,
-            text: "Double-click to write...", imageUrl: "",
-            styles: normalizeStyles({})
-        };
-        const defaults = {
-            art_hero: { w: mobile ? 360 : 520, h: mobile ? 360 : 520, locked: true },
-            art_card: { w: mobile ? 340 : 320, h: mobile ? 430 : 420 },
-            title: { w: mobile ? 340 : 520, h: mobile ? 62 : 84, text: "", styles: { fontSize: mobile ? 34 : 58, textColor: "#fff", background: "transparent", borderColor: "transparent" } },
-            description: { w: mobile ? 340 : 520, h: mobile ? 150 : 190, text: "", styles: { fontSize: mobile ? 16 : 20, textColor: "rgba(255,255,255,.82)", background: "transparent", borderColor: "transparent" } },
-            type_badge: { w: 180, h: 42, styles: { radius: 999, background: "rgba(0,0,0,.48)" } },
-            credit_badge: { w: 220, h: 42, styles: { radius: 999, background: "rgba(0,0,0,.48)" } },
-            noai_badge: { w: 210, h: 42, locked: true, styles: { radius: 999, background: "rgba(0,0,0,.48)" } },
-            text: { w: 260, h: 80, styles: { fontSize: 24, background: "transparent", borderColor: "transparent" } },
-            image_box: { w: 260, h: 260 },
-            shape: { w: 220, h: 140, styles: { background: "rgba(255,255,255,.14)", radius: 0 } },
-            circle: { w: 180, h: 180, styles: { background: "rgba(255,255,255,.14)", radius: 999 } },
-            star: { w: 190, h: 190, styles: { background: "rgba(255,255,255,.14)", radius: 0 } },
-            divider: { w: 520, h: 28, styles: { background: "transparent", borderColor: "transparent" } }
-        }[type] || {};
-        return deepMerge(base, defaults, props);
-    }
-
-    function normalizeStyles(styles) {
-        return {
-            background: styles.background ?? "rgba(255,255,255,.045)",
-            textColor: styles.textColor ?? "#ffffff",
-            borderColor: styles.borderColor ?? "rgba(255,255,255,.10)",
-            borderWidth: Number(styles.borderWidth ?? 1),
-            radius: Number(styles.radius ?? 18),
-            opacity: Number(styles.opacity ?? 1),
-            fontSize: Number(styles.fontSize ?? 18),
-            fontFamily: styles.fontFamily || "Arial",
-            lineHeight: Number(styles.lineHeight ?? 1.16),
-            textAlign: styles.textAlign || "left",
-            objectFit: styles.objectFit || "cover",
-            borderGradient: styles.borderGradient || ""
-        };
-    }
-
-    function renderAll() {
-        normalizeBundle();
-        renderCanvas();
-        renderLayers();
-        renderInspector();
-        renderItemPickers();
-        updateTopbarButtons();
-    }
-
-    function renderCanvas() {
-        canvas.style.width = layout.canvas.width + "px";
-        canvas.style.minHeight = layout.canvas.height + "px";
-        canvas.style.height = layout.canvas.height + "px";
-        canvas.style.fontFamily = layout.canvas.fontFamily || "Arial";
-        canvas.classList.toggle("mobile-layout", activeLayoutMode === "mobile");
-        canvas.classList.toggle("snapgrid-active", isSnap());
-        canvas.style.background = getCanvasBackground();
-        document.getElementById("canvas-note").style.display = layout.objects.length ? "none" : "flex";
-
-        [...canvas.querySelectorAll(".canvas-object,.group-selection-box,.selection-marquee")].forEach(el => el.remove());
-        layout.objects.forEach(obj => canvas.appendChild(renderObjectElement(obj)));
-        renderGroupBox();
-        applyWrapTransform();
-    }
-
-    function renderObjectElement(obj) {
-        const el = document.createElement("div");
-        el.className = `canvas-object ${selectedIds.includes(obj.id) ? (selectedIds.length > 1 ? "multi-selected" : "selected") : ""} ${obj.visible === false ? "hidden-object" : ""} ${obj.locked ? "locked-object" : ""} ${["text","title","description"].includes(obj.type) ? "text-box-object" : ""} ${obj.styles.borderGradient ? "paint-gradient-border" : ""}`;
-        el.dataset.id = obj.id;
-        el.dataset.type = obj.type;
-        Object.assign(el.style, objectFrameStyle(obj));
-        el.style.setProperty("--border-width", `${Number(obj.styles.borderWidth || 1)}px`);
-        el.style.setProperty("--border-paint", obj.styles.borderGradient || "transparent");
-        const inner = document.createElement("div");
-        inner.className = "object-inner";
-        inner.innerHTML = renderObjectInner(obj);
-        el.appendChild(inner);
-        ["nw","n","ne","e","se","s","sw","w"].forEach(dir => {
-            const h = document.createElement("span"); h.className = `resize-handle ${dir}`; h.dataset.dir = dir; el.appendChild(h);
-        });
-        const rotate = document.createElement("span"); rotate.className = "rotate-handle"; el.appendChild(rotate);
-        el.addEventListener("pointerdown", objectPointerDown);
-        el.addEventListener("dblclick", () => maybeEditText(obj.id));
-        return el;
-    }
-
-    function objectFrameStyle(obj) {
-        const s = obj.styles;
-        return {
-            left: obj.x + "px",
-            top: obj.y + "px",
-            width: obj.w + "px",
-            height: obj.h + "px",
-            transform: `rotate(${obj.rotation || 0}deg)`,
-            background: s.background,
-            color: s.textColor,
-            borderColor: obj.styles.borderGradient ? "transparent" : s.borderColor,
-            borderWidth: Number(s.borderWidth || 1) + "px",
-            borderStyle: "solid",
-            borderRadius: Number(s.radius || 0) + "px",
-            opacity: String(clamp(Number(s.opacity ?? 1), .05, 1)),
-            fontSize: Number(s.fontSize || 18) + "px",
-            fontFamily: s.fontFamily || "Arial",
-            textAlign: s.textAlign || "left",
-            lineHeight: String(s.lineHeight || 1.16)
-        };
-    }
-
-    function renderObjectInner(obj) {
-        const item = activeItem || {};
-        const s = obj.styles || {};
-        const imageStyle = `object-fit:${escapeAttr(s.objectFit || 'cover')};`;
-        if (obj.type === "art_hero") {
-            return `<div class="art-hero"><img src="${escapeAttr(item.image_url || '')}" style="${imageStyle}" alt="${escapeAttr(item.title || '')}"><span class="pill">${escapeHtml(item.title || 'Artwork')}</span></div>`;
+        function normalizeLayout(value, mode = "desktop") {
+            let parsed = value;
+            if (typeof parsed === "string") {
+                try { parsed = JSON.parse(parsed); } catch { parsed = null; }
+            }
+            const blank = createBlankLayout(mode);
+            if (!parsed || typeof parsed !== "object") parsed = blank;
+            const mobile = mode === "mobile";
+            parsed.version = 1;
+            parsed.layoutMode = mobile ? "mobile" : "desktop";
+            parsed.canvas = { ...blank.canvas, ...(parsed.canvas || {}), width: mobile ? 430 : 1600, height: mobile ? 1450 : 2200 };
+            parsed.canvas.snapMode = parsed.canvas.snapMode === "snap" || parsed.canvas.snapMode === "snapgrid" ? "snap" : "free";
+            parsed.objects = Array.isArray(parsed.objects) ? parsed.objects : [];
+            parsed.objects = parsed.objects.map(obj => {
+                const next = { ...makeObject(obj.type || "text"), ...obj };
+                next.id = next.id || uid();
+                next.name = next.name || objectLabels[next.type] || "Layer";
+                next.required = next.required === true || isRequiredType(next.type);
+                next.visible = next.required ? true : next.visible !== false;
+                next.locked = next.required ? false : next.locked === true;
+                next.rotation = num(next.rotation, 0);
+                next.styles = normalizeStyles(next.styles || {});
+                const rule = objectRules[next.type] || objectRules.text;
+                next.w = clamp(num(next.w, rule.minW), rule.minW, rule.maxW);
+                next.h = clamp(num(next.h, rule.minH), rule.minH, rule.maxH);
+                next.x = clamp(num(next.x, 40), 0, parsed.canvas.width - next.w);
+                next.y = clamp(num(next.y, 40), 0, parsed.canvas.height - next.h);
+                return next;
+            });
+            ensureRequiredObjects(parsed);
+            keepRequiredObjectsOnTop(parsed);
+            return parsed;
         }
-        if (obj.type === "art_card") {
-            return `<div class="art-card"><img src="${escapeAttr(item.image_url || '')}" style="${imageStyle}" alt=""><div class="art-card-body"><h3>${escapeHtml(item.title || 'Untitled')}</h3><p>${escapeHtml(item.description || 'No description provided.')}</p></div></div>`;
-        }
-        if (obj.type === "title") return `<div class="title-object">${escapeHtml(obj.text || item.title || 'Untitled')}</div>`;
-        if (obj.type === "description") return `<div class="description-object">${escapeHtml(obj.text || item.description || 'No description provided.')}</div>`;
-        if (obj.type === "type_badge") return `<div class="type-badge">${escapeHtml(obj.text || formatType(item.proof_type))}</div>`;
-        if (obj.type === "credit_badge") return `<div class="credit-badge">${escapeHtml(obj.text || 'Creator credited')}</div>`;
-        if (obj.type === "noai_badge") return `<div class="noai-badge">${escapeHtml(obj.text || 'Human-made / No AI')}</div>`;
-        if (obj.type === "text") return `<div class="text-object">${escapeHtml(obj.text || 'Double-click to write...')}</div>`;
-        if (obj.type === "image_box") return `<div class="image-object">${obj.imageUrl ? `<img src="${escapeAttr(obj.imageUrl)}" style="${imageStyle}" alt="">` : `<span class="pill">Upload/select image in Inspector</span>`}</div>`;
-        if (["shape","circle","star"].includes(obj.type)) return `<div class="shape-object ${obj.type === 'circle' ? 'circle' : obj.type === 'star' ? 'star' : ''}"></div>`;
-        if (obj.type === "divider") return `<div class="divider-object"></div>`;
-        return `<div class="text-object">Layer</div>`;
-    }
 
-    function renderLayers() {
-        const list = document.getElementById("layer-list");
-        const reversed = [...layout.objects].reverse();
-        list.innerHTML = reversed.length ? reversed.map((obj, idx) => {
-            const realIndex = layout.objects.findIndex(item => item.id === obj.id);
-            return `<div class="layer-item ${selectedIds.includes(obj.id) ? 'active' : ''} ${obj.locked ? 'locked' : ''} ${obj.visible === false ? 'hidden-layer' : ''}">
-                <button class="tiny-btn" title="Move layer" onclick="moveLayer('${escapeAttr(obj.id)}', -1)">↑</button>
-                <button class="layer-select" onclick="selectObject('${escapeAttr(obj.id)}')"><span>${escapeHtml(obj.name || objectLabels[obj.type] || 'Layer')}</span></button>
-                <div class="layer-actions">
-                    <button class="tiny-btn" onclick="toggleObjectVisibility('${escapeAttr(obj.id)}')">${obj.visible === false ? '🙈' : '👁'}</button>
-                    <button class="tiny-btn" onclick="toggleObjectLock('${escapeAttr(obj.id)}')">${obj.locked ? '🔒' : '🔓'}</button>
-                    <button class="tiny-btn" onclick="moveLayer('${escapeAttr(obj.id)}', 1)">↓</button>
-                </div>
+        function makeObject(type, props = {}) {
+            const mobile = activeLayoutMode === "mobile";
+            const base = {
+                id: uid(), type, name: objectLabels[type] || "Layer",
+                x: mobile ? 35 : 140, y: mobile ? 130 : 180,
+                w: 300, h: 160, rotation: 0, visible: true, locked: false,
+                text: "Double-click to write...", imageUrl: "",
+                styles: normalizeStyles({})
+            };
+            const defaults = {
+                art_hero: { w: mobile ? 360 : 520, h: mobile ? 360 : 520, locked: true },
+                art_card: { w: mobile ? 340 : 320, h: mobile ? 430 : 420 },
+                title: { w: mobile ? 340 : 520, h: mobile ? 62 : 84, text: "", styles: { fontSize: mobile ? 34 : 58, textColor: "#fff", background: "transparent", borderColor: "transparent" } },
+                description: { w: mobile ? 340 : 520, h: mobile ? 150 : 190, text: "", styles: { fontSize: mobile ? 16 : 20, textColor: "rgba(255,255,255,.82)", background: "transparent", borderColor: "transparent" } },
+                type_badge: { w: 180, h: 42, styles: { radius: 999, background: "rgba(0,0,0,.48)" } },
+                credit_badge: { w: 220, h: 42, styles: { radius: 999, background: "rgba(0,0,0,.48)" } },
+                noai_badge: { w: 210, h: 42, styles: { radius: 999, background: "rgba(0,0,0,.48)" } },
+                back_gallery_button: { w: mobile ? 210 : 260, h: mobile ? 46 : 50, text: "Back to Creator Gallery", required: true, styles: { radius: 999, background: "rgba(0,0,0,.58)", borderColor: "rgba(255,255,255,.20)", fontSize: mobile ? 14 : 16 } },
+                report_button: { w: mobile ? 120 : 150, h: mobile ? 46 : 50, text: "Report", required: true, styles: { radius: 999, background: "rgba(90,20,20,.42)", borderColor: "rgba(255,120,120,.28)", fontSize: mobile ? 14 : 16 } },
+                text: { w: 260, h: 80, styles: { fontSize: 24, background: "transparent", borderColor: "transparent" } },
+                image_box: { w: 260, h: 260 },
+                shape: { w: 220, h: 140, styles: { background: "rgba(255,255,255,.14)", radius: 0 } },
+                circle: { w: 180, h: 180, styles: { background: "rgba(255,255,255,.14)", radius: 999 } },
+                star: { w: 190, h: 190, styles: { background: "rgba(255,255,255,.14)", radius: 0 } },
+                divider: { w: 520, h: 28, styles: { background: "transparent", borderColor: "transparent" } }
+            }[type] || {};
+            return deepMerge(base, defaults, props);
+        }
+
+        function normalizeStyles(styles) {
+            return {
+                background: styles.background ?? "rgba(255,255,255,.045)",
+                textColor: styles.textColor ?? "#ffffff",
+                borderColor: styles.borderColor ?? "rgba(255,255,255,.10)",
+                borderWidth: Number(styles.borderWidth ?? 1),
+                radius: Number(styles.radius ?? 18),
+                opacity: Number(styles.opacity ?? 1),
+                fontSize: Number(styles.fontSize ?? 18),
+                fontFamily: styles.fontFamily || "Arial",
+                lineHeight: Number(styles.lineHeight ?? 1.16),
+                textAlign: styles.textAlign || "left",
+                objectFit: styles.objectFit || "cover",
+                borderGradient: styles.borderGradient || ""
+            };
+        }
+
+
+        function ensureRequiredObjects(targetLayout = layout) {
+            if (!targetLayout || !Array.isArray(targetLayout.objects)) return;
+            const mobile = targetLayout.layoutMode === "mobile";
+            const defaults = {
+                back_gallery_button: mobile
+                    ? { x: 24, y: 860, w: 210, h: 46 }
+                    : { x: 90, y: 60, w: 260, h: 50 },
+                report_button: mobile
+                    ? { x: 250, y: 860, w: 120, h: 46 }
+                    : { x: 1280, y: 60, w: 150, h: 50 }
+            };
+            requiredObjectTypes.forEach(type => {
+                let obj = targetLayout.objects.find(item => item.type === type);
+                if (!obj) {
+                    obj = makeObject(type, defaults[type] || {});
+                    targetLayout.objects.push(obj);
+                }
+                obj.required = true;
+                obj.visible = true;
+                obj.locked = false;
+                obj.name = objectLabels[type];
+            });
+            keepRequiredObjectsOnTop(targetLayout);
+        }
+
+        function keepRequiredObjectsOnTop(targetLayout = layout) {
+            if (!targetLayout || !Array.isArray(targetLayout.objects)) return;
+            targetLayout.objects.sort((a, b) => {
+                const ar = isRequiredType(a.type) ? 1 : 0;
+                const br = isRequiredType(b.type) ? 1 : 0;
+                return ar - br;
+            });
+        }
+
+        function orderedObjectsForRender() {
+            keepRequiredObjectsOnTop(layout);
+            return layout.objects;
+        }
+
+        function validateRequiredObjects() {
+            ensureRequiredObjects(layout);
+            const missing = [];
+            requiredObjectTypes.forEach(type => {
+                const obj = layout.objects.find(item => item.type === type);
+                const rule = objectRules[type];
+                if (!obj || obj.visible === false) missing.push(objectLabels[type] || type);
+                if (obj && (obj.w < rule.minW || obj.h < rule.minH)) missing.push(`${objectLabels[type]} is too small`);
+            });
+            if (missing.length) {
+                return `Required system buttons need attention: ${[...new Set(missing)].join(", ")}.`;
+            }
+            return "";
+        }
+
+        function renderAll() {
+            normalizeBundle();
+            renderCanvas();
+            renderLayers();
+            renderInspector();
+            renderItemPickers();
+            updateTopbarButtons();
+        }
+
+        function renderCanvas() {
+            canvas.style.width = layout.canvas.width + "px";
+            canvas.style.minHeight = layout.canvas.height + "px";
+            canvas.style.height = layout.canvas.height + "px";
+            canvas.style.fontFamily = layout.canvas.fontFamily || "Arial";
+            canvas.classList.toggle("mobile-layout", activeLayoutMode === "mobile");
+            canvas.classList.toggle("snapgrid-active", isSnap());
+            canvas.style.background = getCanvasBackground();
+            document.getElementById("canvas-note").style.display = layout.objects.length ? "none" : "flex";
+
+            [...canvas.querySelectorAll(".canvas-object,.group-selection-box,.selection-marquee")].forEach(el => el.remove());
+            orderedObjectsForRender().forEach(obj => canvas.appendChild(renderObjectElement(obj)));
+            renderGroupBox();
+            applyWrapTransform();
+        }
+
+        function renderObjectElement(obj) {
+            const el = document.createElement("div");
+            el.className = `canvas-object ${selectedIds.includes(obj.id) ? (selectedIds.length > 1 ? "multi-selected" : "selected") : ""} ${obj.visible === false ? "hidden-object" : ""} ${obj.locked ? "locked-object" : ""} ${obj.required ? "required-object" : ""} ${["text", "title", "description"].includes(obj.type) ? "text-box-object" : ""} ${obj.styles.borderGradient ? "paint-gradient-border" : ""}`;
+            el.dataset.id = obj.id;
+            el.dataset.type = obj.type;
+            Object.assign(el.style, objectFrameStyle(obj));
+            el.style.setProperty("--border-width", `${Number(obj.styles.borderWidth || 1)}px`);
+            el.style.setProperty("--border-paint", obj.styles.borderGradient || "transparent");
+            const inner = document.createElement("div");
+            inner.className = "object-inner";
+            inner.innerHTML = renderObjectInner(obj);
+            el.appendChild(inner);
+            ["nw", "n", "ne", "e", "se", "s", "sw", "w"].forEach(dir => {
+                const h = document.createElement("span"); h.className = `resize-handle ${dir}`; h.dataset.dir = dir; el.appendChild(h);
+            });
+            const rotate = document.createElement("span"); rotate.className = "rotate-handle"; el.appendChild(rotate);
+            el.addEventListener("pointerdown", objectPointerDown);
+            el.addEventListener("dblclick", () => maybeEditText(obj.id));
+            return el;
+        }
+
+        function objectFrameStyle(obj) {
+            const s = obj.styles;
+            return {
+                left: obj.x + "px",
+                top: obj.y + "px",
+                width: obj.w + "px",
+                height: obj.h + "px",
+                transform: `rotate(${obj.rotation || 0}deg)`,
+                background: s.background,
+                color: s.textColor,
+                borderColor: obj.styles.borderGradient ? "transparent" : s.borderColor,
+                borderWidth: Number(s.borderWidth || 1) + "px",
+                borderStyle: "solid",
+                borderRadius: Number(s.radius || 0) + "px",
+                opacity: String(clamp(Number(s.opacity ?? 1), .05, 1)),
+                fontSize: Number(s.fontSize || 18) + "px",
+                fontFamily: s.fontFamily || "Arial",
+                textAlign: s.textAlign || "left",
+                lineHeight: String(s.lineHeight || 1.16)
+            };
+        }
+
+        function renderObjectInner(obj) {
+            const item = activeItem || {};
+            const s = obj.styles || {};
+            const imageStyle = `object-fit:${escapeAttr(s.objectFit || 'cover')};`;
+            if (obj.type === "art_hero") {
+                return `<div class="art-hero"><img src="${escapeAttr(item.image_url || '')}" style="${imageStyle}" alt="${escapeAttr(item.title || '')}"><span class="pill">${escapeHtml(item.title || 'Artwork')}</span></div>`;
+            }
+            if (obj.type === "art_card") {
+                return `<div class="art-card"><img src="${escapeAttr(item.image_url || '')}" style="${imageStyle}" alt=""><div class="art-card-body"><h3>${escapeHtml(item.title || 'Untitled')}</h3><p>${escapeHtml(item.description || 'No description provided.')}</p></div></div>`;
+            }
+            if (obj.type === "title") return `<div class="title-object">${escapeHtml(obj.text || item.title || 'Untitled')}</div>`;
+            if (obj.type === "description") return `<div class="description-object">${escapeHtml(obj.text || item.description || 'No description provided.')}</div>`;
+            if (obj.type === "type_badge") return `<div class="type-badge">${escapeHtml(obj.text || formatType(item.proof_type))}</div>`;
+            if (obj.type === "credit_badge") return `<div class="credit-badge">${escapeHtml(obj.text || 'Creator credited')}</div>`;
+            if (obj.type === "noai_badge") return `<div class="noai-badge">${escapeHtml(obj.text || 'Human-made / No AI')}</div>`;
+            if (obj.type === "back_gallery_button") return `<div class="system-page-button">${escapeHtml(obj.text || 'Back to Creator Gallery')}</div>`;
+            if (obj.type === "report_button") return `<div class="system-page-button">${escapeHtml(obj.text || 'Report')}</div>`;
+            if (obj.type === "text") return `<div class="text-object">${escapeHtml(obj.text || 'Double-click to write...')}</div>`;
+            if (obj.type === "image_box") return `<div class="image-object">${obj.imageUrl ? `<img src="${escapeAttr(obj.imageUrl)}" style="${imageStyle}" alt="">` : `<span class="pill">Upload/select image in Inspector</span>`}</div>`;
+            if (["shape", "circle", "star"].includes(obj.type)) return `<div class="shape-object ${obj.type === 'circle' ? 'circle' : obj.type === 'star' ? 'star' : ''}"></div>`;
+            if (obj.type === "divider") return `<div class="divider-object"></div>`;
+            return `<div class="text-object">Layer</div>`;
+        }
+
+        function renderLayers() {
+            const list = document.getElementById("layer-list");
+            keepRequiredObjectsOnTop(layout);
+            const reversed = [...layout.objects].reverse();
+            list.innerHTML = reversed.length ? reversed.map((obj, idx) => {
+                const required = obj.required || isRequiredType(obj.type);
+                return `<div class="layer-item ${selectedIds.includes(obj.id) ? 'active' : ''} ${obj.locked ? 'locked' : ''} ${obj.visible === false ? 'hidden-layer' : ''} ${required ? 'locked' : ''}">
+                    <button class="tiny-btn" title="${required ? 'Required button stays above other layers' : 'Move layer up'}" ${required ? 'disabled' : ''} onclick="moveLayer('${escapeAttr(obj.id)}', -1)">↑</button>
+                    <button class="layer-select" onclick="selectObject('${escapeAttr(obj.id)}')"><span>${required ? '🛡 ' : ''}${escapeHtml(obj.name || objectLabels[obj.type] || 'Layer')}</span></button>
+                    <div class="layer-actions">
+                        <button class="tiny-btn" ${required ? 'disabled title="Required buttons cannot be hidden"' : ''} onclick="toggleObjectVisibility('${escapeAttr(obj.id)}')">${obj.visible === false ? '🙈' : '👁'}</button>
+                        <button class="tiny-btn" onclick="toggleObjectLock('${escapeAttr(obj.id)}')">${obj.locked ? '🔒' : '🔓'}</button>
+                        <button class="tiny-btn" title="${required ? 'Required button stays above other layers' : 'Move layer down'}" ${required ? 'disabled' : ''} onclick="moveLayer('${escapeAttr(obj.id)}', 1)">↓</button>
+                    </div>
+                </div>`;
+            }).join("") : `<p class="status">No layers yet.</p>`;
+        }
+
+        function renderInspector() {
+            const box = document.getElementById("inspector-content");
+            const selected = selectedIds.map(id => findObject(id)).filter(Boolean);
+            if (!selected.length) {
+                box.innerHTML = canvasInspectorMarkup();
+                return;
+            }
+            if (selected.length > 1) {
+                box.innerHTML = multiInspectorMarkup(selected.length);
+                return;
+            }
+            box.innerHTML = objectInspectorMarkup(selected[0]);
+        }
+
+        function canvasInspectorMarkup() {
+            return `<div class="inspector-group"><h4>Canvas</h4>
+                <label>Background Mode</label><select onchange="updateCanvasField('backgroundMode', this.value)"><option value="gradient" ${layout.canvas.backgroundMode === 'gradient' ? 'selected' : ''}>Gradient</option><option value="solid" ${layout.canvas.backgroundMode === 'solid' ? 'selected' : ''}>Solid</option></select>
+                <label>Solid Color</label><input type="color" value="${colorValue(layout.canvas.backgroundColor, '#09090b')}" oninput="updateCanvasField('backgroundColor', this.value)">
+                <label>Gradient CSS</label><textarea oninput="updateCanvasField('backgroundGradient', this.value)">${escapeHtml(layout.canvas.backgroundGradient || '')}</textarea>
+                <label>Canvas Height</label><input type="number" min="800" max="5000" value="${layout.canvas.height}" onchange="updateCanvasField('height', this.value)">
+                <label>Font</label><select onchange="updateCanvasField('fontFamily', this.value)">${fontOptions(layout.canvas.fontFamily)}</select>
+                <p class="status">Right-click drag to pan. Mouse wheel zooms. On mobile, use two fingers to scroll/pan and pinch to zoom.</p>
             </div>`;
-        }).join("") : `<p class="status">No layers yet.</p>`;
-    }
-
-    function renderInspector() {
-        const box = document.getElementById("inspector-content");
-        const selected = selectedIds.map(id => findObject(id)).filter(Boolean);
-        if (!selected.length) {
-            box.innerHTML = canvasInspectorMarkup();
-            return;
         }
-        if (selected.length > 1) {
-            box.innerHTML = multiInspectorMarkup(selected.length);
-            return;
+
+        function objectInspectorMarkup(obj) {
+            const s = obj.styles;
+            return `<div class="inspector-group"><h4>${escapeHtml(obj.name || objectLabels[obj.type] || 'Layer')}</h4>
+                <label>Layer Name</label><input value="${escapeAttr(obj.name || '')}" oninput="updateObjectField('${obj.id}','name',this.value)">
+                <div class="mini-grid"><div><label>Visible</label><button type="button" onclick="toggleObjectVisibility('${obj.id}')">${obj.visible === false ? 'Show' : 'Hide'}</button></div><div><label>Lock</label><button type="button" onclick="toggleObjectLock('${obj.id}')">${obj.locked ? 'Unlock' : 'Lock'}</button></div></div>
+            </div>
+            <div class="inspector-group"><h4>Position / Size</h4>
+                ${metric('X', 'x', obj.x, 0, layout.canvas.width, obj.id)}${metric('Y', 'y', obj.y, 0, layout.canvas.height, obj.id)}${metric('Width', 'w', obj.w, objectRules[obj.type]?.minW || 20, objectRules[obj.type]?.maxW || layout.canvas.width, obj.id)}${metric('Height', 'h', obj.h, objectRules[obj.type]?.minH || 20, objectRules[obj.type]?.maxH || layout.canvas.height, obj.id)}${metric('Rotation', 'rotation', obj.rotation, -180, 180, obj.id)}
+            </div>
+            <div class="inspector-group"><h4>Style</h4>
+                <label>Background</label><input value="${escapeAttr(s.background || '')}" oninput="updateObjectStyle('${obj.id}','background',this.value)">
+                <label>Text Color</label><input value="${escapeAttr(s.textColor || '')}" oninput="updateObjectStyle('${obj.id}','textColor',this.value)">
+                <label>Border Color</label><input value="${escapeAttr(s.borderColor || '')}" oninput="updateObjectStyle('${obj.id}','borderColor',this.value)">
+                <label>Border Gradient CSS optional</label><input value="${escapeAttr(s.borderGradient || '')}" oninput="updateObjectStyle('${obj.id}','borderGradient',this.value)">
+                <div class="mini-grid"><div><label>Radius</label><input type="number" value="${s.radius}" onchange="updateObjectStyle('${obj.id}','radius',this.value)"></div><div><label>Border Width</label><input type="number" min="0" max="20" value="${s.borderWidth}" onchange="updateObjectStyle('${obj.id}','borderWidth',this.value)"></div></div>
+                <div class="mini-grid"><div><label>Opacity</label><input type="number" min="0.05" max="1" step="0.05" value="${s.opacity}" onchange="updateObjectStyle('${obj.id}','opacity',this.value)"></div><div><label>Fit</label><select onchange="updateObjectStyle('${obj.id}','objectFit',this.value)"><option value="cover" ${s.objectFit === 'cover' ? 'selected' : ''}>Cover</option><option value="contain" ${s.objectFit === 'contain' ? 'selected' : ''}>Contain</option></select></div></div>
+            </div>
+            ${textInspectorMarkup(obj)}${imageInspectorMarkup(obj)}
+            <div class="inspector-group"><h4>Actions</h4><div class="button-row"><button type="button" onclick="duplicateSelected()">Duplicate</button><button type="button" onclick="deleteSelected()">Delete</button></div></div>`;
         }
-        box.innerHTML = objectInspectorMarkup(selected[0]);
-    }
 
-    function canvasInspectorMarkup() {
-        return `<div class="inspector-group"><h4>Canvas</h4>
-            <label>Background Mode</label><select onchange="updateCanvasField('backgroundMode', this.value)"><option value="gradient" ${layout.canvas.backgroundMode === 'gradient' ? 'selected' : ''}>Gradient</option><option value="solid" ${layout.canvas.backgroundMode === 'solid' ? 'selected' : ''}>Solid</option></select>
-            <label>Solid Color</label><input type="color" value="${colorValue(layout.canvas.backgroundColor, '#09090b')}" oninput="updateCanvasField('backgroundColor', this.value)">
-            <label>Gradient CSS</label><textarea oninput="updateCanvasField('backgroundGradient', this.value)">${escapeHtml(layout.canvas.backgroundGradient || '')}</textarea>
-            <label>Canvas Height</label><input type="number" min="800" max="5000" value="${layout.canvas.height}" onchange="updateCanvasField('height', this.value)">
-            <label>Font</label><select onchange="updateCanvasField('fontFamily', this.value)">${fontOptions(layout.canvas.fontFamily)}</select>
-            <p class="status">Right-click drag to pan. Mouse wheel zooms. On mobile, use two fingers to scroll/pan and pinch to zoom.</p>
-        </div>`;
-    }
-
-    function objectInspectorMarkup(obj) {
-        const s = obj.styles;
-        return `<div class="inspector-group"><h4>${escapeHtml(obj.name || objectLabels[obj.type] || 'Layer')}</h4>
-            <label>Layer Name</label><input value="${escapeAttr(obj.name || '')}" oninput="updateObjectField('${obj.id}','name',this.value)">
-            <div class="mini-grid"><div><label>Visible</label><button type="button" onclick="toggleObjectVisibility('${obj.id}')">${obj.visible === false ? 'Show' : 'Hide'}</button></div><div><label>Lock</label><button type="button" onclick="toggleObjectLock('${obj.id}')">${obj.locked ? 'Unlock' : 'Lock'}</button></div></div>
-        </div>
-        <div class="inspector-group"><h4>Position / Size</h4>
-            ${metric('X','x',obj.x,0,layout.canvas.width,obj.id)}${metric('Y','y',obj.y,0,layout.canvas.height,obj.id)}${metric('Width','w',obj.w,objectRules[obj.type]?.minW || 20,objectRules[obj.type]?.maxW || layout.canvas.width,obj.id)}${metric('Height','h',obj.h,objectRules[obj.type]?.minH || 20,objectRules[obj.type]?.maxH || layout.canvas.height,obj.id)}${metric('Rotation','rotation',obj.rotation,-180,180,obj.id)}
-        </div>
-        <div class="inspector-group"><h4>Style</h4>
-            <label>Background</label><input value="${escapeAttr(s.background || '')}" oninput="updateObjectStyle('${obj.id}','background',this.value)">
-            <label>Text Color</label><input value="${escapeAttr(s.textColor || '')}" oninput="updateObjectStyle('${obj.id}','textColor',this.value)">
-            <label>Border Color</label><input value="${escapeAttr(s.borderColor || '')}" oninput="updateObjectStyle('${obj.id}','borderColor',this.value)">
-            <label>Border Gradient CSS optional</label><input value="${escapeAttr(s.borderGradient || '')}" oninput="updateObjectStyle('${obj.id}','borderGradient',this.value)">
-            <div class="mini-grid"><div><label>Radius</label><input type="number" value="${s.radius}" onchange="updateObjectStyle('${obj.id}','radius',this.value)"></div><div><label>Border Width</label><input type="number" min="0" max="20" value="${s.borderWidth}" onchange="updateObjectStyle('${obj.id}','borderWidth',this.value)"></div></div>
-            <div class="mini-grid"><div><label>Opacity</label><input type="number" min="0.05" max="1" step="0.05" value="${s.opacity}" onchange="updateObjectStyle('${obj.id}','opacity',this.value)"></div><div><label>Fit</label><select onchange="updateObjectStyle('${obj.id}','objectFit',this.value)"><option value="cover" ${s.objectFit === 'cover' ? 'selected' : ''}>Cover</option><option value="contain" ${s.objectFit === 'contain' ? 'selected' : ''}>Contain</option></select></div></div>
-        </div>
-        ${textInspectorMarkup(obj)}${imageInspectorMarkup(obj)}
-        <div class="inspector-group"><h4>Actions</h4><div class="button-row"><button type="button" onclick="duplicateSelected()">Duplicate</button><button type="button" onclick="deleteSelected()">Delete</button></div></div>`;
-    }
-
-    function textInspectorMarkup(obj) {
-        if (!["text","title","description","type_badge","credit_badge","noai_badge"].includes(obj.type)) return "";
-        const s = obj.styles;
-        return `<div class="inspector-group"><h4>Text</h4>
-            <label>Text Override</label><textarea oninput="updateObjectField('${obj.id}','text',this.value)">${escapeHtml(obj.text || '')}</textarea>
-            <div class="mini-grid"><div><label>Font Size</label><input type="number" value="${s.fontSize}" onchange="updateObjectStyle('${obj.id}','fontSize',this.value)"></div><div><label>Line Height</label><input type="number" step="0.05" value="${s.lineHeight}" onchange="updateObjectStyle('${obj.id}','lineHeight',this.value)"></div></div>
-            <label>Font</label><select onchange="updateObjectStyle('${obj.id}','fontFamily',this.value)">${fontOptions(s.fontFamily)}</select>
-            <label>Text Align</label><select onchange="updateObjectStyle('${obj.id}','textAlign',this.value)"><option value="left" ${s.textAlign==='left'?'selected':''}>Left</option><option value="center" ${s.textAlign==='center'?'selected':''}>Center</option><option value="right" ${s.textAlign==='right'?'selected':''}>Right</option></select>
-        </div>`;
-    }
-
-    function imageInspectorMarkup(obj) {
-        if (obj.type !== "image_box") return "";
-        return `<div class="inspector-group"><h4>Image Box</h4>
-            <button type="button" onclick="pickImageForSelected()">Upload / Replace Image</button>
-            <p class="status">Images are stored in the creator-gallery bucket and saved into the layout after upload.</p>
-        </div>`;
-    }
-
-    function multiInspectorMarkup(count) {
-        return `<div class="inspector-group"><h4>${count} layers selected</h4><p class="status">Move, resize, rotate, hide, lock, duplicate, or delete the selected group.</p><div class="button-row"><button onclick="duplicateSelected()">Duplicate</button><button onclick="deleteSelected()">Delete</button></div></div>`;
-    }
-
-    function metric(label, field, value, min, max, id) {
-        return `<div class="metric"><label>${label}</label><input type="number" min="${min}" max="${max}" value="${Math.round(value)}" onchange="updateObjectField('${id}','${field}',this.value)"><input type="range" min="${min}" max="${max}" value="${Math.round(value)}" oninput="updateObjectField('${id}','${field}',this.value)"></div>`;
-    }
-
-    function fontOptions(current) {
-        return ["Arial","Georgia","Verdana","Trebuchet MS","Courier New","Times New Roman","Impact"].map(font => `<option value="${escapeAttr(font)}" ${font === current ? 'selected' : ''}>${escapeHtml(font)}</option>`).join("");
-    }
-
-    function updateCanvasField(field, value) {
-        pushHistory();
-        if (field === "height") value = clamp(Number(value) || layout.canvas.height, 800, 5000);
-        layout.canvas[field] = value;
-        persistActive();
-        renderAll();
-    }
-
-    function updateObjectField(id, field, value) {
-        const obj = findObject(id); if (!obj) return;
-        pushHistory();
-        if (["x","y","w","h","rotation"].includes(field)) value = Number(value) || 0;
-        obj[field] = value;
-        clampObject(obj);
-        persistActive();
-        renderAll();
-    }
-
-    function updateObjectStyle(id, field, value) {
-        const obj = findObject(id); if (!obj) return;
-        pushHistory();
-        if (["radius","borderWidth","opacity","fontSize","lineHeight"].includes(field)) value = Number(value);
-        obj.styles[field] = value;
-        persistActive();
-        renderAll();
-    }
-
-    function addObject(type) {
-        if (!activeItem) return;
-        pushHistory();
-        const obj = makeObject(type, { x: Math.max(30, -panX / zoom + 80), y: Math.max(30, -panY / zoom + 100) });
-        if (type === "shape") obj.styles.radius = 0;
-        if (type === "circle") obj.styles.radius = 999;
-        layout.objects.push(obj);
-        selectedIds = [obj.id];
-        persistActive();
-        renderAll();
-    }
-
-    function selectObject(id, options = {}) {
-        const obj = findObject(id); if (!obj) return;
-        if (options.toggle || window.event?.shiftKey) {
-            selectedIds = selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id];
-        } else {
-            selectedIds = [id];
+        function textInspectorMarkup(obj) {
+            if (!["text", "title", "description", "type_badge", "credit_badge", "noai_badge"].includes(obj.type)) return "";
+            const s = obj.styles;
+            return `<div class="inspector-group"><h4>Text</h4>
+                <label>Text Override</label><textarea oninput="updateObjectField('${obj.id}','text',this.value)">${escapeHtml(obj.text || '')}</textarea>
+                <div class="mini-grid"><div><label>Font Size</label><input type="number" value="${s.fontSize}" onchange="updateObjectStyle('${obj.id}','fontSize',this.value)"></div><div><label>Line Height</label><input type="number" step="0.05" value="${s.lineHeight}" onchange="updateObjectStyle('${obj.id}','lineHeight',this.value)"></div></div>
+                <label>Font</label><select onchange="updateObjectStyle('${obj.id}','fontFamily',this.value)">${fontOptions(s.fontFamily)}</select>
+                <label>Text Align</label><select onchange="updateObjectStyle('${obj.id}','textAlign',this.value)"><option value="left" ${s.textAlign === 'left' ? 'selected' : ''}>Left</option><option value="center" ${s.textAlign === 'center' ? 'selected' : ''}>Center</option><option value="right" ${s.textAlign === 'right' ? 'selected' : ''}>Right</option></select>
+            </div>`;
         }
-        renderAll();
-    }
 
-    function toggleObjectLock(id) { const obj = findObject(id); if (!obj) return; pushHistory(); obj.locked = !obj.locked; persistActive(); renderAll(); }
-    function toggleObjectVisibility(id) { const obj = findObject(id); if (!obj) return; pushHistory(); obj.visible = obj.visible === false; if (obj.visible === false) obj.locked = true; persistActive(); renderAll(); }
-    function moveLayer(id, direction) { const idx = layout.objects.findIndex(o => o.id === id); if (idx < 0) return; const next = clamp(idx + direction, 0, layout.objects.length - 1); if (idx === next) return; pushHistory(); const [obj] = layout.objects.splice(idx,1); layout.objects.splice(next,0,obj); persistActive(); renderAll(); }
+        function imageInspectorMarkup(obj) {
+            if (obj.type !== "image_box") return "";
+            return `<div class="inspector-group"><h4>Image Box</h4>
+                <button type="button" onclick="pickImageForSelected()">Upload / Replace Image</button>
+                <p class="status">Images are stored in the creator-gallery bucket and saved into the layout after upload.</p>
+            </div>`;
+        }
 
-    function deleteSelected() {
-        if (!selectedIds.length) return;
-        pushHistory();
-        layout.objects = layout.objects.filter(obj => !selectedIds.includes(obj.id) || obj.locked);
-        selectedIds = [];
-        persistActive();
-        renderAll();
-    }
+        function multiInspectorMarkup(count) {
+            return `<div class="inspector-group"><h4>${count} layers selected</h4><p class="status">Move, resize, rotate, hide, lock, duplicate, or delete the selected group.</p><div class="button-row"><button onclick="duplicateSelected()">Duplicate</button><button onclick="deleteSelected()">Delete</button></div></div>`;
+        }
 
-    function duplicateSelected() {
-        const selected = selectedIds.map(id => findObject(id)).filter(Boolean);
-        if (!selected.length) return;
-        pushHistory();
-        const clones = selected.map(obj => ({ ...clone(obj), id: uid(), name: `${obj.name || objectLabels[obj.type]} Copy`, x: obj.x + 28, y: obj.y + 28, locked: false }));
-        layout.objects.push(...clones);
-        selectedIds = clones.map(obj => obj.id);
-        persistActive();
-        renderAll();
-    }
+        function metric(label, field, value, min, max, id) {
+            return `<div class="metric"><label>${label}</label><input type="number" min="${min}" max="${max}" value="${Math.round(value)}" onchange="updateObjectField('${id}','${field}',this.value)"><input type="range" min="${min}" max="${max}" value="${Math.round(value)}" oninput="updateObjectField('${id}','${field}',this.value)"></div>`;
+        }
 
-    function pickImageForSelected() {
-        const obj = selectedIds.map(id => findObject(id)).find(o => o?.type === "image_box");
-        if (!obj) { setStatus("Select an Image Box layer first."); return; }
-        imageTargetId = obj.id;
-        hiddenImageInput.click();
-    }
+        function fontOptions(current) {
+            return ["Arial", "Georgia", "Verdana", "Trebuchet MS", "Courier New", "Times New Roman", "Impact"].map(font => `<option value="${escapeAttr(font)}" ${font === current ? 'selected' : ''}>${escapeHtml(font)}</option>`).join("");
+        }
 
-    function setupImageInput() {
-        hiddenImageInput.addEventListener("change", async () => {
-            const file = hiddenImageInput.files?.[0];
-            hiddenImageInput.value = "";
-            if (!file || !imageTargetId) return;
-            const obj = findObject(imageTargetId);
-            if (!obj) return;
-            try {
-                setStatus("Uploading image box asset...");
-                const path = `${currentUser.id}/studio/${Date.now()}-${safeFileName(file.name)}`;
-                const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: true, contentType: file.type || "image/png" });
-                if (error) throw error;
-                const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-                pushHistory();
-                obj.imageUrl = data.publicUrl;
-                persistActive();
+        function updateCanvasField(field, value) {
+            pushHistory();
+            if (field === "height") value = clamp(Number(value) || layout.canvas.height, 800, 5000);
+            layout.canvas[field] = value;
+            persistActive();
+            renderAll();
+        }
+
+        function updateObjectField(id, field, value) {
+            const obj = findObject(id); if (!obj) return;
+            pushHistory();
+            if (["x", "y", "w", "h", "rotation"].includes(field)) value = Number(value) || 0;
+            obj[field] = value;
+            clampObject(obj);
+            persistActive();
+            renderAll();
+        }
+
+        function updateObjectStyle(id, field, value) {
+            const obj = findObject(id); if (!obj) return;
+            pushHistory();
+            if (["radius", "borderWidth", "opacity", "fontSize", "lineHeight"].includes(field)) value = Number(value);
+            obj.styles[field] = value;
+            persistActive();
+            renderAll();
+        }
+
+        function addObject(type) {
+            if (!activeItem) return;
+            if (isRequiredType(type)) {
+                ensureRequiredObjects(layout);
+                const existing = layout.objects.find(obj => obj.type === type);
+                selectedIds = existing ? [existing.id] : [];
+                setStatus(`${objectLabels[type]} is a required system layer and has been selected.`);
                 renderAll();
-                setStatus("Image uploaded.");
-            } catch (error) { setStatus(error.message || "Image upload failed."); }
-        });
-    }
-
-    function switchLayout(mode) {
-        persistActive();
-        activeLayoutMode = mode === "mobile" ? "mobile" : "desktop";
-        layout = layoutBundle.layouts[activeLayoutMode] || createBlankLayout(activeLayoutMode);
-        layoutBundle.layouts[activeLayoutMode] = layout;
-        selectedIds = [];
-        renderAll();
-        requestAnimationFrame(centerView);
-    }
-
-    function setSnapMode(mode) { pushHistory(); layout.canvas.snapMode = mode === "snap" ? "snap" : "free"; persistActive(); renderAll(); }
-    function isSnap() { return layout.canvas.snapMode === "snap"; }
-    function snap(value) { return isSnap() ? Math.round(value / 24) * 24 : value; }
-
-    async function saveDraft() {
-        if (!activeItem) return;
-        try {
+                return;
+            }
+            pushHistory();
+            const obj = makeObject(type, { x: Math.max(30, -panX / zoom + 80), y: Math.max(30, -panY / zoom + 100) });
+            if (type === "shape") obj.styles.radius = 0;
+            if (type === "circle") obj.styles.radius = 999;
+            layout.objects.push(obj);
+            keepRequiredObjectsOnTop(layout);
+            selectedIds = [obj.id];
             persistActive();
-            normalizeBundle();
-            const now = new Date().toISOString();
-            const payload = {
-                gallery_item_id: activeItem.id,
-                owner_id: currentUser.id,
-                draft_layout_json: layoutBundle,
-                draft_updated_at: now,
-                updated_at: now
-            };
-            const { error } = await supabase.from("creator_gallery_item_layouts").upsert(payload, { onConflict: "gallery_item_id" });
-            if (error) throw error;
-            setStatus(`${activeLayoutMode === 'mobile' ? 'Mobile' : 'PC'} gallery item draft saved. Public showcase was not changed.`);
-        } catch (error) { setStatus(error.message || "Could not save draft."); }
-    }
+            renderAll();
+        }
 
-    async function publishLayout() {
-        if (!activeItem) return;
-        try {
+        function selectObject(id, options = {}) {
+            const obj = findObject(id); if (!obj) return;
+            if (options.toggle || window.event?.shiftKey) {
+                selectedIds = selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id];
+            } else {
+                selectedIds = [id];
+            }
+            renderAll();
+        }
+
+        function toggleObjectLock(id) { const obj = findObject(id); if (!obj) return; pushHistory(); obj.locked = !obj.locked; persistActive(); renderAll(); }
+        function toggleObjectVisibility(id) {
+            const obj = findObject(id);
+            if (!obj) return;
+            if (obj.required || isRequiredType(obj.type)) {
+                setStatus("Back to Creator Gallery and Report are required system buttons, so they cannot be hidden.");
+                return;
+            }
+            pushHistory();
+            obj.visible = obj.visible === false;
+            if (obj.visible === false) obj.locked = true;
             persistActive();
-            normalizeBundle();
-            const { data: existing } = await supabase.from("creator_gallery_item_layouts").select("published_layout_json").eq("gallery_item_id", activeItem.id).maybeSingle();
-            const published = existing?.published_layout_json || { version: 1, layouts: {} };
-            published.version = 1;
-            published.layouts = published.layouts || {};
-            published.layouts[activeLayoutMode] = makeSnapshot(layout);
-            const now = new Date().toISOString();
-            const payload = {
-                gallery_item_id: activeItem.id,
-                owner_id: currentUser.id,
-                draft_layout_json: layoutBundle,
-                published_layout_json: published,
-                is_public: true,
-                draft_updated_at: now,
-                published_at: now,
-                updated_at: now
-            };
-            const { error } = await supabase.from("creator_gallery_item_layouts").upsert(payload, { onConflict: "gallery_item_id" });
-            if (error) throw error;
-            publishedBundle = published;
-            setStatus(`${activeLayoutMode === 'mobile' ? 'Mobile' : 'PC'} gallery item showcase published.`);
-        } catch (error) { setStatus(error.message || "Could not publish showcase."); }
-    }
+            renderAll();
+        }
+        function moveLayer(id, direction) {
+            const obj = findObject(id);
+            if (!obj || obj.required || isRequiredType(obj.type)) {
+                setStatus("Required system buttons stay above other layers so they cannot be covered.");
+                return;
+            }
+            const idx = layout.objects.findIndex(o => o.id === id);
+            if (idx < 0) return;
+            const next = clamp(idx + direction, 0, layout.objects.length - 1);
+            if (idx === next) return;
+            pushHistory();
+            const [moved] = layout.objects.splice(idx, 1);
+            layout.objects.splice(next, 0, moved);
+            keepRequiredObjectsOnTop(layout);
+            persistActive();
+            renderAll();
+        }
 
-    function makeSnapshot(source) {
-        const snapLayout = normalizeLayout(clone(source), source.layoutMode || activeLayoutMode);
-        return { version: 1, layoutMode: snapLayout.layoutMode, canvas: clone(snapLayout.canvas), objects: clone(snapLayout.objects), published: true };
-    }
+        function deleteSelected() {
+            if (!selectedIds.length) return;
+            const protectedIds = selectedIds.filter(id => {
+                const obj = findObject(id);
+                return obj?.required || isRequiredType(obj?.type);
+            });
+            pushHistory();
+            layout.objects = layout.objects.filter(obj => !selectedIds.includes(obj.id) || obj.locked || obj.required || isRequiredType(obj.type));
+            if (protectedIds.length) setStatus("Required Back and Report buttons were kept on the page.");
+            selectedIds = [];
+            ensureRequiredObjects(layout);
+            persistActive();
+            renderAll();
+        }
 
-    function setupWorkspaceEvents() {
-        workspace.addEventListener("wheel", e => { e.preventDefault(); const delta = e.deltaY > 0 ? -0.08 : 0.08; zoomAt(e.clientX, e.clientY, clamp(zoom + delta, .18, 2.5)); }, { passive:false });
-        workspace.addEventListener("contextmenu", e => e.preventDefault());
-        workspace.addEventListener("pointerdown", workspacePointerDown);
-        workspace.addEventListener("pointermove", handleTouchGesture, { passive:false });
-        workspace.addEventListener("pointerup", pointerUp, { passive:false });
-        workspace.addEventListener("pointercancel", pointerUp, { passive:false });
-    }
+        function duplicateSelected() {
+            const selected = selectedIds.map(id => findObject(id)).filter(obj => obj && !obj.required && !isRequiredType(obj.type));
+            if (!selected.length) {
+                setStatus("Required system buttons cannot be duplicated.");
+                return;
+            }
+            pushHistory();
+            const clones = selected.map(obj => ({ ...clone(obj), id: uid(), name: `${obj.name || objectLabels[obj.type]} Copy`, x: obj.x + 28, y: obj.y + 28, locked: false, required: false }));
+            layout.objects.push(...clones);
+            selectedIds = clones.map(obj => obj.id);
+            keepRequiredObjectsOnTop(layout);
+            persistActive();
+            renderAll();
+        }
 
-    function workspacePointerDown(e) {
-        if (e.button === 2 || e.altKey || e.target === workspace || e.target === canvas || e.target.classList.contains("canvas-grid")) {
-            e.preventDefault();
+        function pickImageForSelected() {
+            const obj = selectedIds.map(id => findObject(id)).find(o => o?.type === "image_box");
+            if (!obj) { setStatus("Select an Image Box layer first."); return; }
+            imageTargetId = obj.id;
+            hiddenImageInput.click();
+        }
+
+        function setupImageInput() {
+            hiddenImageInput.addEventListener("change", async () => {
+                const file = hiddenImageInput.files?.[0];
+                hiddenImageInput.value = "";
+                if (!file || !imageTargetId) return;
+                const obj = findObject(imageTargetId);
+                if (!obj) return;
+                try {
+                    setStatus("Uploading image box asset...");
+                    const path = `${currentUser.id}/studio/${Date.now()}-${safeFileName(file.name)}`;
+                    const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: true, contentType: file.type || "image/png" });
+                    if (error) throw error;
+                    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+                    pushHistory();
+                    obj.imageUrl = data.publicUrl;
+                    persistActive();
+                    renderAll();
+                    setStatus("Image uploaded.");
+                } catch (error) { setStatus(error.message || "Image upload failed."); }
+            });
+        }
+
+
+        function copyPcLayoutToMobile() {
+            if (!activeItem) return;
+            persistActive();
+            const source = normalizeLayout(clone(layoutBundle.layouts.desktop || createBlankLayout("desktop")), "desktop");
+            const mobileBlank = createBlankLayout("mobile");
+            const sx = mobileBlank.canvas.width / source.canvas.width;
+            const sy = mobileBlank.canvas.height / source.canvas.height;
+            const scale = Math.min(sx, sy);
+            const converted = normalizeLayout({
+                version: 1,
+                layoutMode: "mobile",
+                canvas: {
+                    ...mobileBlank.canvas,
+                    backgroundMode: source.canvas.backgroundMode,
+                    backgroundColor: source.canvas.backgroundColor,
+                    backgroundGradient: source.canvas.backgroundGradient,
+                    fontFamily: source.canvas.fontFamily,
+                    snapMode: source.canvas.snapMode
+                },
+                objects: source.objects.map(obj => {
+                    const next = clone(obj);
+                    next.id = uid();
+                    next.x = Math.round(obj.x * scale);
+                    next.y = Math.round(obj.y * scale);
+                    next.w = Math.max(24, Math.round(obj.w * scale));
+                    next.h = Math.max(24, Math.round(obj.h * scale));
+                    next.styles = { ...(obj.styles || {}), fontSize: Math.max(10, Math.round(Number(obj.styles?.fontSize || 18) * scale)) };
+                    if (isRequiredType(next.type)) {
+                        next.required = true;
+                        next.visible = true;
+                        next.locked = false;
+                    }
+                    return next;
+                })
+            }, "mobile");
+            ensureRequiredObjects(converted);
+            pushHistory();
+            layoutBundle.layouts.mobile = converted;
+            activeLayoutMode = "mobile";
+            layout = layoutBundle.layouts.mobile;
+            selectedIds = [];
+            persistActive();
+            renderAll();
+            requestAnimationFrame(centerView);
+            setStatus("Copied the PC layout into Mobile as a starting point. Save Draft or Publish when ready.");
+        }
+
+        function switchLayout(mode) {
+            persistActive();
+            activeLayoutMode = mode === "mobile" ? "mobile" : "desktop";
+            layout = layoutBundle.layouts[activeLayoutMode] || createBlankLayout(activeLayoutMode);
+            layoutBundle.layouts[activeLayoutMode] = layout;
+            selectedIds = [];
+            renderAll();
+            requestAnimationFrame(centerView);
+        }
+
+        function setSnapMode(mode) { pushHistory(); layout.canvas.snapMode = mode === "snap" ? "snap" : "free"; persistActive(); renderAll(); }
+        function isSnap() { return layout.canvas.snapMode === "snap"; }
+        function snap(value) { return isSnap() ? Math.round(value / 24) * 24 : value; }
+
+        async function saveDraft() {
+            if (!activeItem) return;
+            try {
+                persistActive();
+                normalizeBundle();
+                ensureRequiredObjects(layout);
+                const now = new Date().toISOString();
+                const payload = {
+                    gallery_item_id: activeItem.id,
+                    owner_id: currentUser.id,
+                    draft_layout_json: layoutBundle,
+                    draft_updated_at: now,
+                    updated_at: now
+                };
+                const { error } = await supabase.from("creator_gallery_item_layouts").upsert(payload, { onConflict: "gallery_item_id" });
+                if (error) throw error;
+                setStatus(`${activeLayoutMode === 'mobile' ? 'Mobile' : 'PC'} gallery item draft saved. Public showcase was not changed.`);
+            } catch (error) { setStatus(error.message || "Could not save draft."); }
+        }
+
+        async function publishLayout() {
+            if (!activeItem) return;
+            try {
+                persistActive();
+                normalizeBundle();
+                ensureRequiredObjects(layout);
+                const validationMessage = validateRequiredObjects();
+                if (validationMessage) {
+                    setStatus(validationMessage);
+                    renderAll();
+                    return;
+                }
+                const { data: existing } = await supabase.from("creator_gallery_item_layouts").select("published_layout_json").eq("gallery_item_id", activeItem.id).maybeSingle();
+                const published = existing?.published_layout_json || { version: 1, layouts: {} };
+                published.version = 1;
+                published.layouts = published.layouts || {};
+                published.layouts[activeLayoutMode] = makeSnapshot(layout);
+                const now = new Date().toISOString();
+                const payload = {
+                    gallery_item_id: activeItem.id,
+                    owner_id: currentUser.id,
+                    draft_layout_json: layoutBundle,
+                    published_layout_json: published,
+                    is_public: true,
+                    draft_updated_at: now,
+                    published_at: now,
+                    updated_at: now
+                };
+                const { error } = await supabase.from("creator_gallery_item_layouts").upsert(payload, { onConflict: "gallery_item_id" });
+                if (error) throw error;
+                publishedBundle = published;
+                setStatus(`${activeLayoutMode === 'mobile' ? 'Mobile' : 'PC'} gallery item showcase published.`);
+            } catch (error) { setStatus(error.message || "Could not publish showcase."); }
+        }
+
+        function makeSnapshot(source) {
+            const snapLayout = normalizeLayout(clone(source), source.layoutMode || activeLayoutMode);
+            return { version: 1, layoutMode: snapLayout.layoutMode, canvas: clone(snapLayout.canvas), objects: clone(snapLayout.objects), published: true };
+        }
+
+        function setupWorkspaceEvents() {
+            workspace.addEventListener("wheel", e => { e.preventDefault(); const delta = e.deltaY > 0 ? -0.08 : 0.08; zoomAt(e.clientX, e.clientY, clamp(zoom + delta, .18, 2.5)); }, { passive: false });
+            workspace.addEventListener("contextmenu", e => e.preventDefault());
+            workspace.addEventListener("pointerdown", workspacePointerDown);
+            workspace.addEventListener("pointermove", handleTouchGesture, { passive: false });
+            workspace.addEventListener("pointerup", pointerUp, { passive: false });
+            workspace.addEventListener("pointercancel", pointerUp, { passive: false });
+        }
+
+        function workspacePointerDown(e) {
+            if (e.button === 2 || e.altKey || e.target === workspace || e.target === canvas || e.target.classList.contains("canvas-grid")) {
+                e.preventDefault();
+                workspace.setPointerCapture?.(e.pointerId);
+                touchPointers.set(e.pointerId, point(e));
+                if (e.pointerType === "touch" && touchPointers.size >= 2) { startTouchGesture(); return; }
+                if (e.button === 2 || e.altKey) {
+                    interaction = { mode: "pan", startX: e.clientX, startY: e.clientY, panX, panY };
+                    workspace.classList.add("panning");
+                    return;
+                }
+                startMarquee(e);
+            }
+        }
+
+        function objectPointerDown(e) {
+            const target = e.target;
+            const el = e.currentTarget;
+            const obj = findObject(el.dataset.id);
+            if (!obj || obj.locked) return;
+            e.preventDefault(); e.stopPropagation();
             workspace.setPointerCapture?.(e.pointerId);
             touchPointers.set(e.pointerId, point(e));
             if (e.pointerType === "touch" && touchPointers.size >= 2) { startTouchGesture(); return; }
-            if (e.button === 2 || e.altKey) {
-                interaction = { mode:"pan", startX:e.clientX, startY:e.clientY, panX, panY };
-                workspace.classList.add("panning");
-                return;
+            if (!selectedIds.includes(obj.id)) selectObject(obj.id, { toggle: e.shiftKey });
+            const selected = selectedIds.includes(obj.id) ? selectedIds.map(id => findObject(id)).filter(Boolean) : [obj];
+            const canvasPoint = screenToCanvas(e.clientX, e.clientY);
+            const handle = target.classList.contains("resize-handle") ? target.dataset.dir : "";
+            if (target.classList.contains("rotate-handle")) {
+                interaction = { mode: "rotate", ids: selected.map(o => o.id), center: getSelectionBounds(selected).center };
+            } else if (handle) {
+                interaction = { mode: "resize", handle, ids: selected.map(o => o.id), start: canvasPoint, originals: clone(selected), bounds: getSelectionBounds(selected) };
+            } else {
+                interaction = { mode: "move", ids: selected.map(o => o.id), start: canvasPoint, originals: clone(selected) };
             }
-            startMarquee(e);
+            pushHistory();
+            window.addEventListener("pointermove", interactionMove);
+            window.addEventListener("pointerup", endInteraction, { once: true });
         }
-    }
 
-    function objectPointerDown(e) {
-        const target = e.target;
-        const el = e.currentTarget;
-        const obj = findObject(el.dataset.id);
-        if (!obj || obj.locked) return;
-        e.preventDefault(); e.stopPropagation();
-        workspace.setPointerCapture?.(e.pointerId);
-        touchPointers.set(e.pointerId, point(e));
-        if (e.pointerType === "touch" && touchPointers.size >= 2) { startTouchGesture(); return; }
-        if (!selectedIds.includes(obj.id)) selectObject(obj.id, { toggle:e.shiftKey });
-        const selected = selectedIds.includes(obj.id) ? selectedIds.map(id => findObject(id)).filter(Boolean) : [obj];
-        const canvasPoint = screenToCanvas(e.clientX, e.clientY);
-        const handle = target.classList.contains("resize-handle") ? target.dataset.dir : "";
-        if (target.classList.contains("rotate-handle")) {
-            interaction = { mode:"rotate", ids:selected.map(o=>o.id), center:getSelectionBounds(selected).center };
-        } else if (handle) {
-            interaction = { mode:"resize", handle, ids:selected.map(o=>o.id), start:canvasPoint, originals:clone(selected), bounds:getSelectionBounds(selected) };
-        } else {
-            interaction = { mode:"move", ids:selected.map(o=>o.id), start:canvasPoint, originals:clone(selected) };
+        function interactionMove(e) {
+            if (!interaction) return;
+            const p = screenToCanvas(e.clientX, e.clientY);
+            if (interaction.mode === "move") {
+                interaction.originals.forEach(original => { const obj = findObject(original.id); if (!obj || obj.locked) return; obj.x = snap(original.x + p.x - interaction.start.x); obj.y = snap(original.y + p.y - interaction.start.y); clampObject(obj); });
+            }
+            if (interaction.mode === "resize") resizeSelection(p);
+            if (interaction.mode === "rotate") {
+                const c = interaction.center;
+                const angle = Math.atan2(p.y - c.y, p.x - c.x) * 180 / Math.PI + 90;
+                interaction.ids.forEach(id => { const obj = findObject(id); if (obj && !obj.locked) obj.rotation = Math.round(angle); });
+            }
+            persistActive(); renderCanvas(); renderLayers(); renderInspector();
         }
-        pushHistory();
-        window.addEventListener("pointermove", interactionMove);
-        window.addEventListener("pointerup", endInteraction, { once:true });
-    }
 
-    function interactionMove(e) {
-        if (!interaction) return;
-        const p = screenToCanvas(e.clientX, e.clientY);
-        if (interaction.mode === "move") {
-            interaction.originals.forEach(original => { const obj = findObject(original.id); if (!obj || obj.locked) return; obj.x = snap(original.x + p.x - interaction.start.x); obj.y = snap(original.y + p.y - interaction.start.y); clampObject(obj); });
+        function resizeSelection(p) {
+            const b = interaction.bounds;
+            const dx = p.x - interaction.start.x;
+            const dy = p.y - interaction.start.y;
+            let nx = b.x, ny = b.y, nw = b.w, nh = b.h;
+            if (interaction.handle.includes("e")) nw = b.w + dx;
+            if (interaction.handle.includes("s")) nh = b.h + dy;
+            if (interaction.handle.includes("w")) { nx = b.x + dx; nw = b.w - dx; }
+            if (interaction.handle.includes("n")) { ny = b.y + dy; nh = b.h - dy; }
+            nw = Math.max(20, nw); nh = Math.max(20, nh);
+            interaction.originals.forEach(original => {
+                const obj = findObject(original.id); if (!obj || obj.locked) return;
+                const rx = (original.x - b.x) / b.w, ry = (original.y - b.y) / b.h, rw = original.w / b.w, rh = original.h / b.h;
+                obj.x = snap(nx + rx * nw); obj.y = snap(ny + ry * nh); obj.w = snap(rw * nw); obj.h = snap(rh * nh); clampObject(obj);
+            });
         }
-        if (interaction.mode === "resize") resizeSelection(p);
-        if (interaction.mode === "rotate") {
-            const c = interaction.center;
-            const angle = Math.atan2(p.y - c.y, p.x - c.x) * 180 / Math.PI + 90;
-            interaction.ids.forEach(id => { const obj = findObject(id); if (obj && !obj.locked) obj.rotation = Math.round(angle); });
+
+        function endInteraction() { interaction = null; window.removeEventListener("pointermove", interactionMove); persistActive(); renderAll(); }
+
+        function startMarquee(e) {
+            if (!e.shiftKey) selectedIds = [];
+            const start = screenToCanvas(e.clientX, e.clientY);
+            const marquee = document.createElement("div"); marquee.className = "selection-marquee"; canvas.appendChild(marquee);
+            interaction = { mode: "marquee", start, marquee };
+            window.addEventListener("pointermove", marqueeMove);
+            window.addEventListener("pointerup", endMarquee, { once: true });
         }
-        persistActive(); renderCanvas(); renderLayers(); renderInspector();
-    }
 
-    function resizeSelection(p) {
-        const b = interaction.bounds;
-        const dx = p.x - interaction.start.x;
-        const dy = p.y - interaction.start.y;
-        let nx = b.x, ny = b.y, nw = b.w, nh = b.h;
-        if (interaction.handle.includes("e")) nw = b.w + dx;
-        if (interaction.handle.includes("s")) nh = b.h + dy;
-        if (interaction.handle.includes("w")) { nx = b.x + dx; nw = b.w - dx; }
-        if (interaction.handle.includes("n")) { ny = b.y + dy; nh = b.h - dy; }
-        nw = Math.max(20, nw); nh = Math.max(20, nh);
-        interaction.originals.forEach(original => {
-            const obj = findObject(original.id); if (!obj || obj.locked) return;
-            const rx = (original.x - b.x) / b.w, ry = (original.y - b.y) / b.h, rw = original.w / b.w, rh = original.h / b.h;
-            obj.x = snap(nx + rx * nw); obj.y = snap(ny + ry * nh); obj.w = snap(rw * nw); obj.h = snap(rh * nh); clampObject(obj);
-        });
-    }
+        function marqueeMove(e) {
+            if (!interaction || interaction.mode !== "marquee") return;
+            const p = screenToCanvas(e.clientX, e.clientY);
+            const x = Math.min(interaction.start.x, p.x), y = Math.min(interaction.start.y, p.y), w = Math.abs(p.x - interaction.start.x), h = Math.abs(p.y - interaction.start.y);
+            Object.assign(interaction.marquee.style, { left: x + "px", top: y + "px", width: w + "px", height: h + "px" });
+            const ids = layout.objects.filter(o => o.visible !== false && !o.locked && rectsOverlap({ x, y, w, h }, o)).map(o => o.id);
+            selectedIds = [...new Set(ids)];
+            renderCanvas();
+        }
 
-    function endInteraction() { interaction = null; window.removeEventListener("pointermove", interactionMove); persistActive(); renderAll(); }
+        function endMarquee() { interaction?.marquee?.remove(); interaction = null; window.removeEventListener("pointermove", marqueeMove); renderAll(); }
 
-    function startMarquee(e) {
-        if (!e.shiftKey) selectedIds = [];
-        const start = screenToCanvas(e.clientX, e.clientY);
-        const marquee = document.createElement("div"); marquee.className = "selection-marquee"; canvas.appendChild(marquee);
-        interaction = { mode:"marquee", start, marquee };
-        window.addEventListener("pointermove", marqueeMove);
-        window.addEventListener("pointerup", endMarquee, { once:true });
-    }
+        function handleTouchGesture(e) {
+            if (e.pointerType !== "touch") return;
+            touchPointers.set(e.pointerId, point(e));
+            if (touchPointers.size < 2 || !touchState) return;
+            e.preventDefault();
+            const pts = [...touchPointers.values()].slice(0, 2);
+            const dist = distance(pts[0], pts[1]);
+            const mid = midpoint(pts[0], pts[1]);
+            const scale = dist / touchState.distance;
+            zoom = clamp(touchState.zoom * scale, .18, 2.5);
+            panX = touchState.panX + (mid.x - touchState.mid.x);
+            panY = touchState.panY + (mid.y - touchState.mid.y);
+            applyWrapTransform();
+        }
 
-    function marqueeMove(e) {
-        if (!interaction || interaction.mode !== "marquee") return;
-        const p = screenToCanvas(e.clientX, e.clientY);
-        const x = Math.min(interaction.start.x, p.x), y = Math.min(interaction.start.y, p.y), w = Math.abs(p.x - interaction.start.x), h = Math.abs(p.y - interaction.start.y);
-        Object.assign(interaction.marquee.style, { left:x+"px", top:y+"px", width:w+"px", height:h+"px" });
-        const ids = layout.objects.filter(o => o.visible !== false && !o.locked && rectsOverlap({x,y,w,h}, o)).map(o => o.id);
-        selectedIds = [...new Set(ids)];
-        renderCanvas();
-    }
+        function pointerUp(e) { touchPointers.delete(e.pointerId); if (touchPointers.size < 2) touchState = null; if (interaction?.mode === "pan") { interaction = null; workspace.classList.remove("panning"); } }
+        function startTouchGesture() { const pts = [...touchPointers.values()].slice(0, 2); touchState = { distance: distance(pts[0], pts[1]), mid: midpoint(pts[0], pts[1]), zoom, panX, panY }; }
 
-    function endMarquee() { interaction?.marquee?.remove(); interaction = null; window.removeEventListener("pointermove", marqueeMove); renderAll(); }
+        function setupKeyboard() {
+            document.addEventListener("keydown", e => {
+                if (document.getElementById("studio-page").classList.contains("preview-mode")) { if (e.key === "Escape") exitPreviewMode(); return; }
+                if (e.target && ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redoStudio() : undoStudio(); }
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redoStudio(); }
+                if (e.key === "Delete" || e.key === "Backspace") deleteSelected();
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") { e.preventDefault(); duplicateSelected(); }
+                if (e.key === "Escape") { selectedIds = []; renderAll(); }
+            });
+        }
 
-    function handleTouchGesture(e) {
-        if (e.pointerType !== "touch") return;
-        touchPointers.set(e.pointerId, point(e));
-        if (touchPointers.size < 2 || !touchState) return;
-        e.preventDefault();
-        const pts = [...touchPointers.values()].slice(0,2);
-        const dist = distance(pts[0], pts[1]);
-        const mid = midpoint(pts[0], pts[1]);
-        const scale = dist / touchState.distance;
-        zoom = clamp(touchState.zoom * scale, .18, 2.5);
-        panX = touchState.panX + (mid.x - touchState.mid.x);
-        panY = touchState.panY + (mid.y - touchState.mid.y);
-        applyWrapTransform();
-    }
+        function renderGroupBox() {
+            if (selectedIds.length <= 1) return;
+            const selected = selectedIds.map(id => findObject(id)).filter(Boolean);
+            const b = getSelectionBounds(selected);
+            const box = document.createElement("div"); box.className = "group-selection-box"; Object.assign(box.style, { left: b.x + "px", top: b.y + "px", width: b.w + "px", height: b.h + "px" });
+            ["nw", "n", "ne", "e", "se", "s", "sw", "w"].forEach(dir => { const h = document.createElement("span"); h.className = `group-resize-handle ${dir}`; h.dataset.dir = dir; h.addEventListener("pointerdown", groupHandleDown); box.appendChild(h); });
+            const r = document.createElement("span"); r.className = "group-rotate-handle"; r.addEventListener("pointerdown", groupRotateDown); box.appendChild(r);
+            canvas.appendChild(box);
+        }
 
-    function pointerUp(e) { touchPointers.delete(e.pointerId); if (touchPointers.size < 2) touchState = null; if (interaction?.mode === "pan") { interaction = null; workspace.classList.remove("panning"); } }
-    function startTouchGesture() { const pts = [...touchPointers.values()].slice(0,2); touchState = { distance:distance(pts[0],pts[1]), mid:midpoint(pts[0],pts[1]), zoom, panX, panY }; }
+        function groupHandleDown(e) { e.preventDefault(); e.stopPropagation(); const selected = selectedIds.map(id => findObject(id)).filter(Boolean); interaction = { mode: "resize", handle: e.target.dataset.dir, ids: selectedIds, start: screenToCanvas(e.clientX, e.clientY), originals: clone(selected), bounds: getSelectionBounds(selected) }; pushHistory(); window.addEventListener("pointermove", interactionMove); window.addEventListener("pointerup", endInteraction, { once: true }); }
+        function groupRotateDown(e) { e.preventDefault(); e.stopPropagation(); const selected = selectedIds.map(id => findObject(id)).filter(Boolean); interaction = { mode: "rotate", ids: selectedIds, center: getSelectionBounds(selected).center }; pushHistory(); window.addEventListener("pointermove", interactionMove); window.addEventListener("pointerup", endInteraction, { once: true }); }
 
-    function setupKeyboard() {
-        document.addEventListener("keydown", e => {
-            if (document.getElementById("studio-page").classList.contains("preview-mode")) { if (e.key === "Escape") exitPreviewMode(); return; }
-            if (e.target && ["INPUT","TEXTAREA","SELECT"].includes(e.target.tagName)) return;
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redoStudio() : undoStudio(); }
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redoStudio(); }
-            if (e.key === "Delete" || e.key === "Backspace") deleteSelected();
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") { e.preventDefault(); duplicateSelected(); }
-            if (e.key === "Escape") { selectedIds = []; renderAll(); }
-        });
-    }
+        function centerView() { const rect = workspace.getBoundingClientRect(); zoom = activeLayoutMode === "mobile" ? Math.min(1, (rect.height - 80) / layout.canvas.height) : Math.min(.72, (rect.width - 160) / layout.canvas.width); zoom = clamp(zoom, .18, 1); panX = (rect.width - layout.canvas.width * zoom) / 2; panY = 80; applyWrapTransform(); }
+        function zoomAt(clientX, clientY, nextZoom) { const before = screenToCanvas(clientX, clientY); zoom = nextZoom; panX = clientX - before.x * zoom; panY = clientY - before.y * zoom; applyWrapTransform(); }
+        function applyWrapTransform() { wrap.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`; }
+        function screenToCanvas(x, y) { const rect = workspace.getBoundingClientRect(); return { x: (x - rect.left - panX) / zoom, y: (y - rect.top - panY) / zoom }; }
 
-    function renderGroupBox() {
-        if (selectedIds.length <= 1) return;
-        const selected = selectedIds.map(id => findObject(id)).filter(Boolean);
-        const b = getSelectionBounds(selected);
-        const box = document.createElement("div"); box.className = "group-selection-box"; Object.assign(box.style, { left:b.x+"px", top:b.y+"px", width:b.w+"px", height:b.h+"px" });
-        ["nw","n","ne","e","se","s","sw","w"].forEach(dir => { const h=document.createElement("span"); h.className=`group-resize-handle ${dir}`; h.dataset.dir=dir; h.addEventListener("pointerdown", groupHandleDown); box.appendChild(h); });
-        const r=document.createElement("span"); r.className="group-rotate-handle"; r.addEventListener("pointerdown", groupRotateDown); box.appendChild(r);
-        canvas.appendChild(box);
-    }
+        function enterPreviewMode() { document.getElementById("studio-page").classList.add("preview-mode"); selectedIds = []; renderAll(); panX = 0; panY = 0; zoom = activeLayoutMode === "mobile" ? Math.min(1, (innerWidth - 20) / layout.canvas.width) : 1; applyWrapTransform(); }
+        function exitPreviewMode() { document.getElementById("studio-page").classList.remove("preview-mode"); renderAll(); centerView(); }
 
-    function groupHandleDown(e) { e.preventDefault(); e.stopPropagation(); const selected=selectedIds.map(id=>findObject(id)).filter(Boolean); interaction={mode:"resize", handle:e.target.dataset.dir, ids:selectedIds, start:screenToCanvas(e.clientX,e.clientY), originals:clone(selected), bounds:getSelectionBounds(selected)}; pushHistory(); window.addEventListener("pointermove", interactionMove); window.addEventListener("pointerup", endInteraction, {once:true}); }
-    function groupRotateDown(e) { e.preventDefault(); e.stopPropagation(); const selected=selectedIds.map(id=>findObject(id)).filter(Boolean); interaction={mode:"rotate", ids:selectedIds, center:getSelectionBounds(selected).center}; pushHistory(); window.addEventListener("pointermove", interactionMove); window.addEventListener("pointerup", endInteraction, {once:true}); }
+        function togglePanel(panel) { document.getElementById(panel === "tools" ? "tools-panel" : "inspector-panel").classList.toggle("open"); }
+        function updateTopbarButtons() { document.getElementById("desktop-btn").classList.toggle("active", activeLayoutMode === "desktop"); document.getElementById("mobile-btn").classList.toggle("active", activeLayoutMode === "mobile"); document.getElementById("free-btn").classList.toggle("active", !isSnap()); document.getElementById("snap-btn").classList.toggle("active", isSnap()); document.getElementById("studio-title-detail").textContent = activeItem ? `${activeItem.title || 'Untitled'} · editing ${activeLayoutMode === 'mobile' ? 'mobile' : 'PC'} showcase` : "Choose a gallery item"; }
+        function setStatus(text) { document.getElementById("studio-title-detail").textContent = text; }
+        function getCanvasBackground() { return layout.canvas.backgroundMode === "solid" ? layout.canvas.backgroundColor : layout.canvas.backgroundGradient; }
+        function persistActive() { layoutBundle.layouts[activeLayoutMode] = layout; }
+        function findObject(id) { return layout.objects.find(o => o.id === id); }
+        function clampObject(obj) { const rule = objectRules[obj.type] || objectRules.text; obj.w = clamp(num(obj.w, rule.minW), rule.minW, rule.maxW); obj.h = clamp(num(obj.h, rule.minH), rule.minH, rule.maxH); obj.x = clamp(num(obj.x, 0), 0, Math.max(0, layout.canvas.width - obj.w)); obj.y = clamp(num(obj.y, 0), 0, Math.max(0, layout.canvas.height - obj.h)); }
+        function getSelectionBounds(items) { const xs = items.map(o => o.x), ys = items.map(o => o.y), xe = items.map(o => o.x + o.w), ye = items.map(o => o.y + o.h); const x = Math.min(...xs), y = Math.min(...ys), w = Math.max(...xe) - x, h = Math.max(...ye) - y; return { x, y, w, h, center: { x: x + w / 2, y: y + h / 2 } }; }
+        function maybeEditText(id) { const obj = findObject(id); if (!obj || !["text", "title", "description", "back_gallery_button", "report_button"].includes(obj.type)) return; const next = prompt("Edit text", obj.text || ""); if (next !== null) updateObjectField(id, "text", next); }
 
-    function centerView() { const rect = workspace.getBoundingClientRect(); zoom = activeLayoutMode === "mobile" ? Math.min(1, (rect.height - 80) / layout.canvas.height) : Math.min(.72, (rect.width - 160) / layout.canvas.width); zoom = clamp(zoom, .18, 1); panX = (rect.width - layout.canvas.width * zoom) / 2; panY = 80; applyWrapTransform(); }
-    function zoomAt(clientX, clientY, nextZoom) { const before = screenToCanvas(clientX, clientY); zoom = nextZoom; panX = clientX - before.x * zoom; panY = clientY - before.y * zoom; applyWrapTransform(); }
-    function applyWrapTransform() { wrap.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`; }
-    function screenToCanvas(x,y) { const rect = workspace.getBoundingClientRect(); return { x:(x - rect.left - panX)/zoom, y:(y - rect.top - panY)/zoom }; }
+        function pushHistory() { if (historyLocked) return; history.push(clone({ bundle: layoutBundle, mode: activeLayoutMode, selectedIds })); if (history.length > 60) history.shift(); redo = []; }
+        function undoStudio() { const snap = history.pop(); if (!snap) return; redo.push(clone({ bundle: layoutBundle, mode: activeLayoutMode, selectedIds })); restoreHistory(snap); }
+        function redoStudio() { const snap = redo.pop(); if (!snap) return; history.push(clone({ bundle: layoutBundle, mode: activeLayoutMode, selectedIds })); restoreHistory(snap); }
+        function restoreHistory(snap) { historyLocked = true; layoutBundle = createLayoutBundle(snap.bundle); activeLayoutMode = snap.mode || "desktop"; selectedIds = snap.selectedIds || []; layout = layoutBundle.layouts[activeLayoutMode]; historyLocked = false; renderAll(); }
 
-    function enterPreviewMode() { document.getElementById("studio-page").classList.add("preview-mode"); selectedIds = []; renderAll(); panX = 0; panY = 0; zoom = activeLayoutMode === "mobile" ? Math.min(1, (innerWidth - 20) / layout.canvas.width) : 1; applyWrapTransform(); }
-    function exitPreviewMode() { document.getElementById("studio-page").classList.remove("preview-mode"); renderAll(); centerView(); }
-
-    function togglePanel(panel) { document.getElementById(panel === "tools" ? "tools-panel" : "inspector-panel").classList.toggle("open"); }
-    function updateTopbarButtons() { document.getElementById("desktop-btn").classList.toggle("active", activeLayoutMode === "desktop"); document.getElementById("mobile-btn").classList.toggle("active", activeLayoutMode === "mobile"); document.getElementById("free-btn").classList.toggle("active", !isSnap()); document.getElementById("snap-btn").classList.toggle("active", isSnap()); document.getElementById("studio-title-detail").textContent = activeItem ? `${activeItem.title || 'Untitled'} · editing ${activeLayoutMode === 'mobile' ? 'mobile' : 'PC'} showcase` : "Choose a gallery item"; }
-    function setStatus(text) { document.getElementById("studio-title-detail").textContent = text; }
-    function getCanvasBackground() { return layout.canvas.backgroundMode === "solid" ? layout.canvas.backgroundColor : layout.canvas.backgroundGradient; }
-    function persistActive() { layoutBundle.layouts[activeLayoutMode] = layout; }
-    function findObject(id) { return layout.objects.find(o => o.id === id); }
-    function clampObject(obj) { const rule = objectRules[obj.type] || objectRules.text; obj.w = clamp(num(obj.w, rule.minW), rule.minW, rule.maxW); obj.h = clamp(num(obj.h, rule.minH), rule.minH, rule.maxH); obj.x = clamp(num(obj.x, 0), 0, Math.max(0, layout.canvas.width - obj.w)); obj.y = clamp(num(obj.y, 0), 0, Math.max(0, layout.canvas.height - obj.h)); }
-    function getSelectionBounds(items) { const xs=items.map(o=>o.x), ys=items.map(o=>o.y), xe=items.map(o=>o.x+o.w), ye=items.map(o=>o.y+o.h); const x=Math.min(...xs), y=Math.min(...ys), w=Math.max(...xe)-x, h=Math.max(...ye)-y; return {x,y,w,h,center:{x:x+w/2,y:y+h/2}}; }
-    function maybeEditText(id) { const obj=findObject(id); if (!obj || !["text","title","description"].includes(obj.type)) return; const next=prompt("Edit text", obj.text || ""); if (next !== null) updateObjectField(id,"text",next); }
-
-    function pushHistory() { if (historyLocked) return; history.push(clone({ bundle: layoutBundle, mode: activeLayoutMode, selectedIds })); if (history.length > 60) history.shift(); redo = []; }
-    function undoStudio() { const snap = history.pop(); if (!snap) return; redo.push(clone({ bundle: layoutBundle, mode: activeLayoutMode, selectedIds })); restoreHistory(snap); }
-    function redoStudio() { const snap = redo.pop(); if (!snap) return; history.push(clone({ bundle: layoutBundle, mode: activeLayoutMode, selectedIds })); restoreHistory(snap); }
-    function restoreHistory(snap) { historyLocked = true; layoutBundle = createLayoutBundle(snap.bundle); activeLayoutMode = snap.mode || "desktop"; selectedIds = snap.selectedIds || []; layout = layoutBundle.layouts[activeLayoutMode]; historyLocked = false; renderAll(); }
-
-    function uid() { return `g_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,9)}`; }
-    function clone(value) { return JSON.parse(JSON.stringify(value)); }
-    function deepMerge(...items) { const out={}; for (const item of items) for (const [k,v] of Object.entries(item || {})) out[k] = v && typeof v === 'object' && !Array.isArray(v) ? deepMerge(out[k] || {}, v) : v; return out; }
-    function num(v,f) { const n=Number(v); return Number.isFinite(n)?n:f; }
-    function clamp(v,min,max) { return Math.max(min, Math.min(max, v)); }
-    function point(e) { return { x:e.clientX, y:e.clientY }; }
-    function distance(a,b) { return Math.hypot(a.x-b.x, a.y-b.y); }
-    function midpoint(a,b) { return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
-    function rectsOverlap(a,b) { return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y; }
-    function colorValue(value, fallback) { const m = String(value || '').match(/#[0-9a-fA-F]{6}/); return m ? m[0] : fallback; }
-    function safeFileName(name) { return String(name || 'image').toLowerCase().replace(/[^a-z0-9_.-]/g,'-').slice(-80); }
-    function escapeHtml(v) { return String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
-    function escapeAttr(v) { return escapeHtml(v); }
-    function formatType(v) { return String(v || 'other').replaceAll('_',' ').replace(/\b\w/g, l => l.toUpperCase()); }</script>
+        function uid() { return `g_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`; }
+        function clone(value) { return JSON.parse(JSON.stringify(value)); }
+        function deepMerge(...items) { const out = {}; for (const item of items) for (const [k, v] of Object.entries(item || {})) out[k] = v && typeof v === 'object' && !Array.isArray(v) ? deepMerge(out[k] || {}, v) : v; return out; }
+        function num(v, f) { const n = Number(v); return Number.isFinite(n) ? n : f; }
+        function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+        function point(e) { return { x: e.clientX, y: e.clientY }; }
+        function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+        function midpoint(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+        function rectsOverlap(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+        function colorValue(value, fallback) { const m = String(value || '').match(/#[0-9a-fA-F]{6}/); return m ? m[0] : fallback; }
+        function safeFileName(name) { return String(name || 'image').toLowerCase().replace(/[^a-z0-9_.-]/g, '-').slice(-80); }
+        function escapeHtml(v) { return String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }
+        function escapeAttr(v) { return escapeHtml(v); }
+        function formatType(v) { return String(v || 'other').replaceAll('_', ' ').replace(/\b\w/g, l => l.toUpperCase()); }</script>
 </body>
 </html>
