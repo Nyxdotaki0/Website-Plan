@@ -6,7 +6,7 @@
     <title>OC / Gallery Showcase - Nullverse</title>
     <link rel="icon" type="image/png" href="favicon.png">
     <script>
-    const savedNullverseTheme = localStorage.getItem("nullverse-theme") || "void";
+        const savedNullverseTheme = localStorage.getItem("nullverse-theme") || "void";
         document.documentElement.setAttribute("data-theme", savedNullverseTheme);</script>
     <link rel="stylesheet" href="theme.css?v=25">
     <style>
@@ -500,7 +500,7 @@
         <a id="back-link" class="button" href="creator-gallery.html">Back to Gallery</a>
     </div>
     <script type="module">
-    import { supabase } from "./supabaseClient.js";
+        import { supabase } from "./supabaseClient.js";
 
         const params = new URLSearchParams(location.search);
         const itemId = params.get("id") || params.get("item") || "";
@@ -580,19 +580,118 @@
             if (layout) renderCustom(layout); else renderDefault();
         }
 
+        function parseGalleryLayout(value) {
+            if (typeof value === "string") {
+                try {
+                    return JSON.parse(value);
+                } catch {
+                    return null;
+                }
+            }
+
+            return value && typeof value === "object" ? value : null;
+        }
+
+        function getStoredPublishedLayoutSnapshot(layout) {
+            const parsed = parseGalleryLayout(layout);
+            if (!parsed) return null;
+
+            let snapshot =
+                parsed.publishedSnapshot ||
+                parsed.published_layout ||
+                parsed.publishedLayout ||
+                parsed.publicLayout ||
+                parsed.liveLayout ||
+                null;
+
+            snapshot = parseGalleryLayout(snapshot);
+            return snapshot || null;
+        }
+
+        function getGalleryLayoutBundle(bundle) {
+            const parsed = parseGalleryLayout(bundle);
+
+            if (!parsed) {
+                return { desktop: null, mobile: null };
+            }
+
+            if (parsed.layouts) {
+                return {
+                    desktop: parsed.layouts.desktop || parsed.desktop || null,
+                    mobile: parsed.layouts.mobile || parsed.mobile || null
+                };
+            }
+
+            if (parsed.desktop || parsed.mobile) {
+                return {
+                    desktop: parsed.desktop || null,
+                    mobile: parsed.mobile || null
+                };
+            }
+
+            return {
+                desktop: parsed,
+                mobile: null
+            };
+        }
+
         function chooseLayout(bundle) {
-            if (!bundle?.layouts) return null;
+            const layouts = getGalleryLayoutBundle(bundle);
             const wantMobile = isMobileGalleryViewer();
-            const chosen = wantMobile ? bundle.layouts.mobile : bundle.layouts.desktop;
-            if (!chosen || chosen.published !== true) return null;
-            return chosen;
+            const wantedMode = wantMobile ? "mobile" : "desktop";
+            const chosen = layouts[wantedMode];
+
+            /*
+                Match Account Settings/Profile behavior: PC/tablet only gets
+                the PC published layout, and phones only get the mobile
+                published layout. No cross-device fallback.
+            */
+            return getPublicRenderableLayout(chosen, wantedMode);
+        }
+
+        function getPublicRenderableLayout(layout, mode) {
+            const parsed = parseGalleryLayout(layout);
+
+            if (!parsed) return null;
+
+            const snapshot = getStoredPublishedLayoutSnapshot(parsed);
+            const isPublished = parsed.published === true || parsed.sourceWasPublished === true || !!snapshot;
+
+            if (snapshot) {
+                return normalizeLayout({
+                    ...snapshot,
+                    published: true,
+                    sourceWasPublished: true
+                }, mode);
+            }
+
+            /*
+                Older Gallery Studio publishes saved the public row without
+                embedding per-layout published flags. Since this file is reading
+                from published_layout_json, treat that legacy public payload as
+                renderable when it has real objects.
+            */
+            const hasLegacyPublicObjects = Array.isArray(parsed.objects) && parsed.objects.length > 0;
+
+            if (!isPublished && !hasLegacyPublicObjects) {
+                return null;
+            }
+
+            return normalizeLayout({
+                ...parsed,
+                published: true,
+                sourceWasPublished: true
+            }, mode);
         }
 
         function isMobileGalleryViewer() {
             const ua = navigator.userAgent || "";
-            const phoneUA = /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(ua);
+            const platform = navigator.platform || "";
+            const maxTouchPoints = Number(navigator.maxTouchPoints || 0);
+            const isModernIPad = platform === "MacIntel" && maxTouchPoints > 1;
+            const isPhoneUA = /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(ua);
             const narrowTouch = matchMedia("(max-width: 700px) and (any-pointer: coarse)").matches;
-            return phoneUA || narrowTouch;
+            return !isModernIPad && (isPhoneUA || narrowTouch);
         }
 
         function renderDefault() {
@@ -600,20 +699,45 @@
         }
 
         function renderCustom(layout) {
-            layout = normalizeLayout(layout);
+            layout = normalizeLayout(layout, layout?.layoutMode || layout?.mode || "desktop");
             const root = document.getElementById("page-root");
             root.innerHTML = `<section class="custom-shell"><div id="custom-canvas" class="custom-canvas"></div></section>`;
             const canvas = document.getElementById("custom-canvas");
+
             canvas.style.width = layout.canvas.width + "px";
             canvas.style.height = layout.canvas.height + "px";
             canvas.style.minHeight = layout.canvas.height + "px";
-            canvas.style.background = layout.canvas.backgroundMode === "solid" ? layout.canvas.backgroundColor : layout.canvas.backgroundGradient;
+            applyCanvasBackground(canvas, layout.canvas);
             canvas.style.fontFamily = layout.canvas.fontFamily || "Arial";
+
             layout.objects
                 .filter(o => o.visible !== false)
-                .sort((a, b) => (isRequiredType(a.type) ? 1 : 0) - (isRequiredType(b.type) ? 1 : 0))
+                .sort((a, b) => (Number(a.z || 0) - Number(b.z || 0)))
                 .forEach(obj => canvas.appendChild(renderObject(obj)));
+
             scaleCanvas(canvas, layout);
+        }
+
+        function applyCanvasBackground(canvas, canvasData = {}) {
+            if (canvasData.backgroundImage) {
+                canvas.style.background = `${canvasData.background || canvasData.backgroundGradient || "var(--page-bg)"}, url('${safeCssUrl(canvasData.backgroundImage)}')`;
+                canvas.style.backgroundSize = canvasData.backgroundSize || "cover";
+                canvas.style.backgroundPosition = canvasData.backgroundPosition || "center";
+                canvas.style.backgroundRepeat = "no-repeat";
+                return;
+            }
+
+            if (canvasData.background) {
+                canvas.style.background = canvasData.background;
+                return;
+            }
+
+            if (canvasData.backgroundMode === "solid") {
+                canvas.style.background = canvasData.backgroundColor || "#09090b";
+                return;
+            }
+
+            canvas.style.background = canvasData.backgroundGradient || "var(--page-bg)";
         }
 
         function scaleCanvas(canvas, layout) {
@@ -623,18 +747,102 @@
                 canvas.parentElement.style.minHeight = (layout.canvas.height * scale) + "px";
                 return;
             }
+
             canvas.style.transform = "none";
             canvas.parentElement.style.overflowX = "auto";
             canvas.parentElement.style.minHeight = layout.canvas.height + "px";
         }
 
-        function normalizeLayout(layout) {
-            const mode = layout.layoutMode === "mobile" ? "mobile" : "desktop";
+        function normalizeLayout(layout, preferredMode = "desktop") {
+            const parsed = parseGalleryLayout(layout) || {};
+            const mode = parsed.layoutMode === "mobile" || parsed.mode === "mobile" || preferredMode === "mobile" ? "mobile" : "desktop";
             const width = mode === "mobile" ? 430 : 1600;
-            const height = Number(layout.canvas?.height || (mode === "mobile" ? 1450 : 2200));
-            const normalized = { ...layout, layoutMode: mode, canvas: { width, height, backgroundMode: "gradient", backgroundColor: "#09090b", backgroundGradient: "linear-gradient(135deg,#050506,#14141b)", fontFamily: "Arial", ...(layout.canvas || {}) }, objects: Array.isArray(layout.objects) ? layout.objects : [] };
+            const height = Number(parsed.canvas?.height || parsed.height || (mode === "mobile" ? 1450 : 2200));
+
+            const normalized = {
+                ...parsed,
+                layoutMode: mode,
+                mode,
+                published: true,
+                sourceWasPublished: true,
+                canvas: {
+                    width,
+                    height,
+                    backgroundMode: "gradient",
+                    backgroundColor: "#09090b",
+                    backgroundGradient: "linear-gradient(135deg,#050506,#14141b)",
+                    background: parsed.canvas?.background || parsed.background || "",
+                    backgroundImage: parsed.canvas?.backgroundImage || "",
+                    backgroundSize: parsed.canvas?.backgroundSize || "cover",
+                    backgroundPosition: parsed.canvas?.backgroundPosition || "center",
+                    fontFamily: "Arial",
+                    ...(parsed.canvas || {}),
+                    width,
+                    height
+                },
+                objects: Array.isArray(parsed.objects) ? parsed.objects.map(normalizeObject).filter(Boolean) : []
+            };
+
             ensureRequiredObjects(normalized);
             return normalized;
+        }
+
+        function normalizeObject(input) {
+            if (!input || typeof input !== "object") return null;
+
+            let type = input.type || "text";
+            type = {
+                image: "image_box",
+                image_box: "image_box",
+                bio_box: "bio",
+                lore_box: "bio",
+                artwork: "art_hero",
+                artwork_card: "art_card",
+                back_button: "back_gallery_button"
+            }[type] || type;
+
+            return {
+                ...input,
+                id: input.id || `public_gallery_obj_${Math.random().toString(36).slice(2)}`,
+                type,
+                x: Number.isFinite(Number(input.x)) ? Number(input.x) : 80,
+                y: Number.isFinite(Number(input.y)) ? Number(input.y) : 80,
+                w: Number.isFinite(Number(input.w ?? input.width)) ? Number(input.w ?? input.width) : 240,
+                h: Number.isFinite(Number(input.h ?? input.height)) ? Number(input.h ?? input.height) : 120,
+                rotation: Number.isFinite(Number(input.rotation)) ? Number(input.rotation) : 0,
+                z: Number.isFinite(Number(input.z ?? input.zIndex)) ? Number(input.z ?? input.zIndex) : 10,
+                visible: input.visible !== false && input.hidden !== true,
+                required: isRequiredType(type) || input.required === true,
+                text: input.text ?? input.content ?? "",
+                imageUrl: input.imageUrl || input.image_url || input.src || "",
+                styles: normalizeObjectStyles(input.styles || {}, type)
+            };
+        }
+
+        function normalizeObjectStyles(styles = {}, type = "text") {
+            const textPaint = styles.textPaint || styles.textColor || styles.color || "#fff";
+            const solidTextColor = isStudioTextGradientPaint(textPaint) ? (styles.color || styles.textColor || "#fff") : textPaint;
+
+            return {
+                ...styles,
+                background: styles.background ?? styles.fill ?? "transparent",
+                textColor: solidTextColor,
+                color: solidTextColor,
+                textPaint,
+                borderColor: styles.borderColor || "transparent",
+                borderGradient: styles.borderGradient || styles.borderPaint || "",
+                borderPaint: styles.borderPaint || styles.borderGradient || "",
+                borderWidth: Number(styles.borderWidth || 0),
+                radius: Number(styles.radius ?? (type === "shape" ? 0 : type === "circle" ? 999 : 18)),
+                opacity: Number(styles.opacity ?? 1),
+                fontSize: Number(styles.fontSize || 18),
+                fontFamily: styles.fontFamily || "Arial",
+                lineHeight: Number(styles.lineHeight || 1.16),
+                textAlign: styles.textAlign || "left",
+                objectFit: styles.objectFit || styles.imageFit || "cover",
+                imageFit: styles.imageFit || styles.objectFit || "cover",
+                padding: Number(styles.padding || 0)
+            };
         }
 
         const requiredObjectTypes = ["back_gallery_button", "report_button"];
@@ -692,38 +900,50 @@
         }
 
         function renderObject(obj) {
+            const s = obj.styles || {};
+            const borderPaint = s.borderGradient || s.borderPaint || "";
             const el = document.createElement("article");
-            el.className = `custom-object ${isRequiredType(obj.type) ? 'required-object' : ''} ${obj.styles?.borderGradient ? 'public-gradient-border' : ''}`;
+
+            el.className = `custom-object ${isRequiredType(obj.type) ? 'required-object' : ''} ${borderPaint ? 'public-gradient-border' : ''}`;
             el.dataset.type = obj.type;
             el.dataset.shapeType = obj.type === "shape" ? "rectangle" : obj.type;
+
             Object.assign(el.style, objectStyle(obj));
-            el.style.setProperty("--border-width", `${Number(obj.styles?.borderWidth || 1)}px`);
-            el.style.setProperty("--border-paint", obj.styles?.borderGradient || "transparent");
-            el.style.setProperty("--studio-border-width", `${Number(obj.styles?.borderWidth || 1)}px`);
-            el.style.setProperty("--studio-border-paint", obj.styles?.borderGradient || "transparent");
+
+            el.style.setProperty("--border-width", `${Number(s.borderWidth || 0)}px`);
+            el.style.setProperty("--border-paint", borderPaint || "transparent");
+            el.style.setProperty("--studio-border-width", `${Number(s.borderWidth || 0)}px`);
+            el.style.setProperty("--studio-border-paint", borderPaint || "transparent");
+
             const inner = document.createElement("div");
             inner.className = "custom-inner";
             inner.innerHTML = renderObjectInner(obj);
             el.appendChild(inner);
+
             return el;
         }
 
         function objectStyle(obj) {
             const s = obj.styles || {};
-            const radius = Number(s.radius ?? (obj.type === "shape" ? 0 : 18));
+            const radius = Number(s.radius ?? (obj.type === "shape" ? 0 : obj.type === "circle" ? 999 : 18));
             const borderWidth = Number(s.borderWidth || 0);
+            const borderPaint = s.borderGradient || s.borderPaint || "";
+            const textPaint = s.textPaint || s.textColor || s.color || "#fff";
+            const solidTextColor = isStudioTextGradientPaint(textPaint) ? (s.color || s.textColor || "#fff") : textPaint;
             const fontFamily = s.fontFamily || "Arial";
             const lineHeight = Number(s.lineHeight || 1.16);
             const fontSize = Number(s.fontSize || 18);
+
             return {
                 left: (obj.x || 0) + "px",
                 top: (obj.y || 0) + "px",
                 width: (obj.w || 100) + "px",
                 height: (obj.h || 100) + "px",
+                zIndex: String(obj.z || 10),
                 transform: `rotate(${obj.rotation || 0}deg)`,
                 background: s.background || "transparent",
-                color: s.textColor || "#fff",
-                borderColor: s.borderGradient ? "transparent" : (s.borderColor || "transparent"),
+                color: solidTextColor || "#fff",
+                borderColor: borderPaint ? "transparent" : (s.borderColor || "transparent"),
                 borderWidth: borderWidth + "px",
                 borderStyle: "solid",
                 borderRadius: radius + "px",
@@ -739,7 +959,7 @@
                 "--studio-object-line-height": String(lineHeight),
                 "--studio-surface-radius": radius + "px",
                 "--studio-border-width": borderWidth + "px",
-                "--studio-border-paint": obj.styles?.borderGradient || "transparent"
+                "--studio-border-paint": borderPaint || "transparent"
             };
         }
 
@@ -747,14 +967,19 @@
             return /linear-gradient|radial-gradient/i.test(String(value || ""));
         }
 
+        function getTextPaint(obj) {
+            const s = obj?.styles || {};
+            return String(s.textPaint || s.textColor || s.color || "#fff").trim();
+        }
+
         function getStudioTextPaintInlineStyle(obj) {
-            const paint = String(obj?.styles?.textColor || "").trim();
+            const paint = getTextPaint(obj);
             if (!isStudioTextGradientPaint(paint)) return "";
             return `background:${escapeAttr(paint)};color:transparent;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;`;
         }
 
         function getStudioTextPaintClass(obj, extra = "") {
-            const gradientClass = isStudioTextGradientPaint(obj?.styles?.textColor) ? " studio-gradient-text" : "";
+            const gradientClass = isStudioTextGradientPaint(getTextPaint(obj)) ? " studio-gradient-text" : "";
             return `${extra} studio-text-paint-target${gradientClass}`.trim();
         }
 
@@ -764,21 +989,81 @@
 
         function renderObjectInner(obj) {
             const s = obj.styles || {};
-            const fit = `object-fit:${escapeAttr(s.objectFit || 'cover')};`;
-            if (obj.type === "art_hero") return `<div class="art-hero"><img src="${escapeAttr(item.image_url || '')}" style="${fit}" alt=""><span class="pill">${renderStudioTextPaintTarget(obj, item.title || 'Artwork')}</span></div>`;
-            if (obj.type === "art_card") return `<div class="art-card"><img src="${escapeAttr(item.image_url || '')}" style="${fit}" alt=""><div class="art-card-body"><h3>${renderStudioTextPaintTarget(obj, item.title || 'Untitled')}</h3><p>${renderStudioTextPaintTarget(obj, item.description || 'No description provided.')}</p></div></div>`;
-            if (obj.type === "title") return `<div class="title-object">${renderStudioTextPaintTarget(obj, obj.text || item.title || 'Untitled')}</div>`;
-            if (obj.type === "description") return `<div class="description-object">${renderStudioTextPaintTarget(obj, obj.text || item.description || 'No description provided.')}</div>`;
-            if (obj.type === "type_badge") return `<div class="type-badge"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || formatType(item.proof_type))}</span></div>`;
-            if (obj.type === "credit_badge") return `<div class="credit-badge"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Creator credited')}</span></div>`;
-            if (obj.type === "noai_badge") return `<div class="noai-badge"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Human-made / No AI')}</span></div>`;
-            if (obj.type === "back_gallery_button") return `<a class="system-page-button" href="creator-gallery.html?user=${encodeURIComponent(profile?.username || '')}"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Back to Creator Gallery')}</span></a>`;
-            if (obj.type === "report_button") return `<button class="system-page-button" type="button" onclick="openReportPlaceholder()"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Report')}</span></button>`;
-            if (obj.type === "text") return `<div class="text-object">${renderStudioTextPaintTarget(obj, obj.text || '')}</div>`;
-            if (obj.type === "image_box") return `<div class="image-object">${obj.imageUrl ? `<img src="${escapeAttr(obj.imageUrl)}" style="${fit}" alt="">` : ''}</div>`;
-            if (["shape", "circle", "star"].includes(obj.type)) return `<div class="shape-object ${obj.type === 'circle' ? 'circle' : obj.type === 'star' ? 'star' : 'rectangle'}"></div>`;
-            if (obj.type === "divider") return `<div class="divider-object">${renderStudioTextPaintTarget(obj, "")}</div>`;
+            const imageUrl = obj.imageUrl || item.image_url || "";
+            const fit = `object-fit:${escapeAttr(s.objectFit || s.imageFit || 'cover')};`;
+            const padding = Number(s.padding || 0);
+
+            if (obj.type === "art_hero") {
+                return `<div class="art-hero"><img src="${escapeAttr(imageUrl)}" style="${fit}" alt=""><span class="pill">${renderStudioTextPaintTarget(obj, item.title || 'Artwork')}</span></div>`;
+            }
+
+            if (obj.type === "art_card") {
+                return `<div class="art-card"><img src="${escapeAttr(imageUrl)}" style="${fit}" alt=""><div class="art-card-body"><h3>${renderStudioTextPaintTarget(obj, item.title || 'Untitled')}</h3><p>${renderStudioTextPaintTarget(obj, item.description || 'No description provided.')}</p></div></div>`;
+            }
+
+            if (obj.type === "title") {
+                return `<div class="title-object">${renderStudioTextPaintTarget(obj, obj.text || item.title || 'Untitled')}</div>`;
+            }
+
+            if (obj.type === "description") {
+                return `<div class="description-object">${renderStudioTextPaintTarget(obj, obj.text || item.description || 'No description provided.')}</div>`;
+            }
+
+            if (obj.type === "type_badge") {
+                return `<div class="type-badge"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || formatType(item.proof_type))}</span></div>`;
+            }
+
+            if (obj.type === "credit_badge") {
+                return `<div class="credit-badge"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Creator credited')}</span></div>`;
+            }
+
+            if (obj.type === "noai_badge") {
+                return `<div class="noai-badge"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Human-made / No AI')}</span></div>`;
+            }
+
+            if (obj.type === "back_gallery_button") {
+                return `<a class="system-page-button" href="creator-gallery.html?user=${encodeURIComponent(profile?.username || '')}"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Back to Creator Gallery')}</span></a>`;
+            }
+
+            if (obj.type === "report_button") {
+                return `<button class="system-page-button" type="button" onclick="openReportPlaceholder()"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Report')}</span></button>`;
+            }
+
+            if (obj.type === "text") {
+                return `<div class="text-object">${renderStudioTextPaintTarget(obj, obj.text || '')}</div>`;
+            }
+
+            if (obj.type === "bio") {
+                return `<div class="description-object" style="padding:${padding}px">${renderStudioTextPaintTarget(obj, obj.text || '')}</div>`;
+            }
+
+            if (obj.type === "section") {
+                const [heading, ...body] = String(obj.text || "").split("\n");
+                return `<div class="description-object" style="padding:${padding}px"><h3>${renderStudioTextPaintTarget(obj, heading || 'Section')}</h3><p>${renderStudioTextPaintTarget(obj, body.join("\n"))}</p></div>`;
+            }
+
+            if (obj.type === "image_text") {
+                const [heading, ...body] = String(obj.text || "").split("\n");
+                return `<div class="art-card" style="grid-template-rows:none;grid-template-columns:38% 1fr;gap:12px;padding:${padding || 12}px;"><div class="image-object">${imageUrl ? `<img src="${escapeAttr(imageUrl)}" style="${fit}" alt="">` : ''}</div><div class="art-card-body" style="padding:0;"><h3>${renderStudioTextPaintTarget(obj, heading || 'Image + Text')}</h3><p>${renderStudioTextPaintTarget(obj, body.join("\n"))}</p></div></div>`;
+            }
+
+            if (obj.type === "image_box") {
+                return `<div class="image-object">${obj.imageUrl ? `<img src="${escapeAttr(obj.imageUrl)}" style="${fit}" alt="">` : ''}</div>`;
+            }
+
+            if (["shape", "circle", "star"].includes(obj.type)) {
+                return `<div class="shape-object ${obj.type === 'circle' ? 'circle' : obj.type === 'star' ? 'star' : 'rectangle'}"></div>`;
+            }
+
+            if (obj.type === "divider") {
+                return `<div class="divider-object">${renderStudioTextPaintTarget(obj, "")}</div>`;
+            }
+
             return "";
+        }
+
+        function safeCssUrl(value) {
+            return String(value || "").replace(/['"\\\n\r]/g, "");
         }
 
         function renderOwnerActions() {

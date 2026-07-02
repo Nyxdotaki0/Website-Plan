@@ -1785,10 +1785,197 @@
         function filteredItems() { if (!state.search) return state.items; return state.items.filter(i => [i.title, i.description, i.proof_type, i.visibility, i.moderation_status].map(v => String(v || "").toLowerCase()).join(" ").includes(state.search)) }
         async function chooseGalleryItem(id, opt = {}) { const item = state.items.find(i => i.id === id); if (!item) return toast("That gallery item could not be found.", "bad"); state.item = item; state.selected = []; state.history = []; state.redo = []; await loadLayouts(); protectRequired(); syncTitle(); renderItems(); renderAll(); centerView(); pushHistory(); if (opt.replaceUrl !== false) { const u = new URL(location.href); u.searchParams.set("item", item.id); history.replaceState({}, "", u) } }
         async function loadLayouts() { state.layouts = createBundle(); if (!state.item || state.item.id === "local-preview") return; const { data, error } = await supabase.from("creator_gallery_item_layouts").select("draft_layout_json,published_layout_json").eq("gallery_item_id", state.item.id).maybeSingle(); if (error) { toast("Could not load saved layout: " + error.message, "warn", 7000); return } const src = data?.draft_layout_json || data?.published_layout_json; if (src) state.layouts = createBundle(src); sanitizeAll() }
-        function createBundle(src = null) { const s = src?.layouts || src || {}; return { desktop: normalizeLayout(s.desktop || src?.desktop, "desktop"), mobile: normalizeLayout(s.mobile || src?.mobile, "mobile") } }
-        function normalizeLayout(src = null, mode = "desktop") { const size = DEFAULT[mode]; const l = { mode, canvas: { width: num(src?.canvas?.width || src?.width, size.width), height: num(src?.canvas?.height || src?.height, size.height), background: src?.canvas?.background || src?.background || "var(--page-bg)", backgroundImage: src?.canvas?.backgroundImage || "", backgroundSize: src?.canvas?.backgroundSize || "cover", backgroundPosition: src?.canvas?.backgroundPosition || "center" }, objects: Array.isArray(src?.objects) ? src.objects.map(normalizeObj).filter(Boolean) : [] }; l.objects = l.objects.filter(o => !PROFILE_ONLY.has(o.type)); ensureRequired(l, mode); normalizeZ(l); return l }
-        function normalizeObj(input) { if (!input || typeof input !== "object") return null; let type = input.type || "text"; type = { image_box: "image", bio_box: "bio", lore_box: "bio", artwork: "art_hero", artwork_card: "art_card", back_button: "back_gallery_button" }[type] || type; if (PROFILE_ONLY.has(type) || !LABELS[type]) return null; const [minW, minH, maxW, maxH] = LIMITS[type] || LIMITS.text; const o = { id: String(input.id || id()), type, name: input.name || LABELS[type], x: num(input.x, 120), y: num(input.y, 140), w: clamp(num(input.w ?? input.width, 220), minW, maxW), h: clamp(num(input.h ?? input.height, 80), minH, maxH), rotation: num(input.rotation, 0), z: num(input.z ?? input.zIndex, 10), locked: !!input.locked, hidden: !!input.hidden, required: REQUIRED.includes(type), text: input.text ?? input.content ?? defaultText(type), imageUrl: input.imageUrl || input.image_url || input.src || "", styles: normalizeStyles(input.styles || {}, type) }; if (o.required) o.hidden = false; return o }
-        function normalizeStyles(s = {}, type = "text") { const text = ["text", "title", "description", "bio", "section", "image_text"].includes(type); return { background: s.background ?? s.fill ?? defaultBg(type), color: s.color ?? s.textColor ?? "#fff", textPaint: s.textPaint || "", borderColor: s.borderColor || "rgba(255,255,255,.12)", borderPaint: s.borderPaint || "", borderWidth: num(s.borderWidth, type === "text" || type === "title" ? 0 : 1), radius: num(s.radius, type === "shape" ? 0 : type === "circle" ? 999 : 18), opacity: clamp(num(s.opacity, 1), .05, 1), fontFamily: s.fontFamily || "Arial", fontSize: num(s.fontSize, text ? (type === "title" ? 58 : 22) : 18), lineHeight: num(s.lineHeight, type === "title" ? 1.05 : 1.16), textAlign: s.textAlign || "left", imageFit: s.imageFit || "cover", padding: num(s.padding, ["bio", "section", "image_text"].includes(type) ? 18 : 0), shadow: s.shadow ?? "0 12px 30px rgba(0,0,0,.22)" } }
+        function getStoredPublishedLayoutSnapshot(layout) {
+            if (!layout || typeof layout !== "object") return null;
+
+            let snapshot =
+                layout.publishedSnapshot ||
+                layout.published_layout ||
+                layout.publishedLayout ||
+                layout.publicLayout ||
+                layout.liveLayout ||
+                null;
+
+            if (typeof snapshot === "string") {
+                try {
+                    snapshot = JSON.parse(snapshot);
+                } catch {
+                    snapshot = null;
+                }
+            }
+
+            return snapshot && typeof snapshot === "object" ? clone(snapshot) : null;
+        }
+
+        function makePublishedLayoutSnapshot(layout) {
+            const raw = clone(layout || normalizeLayout(null, state.mode));
+            const mode = raw.mode === "mobile" || raw.layoutMode === "mobile" ? "mobile" : "desktop";
+
+            delete raw.publishedSnapshot;
+            delete raw.published_layout;
+            delete raw.publishedLayout;
+            delete raw.publicLayout;
+            delete raw.liveLayout;
+
+            const normalized = normalizeLayout(raw, mode);
+            protectRequired(normalized, false);
+
+            return {
+                version: "gallery-studio-public-snapshot-v1",
+                mode: normalized.mode,
+                layoutMode: normalized.mode,
+                canvas: clone(normalized.canvas || {}),
+                objects: clone((normalized.objects || []).filter(o => !PROFILE_ONLY.has(o.type))),
+                published: true,
+                sourceWasPublished: true
+            };
+        }
+
+        function ensurePublishedLayoutSnapshot(layout) {
+            if (!layout) return layout;
+
+            const snapshot = getStoredPublishedLayoutSnapshot(layout);
+
+            if (snapshot) {
+                layout.publishedSnapshot = snapshot;
+                layout.published = true;
+                return layout;
+            }
+
+            if (layout.published === true || layout.sourceWasPublished === true) {
+                layout.publishedSnapshot = makePublishedLayoutSnapshot(layout);
+                layout.published = true;
+            } else {
+                delete layout.publishedSnapshot;
+                layout.published = false;
+            }
+
+            return layout;
+        }
+
+        function createBundle(src = null) {
+            let parsed = src;
+
+            if (typeof parsed === "string") {
+                try {
+                    parsed = JSON.parse(parsed);
+                } catch {
+                    parsed = null;
+                }
+            }
+
+            const s = parsed?.layouts || parsed || {};
+            return {
+                desktop: ensurePublishedLayoutSnapshot(normalizeLayout(s.desktop || parsed?.desktop, "desktop")),
+                mobile: ensurePublishedLayoutSnapshot(normalizeLayout(s.mobile || parsed?.mobile, "mobile"))
+            };
+        }
+
+        function normalizeLayout(src = null, mode = "desktop") {
+            let parsed = src;
+
+            if (typeof parsed === "string") {
+                try {
+                    parsed = JSON.parse(parsed);
+                } catch {
+                    parsed = null;
+                }
+            }
+
+            const size = DEFAULT[mode];
+            const snapshot = getStoredPublishedLayoutSnapshot(parsed);
+            const published = parsed?.published === true || parsed?.sourceWasPublished === true || !!snapshot;
+
+            const l = {
+                mode,
+                layoutMode: mode,
+                published,
+                sourceWasPublished: published,
+                canvas: {
+                    width: num(parsed?.canvas?.width || parsed?.width, size.width),
+                    height: num(parsed?.canvas?.height || parsed?.height, size.height),
+                    background: parsed?.canvas?.background || parsed?.background || parsed?.canvas?.backgroundGradient || "var(--page-bg)",
+                    backgroundImage: parsed?.canvas?.backgroundImage || "",
+                    backgroundSize: parsed?.canvas?.backgroundSize || "cover",
+                    backgroundPosition: parsed?.canvas?.backgroundPosition || "center"
+                },
+                objects: Array.isArray(parsed?.objects) ? parsed.objects.map(normalizeObj).filter(Boolean) : []
+            };
+
+            if (snapshot) {
+                l.publishedSnapshot = snapshot;
+            }
+
+            l.objects = l.objects.filter(o => !PROFILE_ONLY.has(o.type));
+            ensureRequired(l, mode);
+            normalizeZ(l);
+            return l;
+        }
+
+        function normalizeObj(input) {
+            if (!input || typeof input !== "object") return null;
+
+            let type = input.type || "text";
+            type = {
+                image_box: "image",
+                bio_box: "bio",
+                lore_box: "bio",
+                artwork: "art_hero",
+                artwork_card: "art_card",
+                back_button: "back_gallery_button"
+            }[type] || type;
+
+            if (PROFILE_ONLY.has(type) || !LABELS[type]) return null;
+
+            const [minW, minH, maxW, maxH] = LIMITS[type] || LIMITS.text;
+
+            const o = {
+                id: String(input.id || id()),
+                type,
+                name: input.name || LABELS[type],
+                x: num(input.x, 120),
+                y: num(input.y, 140),
+                w: clamp(num(input.w ?? input.width, 220), minW, maxW),
+                h: clamp(num(input.h ?? input.height, 80), minH, maxH),
+                rotation: num(input.rotation, 0),
+                z: num(input.z ?? input.zIndex, 10),
+                locked: !!input.locked,
+                hidden: !!input.hidden || input.visible === false,
+                required: REQUIRED.includes(type),
+                text: input.text ?? input.content ?? defaultText(type),
+                imageUrl: input.imageUrl || input.image_url || input.src || "",
+                styles: normalizeStyles(input.styles || {}, type)
+            };
+
+            if (o.required) {
+                o.hidden = false;
+            }
+
+            return o;
+        }
+
+        function normalizeStyles(s = {}, type = "text") {
+            const text = ["text", "title", "description", "bio", "section", "image_text"].includes(type);
+
+            return {
+                background: s.background ?? s.fill ?? defaultBg(type),
+                color: s.color ?? s.textColor ?? "#fff",
+                textPaint: s.textPaint || s.textColor || "",
+                borderColor: s.borderColor || "rgba(255,255,255,.12)",
+                borderPaint: s.borderPaint || s.borderGradient || "",
+                borderWidth: num(s.borderWidth, type === "text" || type === "title" ? 0 : 1),
+                radius: num(s.radius, type === "shape" ? 0 : type === "circle" ? 999 : 18),
+                opacity: clamp(num(s.opacity, 1), .05, 1),
+                fontFamily: s.fontFamily || "Arial",
+                fontSize: num(s.fontSize, text ? (type === "title" ? 58 : 22) : 18),
+                lineHeight: num(s.lineHeight, type === "title" ? 1.05 : 1.16),
+                textAlign: s.textAlign || "left",
+                imageFit: s.imageFit || s.objectFit || "cover",
+                padding: num(s.padding, ["bio", "section", "image_text"].includes(type) ? 18 : 0),
+                shadow: s.shadow ?? "0 12px 30px rgba(0,0,0,.22)"
+            };
+        }
+
         function defaultBg(t) { if (["text", "title", "description"].includes(t)) return "transparent"; if (["back_gallery_button", "report_button"].includes(t)) return "linear-gradient(180deg,#35353b 0%,#1d1d22 45%,#101014 100%)"; if (t === "circle") return "rgba(255,255,255,.12)"; if (t === "star") return "rgba(255,231,170,.28)"; return "rgba(255,255,255,.055)" }
         function defaultText(t) { const i = state.item || localItem(); return { title: i.title || "Untitled Work", description: i.description || "Add a description, bio, lore, or notes about this work.", type_badge: formatType(i.proof_type || "Gallery Item"), credit_badge: "Credit / Source", noai_badge: "NO AI · HUMAN MADE", back_gallery_button: "Back to Creator Gallery", report_button: "Report", text: "New text", bio: "Character Bio\nAdd personality, lore, powers, reference notes, or story details here.", image_text: "Image + Text\nAdd notes beside an image.", section: "Section Title\nWrite extra details here.", divider: "" }[t] ?? "" }
         function requiredDefs(mode) { return mode === "mobile" ? [{ type: "back_gallery_button", name: "Required · Back to Creator Gallery", text: "Back", x: 24, y: 96, w: 150, h: 46, z: 9800 }, { type: "report_button", name: "Required · Report", text: "Report", x: 270, y: 96, w: 130, h: 46, z: 9801 }] : [{ type: "back_gallery_button", name: "Required · Back to Creator Gallery", text: "Back to Creator Gallery", x: 80, y: 120, w: 250, h: 56, z: 9800 }, { type: "report_button", name: "Required · Report", text: "Report", x: 1320, y: 120, w: 180, h: 56, z: 9801 }] }
@@ -2327,12 +2514,130 @@
         function togglePanel(which) { const p = which === "tools" ? dom.tools : dom.inspPanel; p.classList.toggle("open") }
         function enterPreviewMode() { state.previewBefore = { zoom: state.zoom, panX: state.panX, panY: state.panY }; state.selected = []; dom.page.classList.add("preview-mode"); updateButtons(); renderAll(); dom.workspace.scrollTo({ top: 0, left: 0, behavior: "instant" }) }
         function exitPreviewMode() { dom.page.classList.remove("preview-mode"); if (state.previewBefore) { state.zoom = state.previewBefore.zoom; state.panX = state.previewBefore.panX; state.panY = state.previewBefore.panY } state.previewBefore = null; renderAll(); applyTransform() }
-        async function saveDraft() { try { protectRequired(getLayout(), false); await savePayload(buildSave(false)); toast("Progress saved as an internal draft. Public page was not changed.", "good") } catch (e) { console.error(e); localBackup(); toast(`Database save failed, so I saved a browser backup: ${e.message}`, "warn", 8000) } }
-        async function publishLayout() { try { protectRequired(getLayout(), false); const miss = REQUIRED.filter(t => !getLayout().objects.some(o => o.type === t && !o.hidden)); if (miss.length) return toast(`Missing required controls: ${miss.map(t => LABELS[t]).join(", ")}`, "bad", 7000); await savePayload(buildSave(true)); toast(`${state.mode === "mobile" ? "Mobile" : "PC"} gallery layout published.`, "good") } catch (e) { console.error(e); localBackup(); toast(`Publish failed, so I saved a browser backup: ${e.message}`, "bad", 8000) } }
-        function buildSave(pub) { if (!state.item || state.item.id === "local-preview") throw new Error("Choose an uploaded gallery item before saving to Supabase."); if (!state.user?.id) throw new Error("You must be signed in to save."); const draft = payload(); const row = { gallery_item_id: state.item.id, owner_id: state.user.id, draft_layout_json: draft, draft_updated_at: new Date().toISOString(), updated_at: new Date().toISOString(), is_public: true }; if (pub) { row.published_layout_json = draft; row.published_at = new Date().toISOString() } return row }
-        async function savePayload(row) { const { error } = await supabase.from("creator_gallery_item_layouts").upsert(row, { onConflict: "gallery_item_id" }); if (error) throw error }
-        function payload() { sanitizeAll(); return { version: "gallery-studio-bulletproof-v2", updated_at: new Date().toISOString(), active_mode: state.mode, gallery_item_id: state.item?.id || null, layouts: { desktop: exportLayout(state.layouts.desktop), mobile: exportLayout(state.layouts.mobile) } } }
-        function exportLayout(l) { const c = clone(l); c.objects = (c.objects || []).filter(o => !PROFILE_ONLY.has(o.type)).map(o => { const x = clone(o); x.required = REQUIRED.includes(x.type); if (x.required) x.hidden = false; return x }); return c }
+        async function saveDraft() {
+            try {
+                protectRequired(getLayout(), false);
+
+                const active = normalizeLayout(getLayout(), state.mode);
+                const existingSnapshot = getStoredPublishedLayoutSnapshot(getLayout());
+
+                if (existingSnapshot) {
+                    active.publishedSnapshot = existingSnapshot;
+                    active.published = true;
+                } else {
+                    delete active.publishedSnapshot;
+                    active.published = false;
+                }
+
+                active.draftSavedAt = new Date().toISOString();
+                state.layouts[state.mode] = active;
+
+                await savePayload(buildSave(false));
+                toast("Progress saved as an internal draft. Public page was not changed.", "good");
+            } catch (e) {
+                console.error(e);
+                localBackup();
+                toast(`Database save failed, so I saved a browser backup: ${e.message}`, "warn", 8000);
+            }
+        }
+
+        async function publishLayout() {
+            try {
+                protectRequired(getLayout(), false);
+
+                const miss = REQUIRED.filter(t => !getLayout().objects.some(o => o.type === t && !o.hidden));
+
+                if (miss.length) {
+                    return toast(`Missing required controls: ${miss.map(t => LABELS[t]).join(", ")}`, "bad", 7000);
+                }
+
+                const active = normalizeLayout(getLayout(), state.mode);
+                active.publishedSnapshot = makePublishedLayoutSnapshot(active);
+                active.published = true;
+                active.publishedAt = new Date().toISOString();
+                active.draftSavedAt = new Date().toISOString();
+                state.layouts[state.mode] = active;
+
+                await savePayload(buildSave(true));
+                toast(`${state.mode === "mobile" ? "Mobile" : "PC"} gallery layout published.`, "good");
+            } catch (e) {
+                console.error(e);
+                localBackup();
+                toast(`Publish failed, so I saved a browser backup: ${e.message}`, "bad", 8000);
+            }
+        }
+
+        function buildSave(pub) {
+            if (!state.item || state.item.id === "local-preview") throw new Error("Choose an uploaded gallery item before saving to Supabase.");
+            if (!state.user?.id) throw new Error("You must be signed in to save.");
+
+            const draft = payload();
+            const row = {
+                gallery_item_id: state.item.id,
+                owner_id: state.user.id,
+                draft_layout_json: draft,
+                draft_updated_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                is_public: true
+            };
+
+            if (pub) {
+                row.published_layout_json = draft;
+                row.published_at = new Date().toISOString();
+            }
+
+            return row;
+        }
+
+        async function savePayload(row) {
+            const { error } = await supabase.from("creator_gallery_item_layouts").upsert(row, { onConflict: "gallery_item_id" });
+            if (error) throw error;
+        }
+
+        function payload() {
+            sanitizeAll();
+            return {
+                version: "gallery-studio-bulletproof-v3",
+                updated_at: new Date().toISOString(),
+                active_mode: state.mode,
+                gallery_item_id: state.item?.id || null,
+                layouts: {
+                    desktop: exportLayout(state.layouts.desktop),
+                    mobile: exportLayout(state.layouts.mobile)
+                }
+            };
+        }
+
+        function exportLayout(l) {
+            const c = clone(l || {});
+            const snapshot = getStoredPublishedLayoutSnapshot(c);
+
+            c.mode = c.mode === "mobile" || c.layoutMode === "mobile" ? "mobile" : "desktop";
+            c.layoutMode = c.mode;
+            c.objects = (c.objects || [])
+                .filter(o => !PROFILE_ONLY.has(o.type))
+                .map(o => {
+                    const x = clone(o);
+                    x.required = REQUIRED.includes(x.type);
+                    x.visible = x.hidden !== true;
+                    if (x.required) {
+                        x.hidden = false;
+                        x.visible = true;
+                    }
+                    return x;
+                });
+
+            if (snapshot) {
+                c.publishedSnapshot = snapshot;
+                c.published = true;
+            } else {
+                delete c.publishedSnapshot;
+                c.published = false;
+            }
+
+            return c;
+        }
+
         function localBackup() { try { localStorage.setItem(`nullverse-gallery-studio-backup:${state.item?.id || "local"}`, JSON.stringify(payload())) } catch { } }
         function undoStudio() { if (state.history.length <= 1) return; state.redo.push(state.history.pop()); restore(state.history[state.history.length - 1]); toast("Undo", "good", 900) }
         function redoStudio() { const n = state.redo.pop(); if (!n) return; state.history.push(n); restore(n); toast("Redo", "good", 900) }
