@@ -1750,7 +1750,7 @@
         <div class="fixed-nav"><img src="Nullverse-3.png" alt="Nullverse"><div class="preview-links"><span class="active">Creator Gallery</span><span>Showcase</span><span>Back</span><span>Report</span></div></div>
         <button id="exit-preview" class="exit-preview" onclick="exitPreviewMode()">Exit Preview</button>
     </div>
-    <div id="toast" class="toast"></div><input id="img-input" type="file" accept="image/*" style="display:none">
+    <div id="toast" class="toast"></div><input id="img-input" type="file" accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.avif,.svg,.heic,.heif,.bmp,.ico,.jfif" style="display:none">
     <script type="module">
         import { requireBetaAccess } from "./betaGate.js";
         import { supabase } from "./supabaseClient.js";
@@ -2117,13 +2117,30 @@
 
         function syncPreviewForObject(o, solidField, gradientField) {
             const value = (o.styles || {})[gradientField] || (o.styles || {})[solidField] || "transparent";
-            syncPaintPreview("object", `${o.id}-${solidField}-${gradientField}`, value);
+            syncPaintPreview("object", `object-${o.id}-${solidField}-${gradientField}`, value);
         }
 
         function syncPaintPreview(owner, key, value) {
+            const exactKey = String(key || "");
+            const possible = new Set([
+                exactKey,
+                `${owner}-${exactKey}`
+            ]);
+
+            if (owner === "canvas") {
+                possible.add(`canvas-canvas-${exactKey}-${exactKey}`);
+            }
+
             document.querySelectorAll(`[data-paint-preview]`).forEach(p => {
                 const card = p.closest("[data-paint-card]");
-                if (card && (card.dataset.paintCard.includes(String(key)) || card.dataset.paintCard.includes(String(owner)))) p.style.background = value || "transparent";
+                if (!card || !possible.has(card.dataset.paintCard || "")) return;
+
+                p.style.background = value || "transparent";
+
+                const fineInput = card.querySelector(".paint-fine-input");
+                if (fineInput && document.activeElement !== fineInput) {
+                    fineInput.value = value || "transparent";
+                }
             });
         }
 
@@ -2274,12 +2291,12 @@
         function startGesture(e) { e.preventDefault(); const p = [...state.pointers.values()].slice(0, 2), c = mid(p[0], p[1]); state.gesture = { dist: dist(p[0], p[1]), c, zoom: state.zoom, px: state.panX, py: state.panY }; dom.workspace.classList.add("touch-pan") }
         function updateGesture(e) { e.preventDefault(); const p = [...state.pointers.values()].slice(0, 2), c = mid(p[0], p[1]), scale = dist(p[0], p[1]) / Math.max(1, state.gesture.dist); state.zoom = clamp(state.gesture.zoom * scale, .15, 3); state.panX = state.gesture.px + c.x - state.gesture.c.x; state.panY = state.gesture.py + c.y - state.gesture.c.y; applyTransform() }
         function startMove(e, ids) { e.preventDefault(); const st = screen(e), objs = getLayout().objects.filter(o => ids.includes(o.id) && !o.locked); state.interaction = { kind: "move", st, objs: objs.map(o => ({ id: o.id, x: o.x, y: o.y })), changed: false } }
-        function updateMove(e) { const p = screen(e), dx = p.x - state.interaction.st.x, dy = p.y - state.interaction.st.y; for (const s of state.interaction.objs) { const o = find(s.id); if (o && !o.locked) { o.x = snap(s.x + dx); o.y = snap(s.y + dy) } } state.interaction.changed = true; renderCanvas(); syncLiveInspectorControls(); syncLiveInspectorControls(); syncLiveInspectorControls(); syncLiveInspectorControls(); renderLayers(); syncLiveInspectorControls() }
+        function updateMove(e) { const p = screen(e), dx = p.x - state.interaction.st.x, dy = p.y - state.interaction.st.y; for (const s of state.interaction.objs) { const o = find(s.id); if (o && !o.locked) { o.x = snap(s.x + dx); o.y = snap(s.y + dy) } } state.interaction.changed = true; renderCanvas(); renderLayers(); syncLiveInspectorControls() }
         function startResize(e, o, h) { e.preventDefault(); state.interaction = { kind: "resize", id: o.id, h, st: screen(e), o: { x: o.x, y: o.y, w: o.w, h: o.h }, changed: false } }
-        function updateResize(e) { const o = find(state.interaction.id); if (!o || o.locked) return; const p = screen(e), dx = p.x - state.interaction.st.x, dy = p.y - state.interaction.st.y; doResize(o, state.interaction.o, state.interaction.h, dx, dy); state.interaction.changed = true; renderCanvas() }
+        function updateResize(e) { const o = find(state.interaction.id); if (!o || o.locked) return; const p = screen(e), dx = p.x - state.interaction.st.x, dy = p.y - state.interaction.st.y; doResize(o, state.interaction.o, state.interaction.h, dx, dy); state.interaction.changed = true; renderCanvas(); renderLayers(); syncLiveInspectorControls() }
         function doResize(o, st, h, dx, dy) { let x = st.x, y = st.y, w = st.w, hh = st.h; if (h.includes("e")) w = st.w + dx; if (h.includes("s")) hh = st.h + dy; if (h.includes("w")) { x = st.x + dx; w = st.w - dx } if (h.includes("n")) { y = st.y + dy; hh = st.h - dy } const [minW, minH, maxW, maxH] = LIMITS[o.type] || LIMITS.text; if (w < minW) { if (h.includes("w")) x -= minW - w; w = minW } if (hh < minH) { if (h.includes("n")) y -= minH - hh; hh = minH } o.x = snap(x); o.y = snap(y); o.w = snap(clamp(w, minW, maxW)); o.h = snap(clamp(hh, minH, maxH)) }
         function startRotate(e, o) { e.preventDefault(); const c = center(o), p = screen(e); state.interaction = { kind: "rotate", id: o.id, c, start: Math.atan2(p.y - c.y, p.x - c.x), rot: o.rotation || 0, changed: false } }
-        function updateRotate(e) { const o = find(state.interaction.id); if (!o || o.locked) return; const p = screen(e), ang = Math.atan2(p.y - state.interaction.c.y, p.x - state.interaction.c.x), d = (ang - state.interaction.start) * 180 / Math.PI; o.rotation = snapAngle(state.interaction.rot + d); state.interaction.changed = true; renderCanvas() }
+        function updateRotate(e) { const o = find(state.interaction.id); if (!o || o.locked) return; const p = screen(e), ang = Math.atan2(p.y - state.interaction.c.y, p.x - state.interaction.c.x), d = (ang - state.interaction.start) * 180 / Math.PI; o.rotation = snapAngle(state.interaction.rot + d); state.interaction.changed = true; renderCanvas(); renderLayers(); syncLiveInspectorControls() }
         function startMarquee(e) { e.preventDefault(); const p = screen(e); state.selected = []; state.interaction = { kind: "marquee", a: p, b: p, changed: false }; renderCanvas(); drawMarquee(p, p) }
         function updateMarquee(e) { const p = screen(e); state.interaction.b = p; state.interaction.changed = true; drawMarquee(state.interaction.a, p) }
         function drawMarquee(a, b) { dom.canvas.querySelector(".marquee")?.remove(); const r = rect(a, b); dom.canvas.insertAdjacentHTML("beforeend", `<div class="marquee" style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px"></div>`) }
@@ -2287,9 +2304,9 @@
         function startGroupMove(e) { e.preventDefault(); const st = screen(e), objs = getLayout().objects.filter(o => state.selected.includes(o.id) && !o.locked); state.interaction = { kind: "groupMove", st, objs: objs.map(o => ({ id: o.id, x: o.x, y: o.y })), changed: false } }
         function updateGroupMove(e) { updateMove(e) }
         function startGroupResize(e, h) { e.preventDefault(); const sel = getLayout().objects.filter(o => state.selected.includes(o.id) && !o.locked); if (sel.length <= 1) return; state.interaction = { kind: "groupResize", h, st: screen(e), box: bounds(sel), objs: sel.map(o => clone(o)), changed: false } }
-        function updateGroupResize(e) { const p = screen(e), dx = p.x - state.interaction.st.x, dy = p.y - state.interaction.st.y, b = state.interaction.box, h = state.interaction.h; let nb = { ...b }; if (h.includes("e")) nb.w = b.w + dx; if (h.includes("s")) nb.h = b.h + dy; if (h.includes("w")) { nb.x = b.x + dx; nb.w = b.w - dx } if (h.includes("n")) { nb.y = b.y + dy; nb.h = b.h - dy } nb.w = Math.max(20, nb.w); nb.h = Math.max(20, nb.h); const sx = nb.w / Math.max(1, b.w), sy = nb.h / Math.max(1, b.h); for (const st of state.interaction.objs) { const o = find(st.id); if (o && !o.locked) { o.x = snap(nb.x + (st.x - b.x) * sx); o.y = snap(nb.y + (st.y - b.y) * sy); o.w = snap(st.w * sx); o.h = snap(st.h * sy); clampSize(o) } } state.interaction.changed = true; renderCanvas() }
+        function updateGroupResize(e) { const p = screen(e), dx = p.x - state.interaction.st.x, dy = p.y - state.interaction.st.y, b = state.interaction.box, h = state.interaction.h; let nb = { ...b }; if (h.includes("e")) nb.w = b.w + dx; if (h.includes("s")) nb.h = b.h + dy; if (h.includes("w")) { nb.x = b.x + dx; nb.w = b.w - dx } if (h.includes("n")) { nb.y = b.y + dy; nb.h = b.h - dy } nb.w = Math.max(20, nb.w); nb.h = Math.max(20, nb.h); const sx = nb.w / Math.max(1, b.w), sy = nb.h / Math.max(1, b.h); for (const st of state.interaction.objs) { const o = find(st.id); if (o && !o.locked) { o.x = snap(nb.x + (st.x - b.x) * sx); o.y = snap(nb.y + (st.y - b.y) * sy); o.w = snap(st.w * sx); o.h = snap(st.h * sy); clampSize(o) } } state.interaction.changed = true; renderCanvas(); renderLayers(); syncLiveInspectorControls() }
         function startGroupRotate(e) { e.preventDefault(); const sel = getLayout().objects.filter(o => state.selected.includes(o.id) && !o.locked); if (sel.length <= 1) return; const b = bounds(sel), c = { x: b.x + b.w / 2, y: b.y + b.h / 2 }, p = screen(e); state.interaction = { kind: "groupRotate", c, start: Math.atan2(p.y - c.y, p.x - c.x), objs: sel.map(o => ({ ...clone(o), c: center(o) })), changed: false } }
-        function updateGroupRotate(e) { const p = screen(e), ang = Math.atan2(p.y - state.interaction.c.y, p.x - state.interaction.c.x), d = ang - state.interaction.start, deg = d * 180 / Math.PI; for (const st of state.interaction.objs) { const o = find(st.id); if (o && !o.locked) { const rp = rotatePoint(st.c, state.interaction.c, d); o.x = snap(rp.x - st.w / 2); o.y = snap(rp.y - st.h / 2); o.rotation = snapAngle((st.rotation || 0) + deg) } } state.interaction.changed = true; renderCanvas() }
+        function updateGroupRotate(e) { const p = screen(e), ang = Math.atan2(p.y - state.interaction.c.y, p.x - state.interaction.c.x), d = ang - state.interaction.start, deg = d * 180 / Math.PI; for (const st of state.interaction.objs) { const o = find(st.id); if (o && !o.locked) { const rp = rotatePoint(st.c, state.interaction.c, d); o.x = snap(rp.x - st.w / 2); o.y = snap(rp.y - st.h / 2); o.rotation = snapAngle((st.rotation || 0) + deg) } } state.interaction.changed = true; renderCanvas(); renderLayers(); syncLiveInspectorControls() }
         function selectObject(id, e = null) { e?.stopPropagation?.(); if (e?.shiftKey || e?.ctrlKey || e?.metaKey) toggleSel(id); else state.selected = [id]; renderAll() }
         function toggleSel(id) { state.selected = state.selected.includes(id) ? state.selected.filter(x => x !== id) : [...state.selected, id] }
         function selectRequiredObject(t) { const o = getLayout().objects.find(x => x.type === t); if (o) { o.hidden = false; state.selected = [o.id]; renderAll(); toast(`${LABELS[t]} selected.`, "good") } }
@@ -2323,9 +2340,93 @@
         function restore(s) { try { const p = JSON.parse(s); state.mode = p.mode || "desktop"; state.layouts = createBundle(p.layouts || p); state.selected = []; renderAll() } catch (e) { console.error(e) } }
         function pickImageForObject(id) { state.imageTarget = { kind: "object", id }; dom.img.value = ""; dom.img.click() }
         function pickImageForCanvas() { state.imageTarget = { kind: "canvas" }; dom.img.value = ""; dom.img.click() }
-        function setupImageInput() { dom.img.addEventListener("change", async () => { const f = dom.img.files?.[0]; if (!f || !state.imageTarget) return; try { toast("Uploading image...", "warn", 2000); const url = await uploadImage(f); if (state.imageTarget.kind === "canvas") getLayout().canvas.backgroundImage = url; else { const o = find(state.imageTarget.id); if (o) o.imageUrl = url } pushHistory(); renderAll(); toast("Image uploaded.", "good") } catch (e) { console.error(e); toast(e.message || "Image upload failed.", "bad", 7000) } finally { state.imageTarget = null; dom.img.value = "" } }) }
-        async function uploadImage(file) { if (!state.user?.id) throw new Error("You must be signed in to upload images."); const prepared = await prepImage(file); const ext = prepared.type === "image/webp" ? "webp" : (file.name.split(".").pop() || "png"); const path = `${state.user.id}/gallery-studio/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`; const { error } = await supabase.storage.from(BUCKET).upload(path, prepared, { cacheControl: "31536000", upsert: false, contentType: prepared.type || file.type }); if (error) throw error; return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl }
-        async function prepImage(file) { if (!file.type.startsWith("image/") || file.type === "image/gif") return file; const bmp = await createImageBitmap(file).catch(() => null); if (!bmp) return file; const scale = Math.min(1, 1800 / Math.max(bmp.width, bmp.height)), w = Math.max(1, Math.round(bmp.width * scale)), h = Math.max(1, Math.round(bmp.height * scale)), cnv = document.createElement("canvas"); cnv.width = w; cnv.height = h; cnv.getContext("2d").drawImage(bmp, 0, 0, w, h); return await new Promise(r => cnv.toBlob(b => r(b || file), "image/webp", .88)) }
+        function setupImageInput() { dom.img.addEventListener("change", async () => { const f = dom.img.files?.[0]; if (!f || !state.imageTarget) return; try { if (!isSupportedGalleryImageFile(f)) throw new Error("Choose a valid image file like PNG, JPG, WebP, GIF, SVG, AVIF, HEIC, HEIF, BMP, ICO, or JFIF."); toast(`Uploading ${f.name || "image"}...`, "warn", 2500); const url = await uploadImage(f); if (state.imageTarget.kind === "canvas") getLayout().canvas.backgroundImage = url; else { const o = find(state.imageTarget.id); if (o) o.imageUrl = url } pushHistory(); renderAll(); toast("Image uploaded with its original format preserved.", "good") } catch (e) { console.error(e); toast(e.message || "Image upload failed.", "bad", 7000) } finally { state.imageTarget = null; dom.img.value = "" } }) }
+
+        function isSupportedGalleryImageFile(file) {
+            if (!file) return false;
+            const type = String(file.type || "").toLowerCase();
+            const name = String(file.name || "").toLowerCase();
+            return type.startsWith("image/") || /\.(png|jpe?g|webp|gif|avif|svg|heic|heif|bmp|ico|jfif)$/i.test(name);
+        }
+
+        function getGalleryImageUploadExtension(file) {
+            const type = String(file?.type || "").toLowerCase();
+            const typeMap = {
+                "image/jpeg": "jpg",
+                "image/jpg": "jpg",
+                "image/png": "png",
+                "image/webp": "webp",
+                "image/gif": "gif",
+                "image/avif": "avif",
+                "image/svg+xml": "svg",
+                "image/heic": "heic",
+                "image/heif": "heif",
+                "image/bmp": "bmp",
+                "image/x-icon": "ico",
+                "image/vnd.microsoft.icon": "ico"
+            };
+
+            if (typeMap[type]) return typeMap[type];
+
+            const match = String(file?.name || "").toLowerCase().match(/\.([a-z0-9]{2,6})$/);
+            const extension = match?.[1] || "";
+            const allowed = new Set(["png", "jpg", "jpeg", "webp", "gif", "avif", "svg", "heic", "heif", "bmp", "ico", "jfif"]);
+            if (allowed.has(extension)) return extension === "jpeg" || extension === "jfif" ? "jpg" : extension;
+            return "png";
+        }
+
+        function getGalleryImageContentType(file, extension) {
+            const type = String(file?.type || "").toLowerCase();
+            if (type.startsWith("image/")) return type;
+
+            const map = {
+                jpg: "image/jpeg",
+                jpeg: "image/jpeg",
+                png: "image/png",
+                webp: "image/webp",
+                gif: "image/gif",
+                avif: "image/avif",
+                svg: "image/svg+xml",
+                heic: "image/heic",
+                heif: "image/heif",
+                bmp: "image/bmp",
+                ico: "image/x-icon"
+            };
+
+            return map[String(extension || "").toLowerCase()] || "application/octet-stream";
+        }
+
+        function makeGalleryImageFilePath(file, extension) {
+            const userId = String(state.user?.id || "anonymous").replace(/[^a-z0-9_-]/gi, "");
+            const itemId = String(state.item?.id || "local").replace(/[^a-z0-9_-]/gi, "");
+            const safeName = String(file?.name || "upload")
+                .replace(/\.[^.]+$/, "")
+                .replace(/[^a-z0-9_-]/gi, "-")
+                .replace(/-+/g, "-")
+                .replace(/^-+|-+$/g, "")
+                .slice(0, 42) || "upload";
+
+            return `${userId}/gallery-studio/${itemId}/${safeName}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+        }
+
+        async function uploadImage(file) {
+            if (!state.user?.id) throw new Error("You must be signed in to upload images.");
+            if (!isSupportedGalleryImageFile(file)) throw new Error("Choose a valid image file like PNG, JPG, WebP, GIF, SVG, AVIF, HEIC, HEIF, BMP, ICO, or JFIF.");
+
+            const ext = getGalleryImageUploadExtension(file);
+            const contentType = getGalleryImageContentType(file, ext);
+            const path = makeGalleryImageFilePath(file, ext);
+
+            const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+                cacheControl: "31536000",
+                upsert: true,
+                contentType
+            });
+
+            if (error) throw error;
+
+            return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl + "?v=" + Date.now();
+        }
         function setupKeyboard() { window.addEventListener("keydown", e => { if (e.target.closest("input,textarea,select,[contenteditable=\"true\"]")) return; if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); deleteSelected() } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redoStudio() : undoStudio() } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveDraft() } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") { e.preventDefault(); duplicateSelected() } if (e.key === "Escape") { if (dom.page.classList.contains("preview-mode")) exitPreviewMode(); else { state.selected = []; renderAll() } } const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }; if (arrows[e.key] && state.selected.length) { e.preventDefault(); const step = e.shiftKey ? 10 : 1, [dx, dy] = arrows[e.key]; getLayout().objects.forEach(o => { if (state.selected.includes(o.id) && !o.locked) { o.x += dx * step; o.y += dy * step } }); renderCanvas(); syncLiveInspectorControls(); renderInspector() } }) }
         function syncTitle() { const i = state.item || localItem(); dom.title.textContent = `${i.title || "Untitled"} · ${state.mode === "mobile" ? "Mobile" : "PC"} layout`; dom.topBack.href = `creator-gallery.html${i.owner_id ? `?user=${encodeURIComponent(i.owner_id)}` : ""}` }
         function find(id) { return getLayout().objects.find(o => o.id === id) || null }
