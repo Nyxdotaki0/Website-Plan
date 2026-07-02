@@ -198,21 +198,21 @@
             </div>
 
             <section id="login-section">
-                <h1>Welcome Back</h1>
-                <p>Continue building worlds, stories, characters, and creator profiles.</p>
+                <h1>Beta Tester Login</h1>
+                <p>Nullverse is currently invite-only. Approved beta testers can log in with their approved email.</p>
                 <input id="login-email" type="email" placeholder="Email">
                 <input id="login-password" type="password" placeholder="Password">
                 <button onclick="logIn()">Log In</button>
-                <button class="link-button" onclick="showCreateAccount()">Don't have an account? Create one</button>
+                <button class="link-button" onclick="showCreateAccount()">Approved beta tester? Create your account</button>
                 <button class="link-button" onclick="sendPasswordReset()">
                     Forgot password?
                 </button>
             </section>
 
             <section id="signup-section" class="hidden">
-                <h1>Create Account</h1>
-                <p>Create your Nullverse account. After this, you’ll set up your creator profile.</p>
-                <p class="auth-note">You only need an email and password to begin.</p>
+                <h1>Create Beta Account</h1>
+                <p>Account creation is invite-only. Use the exact email that was approved for the Nullverse beta.</p>
+                <p class="auth-note">If your email is not in the beta access list, account creation will be blocked.</p>
                 <input id="signup-email" type="email" placeholder="Email">
                 <input id="signup-password" type="password" placeholder="Password">
                 <input id="signup-confirm-password" type="password" placeholder="Confirm password">
@@ -249,6 +249,148 @@
                 return await Promise.race([promise, timeoutPromise]);
             } finally {
                 clearTimeout(timeout);
+            }
+        }
+
+        function normalizeEmail(email) {
+            return String(email || "")
+                .trim()
+                .toLowerCase();
+        }
+
+        function escapeHtml(value) {
+            return String(value || "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        function showInviteOnlyMessage(email) {
+            const safeEmail =
+                escapeHtml(normalizeEmail(email));
+
+            message.innerHTML = `
+                        Nullverse is currently invite-only.<br><br>
+                        <strong>${safeEmail || "This email"}</strong> is not on the approved beta access list.<br><br>
+                        If this person should be a beta tester, add this exact email to the <strong>beta_access</strong> table first.
+                    `;
+        }
+
+        function showBetaCheckSetupMessage() {
+            message.innerHTML = `
+                        Nullverse could not verify the beta access list yet.<br><br>
+                        Run the beta email check SQL first, then refresh this page and try again.
+                    `;
+        }
+
+        async function checkBetaInviteEmail(email) {
+            const normalizedEmail =
+                normalizeEmail(email);
+
+            if (!normalizedEmail) {
+                return {
+                    allowed: false,
+                    checkFailed: false
+                };
+            }
+
+            try {
+                const { data, error } = await withTimeout(
+                    supabaseClient.rpc("is_beta_approved_email", {
+                        check_email: normalizedEmail
+                    }),
+                    8000
+                );
+
+                if (!error) {
+                    return {
+                        allowed: data === true,
+                        checkFailed: false
+                    };
+                }
+
+                console.warn("Beta invite RPC check failed:", error);
+
+                const { data: directData, error: directError } = await withTimeout(
+                    supabaseClient
+                        .from("beta_access")
+                        .select("role")
+                        .ilike("email", normalizedEmail)
+                        .maybeSingle(),
+                    8000
+                );
+
+                if (!directError) {
+                    return {
+                        allowed: !!directData,
+                        checkFailed: false
+                    };
+                }
+
+                console.warn("Beta invite direct check failed:", directError);
+
+                return {
+                    allowed: false,
+                    checkFailed: true
+                };
+
+            } catch (error) {
+                console.warn("Beta invite check connection failed:", error);
+
+                return {
+                    allowed: false,
+                    checkFailed: true
+                };
+            }
+        }
+
+        async function ensureAuthenticatedUserHasBetaAccess(user) {
+            const normalizedEmail =
+                normalizeEmail(user?.email);
+
+            if (!user || !normalizedEmail) {
+                await supabaseClient.auth.signOut();
+                message.textContent =
+                    "Could not confirm your beta email. Please log in again.";
+                return false;
+            }
+
+            try {
+                const { data: betaData, error: betaError } =
+                    await withTimeout(
+                        supabaseClient
+                            .from("beta_access")
+                            .select("role")
+                            .ilike("email", normalizedEmail)
+                            .maybeSingle(),
+                        8000
+                    );
+
+                if (betaError || !betaData) {
+                    console.warn("Authenticated beta access check failed:", betaError);
+
+                    await supabaseClient.auth.signOut();
+
+                    showInviteOnlyMessage(normalizedEmail);
+
+                    return false;
+                }
+
+                localStorage.setItem("nullverse_user_role", betaData.role || "tester");
+
+                return true;
+
+            } catch (error) {
+                console.warn("Authenticated beta access connection failed:", error);
+
+                await supabaseClient.auth.signOut();
+
+                message.textContent =
+                    "Nullverse could not verify your beta access. Please refresh, try again later, or switch networks.";
+
+                return false;
             }
         }
 
@@ -327,6 +469,14 @@
                 cleanAuthRedirectUrl();
                 message.textContent =
                     "Verification complete. Please log in to finish setting up your profile.";
+                return false;
+            }
+
+            const hasBetaAccess =
+                await ensureAuthenticatedUserHasBetaAccess(user);
+
+            if (!hasBetaAccess) {
+                cleanAuthRedirectUrl();
                 return false;
             }
 
@@ -435,6 +585,21 @@
                 return;
             }
 
+            message.textContent = "Checking beta access...";
+
+            const betaInvite =
+                await checkBetaInviteEmail(email);
+
+            if (betaInvite.checkFailed) {
+                showBetaCheckSetupMessage();
+                return;
+            }
+
+            if (!betaInvite.allowed) {
+                showInviteOnlyMessage(email);
+                return;
+            }
+
             message.textContent = "Creating account...";
 
             try {
@@ -458,11 +623,11 @@
                 document.getElementById("login-email").value = email;
 
                 message.innerHTML = `
-                        Account created successfully.<br><br>
-                        A verification email has been sent to your inbox.<br><br>
-                        Open the verification email and complete the verification process.<br><br>
-                        After verification, Nullverse will send you to profile setup.
-                    `;
+                            Account created successfully.<br><br>
+                            A verification email has been sent to your inbox.<br><br>
+                            Open the verification email and complete the verification process.<br><br>
+                            After verification, Nullverse will send you to profile setup.
+                        `;
 
             } catch (error) {
                 console.warn("Signup connection failed:", error);
@@ -529,9 +694,9 @@
                 }
 
                 message.innerHTML = `
-                        Password reset email sent.<br><br>
-                        Check your inbox and follow the reset link to create a new password.
-                    `;
+                            Password reset email sent.<br><br>
+                            Check your inbox and follow the reset link to create a new password.
+                        `;
 
             } catch (error) {
                 console.warn("Password reset connection failed:", error);
