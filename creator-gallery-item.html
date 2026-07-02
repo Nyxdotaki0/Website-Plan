@@ -485,6 +485,51 @@
         .shape-object.rectangle {
             border-radius: var(--studio-surface-radius, 0px) !important;
         }
+
+
+        /* ============================================================
+           GALLERY ITEM PUBLIC RENDERER PARITY WITH PROFILE.HTML
+           Uses a scaled footprint wrapper so Studio coordinates translate
+           cleanly instead of clipping left or leaving a black square.
+        ============================================================ */
+
+        html,
+        body {
+            overflow-x: hidden;
+            background: var(--gallery-page-bg, var(--page-bg));
+            background-image: var(--gallery-page-bg-image, none);
+            background-size: var(--gallery-page-bg-size, cover);
+            background-position: var(--gallery-page-bg-position, center);
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+
+        .custom-shell {
+            width: 100%;
+            min-height: calc(100vh - 77px);
+            overflow-x: hidden;
+            overflow-y: auto;
+            background: var(--gallery-page-bg, var(--page-bg));
+            background-image: var(--gallery-page-bg-image, none);
+            background-size: var(--gallery-page-bg-size, cover);
+            background-position: var(--gallery-page-bg-position, center);
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+
+        .custom-canvas-footprint {
+            position: relative;
+            width: var(--gallery-footprint-width, 100%);
+            min-height: var(--gallery-footprint-height, 100vh);
+            margin: 0 auto;
+            overflow: visible;
+        }
+
+        .custom-canvas {
+            transform-origin: top left;
+            box-shadow: none !important;
+            margin: 0 !important;
+        }
     </style>
 </head>
 <body>
@@ -508,6 +553,8 @@
         let item = null;
         let profile = null;
         let layoutBundle = null;
+        let currentRenderedCustomLayout = null;
+        let publicResizeTimer = null;
         let bootFinished = false;
         const requiredObjectTypes = ["back_gallery_button", "report_button"];
 
@@ -518,6 +565,7 @@
         }, 12000);
 
         await bootGalleryShowcase();
+        window.addEventListener("resize", handlePublicShowcaseResize);
 
         async function bootGalleryShowcase() {
             try {
@@ -802,14 +850,17 @@
 
         function renderCustom(layout) {
             layout = normalizeLayout(layout, layout?.layoutMode || layout?.mode || "desktop");
+            currentRenderedCustomLayout = layout;
             const root = document.getElementById("page-root");
-            root.innerHTML = `<section class="custom-shell"><div id="custom-canvas" class="custom-canvas"></div></section>`;
+            root.innerHTML = `<section id="custom-shell" class="custom-shell"><div id="custom-canvas-footprint" class="custom-canvas-footprint"><div id="custom-canvas" class="custom-canvas"></div></div></section>`;
             const canvas = document.getElementById("custom-canvas");
+            const shell = document.getElementById("custom-shell");
 
             canvas.style.width = layout.canvas.width + "px";
             canvas.style.height = layout.canvas.height + "px";
             canvas.style.minHeight = layout.canvas.height + "px";
             applyCanvasBackground(canvas, layout.canvas);
+            applyPageBackground(shell, layout.canvas);
             canvas.style.fontFamily = layout.canvas.fontFamily || "Arial";
 
             layout.objects
@@ -818,6 +869,14 @@
                 .forEach(obj => canvas.appendChild(renderObject(obj)));
 
             scaleCanvas(canvas, layout);
+        }
+
+        function handlePublicShowcaseResize() {
+            clearTimeout(publicResizeTimer);
+            publicResizeTimer = setTimeout(() => {
+                const canvas = document.getElementById("custom-canvas");
+                if (canvas && currentRenderedCustomLayout) scaleCanvas(canvas, currentRenderedCustomLayout);
+            }, 80);
         }
 
         function applyCanvasBackground(canvas, canvasData = {}) {
@@ -842,17 +901,63 @@
             canvas.style.background = canvasData.backgroundGradient || "var(--page-bg)";
         }
 
+
+        function applyPageBackground(shell, canvasData = {}) {
+            const bg = canvasData.background || canvasData.backgroundGradient || canvasData.backgroundColor || "var(--page-bg)";
+            const bgImage = canvasData.backgroundImage ? `url('${safeCssUrl(canvasData.backgroundImage)}')` : "none";
+            const bgSize = canvasData.backgroundSize || "cover";
+            const bgPosition = canvasData.backgroundPosition || "center";
+
+            document.documentElement.style.setProperty("--gallery-page-bg", bg);
+            document.body.style.setProperty("--gallery-page-bg", bg);
+            document.documentElement.style.setProperty("--gallery-page-bg-image", bgImage);
+            document.body.style.setProperty("--gallery-page-bg-image", bgImage);
+            document.documentElement.style.setProperty("--gallery-page-bg-size", bgSize);
+            document.body.style.setProperty("--gallery-page-bg-size", bgSize);
+            document.documentElement.style.setProperty("--gallery-page-bg-position", bgPosition);
+            document.body.style.setProperty("--gallery-page-bg-position", bgPosition);
+
+            if (!shell) return;
+            shell.style.background = bg;
+            if (canvasData.backgroundImage) {
+                shell.style.backgroundImage = bgImage;
+                shell.style.backgroundSize = bgSize;
+                shell.style.backgroundPosition = bgPosition;
+                shell.style.backgroundRepeat = "no-repeat";
+                shell.style.backgroundAttachment = "fixed";
+            }
+        }
+
         function scaleCanvas(canvas, layout) {
-            if (layout.layoutMode === "mobile") {
-                const scale = Math.min(1, innerWidth / layout.canvas.width);
-                canvas.style.transform = `scale(${scale})`;
-                canvas.parentElement.style.minHeight = (layout.canvas.height * scale) + "px";
-                return;
+            const shell = canvas.closest(".custom-shell") || canvas.parentElement;
+            const footprint = document.getElementById("custom-canvas-footprint") || canvas.parentElement;
+            const shellWidth = Math.max(1, shell?.clientWidth || innerWidth || layout.canvas.width);
+            const canvasWidth = Number(layout.canvas.width || 1600);
+            const canvasHeight = Number(layout.canvas.height || 2200);
+            const widthScale = shellWidth / Math.max(1, canvasWidth);
+            const scale = Math.max(.25, Math.min(2.2, widthScale || 1));
+            const scaledWidth = Math.ceil(canvasWidth * scale);
+            const scaledHeight = Math.ceil(canvasHeight * scale);
+
+            canvas.style.transform = `scale(${scale})`;
+            canvas.style.transformOrigin = "top left";
+            canvas.style.width = canvasWidth + "px";
+            canvas.style.height = canvasHeight + "px";
+            canvas.style.minHeight = canvasHeight + "px";
+
+            if (footprint) {
+                footprint.style.width = scaledWidth + "px";
+                footprint.style.minHeight = scaledHeight + "px";
+                footprint.style.height = scaledHeight + "px";
+                footprint.style.marginLeft = "auto";
+                footprint.style.marginRight = "auto";
             }
 
-            canvas.style.transform = "none";
-            canvas.parentElement.style.overflowX = "auto";
-            canvas.parentElement.style.minHeight = layout.canvas.height + "px";
+            if (shell) {
+                shell.style.minHeight = Math.max(window.innerHeight - 77, scaledHeight) + "px";
+                shell.style.overflowX = "hidden";
+                shell.style.overflowY = "auto";
+            }
         }
 
         function normalizeLayout(layout, preferredMode = "desktop") {

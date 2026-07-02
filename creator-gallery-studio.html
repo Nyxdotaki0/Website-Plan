@@ -1700,6 +1700,77 @@
             .preview-mode .canvas {
                 background-color: transparent !important;
             }
+
+
+        /* ============================================================
+           GALLERY STUDIO PREVIEW PARITY WITH ACCOUNT SETTINGS
+           Preview uses the same scaled wrapper footprint + fixed nav
+           pattern as Profile Studio instead of showing a loose canvas.
+        ============================================================ */
+
+        .studio-page.preview-mode {
+            grid-template-rows: minmax(0, 1fr) !important;
+            background: var(--preview-page-bg, var(--canvas-bg, var(--page-bg,#050506))) !important;
+            background-image: var(--preview-page-bg-image, none) !important;
+            background-size: var(--preview-page-bg-size, cover) !important;
+            background-position: var(--preview-page-bg-position, center) !important;
+            background-repeat: no-repeat !important;
+            background-attachment: fixed !important;
+        }
+
+            .studio-page.preview-mode .studio-shell {
+                height: 100dvh !important;
+                min-height: 100dvh !important;
+            }
+
+            .studio-page.preview-mode .workspace {
+                width: 100vw !important;
+                height: 100dvh !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                background: var(--preview-page-bg, var(--canvas-bg, var(--page-bg,#050506))) !important;
+                background-image: var(--preview-page-bg-image, none) !important;
+                background-size: var(--preview-page-bg-size, cover) !important;
+                background-position: var(--preview-page-bg-position, center) !important;
+                background-repeat: no-repeat !important;
+                background-attachment: fixed !important;
+                cursor: default !important;
+            }
+
+            .studio-page.preview-mode .canvas-wrap {
+                position: relative !important;
+                left: 0 !important;
+                top: 0 !important;
+                overflow: visible !important;
+                margin: 0 auto !important;
+                transform-origin: top left !important;
+                transform: translate(var(--preview-pan-x, 0px), var(--preview-pan-y, 0px)) scale(var(--preview-scale, 1)) !important;
+            }
+
+            .studio-page.preview-mode .canvas {
+                margin: 0 !important;
+                overflow: visible !important;
+                background-color: transparent !important;
+                box-shadow: none !important;
+            }
+
+                .studio-page.preview-mode .canvas > .preview-nav {
+                    visibility: hidden !important;
+                    pointer-events: none !important;
+                }
+
+            .studio-page.preview-mode .fixed-nav {
+                display: flex !important;
+            }
+
+            .studio-page.preview-mode .exit-preview {
+                display: inline-flex !important;
+            }
+
+            .studio-page.preview-mode .obj {
+                pointer-events: none !important;
+                outline: none !important;
+            }
     </style>
 </head>
 <body>
@@ -2574,8 +2645,89 @@
         function centerView() { const r = dom.workspace.getBoundingClientRect(), l = getLayout(), w = l.canvas.width || DEFAULT[state.mode].width; state.zoom = state.mode === "mobile" ? Math.min(1, Math.max(.38, (r.width - 80) / w)) : Math.min(.85, Math.max(.25, (r.width - 180) / w)); state.panX = Math.round((r.width - w * state.zoom) / 2); state.panY = 30; applyTransform() }
         function applyTransform() { if (dom.page.classList.contains("preview-mode")) return; dom.wrap.style.transform = `translate(${state.panX}px,${state.panY}px) scale(${state.zoom})` }
         function togglePanel(which) { const p = which === "tools" ? dom.tools : dom.inspPanel; p.classList.toggle("open") }
-        function enterPreviewMode() { state.previewBefore = { zoom: state.zoom, panX: state.panX, panY: state.panY }; state.selected = []; dom.page.classList.add("preview-mode"); updateButtons(); renderAll(); dom.workspace.scrollTo({ top: 0, left: 0, behavior: "instant" }) }
-        function exitPreviewMode() { dom.page.classList.remove("preview-mode"); if (state.previewBefore) { state.zoom = state.previewBefore.zoom; state.panX = state.previewBefore.panX; state.panY = state.previewBefore.panY } state.previewBefore = null; renderAll(); applyTransform() }
+        function enterPreviewMode() {
+            if (dom.page.classList.contains("preview-mode")) {
+                exitPreviewMode();
+                return;
+            }
+
+            state.previewBefore = {
+                zoom: state.zoom,
+                panX: state.panX,
+                panY: state.panY,
+                selected: [...state.selected],
+                toolsOpen: dom.tools?.classList.contains("open") || false,
+                inspectorOpen: dom.inspPanel?.classList.contains("open") || false
+            };
+
+            state.selected = [];
+            dom.tools?.classList.remove("open");
+            dom.inspPanel?.classList.remove("open");
+            dom.page.classList.add("preview-mode");
+            dom.page.classList.toggle("mobile-preview", state.mode === "mobile");
+            document.querySelector(".fixed-nav")?.setAttribute("aria-hidden", "false");
+            renderAll();
+
+            requestAnimationFrame(() => {
+                fitPreviewToScreen();
+                toast("Preview mode. Use Exit Preview to return to editing.", "good", 2400);
+            });
+        }
+
+        function fitPreviewToScreen() {
+            const l = getLayout();
+            if (!l?.canvas) return;
+
+            const rect = dom.workspace.getBoundingClientRect();
+            const canvasWidth = Number(l.canvas.width || DEFAULT[state.mode].width || 1600);
+            const canvasHeight = Number(l.canvas.height || DEFAULT[state.mode].height || 2200);
+            const widthScale = rect.width / Math.max(1, canvasWidth);
+            const previewScale = clamp(widthScale || 1, .25, 2.2);
+            const previewPanX = Math.max(0, (rect.width - canvasWidth * previewScale) / 2);
+            const previewPanY = 0;
+
+            state.zoom = previewScale;
+            state.panX = previewPanX;
+            state.panY = previewPanY;
+
+            dom.wrap.style.width = Math.ceil(canvasWidth * previewScale) + "px";
+            dom.wrap.style.height = Math.ceil(canvasHeight * previewScale) + "px";
+            dom.page.style.setProperty("--preview-scale", String(previewScale));
+            dom.page.style.setProperty("--preview-pan-x", previewPanX + "px");
+            dom.page.style.setProperty("--preview-pan-y", previewPanY + "px");
+
+            dom.workspace.scrollTop = 0;
+            dom.workspace.scrollLeft = 0;
+        }
+
+        function exitPreviewMode() {
+            if (!dom.page.classList.contains("preview-mode")) return;
+
+            dom.page.classList.remove("preview-mode");
+            dom.page.classList.remove("mobile-preview");
+            document.querySelector(".fixed-nav")?.setAttribute("aria-hidden", "true");
+
+            if (state.previewBefore) {
+                state.zoom = state.previewBefore.zoom;
+                state.panX = state.previewBefore.panX;
+                state.panY = state.previewBefore.panY;
+                state.selected = Array.isArray(state.previewBefore.selected) ? [...state.previewBefore.selected] : [];
+                dom.tools?.classList.toggle("open", !!state.previewBefore.toolsOpen);
+                dom.inspPanel?.classList.toggle("open", !!state.previewBefore.inspectorOpen);
+            }
+
+            state.previewBefore = null;
+            dom.wrap.style.width = "";
+            dom.wrap.style.height = "";
+            dom.page.style.removeProperty("--preview-scale");
+            dom.page.style.removeProperty("--preview-pan-x");
+            dom.page.style.removeProperty("--preview-pan-y");
+
+            renderAll();
+            applyTransform();
+            toast("Exited preview mode.", "good", 1200);
+        }
+
         async function saveDraft() {
             try {
                 protectRequired(getLayout(), false);
