@@ -411,6 +411,80 @@
             word-break: normal;
             overflow-wrap: normal;
         }
+
+
+
+        /* Public renderer parity with Gallery/Profile Studio paint system */
+        .studio-button-label,
+        .studio-text-paint-target {
+            display: inline-block;
+            max-width: 100%;
+            -webkit-box-decoration-break: clone;
+            box-decoration-break: clone;
+        }
+
+        .studio-gradient-text {
+            color: transparent !important;
+            -webkit-background-clip: text !important;
+            background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+        }
+
+        .custom-object,
+        .custom-object .custom-inner,
+        .title-object,
+        .description-object,
+        .text-object,
+        .type-badge,
+        .credit-badge,
+        .noai-badge,
+        .system-page-button,
+        .art-card-body,
+        .art-card-body h3,
+        .art-card-body p,
+        .pill {
+            font-family: var(--studio-object-font-family, inherit) !important;
+            line-height: var(--studio-object-line-height, inherit) !important;
+        }
+
+            .custom-object[data-type="shape"],
+            .custom-object[data-shape-type="rectangle"],
+            .custom-object[data-type="shape"] .custom-inner,
+            .custom-object[data-shape-type="rectangle"] .custom-inner,
+            .custom-object[data-type="shape"] .shape-object,
+            .custom-object[data-shape-type="rectangle"] .shape-object {
+                border-radius: var(--studio-surface-radius, 0px) !important;
+            }
+
+            .custom-object.public-gradient-border {
+                position: absolute !important;
+                border-color: transparent !important;
+                border-image: none !important;
+                overflow: visible !important;
+            }
+
+                .custom-object.public-gradient-border::before {
+                    content: "";
+                    position: absolute;
+                    inset: 0;
+                    z-index: 3;
+                    border-radius: var(--studio-surface-radius, inherit);
+                    padding: var(--studio-border-width, var(--border-width, 1px));
+                    background: var(--studio-border-paint, var(--border-paint, transparent));
+                    pointer-events: none;
+                    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+                    -webkit-mask-composite: xor;
+                    mask-composite: exclude;
+                }
+
+                .custom-object.public-gradient-border > .custom-inner {
+                    position: relative;
+                    z-index: 4;
+                }
+
+        .shape-object.rectangle {
+            border-radius: var(--studio-surface-radius, 0px) !important;
+        }
     </style>
 </head>
 <body>
@@ -621,9 +695,12 @@
             const el = document.createElement("article");
             el.className = `custom-object ${isRequiredType(obj.type) ? 'required-object' : ''} ${obj.styles?.borderGradient ? 'public-gradient-border' : ''}`;
             el.dataset.type = obj.type;
+            el.dataset.shapeType = obj.type === "shape" ? "rectangle" : obj.type;
             Object.assign(el.style, objectStyle(obj));
             el.style.setProperty("--border-width", `${Number(obj.styles?.borderWidth || 1)}px`);
             el.style.setProperty("--border-paint", obj.styles?.borderGradient || "transparent");
+            el.style.setProperty("--studio-border-width", `${Number(obj.styles?.borderWidth || 1)}px`);
+            el.style.setProperty("--studio-border-paint", obj.styles?.borderGradient || "transparent");
             const inner = document.createElement("div");
             inner.className = "custom-inner";
             inner.innerHTML = renderObjectInner(obj);
@@ -633,25 +710,74 @@
 
         function objectStyle(obj) {
             const s = obj.styles || {};
-            return { left: (obj.x || 0) + "px", top: (obj.y || 0) + "px", width: (obj.w || 100) + "px", height: (obj.h || 100) + "px", transform: `rotate(${obj.rotation || 0}deg)`, background: s.background || "transparent", color: s.textColor || "#fff", borderColor: s.borderGradient ? "transparent" : (s.borderColor || "transparent"), borderWidth: Number(s.borderWidth || 0) + "px", borderStyle: "solid", borderRadius: Number(s.radius || 0) + "px", opacity: String(s.opacity ?? 1), fontSize: Number(s.fontSize || 18) + "px", fontFamily: s.fontFamily || "Arial", textAlign: s.textAlign || "left", lineHeight: String(s.lineHeight || 1.16) };
+            const radius = Number(s.radius ?? (obj.type === "shape" ? 0 : 18));
+            const borderWidth = Number(s.borderWidth || 0);
+            const fontFamily = s.fontFamily || "Arial";
+            const lineHeight = Number(s.lineHeight || 1.16);
+            const fontSize = Number(s.fontSize || 18);
+            return {
+                left: (obj.x || 0) + "px",
+                top: (obj.y || 0) + "px",
+                width: (obj.w || 100) + "px",
+                height: (obj.h || 100) + "px",
+                transform: `rotate(${obj.rotation || 0}deg)`,
+                background: s.background || "transparent",
+                color: s.textColor || "#fff",
+                borderColor: s.borderGradient ? "transparent" : (s.borderColor || "transparent"),
+                borderWidth: borderWidth + "px",
+                borderStyle: "solid",
+                borderRadius: radius + "px",
+                opacity: String(s.opacity ?? 1),
+                fontSize: fontSize + "px",
+                fontFamily,
+                textAlign: s.textAlign || "left",
+                lineHeight: String(lineHeight),
+                "--object-font": fontFamily,
+                "--object-line-height": String(lineHeight),
+                "--studio-object-font-family": fontFamily,
+                "--studio-object-font-size": fontSize + "px",
+                "--studio-object-line-height": String(lineHeight),
+                "--studio-surface-radius": radius + "px",
+                "--studio-border-width": borderWidth + "px",
+                "--studio-border-paint": obj.styles?.borderGradient || "transparent"
+            };
+        }
+
+        function isStudioTextGradientPaint(value) {
+            return /linear-gradient|radial-gradient/i.test(String(value || ""));
+        }
+
+        function getStudioTextPaintInlineStyle(obj) {
+            const paint = String(obj?.styles?.textColor || "").trim();
+            if (!isStudioTextGradientPaint(paint)) return "";
+            return `background:${escapeAttr(paint)};color:transparent;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;`;
+        }
+
+        function getStudioTextPaintClass(obj, extra = "") {
+            const gradientClass = isStudioTextGradientPaint(obj?.styles?.textColor) ? " studio-gradient-text" : "";
+            return `${extra} studio-text-paint-target${gradientClass}`.trim();
+        }
+
+        function renderStudioTextPaintTarget(obj, text, extraClass = "") {
+            return `<span class="${escapeAttr(getStudioTextPaintClass(obj, extraClass))}" style="${getStudioTextPaintInlineStyle(obj)}">${escapeHtml(text)}</span>`;
         }
 
         function renderObjectInner(obj) {
             const s = obj.styles || {};
             const fit = `object-fit:${escapeAttr(s.objectFit || 'cover')};`;
-            if (obj.type === "art_hero") return `<div class="art-hero"><img src="${escapeAttr(item.image_url || '')}" style="${fit}" alt=""><span class="pill">${escapeHtml(item.title || 'Artwork')}</span></div>`;
-            if (obj.type === "art_card") return `<div class="art-card"><img src="${escapeAttr(item.image_url || '')}" style="${fit}" alt=""><div class="art-card-body"><h3>${escapeHtml(item.title || 'Untitled')}</h3><p>${escapeHtml(item.description || 'No description provided.')}</p></div></div>`;
-            if (obj.type === "title") return `<div class="title-object">${escapeHtml(obj.text || item.title || 'Untitled')}</div>`;
-            if (obj.type === "description") return `<div class="description-object">${escapeHtml(obj.text || item.description || 'No description provided.')}</div>`;
-            if (obj.type === "type_badge") return `<div class="type-badge">${escapeHtml(obj.text || formatType(item.proof_type))}</div>`;
-            if (obj.type === "credit_badge") return `<div class="credit-badge">${escapeHtml(obj.text || 'Creator credited')}</div>`;
-            if (obj.type === "noai_badge") return `<div class="noai-badge">${escapeHtml(obj.text || 'Human-made / No AI')}</div>`;
-            if (obj.type === "back_gallery_button") return `<a class="system-page-button" href="creator-gallery.html?user=${encodeURIComponent(profile?.username || '')}">${escapeHtml(obj.text || 'Back to Creator Gallery')}</a>`;
-            if (obj.type === "report_button") return `<button class="system-page-button" type="button" onclick="openReportPlaceholder()">${escapeHtml(obj.text || 'Report')}</button>`;
-            if (obj.type === "text") return `<div class="text-object">${escapeHtml(obj.text || '')}</div>`;
+            if (obj.type === "art_hero") return `<div class="art-hero"><img src="${escapeAttr(item.image_url || '')}" style="${fit}" alt=""><span class="pill">${renderStudioTextPaintTarget(obj, item.title || 'Artwork')}</span></div>`;
+            if (obj.type === "art_card") return `<div class="art-card"><img src="${escapeAttr(item.image_url || '')}" style="${fit}" alt=""><div class="art-card-body"><h3>${renderStudioTextPaintTarget(obj, item.title || 'Untitled')}</h3><p>${renderStudioTextPaintTarget(obj, item.description || 'No description provided.')}</p></div></div>`;
+            if (obj.type === "title") return `<div class="title-object">${renderStudioTextPaintTarget(obj, obj.text || item.title || 'Untitled')}</div>`;
+            if (obj.type === "description") return `<div class="description-object">${renderStudioTextPaintTarget(obj, obj.text || item.description || 'No description provided.')}</div>`;
+            if (obj.type === "type_badge") return `<div class="type-badge"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || formatType(item.proof_type))}</span></div>`;
+            if (obj.type === "credit_badge") return `<div class="credit-badge"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Creator credited')}</span></div>`;
+            if (obj.type === "noai_badge") return `<div class="noai-badge"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Human-made / No AI')}</span></div>`;
+            if (obj.type === "back_gallery_button") return `<a class="system-page-button" href="creator-gallery.html?user=${encodeURIComponent(profile?.username || '')}"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Back to Creator Gallery')}</span></a>`;
+            if (obj.type === "report_button") return `<button class="system-page-button" type="button" onclick="openReportPlaceholder()"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Report')}</span></button>`;
+            if (obj.type === "text") return `<div class="text-object">${renderStudioTextPaintTarget(obj, obj.text || '')}</div>`;
             if (obj.type === "image_box") return `<div class="image-object">${obj.imageUrl ? `<img src="${escapeAttr(obj.imageUrl)}" style="${fit}" alt="">` : ''}</div>`;
-            if (["shape", "circle", "star"].includes(obj.type)) return `<div class="shape-object ${obj.type === 'circle' ? 'circle' : obj.type === 'star' ? 'star' : ''}"></div>`;
-            if (obj.type === "divider") return `<div class="divider-object"></div>`;
+            if (["shape", "circle", "star"].includes(obj.type)) return `<div class="shape-object ${obj.type === 'circle' ? 'circle' : obj.type === 'star' ? 'star' : 'rectangle'}"></div>`;
+            if (obj.type === "divider") return `<div class="divider-object">${renderStudioTextPaintTarget(obj, "")}</div>`;
             return "";
         }
 
