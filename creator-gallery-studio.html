@@ -1767,7 +1767,7 @@
         const SWATCHES = ["#ffffff", "#050506", "#1d1d22", "#8ecbff", "#b7a7ff", "#ffe7aa", "#ff9fbd", "#9ef0b0", "rgba(0,0,0,.55)", "rgba(255,255,255,.10)", "linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.04))", "linear-gradient(135deg, #8ecbff, #b7a7ff)"];
         const $ = id => document.getElementById(id);
         const dom = { page: $("page"), workspace: $("workspace"), wrap: $("wrap"), canvas: $("canvas"), note: $("empty-note"), tools: $("tools"), inspPanel: $("inspector-panel"), insp: $("inspector"), layers: $("layers"), itemList: $("item-list"), itemCount: $("item-count"), title: $("title-detail"), toast: $("toast"), img: $("img-input"), topBack: $("top-back") };
-        const state = { user: null, items: [], item: null, mode: "desktop", layouts: null, selected: [], zoom: 1, panX: 0, panY: 0, snap: "free", history: [], redo: [], interaction: null, pointers: new Map(), gesture: null, search: "", imageTarget: null, toastTimer: null, previewBefore: null };
+        const state = { user: null, ownerProfile: null, items: [], item: null, mode: "desktop", layouts: null, selected: [], zoom: 1, panX: 0, panY: 0, snap: "free", history: [], redo: [], interaction: null, pointers: new Map(), gesture: null, search: "", imageTarget: null, toastTimer: null, previewBefore: null };
         state.layouts = createBundle();
 
         Object.assign(window, { switchLayout, setSnapMode, togglePanel, zoomStudio, centerView, copyPcLayoutToMobile, addObject, saveDraft, publishLayout, enterPreviewMode, exitPreviewMode, undoStudio, redoStudio, filterGalleryItems, chooseGalleryItem, selectObject, updateObjectField, updateObjectStyle, updateObjectText, updateCanvasStyle, applyObjectGradient, applyCanvasGradient, applyTextGradient, applySharedStyle, applySharedTextGradient, applySharedBorderGradient, deleteSelected, duplicateSelected, toggleObjectLock, toggleObjectVisibility, moveLayer, pickImageForObject, pickImageForCanvas, selectRequiredObject, updateObjectSolidPaint, updateObjectGradientPaint, updateObjectManualPaint, updateObjectPaintOpacity, updateCanvasSolidPaint, updateCanvasGradientPaint, updateCanvasManualPaint, updateCanvasPaintOpacity, lockSelected, unlockSelected, showSelected, hideSelected, clearObjectTextGradient, clearSharedTextGradient, updateSharedSolidPaint, updateSharedGradientPaint, updateSharedManualPaint, updateSharedPaintOpacity, syncMetricControl, syncPaintOpacityControl, startTextEdit });
@@ -1778,12 +1778,74 @@
 
         async function boot() { document.body.classList.add("studio-open"); setupEvents(); setupKeyboard(); setupImageInput(); renderAll(); centerView(); try { state.user = await requireBetaAccess(); await loadItems(); const target = state.items.find(i => i.id === START_ID) || state.items[0]; if (target) await chooseGalleryItem(target.id, { replaceUrl: !START_ID }); else { state.item = localItem(); state.layouts = createBundle(); protectRequired(); syncTitle(); renderAll(); toast("No uploaded gallery items found. You can test the editor, but select an item before saving.", "warn", 7000) } } catch (e) { console.error(e); state.item = localItem(); state.layouts = createBundle(); protectRequired(); syncTitle(); renderAll(); toast(e.message || "Could not connect. Editor is still usable locally.", "bad", 7000) } pushHistory() }
         function localItem() { return { id: "local-preview", owner_id: state.user?.id || "", title: "Gallery Item Draft", description: "Design your OC or artwork showcase.", image_url: "", proof_type: "gallery_item", visibility: "draft" } }
-        async function loadItems() { const { data, error } = await supabase.from("creator_proof_gallery").select("*").eq("owner_id", state.user.id).order("created_at", { ascending: false }); if (error) throw error; state.items = (data || []).map(normalizeItem); renderItems() }
+        async function loadItems() {
+            const { data, error } = await supabase.from("creator_proof_gallery").select("*").eq("owner_id", state.user.id).order("created_at", { ascending: false });
+            if (error) throw error;
+            state.items = (data || []).map(normalizeItem);
+            renderItems();
+        }
         function normalizeItem(i) { return { ...i, title: i.title || i.name || i.work_name || "Untitled", description: i.description || i.details || i.notes || "", image_url: i.image_url || i.image || i.url || "", proof_type: i.proof_type || i.work_type || i.kind || "gallery_item", visibility: i.visibility || "public", moderation_status: i.moderation_status || "approved" } }
         function renderItems() { const list = filteredItems(); dom.itemCount.textContent = state.search ? `${list.length} of ${state.items.length} shown` : `${state.items.length} item${state.items.length === 1 ? "" : "s"}`; dom.itemList.innerHTML = list.length ? list.map(i => `<button type="button" class="item-chip ${state.item?.id === i.id ? "active" : ""}" onclick="chooseGalleryItem('${escA(i.id)}')">${i.image_url ? `<img src="${escA(i.image_url)}" alt="">` : `<span class="placeholder">No image</span>`}<span><strong>${esc(i.title)}</strong><span>${esc(formatType(i.proof_type))} · ${esc(i.visibility)}</span></span></button>`).join("") : `<p class="status">No gallery items match that search.</p>` }
         function filterGalleryItems(v) { state.search = String(v || "").trim().toLowerCase(); renderItems() }
         function filteredItems() { if (!state.search) return state.items; return state.items.filter(i => [i.title, i.description, i.proof_type, i.visibility, i.moderation_status].map(v => String(v || "").toLowerCase()).join(" ").includes(state.search)) }
-        async function chooseGalleryItem(id, opt = {}) { const item = state.items.find(i => i.id === id); if (!item) return toast("That gallery item could not be found.", "bad"); state.item = item; state.selected = []; state.history = []; state.redo = []; await loadLayouts(); protectRequired(); syncTitle(); renderItems(); renderAll(); centerView(); pushHistory(); if (opt.replaceUrl !== false) { const u = new URL(location.href); u.searchParams.set("item", item.id); history.replaceState({}, "", u) } }
+        async function chooseGalleryItem(id, opt = {}) {
+            const item = state.items.find(i => i.id === id);
+            if (!item) return toast("That gallery item could not be found.", "bad");
+            state.item = item;
+            state.ownerProfile = null;
+            state.selected = [];
+            state.history = [];
+            state.redo = [];
+            await loadOwnerProfile();
+            await loadLayouts();
+            protectRequired();
+            syncTitle();
+            renderItems();
+            renderAll();
+            centerView();
+            pushHistory();
+            if (opt.replaceUrl !== false) {
+                const u = new URL(location.href);
+                u.searchParams.set("item", item.id);
+                history.replaceState({}, "", u);
+            }
+        }
+
+        async function loadOwnerProfile() {
+            state.ownerProfile = null;
+            const ownerId = state.item?.owner_id || state.user?.id;
+            if (!ownerId) return null;
+
+            const selects = [
+                { table: "public_creator_profiles", columns: "id, username, display_name" },
+                { table: "profiles", columns: "id, username, display_name" }
+            ];
+
+            for (const q of selects) {
+                try {
+                    const { data, error } = await supabase.from(q.table).select(q.columns).eq("id", ownerId).maybeSingle();
+                    if (!error && data) {
+                        state.ownerProfile = data;
+                        return data;
+                    }
+                    if (error) console.warn(`Could not load owner profile from ${q.table}:`, error.message || error);
+                } catch (err) {
+                    console.warn(`Owner profile lookup failed for ${q.table}:`, err);
+                }
+            }
+
+            return null;
+        }
+
+        function galleryShowcaseHref() {
+            const id = state.item?.id || START_ID || "";
+            return id && id !== "local-preview" ? `creator-gallery-item.html?id=${encodeURIComponent(id)}` : "creator-gallery.html";
+        }
+
+        function galleryOwnerHref() {
+            const username = state.ownerProfile?.username || state.item?.owner_username || state.item?.username || "";
+            return username ? `creator-gallery.html?user=${encodeURIComponent(username)}` : "creator-gallery.html";
+        }
         async function loadLayouts() { state.layouts = createBundle(); if (!state.item || state.item.id === "local-preview") return; const { data, error } = await supabase.from("creator_gallery_item_layouts").select("draft_layout_json,published_layout_json").eq("gallery_item_id", state.item.id).maybeSingle(); if (error) { toast("Could not load saved layout: " + error.message, "warn", 7000); return } const src = data?.draft_layout_json || data?.published_layout_json; if (src) state.layouts = createBundle(src); sanitizeAll() }
         function getStoredPublishedLayoutSnapshot(layout) {
             if (!layout || typeof layout !== "object") return null;
@@ -2733,7 +2795,7 @@
             return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl + "?v=" + Date.now();
         }
         function setupKeyboard() { window.addEventListener("keydown", e => { if (e.target.closest("input,textarea,select,[contenteditable=\"true\"]")) return; if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); deleteSelected() } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redoStudio() : undoStudio() } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveDraft() } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") { e.preventDefault(); duplicateSelected() } if (e.key === "Escape") { if (dom.page.classList.contains("preview-mode")) exitPreviewMode(); else { state.selected = []; renderAll() } } const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }; if (arrows[e.key] && state.selected.length) { e.preventDefault(); const step = e.shiftKey ? 10 : 1, [dx, dy] = arrows[e.key]; getLayout().objects.forEach(o => { if (state.selected.includes(o.id) && !o.locked) { o.x += dx * step; o.y += dy * step } }); renderCanvas(); syncLiveInspectorControls(); renderInspector() } }) }
-        function syncTitle() { const i = state.item || localItem(); dom.title.textContent = `${i.title || "Untitled"} · ${state.mode === "mobile" ? "Mobile" : "PC"} layout`; dom.topBack.href = `creator-gallery.html${i.owner_id ? `?user=${encodeURIComponent(i.owner_id)}` : ""}` }
+        function syncTitle() { const i = state.item || localItem(); dom.title.textContent = `${i.title || "Untitled"} · ${state.mode === "mobile" ? "Mobile" : "PC"} layout`; dom.topBack.href = galleryShowcaseHref(); dom.topBack.textContent = i.id && i.id !== "local-preview" ? "Back to Showcase" : "Back" }
         function find(id) { return getLayout().objects.find(o => o.id === id) || null }
         function nextZ() { return Math.max(10, ...getLayout().objects.map(o => Number(o.z) || 0)) + 1 }
         function clampSize(o) { const [minW, minH, maxW, maxH] = LIMITS[o.type] || LIMITS.text; o.w = clamp(num(o.w, minW), minW, maxW); o.h = clamp(num(o.h, minH), minH, maxH) }

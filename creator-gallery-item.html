@@ -504,13 +504,40 @@
 
         const params = new URLSearchParams(location.search);
         const itemId = params.get("id") || params.get("item") || "";
-        let currentUser = await getOptionalBetaUser();
+        let currentUser = null;
         let item = null;
         let profile = null;
         let layoutBundle = null;
+        let bootFinished = false;
 
-        renderNav();
-        await init();
+        const bootTimer = setTimeout(() => {
+            if (!bootFinished) {
+                showError("This gallery showcase is taking too long to load. Refresh once, or open it again from the creator gallery.");
+            }
+        }, 12000);
+
+        await bootGalleryShowcase();
+
+        async function bootGalleryShowcase() {
+            try {
+                currentUser = await withTimeout(getOptionalBetaUser(), 6500, null);
+                renderNav();
+                await init();
+            } catch (error) {
+                console.error("Gallery showcase boot failed:", error);
+                showError(`Could not load this gallery showcase: ${error?.message || error || "Unknown error"}`);
+            } finally {
+                bootFinished = true;
+                clearTimeout(bootTimer);
+            }
+        }
+
+        function withTimeout(promise, ms, fallback = null) {
+            return Promise.race([
+                promise,
+                new Promise(resolve => setTimeout(() => resolve(fallback), ms))
+            ]);
+        }
 
         async function init() {
             if (!itemId) { showError("No gallery item was selected."); return; }
@@ -551,26 +578,95 @@
         };
 
         async function loadItem() {
-            const { data: publicItem } = await supabase.from("public_creator_gallery_items").select("*").eq("id", itemId).maybeSingle();
-            if (publicItem) { item = publicItem; return; }
+            item = null;
+
+            const attempts = [
+                async () => supabase.from("public_creator_gallery_items").select("*").eq("id", itemId).maybeSingle(),
+                async () => supabase.from("creator_proof_gallery").select("*").eq("id", itemId).maybeSingle()
+            ];
+
             if (currentUser) {
-                const { data: ownItem } = await supabase.from("creator_proof_gallery").select("*").eq("id", itemId).eq("owner_id", currentUser.id).maybeSingle();
-                if (ownItem) item = ownItem;
+                attempts.unshift(async () => supabase.from("creator_proof_gallery").select("*").eq("id", itemId).eq("owner_id", currentUser.id).maybeSingle());
+            }
+
+            for (const attempt of attempts) {
+                try {
+                    const { data, error } = await attempt();
+                    if (error) {
+                        console.warn("Gallery item lookup skipped:", error.message || error);
+                        continue;
+                    }
+                    if (data) {
+                        item = normalizeItem(data);
+                        return;
+                    }
+                } catch (error) {
+                    console.warn("Gallery item lookup failed:", error);
+                }
             }
         }
 
+        function normalizeItem(source = {}) {
+            return {
+                ...source,
+                title: source.title || source.name || source.work_name || "Untitled",
+                description: source.description || source.details || source.notes || "",
+                image_url: source.image_url || source.image || source.url || source.src || "",
+                proof_type: source.proof_type || source.work_type || source.kind || "gallery_item",
+                visibility: source.visibility || "public",
+                moderation_status: source.moderation_status || "approved"
+            };
+        }
+
         async function loadProfile() {
+            profile = null;
             if (!item?.owner_id) return;
-            const { data } = await supabase.from("public_creator_profiles").select("id, username, display_name, bio, avatar_url").eq("id", item.owner_id).maybeSingle();
-            profile = data || null;
+
+            const attempts = [
+                async () => supabase.from("public_creator_profiles").select("id, username, display_name, bio, avatar_url").eq("id", item.owner_id).maybeSingle(),
+                async () => supabase.from("profiles").select("id, username, display_name, bio, avatar_url").eq("id", item.owner_id).maybeSingle()
+            ];
+
+            for (const attempt of attempts) {
+                try {
+                    const { data, error } = await attempt();
+                    if (error) {
+                        console.warn("Profile lookup skipped:", error.message || error);
+                        continue;
+                    }
+                    if (data) {
+                        profile = data;
+                        return;
+                    }
+                } catch (error) {
+                    console.warn("Profile lookup failed:", error);
+                }
+            }
         }
 
         async function loadLayout() {
-            const { data } = await supabase.from("public_creator_gallery_item_layouts").select("published_layout_json").eq("gallery_item_id", item.id).maybeSingle();
-            layoutBundle = data?.published_layout_json || null;
-            if (!layoutBundle && currentUser?.id === item.owner_id) {
-                const { data: own } = await supabase.from("creator_gallery_item_layouts").select("published_layout_json").eq("gallery_item_id", item.id).maybeSingle();
-                layoutBundle = own?.published_layout_json || null;
+            layoutBundle = null;
+            if (!item?.id) return;
+
+            try {
+                const { data, error } = await supabase.from("public_creator_gallery_item_layouts").select("published_layout_json").eq("gallery_item_id", item.id).maybeSingle();
+                if (!error && data?.published_layout_json) {
+                    layoutBundle = data.published_layout_json;
+                    return;
+                }
+                if (error) console.warn("Public gallery layout lookup skipped:", error.message || error);
+            } catch (error) {
+                console.warn("Public gallery layout lookup failed:", error);
+            }
+
+            if (currentUser?.id === item.owner_id) {
+                try {
+                    const { data: own, error } = await supabase.from("creator_gallery_item_layouts").select("published_layout_json").eq("gallery_item_id", item.id).maybeSingle();
+                    if (!error && own?.published_layout_json) layoutBundle = own.published_layout_json;
+                    if (error) console.warn("Owner gallery layout lookup skipped:", error.message || error);
+                } catch (error) {
+                    console.warn("Owner gallery layout lookup failed:", error);
+                }
             }
         }
 
@@ -694,8 +790,13 @@
             return !isModernIPad && (isPhoneUA || narrowTouch);
         }
 
+        function galleryBackHref() {
+            const username = profile?.username || item?.owner_username || item?.username || "";
+            return username ? `creator-gallery.html?user=${encodeURIComponent(username)}` : "creator-gallery.html";
+        }
+
         function renderDefault() {
-            document.getElementById("page-root").innerHTML = `<section class="default-shell"><div class="default-card"><div class="default-layout"><div><img class="default-image" src="${escapeAttr(item.image_url || '')}" alt="${escapeAttr(item.title || '')}"></div><div><p class="muted">${escapeHtml(profile?.display_name || profile?.username || 'Nullverse Creator')}</p><h1>${escapeHtml(item.title || 'Untitled')}</h1><p class="muted">${escapeHtml(formatType(item.proof_type))}</p><p class="muted">${escapeHtml(item.description || 'No description provided.')}</p><a class="button" href="creator-gallery.html?user=${encodeURIComponent(profile?.username || '')}">Back to Creator Gallery</a><button class="button" type="button" onclick="openReportPlaceholder()">Report</button></div></div></div></section>`;
+            document.getElementById("page-root").innerHTML = `<section class="default-shell"><div class="default-card"><div class="default-layout"><div><img class="default-image" src="${escapeAttr(item.image_url || '')}" alt="${escapeAttr(item.title || '')}"></div><div><p class="muted">${escapeHtml(profile?.display_name || profile?.username || 'Nullverse Creator')}</p><h1>${escapeHtml(item.title || 'Untitled')}</h1><p class="muted">${escapeHtml(formatType(item.proof_type))}</p><p class="muted">${escapeHtml(item.description || 'No description provided.')}</p><a class="button" href="${galleryBackHref()}">Back to Creator Gallery</a><button class="button" type="button" onclick="openReportPlaceholder()">Report</button></div></div></div></section>`;
         }
 
         function renderCustom(layout) {
@@ -1022,7 +1123,7 @@
             }
 
             if (obj.type === "back_gallery_button") {
-                return `<a class="system-page-button" href="creator-gallery.html?user=${encodeURIComponent(profile?.username || '')}"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Back to Creator Gallery')}</span></a>`;
+                return `<a class="system-page-button" href="${galleryBackHref()}"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Back to Creator Gallery')}</span></a>`;
             }
 
             if (obj.type === "report_button") {
@@ -1070,7 +1171,7 @@
             const actions = document.getElementById("owner-actions");
             const customize = document.getElementById("customize-link");
             const back = document.getElementById("back-link");
-            if (profile?.username) back.href = `creator-gallery.html?user=${encodeURIComponent(profile.username)}`;
+            back.href = galleryBackHref();
             if (currentUser && item && currentUser.id === item.owner_id) {
                 customize.href = `creator-gallery-studio.html?item=${encodeURIComponent(item.id)}`;
                 actions.classList.add("show");
