@@ -733,13 +733,13 @@
 
     <header>
         <div class="logo">
-            <a id="logo-link" href="gallery.html">
+            <a id="logo-link" href="creator-gallery.html">
                 <img src="Nullverse-3.png" alt="Nullverse" class="site-logo">
             </a>
         </div>
 
         <nav id="main-nav">
-            <a href="gallery.html">Creator Gallery</a>
+            <a href="creator-gallery.html">Creator Gallery</a>
             <a href="login.html">Beta Login</a>
         </nav>
     </header>
@@ -1134,10 +1134,10 @@
                 return;
             }
 
-            if (logoLink) logoLink.href = "gallery.html";
+            if (logoLink) logoLink.href = "creator-gallery.html";
 
             nav.innerHTML = `
-                    <a href="gallery.html">Creator Gallery</a>
+                    <a href="creator-gallery.html">Creator Gallery</a>
                     <a href="login.html">Beta Login</a>
                 `;
         }
@@ -1161,7 +1161,7 @@
             document.getElementById("gallery-grid").innerHTML = `
                     <p class="empty">
                         Open a creator gallery using a link like
-                        <strong>gallery.html?user=username</strong>.
+                        <strong>creator-gallery.html?user=username</strong>.
                         Full Nullverse access is still invite-only while the beta stays protected.
                     </p>
                 `;
@@ -1212,7 +1212,7 @@
 
         async function loadCreatorGallery() {
             const { data: profileData, error: profileError } = await supabase
-                .from("profiles")
+                .from("public_creator_profiles")
                 .select("id, username, display_name, bio, avatar_url")
                 .eq("username", usernameFromUrl)
                 .single();
@@ -1249,40 +1249,44 @@
             document.getElementById("add-gallery-button").style.display =
                 isGalleryOwner ? "inline-block" : "none";
 
-            let galleryQuery = supabase
-                .from("creator_proof_gallery")
-                .select(`
-                    *,
-                    creator_gallery_likes (
-                        user_id
-                    )
-                `)
-                .eq("owner_id", profile.id)
-                .order("created_at", { ascending: false });
+            let data = [];
+            let error = null;
 
-            if (!isGalleryOwner) {
-                galleryQuery = galleryQuery.eq("visibility", "public");
-            }
-
-            let { data, error } = await galleryQuery;
-
-            if (error && !currentUser) {
-                console.warn("Public gallery like-count query failed, retrying without likes:", error);
-
-                const fallbackResult = await supabase
+            if (currentUser) {
+                let galleryQuery = supabase
                     .from("creator_proof_gallery")
-                    .select("*")
+                    .select(`
+                            *,
+                            creator_gallery_likes (
+                                user_id
+                            )
+                        `)
                     .eq("owner_id", profile.id)
-                    .eq("visibility", "public")
                     .order("created_at", { ascending: false });
 
-                data = fallbackResult.data || [];
-                error = fallbackResult.error || null;
+                if (!isGalleryOwner) {
+                    galleryQuery = galleryQuery
+                        .eq("visibility", "public")
+                        .eq("moderation_status", "approved");
+                }
 
-                data = data.map(item => ({
+                const galleryResult = await galleryQuery;
+                data = galleryResult.data || [];
+                error = galleryResult.error || null;
+            } else {
+                const publicGalleryResult = await supabase
+                    .from("public_creator_gallery_items")
+                    .select("*")
+                    .eq("owner_id", profile.id)
+                    .order("created_at", { ascending: false });
+
+                data = (publicGalleryResult.data || []).map(item => ({
                     ...item,
-                    creator_gallery_likes: []
+                    creator_gallery_likes: [],
+                    like_count: Number(item.like_count || 0)
                 }));
+
+                error = publicGalleryResult.error || null;
             }
 
             if (error) {
@@ -1331,6 +1335,22 @@
             });
         }
 
+        function getGalleryLikeCount(item) {
+            if (Array.isArray(item.creator_gallery_likes)) {
+                return item.creator_gallery_likes.length;
+            }
+
+            return Number(item.like_count || 0);
+        }
+
+        function didCurrentUserLikeItem(item) {
+            if (!currentUser || !Array.isArray(item.creator_gallery_likes)) {
+                return false;
+            }
+
+            return item.creator_gallery_likes.some(like => like.user_id === currentUser.id);
+        }
+
         function renderGallery() {
             const grid = document.getElementById("gallery-grid");
             const count = document.getElementById("gallery-count");
@@ -1348,8 +1368,8 @@
             }
 
             grid.innerHTML = filtered.map(item => {
-                const likes = item.creator_gallery_likes || [];
-                const likedByMe = !!currentUser && likes.some(like => like.user_id === currentUser.id);
+                const likeCount = getGalleryLikeCount(item);
+                const likedByMe = didCurrentUserLikeItem(item);
 
                 return `
                         <article class="gallery-card" onclick="openGalleryLightbox('${item.id}')">
@@ -1379,7 +1399,7 @@
                                 data-id="${item.id}"
                                 title="${currentUser ? "Like this gallery work" : "Beta testers can like gallery work"}"
                                 onclick="event.stopPropagation(); toggleGalleryLike('${item.id}')">
-                                ${likedByMe ? "♥" : "♡"} ${likes.length}
+                                ${likedByMe ? "♥" : "♡"} ${likeCount}
                             </button>
                         </article>
                     `;
@@ -1393,8 +1413,8 @@
 
             activeLightboxItemId = itemId;
 
-            const likes = item.creator_gallery_likes || [];
-            const likedByMe = !!currentUser && likes.some(like => like.user_id === currentUser.id);
+            const likeCount = getGalleryLikeCount(item);
+            const likedByMe = didCurrentUserLikeItem(item);
 
             document.getElementById("lightbox-image").src = item.image_url;
             document.getElementById("lightbox-image").alt =
@@ -1410,9 +1430,9 @@
                 item.description || "No description provided.";
 
             document.getElementById("lightbox-likes").textContent =
-                `${likes.length} ${likes.length === 1 ? "Like" : "Likes"}`;
+                `${likeCount} ${likeCount === 1 ? "Like" : "Likes"}`;
 
-            const likeText = `${likedByMe ? "♥" : "♡"} ${likes.length}`;
+            const likeText = `${likedByMe ? "♥" : "♡"} ${likeCount}`;
 
             const lightboxLikeButton = document.getElementById("lightbox-like-button");
             const floatingLikeButton = document.getElementById("lightbox-floating-like-button");
