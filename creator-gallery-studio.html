@@ -1642,6 +1642,64 @@
                 grid-template-columns: 1fr;
             }
         }
+
+
+        /* ============================================================
+           GALLERY STUDIO FINAL POLISH PATCH
+           Double-click inline text editing, live inspector syncing,
+           and preview background parity with Account Settings Studio.
+        ============================================================ */
+
+        .obj.text-editing {
+            cursor: text !important;
+            user-select: text !important;
+        }
+
+            .obj.text-editing .inner,
+            .obj.text-editing .text-content,
+            .obj.text-editing .paint-target,
+            .obj.text-editing .button-content,
+            .obj.text-editing .badge-content,
+            .obj.text-editing .button-label {
+                pointer-events: auto !important;
+                user-select: text !important;
+                -webkit-user-select: text !important;
+            }
+
+            .obj.text-editing .text-content,
+            .obj.text-editing .paint-target,
+            .obj.text-editing .button-label,
+            .obj.text-editing .badge-content,
+            .obj.text-editing .button-content {
+                outline: 1px dashed rgba(140,190,255,.72);
+                outline-offset: 4px;
+                cursor: text !important;
+                caret-color: currentColor;
+                white-space: pre-wrap;
+            }
+
+            .obj.text-editing .handle,
+            .obj.text-editing .rotate {
+                display: none !important;
+            }
+
+        [contenteditable="true"] {
+            -webkit-user-modify: read-write-plaintext-only;
+        }
+
+        .preview-mode,
+        .preview-mode .workspace {
+            background: var(--preview-page-bg, var(--canvas-bg, var(--page-bg,#050506))) !important;
+            background-image: var(--preview-page-bg-image, none) !important;
+            background-size: var(--preview-page-bg-size, cover) !important;
+            background-position: var(--preview-page-bg-position, center) !important;
+            background-repeat: no-repeat !important;
+            background-attachment: fixed !important;
+        }
+
+            .preview-mode .canvas {
+                background-color: transparent !important;
+            }
     </style>
 </head>
 <body>
@@ -1712,7 +1770,7 @@
         const state = { user: null, items: [], item: null, mode: "desktop", layouts: null, selected: [], zoom: 1, panX: 0, panY: 0, snap: "free", history: [], redo: [], interaction: null, pointers: new Map(), gesture: null, search: "", imageTarget: null, toastTimer: null, previewBefore: null };
         state.layouts = createBundle();
 
-        Object.assign(window, { switchLayout, setSnapMode, togglePanel, zoomStudio, centerView, copyPcLayoutToMobile, addObject, saveDraft, publishLayout, enterPreviewMode, exitPreviewMode, undoStudio, redoStudio, filterGalleryItems, chooseGalleryItem, selectObject, updateObjectField, updateObjectStyle, updateObjectText, updateCanvasStyle, applyObjectGradient, applyCanvasGradient, applyTextGradient, applySharedStyle, applySharedTextGradient, applySharedBorderGradient, deleteSelected, duplicateSelected, toggleObjectLock, toggleObjectVisibility, moveLayer, pickImageForObject, pickImageForCanvas, selectRequiredObject, updateObjectSolidPaint, updateObjectGradientPaint, updateObjectManualPaint, updateObjectPaintOpacity, updateCanvasSolidPaint, updateCanvasGradientPaint, updateCanvasManualPaint, updateCanvasPaintOpacity, lockSelected, unlockSelected, showSelected, hideSelected, clearObjectTextGradient, clearSharedTextGradient, updateSharedSolidPaint, updateSharedGradientPaint, updateSharedManualPaint, updateSharedPaintOpacity });
+        Object.assign(window, { switchLayout, setSnapMode, togglePanel, zoomStudio, centerView, copyPcLayoutToMobile, addObject, saveDraft, publishLayout, enterPreviewMode, exitPreviewMode, undoStudio, redoStudio, filterGalleryItems, chooseGalleryItem, selectObject, updateObjectField, updateObjectStyle, updateObjectText, updateCanvasStyle, applyObjectGradient, applyCanvasGradient, applyTextGradient, applySharedStyle, applySharedTextGradient, applySharedBorderGradient, deleteSelected, duplicateSelected, toggleObjectLock, toggleObjectVisibility, moveLayer, pickImageForObject, pickImageForCanvas, selectRequiredObject, updateObjectSolidPaint, updateObjectGradientPaint, updateObjectManualPaint, updateObjectPaintOpacity, updateCanvasSolidPaint, updateCanvasGradientPaint, updateCanvasManualPaint, updateCanvasPaintOpacity, lockSelected, unlockSelected, showSelected, hideSelected, clearObjectTextGradient, clearSharedTextGradient, updateSharedSolidPaint, updateSharedGradientPaint, updateSharedManualPaint, updateSharedPaintOpacity, syncMetricControl, syncPaintOpacityControl, startTextEdit });
 
         window.addEventListener("error", e => { console.error(e.error || e.message); toast("Editor error: " + (e.message || "unknown error"), "bad", 7000) });
         window.addEventListener("unhandledrejection", e => { console.error(e.reason); toast("Editor error: " + (e.reason?.message || e.reason || "unknown error"), "bad", 7000) });
@@ -1743,7 +1801,7 @@
         function defaultSize(t, mode) { const m = mode === "mobile"; return ({ art_hero: m ? { w: 340, h: 340 } : { w: 600, h: 600 }, art_card: m ? { w: 330, h: 420 } : { w: 420, h: 520 }, title: m ? { w: 330, h: 70 } : { w: 700, h: 90 }, description: m ? { w: 330, h: 150 } : { w: 700, h: 180 }, type_badge: m ? { w: 160, h: 44 } : { w: 220, h: 48 }, credit_badge: m ? { w: 220, h: 44 } : { w: 300, h: 48 }, noai_badge: m ? { w: 220, h: 44 } : { w: 300, h: 48 }, back_gallery_button: m ? { w: 150, h: 46 } : { w: 250, h: 56 }, report_button: m ? { w: 130, h: 46 } : { w: 180, h: 56 }, text: m ? { w: 220, h: 44 } : { w: 320, h: 52 }, bio: m ? { w: 330, h: 190 } : { w: 520, h: 230 }, image: m ? { w: 240, h: 240 } : { w: 360, h: 360 }, image_text: m ? { w: 330, h: 170 } : { w: 520, h: 230 }, section: m ? { w: 330, h: 170 } : { w: 520, h: 230 }, shape: m ? { w: 220, h: 140 } : { w: 320, h: 180 }, circle: m ? { w: 180, h: 180 } : { w: 220, h: 220 }, star: m ? { w: 180, h: 180 } : { w: 220, h: 220 }, divider: m ? { w: 300, h: 20 } : { w: 520, h: 24 } })[t] || { w: 300, h: 60 } }
         function addObject(type) { if (!LABELS[type]) return toast("Unsupported layer type.", "bad"); const l = getLayout(); pushHistory(); if (REQUIRED.includes(type)) { const ex = l.objects.find(o => o.type === type); if (ex) { ex.hidden = false; ex.z = nextZ(); state.selected = [ex.id]; renderAll(); return toast(`${LABELS[type]} is already on the page, so I selected it.`, "warn") } } const o = createObj(type); l.objects.push(o); state.selected = [o.id]; protectRequired(l, false); renderAll(); toast(`${LABELS[type]} added.`, "good") }
         function renderAll() { renderCanvas(); renderLayers(); renderInspector(); renderReq(); updateButtons() }
-        function renderCanvas() { const l = getLayout(), c = dom.canvas, size = DEFAULT[state.mode]; c.classList.toggle("mobile", state.mode === "mobile"); c.classList.toggle("snap", state.snap === "snap"); c.style.width = `${l.canvas.width || size.width}px`; c.style.minHeight = `${l.canvas.height || size.height}px`; c.style.setProperty("--canvas-bg", l.canvas.background || "var(--page-bg)"); c.style.background = l.canvas.background || "var(--page-bg)"; c.style.backgroundImage = l.canvas.backgroundImage ? `url('${String(l.canvas.backgroundImage).replace(/'/g, "%27")}')` : ""; c.style.backgroundSize = l.canvas.backgroundSize || "cover"; c.style.backgroundPosition = l.canvas.backgroundPosition || "center"; dom.page.style.setProperty("--canvas-bg", l.canvas.background || "var(--page-bg)");[...c.querySelectorAll(".obj,.marquee,.group-box")].forEach(n => n.remove());[...l.objects].sort((a, b) => (a.z || 0) - (b.z || 0)).forEach(o => { c.insertAdjacentHTML("beforeend", objHtml(o)); styleObj(c.querySelector(`[data-id="${CSS.escape(o.id)}"]`), o) }); dom.note.style.display = l.objects.filter(o => !o.hidden).length ? "none" : "flex"; renderGroupBox(); applyTransform() }
+        function renderCanvas() { const l = getLayout(), c = dom.canvas, size = DEFAULT[state.mode]; c.classList.toggle("mobile", state.mode === "mobile"); c.classList.toggle("snap", state.snap === "snap"); c.style.width = `${l.canvas.width || size.width}px`; c.style.minHeight = `${l.canvas.height || size.height}px`; c.style.setProperty("--canvas-bg", l.canvas.background || "var(--page-bg)"); c.style.background = l.canvas.background || "var(--page-bg)"; c.style.backgroundImage = l.canvas.backgroundImage ? `url('${String(l.canvas.backgroundImage).replace(/'/g, "%27")}')` : ""; c.style.backgroundSize = l.canvas.backgroundSize || "cover"; c.style.backgroundPosition = l.canvas.backgroundPosition || "center"; dom.page.style.setProperty("--canvas-bg", l.canvas.background || "var(--page-bg)"); dom.page.style.setProperty("--preview-page-bg", l.canvas.background || "var(--page-bg,#050506)"); dom.page.style.setProperty("--preview-page-bg-image", l.canvas.backgroundImage ? `url('${String(l.canvas.backgroundImage).replace(/'/g, "%27")}')` : "none"); dom.page.style.setProperty("--preview-page-bg-size", l.canvas.backgroundSize || "cover"); dom.page.style.setProperty("--preview-page-bg-position", l.canvas.backgroundPosition || "center");[...c.querySelectorAll(".obj,.marquee,.group-box")].forEach(n => n.remove());[...l.objects].sort((a, b) => (a.z || 0) - (b.z || 0)).forEach(o => { c.insertAdjacentHTML("beforeend", objHtml(o)); styleObj(c.querySelector(`[data-id="${CSS.escape(o.id)}"]`), o) }); dom.note.style.display = l.objects.filter(o => !o.hidden).length ? "none" : "flex"; renderGroupBox(); applyTransform() }
         function objHtml(o) { const sel = state.selected.includes(o.id), multi = sel && state.selected.length > 1, cls = ["obj", sel ? "selected" : "", multi ? "multi" : "", o.locked ? "locked" : "", o.hidden ? "hidden" : "", o.required ? "required" : "", ["text", "title", "description"].includes(o.type) ? "textlike" : "", o.styles?.borderPaint ? "grad-border" : ""].filter(Boolean).join(" "); return `<div class="${cls}" data-id="${escA(o.id)}" data-type="${escA(o.type)}"><div class="inner">${innerHtml(o)}</div>${handles()}<div class="rotate" data-rotate="1"></div></div>` }
         function innerHtml(o) { const text = textMarkup(o.text || "", o), img = o.imageUrl || (["art_hero", "art_card"].includes(o.type) ? state.item?.image_url || "" : ""); const item = state.item || localItem(); switch (o.type) { case "art_hero": return `<div class="art-hero">${imageHtml(img, "Artwork")}${credit(item)}</div>`; case "art_card": return `<div class="art-card">${imageHtml(img, "Artwork")}<div class="card-body"><h3>${esc(item.title || "Untitled")}</h3><p>${esc(item.description || "Gallery item description")}</p></div>${credit(item)}</div>`; case "title": return `<div class="text-content" style="font-weight:850;line-height:1.05!important">${text}</div>`; case "description": case "text": return `<div class="text-content">${text}</div>`; case "bio": case "section": return `<div class="text-content" style="padding:var(--obj-pad,18px)">${text}</div>`; case "type_badge": case "credit_badge": case "noai_badge": return `<div class="badge-content">${text}</div>`; case "back_gallery_button": case "report_button": return `<div class="button-content"><span class="button-label">${esc(o.text || LABELS[o.type])}</span></div>`; case "image": return `<div class="image-box">${imageHtml(img, "Custom image")}</div>`; case "image_text": return `<div class="image-text"><div class="image-text-thumb">${imageHtml(img, "Custom image")}</div><div class="text-content">${text}</div></div>`; case "shape": return `<div class="shape"></div>`; case "circle": return `<div class="shape circle"></div>`; case "star": return `<div class="shape star"></div>`; case "divider": return `<div class="divider"></div>`; default: return `<div class="text-content">${text}</div>` } }
         function imageHtml(url, label) { return url ? `<img src="${escA(url)}" alt="${escA(label)}">` : `<div class="placeholder">Upload image from Inspector</div>` }
@@ -1788,7 +1846,7 @@
             const imgs = isImageCapable(o);
             const layoutControls = `<div class="group"><h4>Position & Size</h4><div class="mini-grid">${metric("X", o.x, -200, 1800, `updateObjectField('${idv}','x',this.value,true)`)}${metric("Y", o.y, -200, 2600, `updateObjectField('${idv}','y',this.value,true)`)}${metric("Width", o.w, 1, 1800, `updateObjectField('${idv}','w',this.value,true)`)}${metric("Height", o.h, 1, 2000, `updateObjectField('${idv}','h',this.value,true)`)}${metric("Z / Layer", o.z, 1, 9999, `updateObjectField('${idv}','z',this.value,true)`)}${metric("Rotation", o.rotation, -180, 180, `updateObjectField('${idv}','rotation',this.value,true)`)}</div></div>`;
 
-            const contentControls = `<div class="group"><h4>Layer</h4><div class="inspector-group-compact"><span class="lock-state-pill ${o.locked ? "locked" : "unlocked"}">${o.locked ? "🔒 Locked" : "🔓 Unlocked"}</span>${o.required ? `<p class="note">Required gallery control. You can style and move it, but not hide or delete it.</p>` : ""}<label>Layer Name</label><input value="${escA(o.name || "")}" oninput="updateObjectField('${idv}','name',this.value,false)">${textTypes ? `<label>Text</label><textarea oninput="updateObjectText('${idv}',this.value)">${escT(o.text || "")}</textarea>` : ""}</div></div>`;
+            const contentControls = `<div class="group"><h4>Layer</h4><div class="inspector-group-compact"><span class="lock-state-pill ${o.locked ? "locked" : "unlocked"}">${o.locked ? "🔒 Locked" : "🔓 Unlocked"}</span>${o.required ? `<p class="note">Required gallery control. You can style and move it, but not hide or delete it.</p>` : ""}<label>Layer Name</label><input value="${escA(o.name || "")}" oninput="updateObjectField('${idv}','name',this.value,false)">${textTypes ? `<label>Text</label><textarea data-object-text-id="${idv}" oninput="updateObjectText('${idv}',this.value)">${escT(o.text || "")}</textarea>` : ""}</div></div>`;
 
             const imageControls = imgs ? `<div class="group"><h4>Image</h4><button onclick="pickImageForObject('${idv}')">Upload / Replace Image</button><label>Image URL</label><input value="${escA(o.imageUrl || "")}" oninput="updateObjectField('${idv}','imageUrl',this.value,false)"><label>Image Fit</label><select onchange="updateObjectStyle('${idv}','imageFit',this.value,{commit:true})">${["cover", "contain", "fill", "none", "scale-down"].map(v => `<option value="${v}" ${s.imageFit === v ? "selected" : ""}>${v}</option>`).join("")}</select></div>` : "";
 
@@ -1816,7 +1874,8 @@
 
         function metric(label, val, min, max, handler, step = 1) {
             const v = Number.isFinite(Number(val)) ? Number(val) : 0;
-            return `<div class="metric"><label>${esc(label)}</label><input type="range" min="${min}" max="${max}" step="${step}" value="${escA(v)}" oninput="${handler}"><input type="number" min="${min}" max="${max}" step="${step}" value="${escA(v)}" oninput="${handler}"></div>`;
+            const key = escA(label);
+            return `<div class="metric" data-metric-wrap="${key}"><label>${esc(label)}</label><input data-metric-label="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${escA(v)}" oninput="syncMetricControl(this);${handler}"><input data-metric-label="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${escA(v)}" oninput="syncMetricControl(this);${handler}"></div>`;
         }
 
         function objectOpacityControl(o) {
@@ -1863,7 +1922,7 @@
                     : `updateObjectManualPaint('${escA(id)}','${fields.solid}','${fields.gradient || fields.solid}', this.value, {live:true})`;
             const manualCommit = manualCall.replace("{live:true}", "{commit:true}");
 
-            return `<div class="paint-card" data-paint-card="${escA(safeId)}"><label>${esc(label)}</label><span class="paint-sub-label">Solid</span><div class="paint-row"><input type="color" value="${escA(info.solid)}" oninput="${solidCall}" onchange="${solidCommit}"><div class="paint-preview"><span data-paint-preview="${escA(safeId)}" style="background:${escA(info.value)}"></span></div></div><label class="paint-sub-label">Color Opacity <span id="${escA(safeId)}-alpha-label" class="paint-alpha-value">${Math.round(info.alpha * 100)}%</span></label><div class="paint-alpha-row"><input type="range" min="0" max="100" step="1" value="${Math.round(info.alpha * 100)}" oninput="document.getElementById('${escA(safeId)}-alpha-label').textContent=this.value+'%';${opacityCall}" onchange="${opacityCommit}"><span class="paint-alpha-value">${Math.round(info.alpha * 100)}%</span></div><span class="paint-sub-label">Gradient</span><div class="paint-gradient-grid" data-grad-box="${escA(safeId)}"><select data-dir oninput="${gradCall}" onchange="${gradCommit}">${gradientDirections(info.dir)}</select><input data-a type="color" value="${escA(info.a)}" oninput="${gradCall}" onchange="${gradCommit}"><input data-b type="color" value="${escA(info.b)}" oninput="${gradCall}" onchange="${gradCommit}"></div><input class="paint-fine-input" value="${escA(info.value)}" placeholder="hex, rgba(), transparent, or linear-gradient(...)" oninput="${manualCall}" onchange="${manualCommit}"></div>`;
+            return `<div class="paint-card" data-paint-card="${escA(safeId)}"><label>${esc(label)}</label><span class="paint-sub-label">Solid</span><div class="paint-row"><input type="color" value="${escA(info.solid)}" oninput="${solidCall}" onchange="${solidCommit}"><div class="paint-preview"><span data-paint-preview="${escA(safeId)}" style="background:${escA(info.value)}"></span></div></div><label class="paint-sub-label">Color Opacity <span id="${escA(safeId)}-alpha-label" class="paint-alpha-value">${Math.round(info.alpha * 100)}%</span></label><div class="paint-alpha-row"><input type="range" min="0" max="100" step="1" value="${Math.round(info.alpha * 100)}" oninput="syncPaintOpacityControl(this,'${escA(safeId)}-alpha-label');${opacityCall}" onchange="${opacityCommit}"><span class="paint-alpha-value">${Math.round(info.alpha * 100)}%</span></div><span class="paint-sub-label">Gradient</span><div class="paint-gradient-grid" data-grad-box="${escA(safeId)}"><select data-dir oninput="${gradCall}" onchange="${gradCommit}">${gradientDirections(info.dir)}</select><input data-a type="color" value="${escA(info.a)}" oninput="${gradCall}" onchange="${gradCommit}"><input data-b type="color" value="${escA(info.b)}" oninput="${gradCall}" onchange="${gradCommit}"></div><input class="paint-fine-input" value="${escA(info.value)}" placeholder="hex, rgba(), transparent, or linear-gradient(...)" oninput="${manualCall}" onchange="${manualCommit}"></div>`;
         }
 
         function gradientDirections(active = "135deg") {
@@ -1966,28 +2025,28 @@
         function updateSharedSolidPaint(solidField, gradientField, color, options = {}) {
             paintHistory(`shared:${solidField}:solid`, options);
             selectedEditable().forEach(o => setSolidPaint(o.styles || (o.styles = {}), solidField, gradientField, color));
-            renderCanvas(); renderLayers();
+            renderCanvas(); renderLayers(); syncSharedPaintPreview(solidField, gradientField);
             if (options.commit) renderInspector();
         }
 
         function updateSharedGradientPaint(solidField, gradientField, boxId, options = {}) {
             paintHistory(`shared:${gradientField}:gradient`, options);
             selectedEditable().forEach(o => setGradientPaintFromBox(o.styles || (o.styles = {}), solidField, gradientField, boxId));
-            renderCanvas(); renderLayers();
+            renderCanvas(); renderLayers(); syncSharedPaintPreview(solidField, gradientField);
             if (options.commit) renderInspector();
         }
 
         function updateSharedManualPaint(solidField, gradientField, value, options = {}) {
             paintHistory(`shared:${gradientField}:manual`, options);
             selectedEditable().forEach(o => setManualPaint(o.styles || (o.styles = {}), solidField, gradientField, value));
-            renderCanvas(); renderLayers();
+            renderCanvas(); renderLayers(); syncSharedPaintPreview(solidField, gradientField);
             if (options.commit) renderInspector();
         }
 
         function updateSharedPaintOpacity(solidField, gradientField, alpha, options = {}) {
             paintHistory(`shared:${gradientField}:opacity`, options);
             selectedEditable().forEach(o => setPaintOpacity(o.styles || (o.styles = {}), solidField, gradientField, alpha));
-            renderCanvas(); renderLayers();
+            renderCanvas(); renderLayers(); syncSharedPaintPreview(solidField, gradientField);
             if (options.commit) renderInspector();
         }
 
@@ -2077,17 +2136,17 @@
         function hexToRgb(v) { const hex = colorInput(v).slice(1); return { r: parseInt(hex.slice(0, 2), 16), g: parseInt(hex.slice(2, 4), 16), b: parseInt(hex.slice(4, 6), 16) }; }
         function rgbaFromHex(v, alpha = 1) { const { r, g, b } = hexToRgb(v); return `rgba(${r}, ${g}, ${b}, ${clamp(num(alpha, 1), 0, 1)})`; }
 
-        function updateObjectField(id, field, value) { const o = find(id); if (!o) return; if (["x", "y", "w", "h", "z", "rotation"].includes(field)) { o[field] = Number(value) || 0; if (field === "w" || field === "h") clampSize(o) } else o[field] = value; renderCanvas(); renderLayers() }
-        function updateObjectText(id, value) { const o = find(id); if (!o) return; o.text = value; renderCanvas() }
-        function updateObjectStyle(id, key, value, options = {}) { const o = find(id); if (!o) return; if (options.live || options.commit) paintHistory(`${id}:${key}:style`, options); o.styles = o.styles || normalizeStyles({}, o.type); o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding"].includes(key) ? Number(value) : value; renderCanvas(); renderLayers(); if (options.commit) renderInspector() }
+        function updateObjectField(id, field, value) { const o = find(id); if (!o) return; if (["x", "y", "w", "h", "z", "rotation"].includes(field)) { o[field] = Number(value) || 0; if (field === "w" || field === "h") clampSize(o) } else o[field] = value; renderCanvas(); renderLayers(); syncLiveInspectorControls() }
+        function updateObjectText(id, value) { const o = find(id); if (!o) return; o.text = value; renderCanvas(); syncObjectTextInspector(id, value) }
+        function updateObjectStyle(id, key, value, options = {}) { const o = find(id); if (!o) return; if (options.live || options.commit) paintHistory(`${id}:${key}:style`, options); o.styles = o.styles || normalizeStyles({}, o.type); o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding"].includes(key) ? Number(value) : value; renderCanvas(); renderLayers(); syncLiveInspectorControls(); if (options.commit) renderInspector() }
         function applyObjectGradient(id, target) { const o = find(id); if (!o) return; const field = target === "border" ? "borderPaint" : "background"; updateObjectGradientPaint(id, target === "border" ? "borderColor" : "background", field, `${id}-${target}`, { commit: true }) }
         function applyTextGradient(id) { const o = find(id); if (!o) return; const p = o.styles || (o.styles = {}); if (p.textPaint) p.textPaint = ""; renderAll() }
         function clearObjectTextGradient(id) { const o = find(id); if (!o) return; o.styles = o.styles || {}; o.styles.textPaint = ""; renderAll() }
         function applySharedTextGradient() { /* compatibility hook: gradients now update live from the Text Color control */ }
         function applySharedBorderGradient() { /* compatibility hook: gradients now update live from the Border Color control */ }
         function clearSharedTextGradient() { selectedEditable().forEach(o => { o.styles = o.styles || {}; o.styles.textPaint = "" }); renderAll() }
-        function applySharedStyle(key, value, options = {}) { if (options.live || options.commit) paintHistory(`shared:${key}:style`, options); selectedEditable().forEach(o => { o.styles = o.styles || normalizeStyles({}, o.type); o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding"].includes(key) ? Number(value) : value }); renderCanvas(); renderLayers(); if (options.commit) renderInspector() }
-        function updateCanvasStyle(key, value) { const l = getLayout(); l.canvas[key] = ["width", "height"].includes(key) ? Number(value) || DEFAULT[state.mode][key] : value; renderCanvas(); renderInspector() }
+        function applySharedStyle(key, value, options = {}) { if (options.live || options.commit) paintHistory(`shared:${key}:style`, options); selectedEditable().forEach(o => { o.styles = o.styles || normalizeStyles({}, o.type); o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding"].includes(key) ? Number(value) : value }); renderCanvas(); renderLayers(); syncLiveInspectorControls(); if (options.commit) renderInspector() }
+        function updateCanvasStyle(key, value) { const l = getLayout(); l.canvas[key] = ["width", "height"].includes(key) ? Number(value) || DEFAULT[state.mode][key] : value; renderCanvas(); syncLiveInspectorControls(); if (!["width", "height"].includes(key)) renderInspector() }
         function applyCanvasGradient() { /* compatibility hook: canvas gradients now update live from the Page Background control */ }
 
         function lockSelected() { selectedAll().forEach(o => { o.locked = true }); renderAll(); }
@@ -2096,9 +2155,117 @@
         function hideSelected() { selectedAll().forEach(o => { if (!o.required) o.hidden = true }); renderAll(); }
         function selectedAll() { return getLayout().objects.filter(o => state.selected.includes(o.id)); }
 
-        function setupEvents() { dom.workspace.addEventListener("contextmenu", e => e.preventDefault()); dom.workspace.addEventListener("wheel", wheel, { passive: false }); dom.workspace.addEventListener("pointerdown", down); window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up); window.addEventListener("blur", cancel) }
+
+
+        function syncMetricControl(input) {
+            const wrap = input.closest("[data-metric-wrap]");
+            if (!wrap) return;
+            wrap.querySelectorAll("input[data-metric-label]").forEach(el => { if (el !== input) el.value = input.value; });
+        }
+
+        function syncPaintOpacityControl(input, labelId = "") {
+            const wrap = input.closest(".paint-card");
+            if (labelId) {
+                const label = document.getElementById(labelId);
+                if (label) label.textContent = input.value + "%";
+            }
+            if (wrap) wrap.querySelectorAll(".paint-alpha-value").forEach(el => el.textContent = input.value + "%");
+        }
+
+        function syncLiveInspectorControls() {
+            const l = getLayout();
+            const sel = l.objects.filter(o => state.selected.includes(o.id));
+            let values = {};
+            if (sel.length === 1) {
+                const o = sel[0], s = o.styles || {};
+                values = { "X": o.x, "Y": o.y, "Width": o.w, "Height": o.h, "Z / Layer": o.z, "Rotation": o.rotation, "Font Size": s.fontSize, "Line Height": s.lineHeight, "Padding": s.padding };
+            } else if (sel.length > 1) {
+                const textSel = sel.filter(isTextCapable);
+                const avg = (key, fallback) => textSel.length ? textSel.reduce((n, o) => n + num(o.styles?.[key], fallback), 0) / textSel.length : fallback;
+                values = { "Font Size": avg("fontSize", 22), "Line Height": avg("lineHeight", 1.16) };
+            } else {
+                values = { "Canvas Width": l.canvas.width, "Canvas Height": l.canvas.height };
+            }
+            document.querySelectorAll("input[data-metric-label]").forEach(el => {
+                const key = el.dataset.metricLabel;
+                if (!(key in values)) return;
+                const v = Number(values[key]);
+                if (!Number.isFinite(v)) return;
+                const step = Number(el.step || 1);
+                const out = step && step < 1 ? String(Number(v.toFixed(2))) : String(Math.round(v));
+                if (document.activeElement !== el) el.value = out;
+            });
+        }
+
+        function syncObjectTextInspector(id, value) {
+            document.querySelectorAll(`[data-object-text-id="${CSS.escape(id)}"]`).forEach(el => {
+                if (document.activeElement !== el) el.value = value || "";
+            });
+        }
+
+        function syncSharedPaintPreview(solidField, gradientField) {
+            const first = selectedEditable().find(o => o.styles);
+            const value = first ? ((first.styles || {})[gradientField] || (first.styles || {})[solidField] || "transparent") : "transparent";
+            document.querySelectorAll(`[data-paint-card^="shared-shared-${solidField}-${gradientField}"] [data-paint-preview]`).forEach(p => p.style.background = value);
+        }
+
+        function textEditDblClick(e) {
+            if (dom.page.classList.contains("preview-mode")) return;
+            if (e.target.closest(".sidebar,.inspector,.studio-topbar,.mobile-tabs,.toast")) return;
+            const objNode = e.target.closest(".obj");
+            if (!objNode) return;
+            const o = find(objNode.dataset.id);
+            if (!o || o.locked || !isTextCapable(o)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            state.selected = [o.id];
+            renderAll();
+            requestAnimationFrame(() => startTextEdit(o.id));
+        }
+
+        function startTextEdit(id) {
+            const o = find(id);
+            if (!o || o.locked || !isTextCapable(o)) return;
+            const node = dom.canvas.querySelector(`[data-id="${CSS.escape(id)}"]`);
+            if (!node) return;
+            const target = node.querySelector(".text-content") || node.querySelector(".button-label") || node.querySelector(".badge-content") || node.querySelector(".button-content");
+            if (!target) return;
+            node.classList.add("text-editing");
+            target.setAttribute("contenteditable", "true");
+            target.setAttribute("spellcheck", "true");
+            target.textContent = o.text || "";
+            const saveLive = () => {
+                o.text = target.innerText.replace(/\u00a0/g, " ");
+                syncObjectTextInspector(o.id, o.text);
+            };
+            const finish = () => {
+                saveLive();
+                target.removeAttribute("contenteditable");
+                target.removeAttribute("spellcheck");
+                node.classList.remove("text-editing");
+                pushHistory();
+                renderAll();
+            };
+            const key = ev => {
+                if (ev.key === "Escape") { ev.preventDefault(); finish(); }
+                if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") { ev.preventDefault(); finish(); }
+                ev.stopPropagation();
+            };
+            target.addEventListener("input", saveLive);
+            target.addEventListener("keydown", key);
+            target.addEventListener("blur", finish, { once: true });
+            const range = document.createRange();
+            range.selectNodeContents(target);
+            range.collapse(false);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            target.focus({ preventScroll: true });
+        }
+
+        function setupEvents() { dom.workspace.addEventListener("contextmenu", e => e.preventDefault()); dom.workspace.addEventListener("wheel", wheel, { passive: false }); dom.workspace.addEventListener("dblclick", textEditDblClick); dom.workspace.addEventListener("pointerdown", down); window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up); window.addEventListener("blur", cancel) }
         function wheel(e) { if (dom.page.classList.contains("preview-mode")) return; e.preventDefault(); zoomAt(e.clientX, e.clientY, e.deltaY > 0 ? -.08 : .08) }
-        function down(e) { if (dom.page.classList.contains("preview-mode")) return; if (e.target.closest(".sidebar,.inspector,.studio-topbar,.mobile-tabs,.toast")) return; if (e.pointerType === "touch") { state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (state.pointers.size === 2) { startGesture(e); return } } if (e.button === 2 || e.buttons === 2) { startPan(e); return } const gr = e.target.closest("[data-gresize]"), grot = e.target.closest("[data-grotate]"), gbox = e.target.closest(".group-box"), objNode = e.target.closest(".obj"), rh = e.target.closest("[data-resize]"), rot = e.target.closest("[data-rotate]"); if (gr) return startGroupResize(e, gr.dataset.gresize); if (grot) return startGroupRotate(e); if (gbox) return startGroupMove(e); if (rh && objNode) { const o = find(objNode.dataset.id); if (!o || o.locked) return; if (!state.selected.includes(o.id)) state.selected = [o.id]; return startResize(e, o, rh.dataset.resize) } if (rot && objNode) { const o = find(objNode.dataset.id); if (!o || o.locked) return; if (!state.selected.includes(o.id)) state.selected = [o.id]; return startRotate(e, o) } if (objNode) { const o = find(objNode.dataset.id); if (!o || o.locked) return; if (e.shiftKey || e.ctrlKey || e.metaKey) { toggleSel(o.id); renderAll(); return } if (!state.selected.includes(o.id)) { state.selected = [o.id]; renderAll() } return startMove(e, state.selected) } startMarquee(e) }
+        function down(e) { if (dom.page.classList.contains("preview-mode")) return; if (e.target.closest('[contenteditable="true"]')) return; if (e.target.closest(".sidebar,.inspector,.studio-topbar,.mobile-tabs,.toast")) return; if (e.pointerType === "touch") { state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (state.pointers.size === 2) { startGesture(e); return } } if (e.button === 2 || e.buttons === 2) { startPan(e); return } const gr = e.target.closest("[data-gresize]"), grot = e.target.closest("[data-grotate]"), gbox = e.target.closest(".group-box"), objNode = e.target.closest(".obj"), rh = e.target.closest("[data-resize]"), rot = e.target.closest("[data-rotate]"); if (gr) return startGroupResize(e, gr.dataset.gresize); if (grot) return startGroupRotate(e); if (gbox) return startGroupMove(e); if (rh && objNode) { const o = find(objNode.dataset.id); if (!o || o.locked) return; if (!state.selected.includes(o.id)) state.selected = [o.id]; return startResize(e, o, rh.dataset.resize) } if (rot && objNode) { const o = find(objNode.dataset.id); if (!o || o.locked) return; if (!state.selected.includes(o.id)) state.selected = [o.id]; return startRotate(e, o) } if (objNode) { const o = find(objNode.dataset.id); if (!o || o.locked || objNode.classList.contains("text-editing")) return; if (e.shiftKey || e.ctrlKey || e.metaKey) { toggleSel(o.id); renderAll(); return } if (!state.selected.includes(o.id)) { state.selected = [o.id]; renderAll() } return startMove(e, state.selected) } startMarquee(e) }
         function move(e) { if (e.pointerType === "touch" && state.pointers.has(e.pointerId)) { state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (state.gesture && state.pointers.size >= 2) { updateGesture(e); return } } if (!state.interaction) return; e.preventDefault(); ({ pan: updatePan, move: updateMove, resize: updateResize, rotate: updateRotate, marquee: updateMarquee, groupMove: updateGroupMove, groupResize: updateGroupResize, groupRotate: updateGroupRotate }[state.interaction.kind])?.(e) }
         function up(e) { if (e.pointerType === "touch") { state.pointers.delete(e.pointerId); if (state.pointers.size < 2) { state.gesture = null; dom.workspace.classList.remove("touch-pan") } } if (!state.interaction) return; if (state.interaction.kind === "marquee") finishMarquee(); if (state.interaction.changed) pushHistory(); state.interaction = null; dom.workspace.classList.remove("panning"); renderAll() }
         function cancel() { state.interaction = null; state.gesture = null; state.pointers.clear(); dom.workspace.classList.remove("panning"); renderAll() }
@@ -2107,7 +2274,7 @@
         function startGesture(e) { e.preventDefault(); const p = [...state.pointers.values()].slice(0, 2), c = mid(p[0], p[1]); state.gesture = { dist: dist(p[0], p[1]), c, zoom: state.zoom, px: state.panX, py: state.panY }; dom.workspace.classList.add("touch-pan") }
         function updateGesture(e) { e.preventDefault(); const p = [...state.pointers.values()].slice(0, 2), c = mid(p[0], p[1]), scale = dist(p[0], p[1]) / Math.max(1, state.gesture.dist); state.zoom = clamp(state.gesture.zoom * scale, .15, 3); state.panX = state.gesture.px + c.x - state.gesture.c.x; state.panY = state.gesture.py + c.y - state.gesture.c.y; applyTransform() }
         function startMove(e, ids) { e.preventDefault(); const st = screen(e), objs = getLayout().objects.filter(o => ids.includes(o.id) && !o.locked); state.interaction = { kind: "move", st, objs: objs.map(o => ({ id: o.id, x: o.x, y: o.y })), changed: false } }
-        function updateMove(e) { const p = screen(e), dx = p.x - state.interaction.st.x, dy = p.y - state.interaction.st.y; for (const s of state.interaction.objs) { const o = find(s.id); if (o && !o.locked) { o.x = snap(s.x + dx); o.y = snap(s.y + dy) } } state.interaction.changed = true; renderCanvas(); renderLayers() }
+        function updateMove(e) { const p = screen(e), dx = p.x - state.interaction.st.x, dy = p.y - state.interaction.st.y; for (const s of state.interaction.objs) { const o = find(s.id); if (o && !o.locked) { o.x = snap(s.x + dx); o.y = snap(s.y + dy) } } state.interaction.changed = true; renderCanvas(); syncLiveInspectorControls(); syncLiveInspectorControls(); syncLiveInspectorControls(); syncLiveInspectorControls(); renderLayers(); syncLiveInspectorControls() }
         function startResize(e, o, h) { e.preventDefault(); state.interaction = { kind: "resize", id: o.id, h, st: screen(e), o: { x: o.x, y: o.y, w: o.w, h: o.h }, changed: false } }
         function updateResize(e) { const o = find(state.interaction.id); if (!o || o.locked) return; const p = screen(e), dx = p.x - state.interaction.st.x, dy = p.y - state.interaction.st.y; doResize(o, state.interaction.o, state.interaction.h, dx, dy); state.interaction.changed = true; renderCanvas() }
         function doResize(o, st, h, dx, dy) { let x = st.x, y = st.y, w = st.w, hh = st.h; if (h.includes("e")) w = st.w + dx; if (h.includes("s")) hh = st.h + dy; if (h.includes("w")) { x = st.x + dx; w = st.w - dx } if (h.includes("n")) { y = st.y + dy; hh = st.h - dy } const [minW, minH, maxW, maxH] = LIMITS[o.type] || LIMITS.text; if (w < minW) { if (h.includes("w")) x -= minW - w; w = minW } if (hh < minH) { if (h.includes("n")) y -= minH - hh; hh = minH } o.x = snap(x); o.y = snap(y); o.w = snap(clamp(w, minW, maxW)); o.h = snap(clamp(hh, minH, maxH)) }
@@ -2157,9 +2324,9 @@
         function pickImageForObject(id) { state.imageTarget = { kind: "object", id }; dom.img.value = ""; dom.img.click() }
         function pickImageForCanvas() { state.imageTarget = { kind: "canvas" }; dom.img.value = ""; dom.img.click() }
         function setupImageInput() { dom.img.addEventListener("change", async () => { const f = dom.img.files?.[0]; if (!f || !state.imageTarget) return; try { toast("Uploading image...", "warn", 2000); const url = await uploadImage(f); if (state.imageTarget.kind === "canvas") getLayout().canvas.backgroundImage = url; else { const o = find(state.imageTarget.id); if (o) o.imageUrl = url } pushHistory(); renderAll(); toast("Image uploaded.", "good") } catch (e) { console.error(e); toast(e.message || "Image upload failed.", "bad", 7000) } finally { state.imageTarget = null; dom.img.value = "" } }) }
-        async function uploadImage(file) { if (!state.user?.id) throw new Error("You must be signed in to upload images."); const prepared = await prepImage(file); const ext = prepared.type === "image/webp" ? "webp" : (file.name.split(".").pop() || "png"); const path = `gallery-studio/${state.user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`; const { error } = await supabase.storage.from(BUCKET).upload(path, prepared, { cacheControl: "31536000", upsert: false, contentType: prepared.type || file.type }); if (error) throw error; return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl }
+        async function uploadImage(file) { if (!state.user?.id) throw new Error("You must be signed in to upload images."); const prepared = await prepImage(file); const ext = prepared.type === "image/webp" ? "webp" : (file.name.split(".").pop() || "png"); const path = `${state.user.id}/gallery-studio/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`; const { error } = await supabase.storage.from(BUCKET).upload(path, prepared, { cacheControl: "31536000", upsert: false, contentType: prepared.type || file.type }); if (error) throw error; return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl }
         async function prepImage(file) { if (!file.type.startsWith("image/") || file.type === "image/gif") return file; const bmp = await createImageBitmap(file).catch(() => null); if (!bmp) return file; const scale = Math.min(1, 1800 / Math.max(bmp.width, bmp.height)), w = Math.max(1, Math.round(bmp.width * scale)), h = Math.max(1, Math.round(bmp.height * scale)), cnv = document.createElement("canvas"); cnv.width = w; cnv.height = h; cnv.getContext("2d").drawImage(bmp, 0, 0, w, h); return await new Promise(r => cnv.toBlob(b => r(b || file), "image/webp", .88)) }
-        function setupKeyboard() { window.addEventListener("keydown", e => { if (e.target.closest("input,textarea,select")) return; if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); deleteSelected() } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redoStudio() : undoStudio() } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveDraft() } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") { e.preventDefault(); duplicateSelected() } if (e.key === "Escape") { if (dom.page.classList.contains("preview-mode")) exitPreviewMode(); else { state.selected = []; renderAll() } } const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }; if (arrows[e.key] && state.selected.length) { e.preventDefault(); const step = e.shiftKey ? 10 : 1, [dx, dy] = arrows[e.key]; getLayout().objects.forEach(o => { if (state.selected.includes(o.id) && !o.locked) { o.x += dx * step; o.y += dy * step } }); renderCanvas(); renderInspector() } }) }
+        function setupKeyboard() { window.addEventListener("keydown", e => { if (e.target.closest("input,textarea,select,[contenteditable=\"true\"]")) return; if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); deleteSelected() } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redoStudio() : undoStudio() } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveDraft() } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") { e.preventDefault(); duplicateSelected() } if (e.key === "Escape") { if (dom.page.classList.contains("preview-mode")) exitPreviewMode(); else { state.selected = []; renderAll() } } const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }; if (arrows[e.key] && state.selected.length) { e.preventDefault(); const step = e.shiftKey ? 10 : 1, [dx, dy] = arrows[e.key]; getLayout().objects.forEach(o => { if (state.selected.includes(o.id) && !o.locked) { o.x += dx * step; o.y += dy * step } }); renderCanvas(); syncLiveInspectorControls(); renderInspector() } }) }
         function syncTitle() { const i = state.item || localItem(); dom.title.textContent = `${i.title || "Untitled"} · ${state.mode === "mobile" ? "Mobile" : "PC"} layout`; dom.topBack.href = `creator-gallery.html${i.owner_id ? `?user=${encodeURIComponent(i.owner_id)}` : ""}` }
         function find(id) { return getLayout().objects.find(o => o.id === id) || null }
         function nextZ() { return Math.max(10, ...getLayout().objects.map(o => Number(o.z) || 0)) + 1 }
