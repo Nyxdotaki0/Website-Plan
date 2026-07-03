@@ -415,40 +415,87 @@
                 -webkit-backdrop-filter: blur(10px);
             }
 
-        .owner-card-actions {
-            position: absolute;
-            z-index: 6;
-            top: 12px;
-            right: 12px;
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
+        .card-top {
+            min-height: 34px;
         }
 
-            .owner-card-actions .button {
-                pointer-events: auto;
-                margin: 0;
+            .card-top .status-pill {
+                max-width: calc(50% - 4px);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                background: rgba(0,0,0,.64);
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
             }
 
-        .owner-card-edit-action {
+        .card-meta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+        }
+
+            .card-meta-row .status-pill {
+                max-width: 100%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                background: rgba(0,0,0,.52);
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+            }
+
+        .owner-managed-card .card-content {
+            padding-bottom: 62px;
+        }
+
+        .owner-managed-card.organizing-card .card-content {
+            padding-bottom: 104px;
+        }
+
+        .owner-card-actions {
+            display: none !important;
+        }
+
+        .owner-card-edit-action,
+        .owner-card-organize-actions {
             position: absolute;
-            right: 12px;
-            bottom: 12px;
             z-index: 8;
             display: flex;
             gap: 6px;
-            justify-content: flex-end;
+            flex-wrap: wrap;
             pointer-events: none;
         }
 
-            .owner-card-edit-action .button {
+        .owner-card-edit-action {
+            right: 12px;
+            bottom: 12px;
+            justify-content: flex-end;
+        }
+
+        .owner-card-organize-actions {
+            left: 12px;
+            right: 82px;
+            bottom: 12px;
+            justify-content: flex-start;
+        }
+
+            .owner-card-edit-action .button,
+            .owner-card-organize-actions .button {
                 margin: 0;
                 pointer-events: auto;
                 background: rgba(0,0,0,.66);
                 backdrop-filter: blur(12px);
                 -webkit-backdrop-filter: blur(12px);
+                box-shadow: 0 8px 24px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.08);
             }
+
+                .owner-card-organize-actions .button.move-out {
+                    border-color: rgba(135,210,255,.32);
+                    color: #e8f6ff;
+                    background: rgba(20,42,56,.74);
+                }
 
         .gallery-card.drag-ready {
             cursor: grab;
@@ -464,13 +511,19 @@
             border-color: rgba(135,210,255,.46);
         }
 
-        .folder-card.drop-ready {
+        .folder-card.drop-ready,
+        .chip.drop-ready {
             outline: 1px dashed rgba(135,210,255,.50);
             outline-offset: -8px;
         }
 
+        .chip.drop-ready {
+            outline-offset: 2px;
+        }
+
         .folder-card.drop-hover,
-        .gallery-grid.drop-hover {
+        .gallery-grid.drop-hover,
+        .chip.drop-hover {
             border-color: rgba(135,210,255,.72) !important;
             box-shadow: 0 0 0 3px rgba(135,210,255,.10), 0 22px 52px rgba(0,0,0,.30);
         }
@@ -503,14 +556,44 @@
         }
 
             .gallery-grid.organize-drop-zone::before {
-                content: "Drag gallery items into folders. Drop here to move into the current folder.";
-                position: absolute;
-                left: 14px;
-                top: -30px;
-                color: var(--text-muted,rgba(255,255,255,.54));
-                font-size: .78rem;
-                pointer-events: none;
+                display: none !important;
+                content: none !important;
             }
+
+        .organizer-hint-pill {
+            display: inline-flex;
+            width: fit-content;
+            margin-top: 5px;
+            padding: 7px 10px;
+            border: 1px solid rgba(135,210,255,.24);
+            border-radius: 999px;
+            background: rgba(135,210,255,.07);
+            color: #dff4ff;
+            font-size: .84rem;
+            line-height: 1.25;
+        }
+
+        @media(max-width:540px) {
+            .owner-managed-card .card-content,
+            .owner-managed-card.organizing-card .card-content {
+                padding-bottom: 118px;
+            }
+
+            .owner-card-edit-action,
+            .owner-card-organize-actions {
+                left: 12px;
+                right: 12px;
+            }
+
+            .owner-card-edit-action {
+                justify-content: flex-end;
+            }
+
+            .owner-card-organize-actions {
+                bottom: 50px;
+                justify-content: flex-start;
+            }
+        }
 
         .blur-preview img, .blur-preview .folder-cover, .blur-preview .gallery-cover {
             filter: blur(15px) brightness(.72);
@@ -1328,7 +1411,8 @@
             allowGalleryItemDrop,
             clearGalleryDropHover,
             dropGalleryItemOnFolder,
-            dropGalleryItemToCurrentFolder
+            dropGalleryItemToCurrentFolder,
+            moveGalleryItemToFolder
         });
 
         document.addEventListener("keydown", event => {
@@ -1571,12 +1655,17 @@
 
         function renderBreadcrumb() {
             const trail = folderTrail(currentFolderId);
-            const html = [`<button type="button" class="chip ${!currentFolderId ? "active" : ""}" onclick="navigateBreadcrumb(null)">Gallery Home</button>`]
-                .concat(trail.map(folder => `<button type="button" class="chip ${folder.id === currentFolderId ? "active" : ""}" onclick="navigateBreadcrumb('${escapeAttr(folder.id)}')">${escapeHtml(folder.icon || "📁")} ${escapeHtml(folder.name)}</button>`));
+            const makeDropAttrs = folderId => isOwner && ownerToolsOpen
+                ? ` ondragover="allowGalleryItemDrop(event)" ondragleave="clearGalleryDropHover(event)" ondrop="dropGalleryItemOnFolder(event, '${escapeAttr(folderId || "")}')"`
+                : "";
+            const makeDropClass = () => isOwner && ownerToolsOpen ? " drop-ready" : "";
+            const html = [`<button type="button" class="chip ${!currentFolderId ? "active" : ""}${makeDropClass()}"${makeDropAttrs("")} onclick="navigateBreadcrumb(null)">Gallery Home</button>`]
+                .concat(trail.map(folder => `<button type="button" class="chip ${folder.id === currentFolderId ? "active" : ""}${makeDropClass()}"${makeDropAttrs(folder.id)} onclick="navigateBreadcrumb('${escapeAttr(folder.id)}')">${escapeHtml(folder.icon || "📁")} ${escapeHtml(folder.name)}</button>`));
             $("breadcrumb").innerHTML = html.join("");
             const editBtn = $("edit-current-folder-btn");
             if (editBtn) editBtn.style.display = isOwner && currentFolderId ? "inline-flex" : "none";
         }
+
 
         function renderFilters() {
             const types = [...new Set(allItems.map(item => item.proof_type || "other"))].sort();
@@ -1620,10 +1709,18 @@
                 .sort(sortRecords);
             const folderHeading = $("folders-heading");
             const itemsHeading = $("items-heading");
+            const folderHelp = ownerToolsOpen
+                ? "Organizer is on. Drop gallery items on a folder card to move them there, or drop them on a breadcrumb to move them back out."
+                : "Open a folder to browse subfolders and gallery items.";
+            const itemHelp = ownerToolsOpen
+                ? (currentFolderId
+                    ? "Organizer is on. Drag items into folders, drop them on Gallery Home above, or use Move Out to remove them from this folder."
+                    : "Organizer is on. Drag gallery items into folders. Drop items here to keep them loose on Gallery Home.")
+                : (isOwner ? "Private, draft, mature, and censored work is visible to you here." : "Safety settings may blur, gate, or hide sensitive previews.");
             folderHeading.style.display = childFolders.length ? "flex" : "none";
-            folderHeading.innerHTML = childFolders.length ? `<div><h2>Folders</h2><p>Open a folder to browse subfolders and gallery items.</p></div>${isOwner ? `<button class="button tiny soft" type="button" onclick="openFolderModal(null)">+ Folder</button>` : ""}` : "";
+            folderHeading.innerHTML = childFolders.length ? `<div><h2>Folders</h2><p>${escapeHtml(folderHelp)}</p>${ownerToolsOpen ? `<span class="organizer-hint-pill">Breadcrumbs also accept drops, including Gallery Home.</span>` : ""}</div>${isOwner ? `<button class="button tiny soft" type="button" onclick="openFolderModal(null)">+ Folder</button>` : ""}` : "";
             itemsHeading.style.display = items.length || !childFolders.length ? "flex" : "none";
-            itemsHeading.innerHTML = `<div><h2>${currentFolderId ? "Folder Items" : "Gallery Items"}</h2><p>${isOwner ? "Private, draft, mature, and censored work is visible to you here." : "Safety settings may blur, gate, or hide sensitive previews."}</p></div>${isOwner ? `<button class="button tiny soft" type="button" onclick="openItemModal(null)">+ Item</button>` : ""}`;
+            itemsHeading.innerHTML = `<div><h2>${currentFolderId ? "Folder Items" : "Gallery Items"}</h2><p>${escapeHtml(itemHelp)}</p></div>${isOwner ? `<button class="button tiny soft" type="button" onclick="openItemModal(null)">+ Item</button>` : ""}`;
             $("folders-grid").innerHTML = childFolders.map(renderFolderCard).join("");
             $("gallery-grid").innerHTML = items.length
                 ? items.map(renderItemCard).join("")
@@ -1632,48 +1729,58 @@
             $("gallery-count").textContent = `${childFolders.length} folder${childFolders.length === 1 ? "" : "s"} · ${items.length} item${items.length === 1 ? "" : "s"}`;
         }
 
+
         function renderFolderCard(folder) {
             const safety = canShowRecord(folder);
             const classes = ["folder-card"];
             if (safety.preview === "blur") classes.push("blur-preview");
             if (safety.preview === "hide") classes.push("hide-preview");
+            if (isOwner) classes.push("owner-managed-card");
+            if (isOwner && ownerToolsOpen) classes.push("organizing-card", "drop-ready");
             const childCount = folders.filter(f => sameId(f.parent_id, folder.id)).length;
             const itemCount = allItems.filter(i => sameId(i.folder_id, folder.id)).length;
             const cover = folder.cover_image_url
                 ? `<div class="folder-cover"><img src="${escapeAttr(folder.cover_image_url)}" alt="${escapeAttr(folder.name)}" style="${placementCss(folder.cover_image_placement)}"></div>`
                 : `<div class="folder-cover no-cover"><span>${escapeHtml(folder.icon || "📁")}</span></div>`;
-            if (isOwner && ownerToolsOpen) classes.push("drop-ready");
             const dropAttrs = isOwner && ownerToolsOpen
                 ? ` data-folder-id="${escapeAttr(folder.id)}" ondragover="allowGalleryItemDrop(event)" ondragleave="clearGalleryDropHover(event)" ondrop="dropGalleryItemOnFolder(event, '${escapeAttr(folder.id)}')"`
                 : ` data-folder-id="${escapeAttr(folder.id)}"`;
             return `<article class="${classes.join(" ")}"${dropAttrs} onclick="openFolder('${escapeAttr(folder.id)}')">
-                        ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, folder)}
-                        <div class="card-top"><span class="status-pill">${escapeHtml(folder.icon || "📁")} Folder</span>${agePill(folder.age_rating)}</div>
-                        ${isOwner ? `<div class="owner-card-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openFolderModal('${escapeAttr(folder.id)}')">Edit</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', 1)">↓</button></div>` : ""}
-                        <div class="card-content"><h3>${escapeHtml(folder.name)}</h3><p>${escapeHtml(folder.description || `${childCount} folder${childCount === 1 ? "" : "s"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`)}</p><div>${visibilityPill(folder)} ${warningCountPill(folder)}</div></div>
-                    </article>`;
+                            ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, folder)}
+                            <div class="card-top"><span class="status-pill">${escapeHtml(folder.icon || "📁")} Folder</span>${agePill(folder.age_rating)}</div>
+                            ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', 1)">↓</button></div>` : ""}
+                            ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openFolderModal('${escapeAttr(folder.id)}')">Edit</button></div>` : ""}
+                            <div class="card-content"><h3>${escapeHtml(folder.name)}</h3><p>${escapeHtml(folder.description || `${childCount} folder${childCount === 1 ? "" : "s"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`)}</p><div class="card-meta-row">${visibilityPill(folder)} ${warningCountPill(folder)}</div></div>
+                        </article>`;
         }
+
 
         function renderItemCard(item) {
             const safety = canShowRecord(item);
             const classes = ["gallery-card"];
             if (safety.preview === "blur") classes.push("blur-preview");
             if (safety.preview === "hide") classes.push("hide-preview");
+            if (isOwner) classes.push("owner-managed-card");
+            if (isOwner && ownerToolsOpen) classes.push("organizing-card", "drag-ready");
+            if (draggedGalleryItemId && sameId(draggedGalleryItemId, item.id)) classes.push("dragging-card");
             const cover = item.image_url
                 ? `<div class="gallery-cover"><img src="${escapeAttr(item.image_url)}" alt="${escapeAttr(item.title)}" style="${placementCss(item.image_placement)}"></div>`
                 : `<div class="gallery-cover"></div>`;
-            if (isOwner && ownerToolsOpen) classes.push("drag-ready");
-            if (draggedGalleryItemId && sameId(draggedGalleryItemId, item.id)) classes.push("dragging-card");
             const dragAttrs = isOwner && ownerToolsOpen
                 ? ` draggable="true" data-gallery-item-id="${escapeAttr(item.id)}" ondragstart="startGalleryItemDrag(event, '${escapeAttr(item.id)}')" ondragend="finishGalleryItemDrag(event)"`
                 : ` draggable="false" data-gallery-item-id="${escapeAttr(item.id)}"`;
+            const moveOutButton = isOwner && ownerToolsOpen && item.folder_id
+                ? `<button class="button tiny soft move-out" type="button" onclick="event.stopPropagation(); moveGalleryItemToFolder('${escapeAttr(item.id)}', null)">Move Out</button>`
+                : "";
             return `<article class="${classes.join(" ")}"${dragAttrs} onclick="openItemPreview('${escapeAttr(item.id)}')">
-                        ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, item)}
-                        <div class="card-top"><span class="status-pill">${escapeHtml(formatType(item.proof_type))}</span>${agePill(item.age_rating)}</div>
-                        ${isOwner ? `<div class="owner-card-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', 1)">↓</button></div><div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openItemModal('${escapeAttr(item.id)}')">Edit</button></div>` : ""}
-                        <div class="card-content"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description || "No description provided.")}</p><div>${visibilityPill(item)} ${warningCountPill(item)}</div></div>
-                    </article>`;
+                            ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, item)}
+                            <div class="card-top"><span class="status-pill">${escapeHtml(formatType(item.proof_type))}</span>${agePill(item.age_rating)}</div>
+                            ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', 1)">↓</button>${moveOutButton}</div>` : ""}
+                            ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openItemModal('${escapeAttr(item.id)}')">Edit</button></div>` : ""}
+                            <div class="card-content"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description || "No description provided.")}</p><div class="card-meta-row">${visibilityPill(item)} ${warningCountPill(item)}</div></div>
+                        </article>`;
         }
+
 
         function safetyOverlayHtml(safety, record) {
             if (safety.reason === "blocked") return `<div class="safety-screen"><strong>Restricted</strong><span>${escapeHtml(safety.message)}</span></div>`;
