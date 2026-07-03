@@ -2818,12 +2818,14 @@
 
         .default-studio-canvas {
             position: relative;
-            width: 1200px;
-            height: 1500px;
+            width: 1600px;
+            height: 2200px;
+            min-height: 2200px;
             overflow: visible;
-            border: 1px solid rgba(255,255,255,.12);
+            border: 0;
+            border-radius: 0;
             background: radial-gradient(circle at 18% 0%, rgba(255,255,255,.09), transparent 28%), linear-gradient(135deg, rgba(255,255,255,.04), rgba(255,255,255,.012)), #09090d;
-            box-shadow: 0 28px 90px rgba(0,0,0,.45);
+            box-shadow: none;
         }
 
         .default-studio-grid {
@@ -3498,7 +3500,7 @@
         }
 
         .default-studio-canvas.v5-canvas {
-            min-height: 1500px;
+            min-height: 2200px;
             border-radius: 0;
             overflow: visible;
         }
@@ -4006,6 +4008,71 @@
                 justify-content: flex-start;
             }
         }
+
+
+        /* ============================================================
+           DEFAULT SHOWCASE V11 — FULL-PAGE SNAPGRID WORKSPACE
+           Makes Default Studio behave like the Custom Studio page:
+           the whole page is the usable snapgrid instead of a shrinking
+           card/block, while keeping Default Studio restrictions intact.
+        ============================================================ */
+
+        .default-studio-public-shell {
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 0 120px !important;
+        }
+
+        .default-studio-public-header {
+            width: min(1440px, calc(100% - 28px));
+            margin: 24px auto 18px !important;
+        }
+
+        .default-studio-public-footprint {
+            width: var(--default-studio-public-footprint-width, 100%) !important;
+            min-height: var(--default-studio-public-footprint-height, 100vh) !important;
+            margin: 0 auto !important;
+            overflow: visible !important;
+        }
+
+        .default-studio-public-canvas {
+            border: 0 !important;
+            border-radius: 0 !important;
+            overflow: visible !important;
+            background: radial-gradient(circle at 18% 0%, rgba(255,255,255,.09), transparent 28%), linear-gradient(135deg, rgba(255,255,255,.04), rgba(255,255,255,.012)), transparent !important;
+            box-shadow: none !important;
+        }
+
+            .default-studio-public-canvas::before {
+                inset: 0 !important;
+                background-image: linear-gradient(rgba(255,255,255,.028) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px) !important;
+                background-size: 24px 24px !important;
+                opacity: .55 !important;
+            }
+
+        .showcase-manager-overlay.default-studio-fullscreen,
+        .default-studio-v5-body,
+        .default-studio-v5-workspace {
+            background: radial-gradient(circle at 20% 10%, rgba(255,255,255,.08), transparent 28%), radial-gradient(circle at 80% 20%, rgba(120,160,255,.06), transparent 26%), #050506 !important;
+        }
+
+        .default-studio-canvas {
+            min-width: 1600px !important;
+            min-height: 2200px !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }
+
+        .default-studio-grid {
+            background-size: 24px 24px !important;
+            opacity: .72 !important;
+        }
+
+        .default-studio-canvas.snap .default-studio-grid {
+            opacity: .68 !important;
+        }
     </style>
 </head>
 <body>
@@ -4301,7 +4368,9 @@
         const SHEET_BLOCK_KIND_CHOICES = ["text", "title", "stat", "lore", "ability", "relationship", "rules", "credit", "proof", "quote", "timeline", "inventory", "warning"];
 
 
-        const DEFAULT_STUDIO_CANVAS = { width: 1200, height: 1500 };
+        const DEFAULT_STUDIO_CANVAS = { width: 1600, height: 2200 };
+        const DEFAULT_STUDIO_CANVAS_MAX = { width: 6000, height: 10000 };
+        const DEFAULT_STUDIO_CANVAS_PADDING = { x: 320, y: 420 };
         const DEFAULT_STUDIO_FONTS = ["Arial", "Georgia", "Verdana", "Trebuchet MS", "Courier New", "Times New Roman", "Impact", "Comic Sans MS"];
         const DEFAULT_STUDIO_KINDS = ["heading", "info", "stat", "lore", "ability", "relationship", "rules", "credit", "proof", "quote", "timeline", "inventory", "warning"];
         const DEFAULT_STUDIO_LIMITS = {
@@ -4648,8 +4717,8 @@
                 subtitle,
                 credit,
                 canvas: {
-                    width: dsClamp(dsNum(canvasSource.width, DEFAULT_STUDIO_CANVAS.width), 760, 1800),
-                    height: dsClamp(dsNum(canvasSource.height, DEFAULT_STUDIO_CANVAS.height), 900, 3200),
+                    width: dsClamp(dsNum(canvasSource.width, DEFAULT_STUDIO_CANVAS.width), DEFAULT_STUDIO_CANVAS.width, DEFAULT_STUDIO_CANVAS_MAX.width),
+                    height: dsClamp(dsNum(canvasSource.height, DEFAULT_STUDIO_CANVAS.height), DEFAULT_STUDIO_CANVAS.height, DEFAULT_STUDIO_CANVAS_MAX.height),
                     fontFamily: dsFont(canvasSource.fontFamily || source.sheetFont || source.fontFamily || "Arial")
                 },
                 objects: objects.map((obj, index) => normalizeDefaultStudioObject(obj, index)).filter(Boolean),
@@ -4768,8 +4837,8 @@
                 heading: String(source.heading || source.title || (type === "main_image" ? "Main Gallery Image" : type === "extra_image" ? "Extra Image" : "Info")),
                 body: String(source.body || source.content || source.text || ""),
                 imageUrl: String(source.imageUrl || source.image_url || source.url || ""),
-                x: dsClamp(dsNum(source.x, type === "main_image" ? 48 : type === "extra_image" ? 48 : 492), 0, DEFAULT_STUDIO_CANVAS.width - 40),
-                y: dsClamp(dsNum(source.y, type === "main_image" ? 48 : type === "extra_image" ? 640 + index * 24 : 48 + index * 24), 0, 3000),
+                x: dsClamp(dsNum(source.x, type === "main_image" ? 48 : type === "extra_image" ? 48 : 492), 0, DEFAULT_STUDIO_CANVAS_MAX.width - 40),
+                y: dsClamp(dsNum(source.y, type === "main_image" ? 48 : type === "extra_image" ? 640 + index * 24 : 48 + index * 24), 0, DEFAULT_STUDIO_CANVAS_MAX.height - 40),
                 w: dsClamp(dsNum(source.w ?? source.width, type === "main_image" ? 420 : type === "extra_image" ? 320 : 320), limits[0], limits[2]),
                 h: dsClamp(dsNum(source.h ?? source.height, type === "main_image" ? 560 : type === "extra_image" ? 260 : 132), limits[1], limits[3]),
                 z: dsNum(source.z ?? source.zIndex, type === "main_image" ? 10 : 20 + index),
@@ -4822,11 +4891,26 @@
         }
 
         function fitDefaultStudioCanvas(data) {
-            if (!data?.objects?.length) return data;
-            const maxX = Math.max(DEFAULT_STUDIO_CANVAS.width, ...data.objects.filter(o => !o.hidden).map(o => dsNum(o.x, 0) + dsNum(o.w, 0) + 48));
-            const maxY = Math.max(DEFAULT_STUDIO_CANVAS.height, ...data.objects.filter(o => !o.hidden).map(o => dsNum(o.y, 0) + dsNum(o.h, 0) + 80));
-            data.canvas.width = dsClamp(Math.ceil(maxX / 24) * 24, 760, 1800);
-            data.canvas.height = dsClamp(Math.ceil(maxY / 24) * 24, 900, 3200);
+            if (!data) return data;
+            data.canvas = data.canvas || {};
+            const visible = (data.objects || []).filter(o => !o.hidden);
+            const currentWidth = dsNum(data.canvas.width, DEFAULT_STUDIO_CANVAS.width);
+            const currentHeight = dsNum(data.canvas.height, DEFAULT_STUDIO_CANVAS.height);
+            const contentMaxX = visible.length ? Math.max(...visible.map(o => dsNum(o.x, 0) + dsNum(o.w, 0) + DEFAULT_STUDIO_CANVAS_PADDING.x)) : DEFAULT_STUDIO_CANVAS.width;
+            const contentMaxY = visible.length ? Math.max(...visible.map(o => dsNum(o.y, 0) + dsNum(o.h, 0) + DEFAULT_STUDIO_CANVAS_PADDING.y)) : DEFAULT_STUDIO_CANVAS.height;
+
+            /*
+               Default Studio V11: keep the full-page canvas stable.
+               Older passes shrank the canvas back down to the object bounds,
+               which made the editor feel like it was expanding/contracting
+               around whatever block was selected. This now only grows the
+               page when content needs more room, matching the custom studio's
+               full-page workspace behavior.
+            */
+            const nextWidth = Math.max(DEFAULT_STUDIO_CANVAS.width, currentWidth, contentMaxX);
+            const nextHeight = Math.max(DEFAULT_STUDIO_CANVAS.height, currentHeight, contentMaxY);
+            data.canvas.width = dsClamp(Math.ceil(nextWidth / DEFAULT_STUDIO_GRID) * DEFAULT_STUDIO_GRID, DEFAULT_STUDIO_CANVAS.width, DEFAULT_STUDIO_CANVAS_MAX.width);
+            data.canvas.height = dsClamp(Math.ceil(nextHeight / DEFAULT_STUDIO_GRID) * DEFAULT_STUDIO_GRID, DEFAULT_STUDIO_CANVAS.height, DEFAULT_STUDIO_CANVAS_MAX.height);
             return data;
         }
 
@@ -4943,6 +5027,8 @@
             canvas.style.transformOrigin = "top left";
             footprint.style.width = Math.ceil(width * scale) + "px";
             footprint.style.height = Math.ceil(height * scale) + "px";
+            footprint.style.setProperty("--default-studio-public-footprint-width", Math.ceil(width * scale) + "px");
+            footprint.style.setProperty("--default-studio-public-footprint-height", Math.ceil(height * scale) + "px");
         }
 
         handlePublicShowcaseResize = function () {
@@ -4975,7 +5061,7 @@
                     zoom: .72,
                     panX: 80,
                     panY: 60,
-                    snap: "free",
+                    snap: "snap",
                     history: [],
                     redo: [],
                     pointers: new Map(),
@@ -5321,15 +5407,15 @@
                                             <select onchange="updateDefaultStudioCanvas('fontFamily', this.value)">${dsFontOptions(data.canvas.fontFamily)}</select>
                                             <div class="default-studio-mini-grid">
                                                 <div>
-                                                    <label>Canvas Width</label>
-                                                    <input type="number" min="760" max="1800" value="${escapeAttr(data.canvas.width)}" onchange="updateDefaultStudioCanvas('width', this.value)">
+                                                    <label>Page Width</label>
+                                                    <input type="number" min="1600" max="6000" value="${escapeAttr(data.canvas.width)}" onchange="updateDefaultStudioCanvas('width', this.value)">
                                                 </div>
                                                 <div>
-                                                    <label>Canvas Height</label>
-                                                    <input type="number" min="900" max="3200" value="${escapeAttr(data.canvas.height)}" onchange="updateDefaultStudioCanvas('height', this.value)">
+                                                    <label>Page Height</label>
+                                                    <input type="number" min="2200" max="10000" value="${escapeAttr(data.canvas.height)}" onchange="updateDefaultStudioCanvas('height', this.value)">
                                                 </div>
                                             </div>
-                                            <div class="default-studio-note">This default editor stays restricted: solid-only text/fill colors are allowed, with no rotation, shapes, gradients, PNG/SVG uploads, or full custom layers. Use Custom Studio for full freedom.</div>
+                                            <div class="default-studio-note">The Default Studio now uses the whole page as the canvas, like the Custom Studio, while keeping default restrictions: solid-only text/fill colors, no rotation, no shapes, no gradients, PNG/SVG uploads, or full custom layers.</div>
                                         </div>
                                     `;
         }
@@ -6076,8 +6162,8 @@
                     if (obj.type !== "main_image" && !obj.styles.fontFamily) obj.styles.fontFamily = dsFont(value);
                 });
             }
-            if (field === "width") managerState.defaultData.canvas.width = dsClamp(dsNum(value, DEFAULT_STUDIO_CANVAS.width), 760, 1800);
-            if (field === "height") managerState.defaultData.canvas.height = dsClamp(dsNum(value, DEFAULT_STUDIO_CANVAS.height), 900, 3200);
+            if (field === "width") managerState.defaultData.canvas.width = dsClamp(dsNum(value, DEFAULT_STUDIO_CANVAS.width), DEFAULT_STUDIO_CANVAS.width, DEFAULT_STUDIO_CANVAS_MAX.width);
+            if (field === "height") managerState.defaultData.canvas.height = dsClamp(dsNum(value, DEFAULT_STUDIO_CANVAS.height), DEFAULT_STUDIO_CANVAS.height, DEFAULT_STUDIO_CANVAS_MAX.height);
             renderDefaultStudioCanvas();
             renderDefaultStudioInspector();
         };
@@ -8746,7 +8832,7 @@
                     zoom: .78,
                     panX: 90,
                     panY: 70,
-                    snap: "free",
+                    snap: "snap",
                     history: [],
                     redo: [],
                     pointers: new Map(),
