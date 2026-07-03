@@ -1857,6 +1857,56 @@
             font-size: .82rem;
             line-height: 1.45;
         }
+
+        /* Gallery Studio credit pill old-credit-system parity */
+        .obj[data-type="credit_pill"],
+        .obj[data-type="credit_pill"] .inner {
+            overflow: visible !important;
+        }
+
+        .credit-pill-object {
+            position: relative;
+            overflow: visible;
+        }
+
+        .credit-pill-tooltip-preview {
+            display: block;
+            position: absolute;
+            left: 0;
+            bottom: calc(100% + 8px);
+            z-index: 80;
+            width: min(280px, max-content);
+            max-width: 320px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,.16);
+            background: rgba(0,0,0,.88);
+            color: var(--text-secondary, rgba(255,255,255,.72));
+            box-shadow: 0 12px 28px rgba(0,0,0,.35);
+            font-size: .78rem;
+            line-height: 1.45;
+            white-space: normal;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            text-align: left;
+        }
+
+        .credit-pill-object:hover .credit-pill-tooltip-preview {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .credit-auto-preview {
+            margin: 0 0 10px;
+            padding: 10px 11px;
+            border-radius: 13px;
+            border: 1px solid rgba(120,190,255,.20);
+            background: rgba(120,190,255,.07);
+            color: #eaf3ff;
+            line-height: 1.45;
+            font-size: .88rem;
+        }
     </style>
 </head>
 <body>
@@ -2201,62 +2251,84 @@
         function defaultBg(t) { if (["text", "title", "description"].includes(t)) return "transparent"; if (["back_gallery_button", "report_button"].includes(t)) return "linear-gradient(180deg,#35353b 0%,#1d1d22 45%,#101014 100%)"; if (t === "credit_pill") return "rgba(0,0,0,.62)"; if (t === "circle") return "rgba(255,255,255,.12)"; if (t === "star") return "rgba(255,231,170,.28)"; return "rgba(255,255,255,.055)" }
         function defaultText(t) { const i = state.item || localItem(); return { title: i.title || "Untitled Work", description: i.description || "Add a description, bio, lore, or notes about this work.", type_badge: formatType(i.proof_type || "Gallery Item"), credit_badge: "Credit / Source", credit_pill: "Credit: Own work", noai_badge: "NO AI · HUMAN MADE", back_gallery_button: "Back to Creator Gallery", report_button: "Report", text: "New text", bio: "Character Bio\nAdd personality, lore, powers, reference notes, or story details here.", image_text: "Image + Text\nAdd notes beside an image.", section: "Section Title\nWrite extra details here.", divider: "" }[t] ?? "" }
 
+        function normalizeCreditType(type) {
+            const raw = String(type || "own_work").trim();
+            return ({
+                external: "external_artist",
+                external_source: "external_artist",
+                external_artist: "external_artist",
+                stock: "stock_public_domain",
+                public_domain: "stock_public_domain",
+                stock_public_domain: "stock_public_domain",
+                no_credit: "no_credit_needed",
+                custom_text: "custom",
+                custom: "custom"
+            })[raw] || raw || "own_work";
+        }
+
         function normalizeCreditData(input = {}, fallbackText = "") {
             const source = input && typeof input === "object" ? input : {};
-            const type = source.type || source.creditType || "own_work";
-            const data = {
+            const type = normalizeCreditType(source.type || source.creditType || source.image_credit_type || "own_work");
+            const username = String(
+                source.creatorUsername ||
+                source.creator_username ||
+                source.nullverse_username ||
+                source.image_credit_nullverse_username ||
+                ""
+            ).replace(/^@+/, "");
+
+            return {
                 type,
-                label: source.label || source.creditLabel || source.credit_label || "",
-                description: source.description || source.creditDescription || source.credit_description || "",
-                sourceText: source.sourceText || source.source_text || source.externalText || source.external_url || "",
+                customText: source.customText || source.custom_text || (type === "custom" ? (source.label || source.creditLabel || source.credit_label || fallbackText || "") : ""),
+                name: source.name || source.creditName || source.credit_name || source.image_credit_name || "",
+                url: source.url || source.creditUrl || source.credit_url || source.image_credit_url || "",
+                note: source.note || source.creditNote || source.credit_note || source.image_credit_note || source.description || source.creditDescription || source.credit_description || "",
+                noAi: !!(source.noAi || source.no_ai || source.credit_no_ai || source.image_credit_no_ai),
+                sourceText: source.sourceText || source.source_text || source.externalText || source.external_url || source.url || source.credit_url || "",
                 creatorId: source.creatorId || source.creator_id || "",
-                creatorUsername: String(source.creatorUsername || source.creator_username || "").replace(/^@+/, ""),
-                creatorDisplayName: source.creatorDisplayName || source.creator_display_name || "",
-                relation: source.relation || source.creditRelation || "Credit"
+                creatorUsername: username,
+                creatorDisplayName: source.creatorDisplayName || source.creator_display_name || source.displayName || source.display_name || "",
+                relation: source.relation || source.creditRelation || "Artwork by"
             };
-
-            if (!data.label && fallbackText && !/^Credit:\s*Own work$/i.test(String(fallbackText))) {
-                data.label = String(fallbackText);
-            }
-
-            return data;
         }
 
         function creditTypeLabel(type) {
             return ({
+                custom: "Custom text",
                 own_work: "My own work",
-                nullverse_creator: "Nullverse creator",
-                external: "External artist / source",
+                nullverse_creator: "Another Nullverse creator",
+                external_artist: "External artist",
                 photographer: "Photographer",
-                stock: "Stock / public domain",
-                public_domain: "Public domain",
+                stock_public_domain: "Stock / public domain",
                 no_credit_needed: "No credit needed"
-            })[type] || "Credit";
+            })[normalizeCreditType(type)] || "Credit";
         }
 
         function creditPillText(o) {
             const c = normalizeCreditData(o?.credit || {}, o?.text || "");
-            if (c.label) return c.label;
+            if (c.type === "custom") return c.customText || "Custom credit";
+            if (c.type === "own_work") return "Artwork by you";
+            if (c.type === "nullverse_creator") return c.creatorUsername ? `Artwork by @${c.creatorUsername}` : "Artwork by @creator";
+            if (c.type === "external_artist" || c.type === "photographer" || c.type === "stock_public_domain") return c.name ? `Credit: ${c.name}` : "Credit needed";
             if (c.type === "no_credit_needed") return "No credit needed";
-            if (c.type === "nullverse_creator") return c.creatorUsername ? `${c.relation || "Credit"}: @${c.creatorUsername}` : "Credit: Nullverse creator";
-            if (c.type === "own_work") return "Credit: Own work";
-            const target = c.description || c.sourceText || creditTypeLabel(c.type);
-            return `Credit: ${target}`;
+            return "Credit needed";
         }
 
         function creditPillTooltip(o) {
             const c = normalizeCreditData(o?.credit || {}, o?.text || "");
             const parts = [creditTypeLabel(c.type)];
-            if (c.creatorUsername) parts.push(`Nullverse creator: @${c.creatorUsername}`);
-            if (c.description) parts.push(c.description);
-            if (c.sourceText) parts.push(`Source text: ${c.sourceText}`);
+            if (c.type === "nullverse_creator" && c.creatorUsername) parts.push(`Nullverse creator: @${c.creatorUsername}`);
+            if (c.name && c.type !== "nullverse_creator") parts.push(c.name);
+            if (c.note) parts.push(c.note);
+            if (c.url || c.sourceText) parts.push(`Source text: ${c.url || c.sourceText}`);
+            if (c.noAi) parts.push("Confirmed not AI-generated artwork");
             return parts.filter(Boolean).join(" · ");
         }
 
         function creditPillStudioMarkup(o) {
             const label = creditPillText(o);
             const tooltip = creditPillTooltip(o);
-            return `<div class="credit-pill-object" title="${escA(tooltip)}">${textMarkup(label, o)}</div>`;
+            return `<div class="credit-pill-object" title="${escA(tooltip)}">${textMarkup(label, o)}${tooltip ? `<span class="credit-pill-tooltip-preview">${esc(tooltip)}</span>` : ""}</div>`;
         }
 
         function updateCreditText(o) {
@@ -2341,33 +2413,47 @@
         function creditInspector(o) {
             const idv = escA(o.id);
             const c = normalizeCreditData(o.credit || {}, o.text || "");
+            const isCustom = c.type === "custom";
             const selected = c.creatorUsername ? `<div class="credit-selected-creator"><span>Linked to <strong>@${esc(c.creatorUsername)}</strong>${c.creatorDisplayName ? ` · ${esc(c.creatorDisplayName)}` : ""}</span><button class="tiny warn" type="button" onclick="clearCreditCreator('${idv}')">×</button></div>` : `<p class="credit-security-note">Search a Nullverse username, then press Add Creator to make this pill link to their Nullverse profile.</p>`;
-            return `<div class="group"><h4>Credit</h4><p class="credit-security-note">External URLs can be pasted for credit notes, but they stay plain text. Only Nullverse creator credits become clickable internal profile links on the public showcase.</p><label>Credit Type</label><select onchange="updateCreditField('${idv}','type',this.value,{commit:true})">${creditTypeOptions(c.type)}</select><label>Credit Label</label><input value="${escA(c.label || creditPillText(o))}" placeholder="Example: Art by @creator" oninput="updateCreditField('${idv}','label',this.value,{live:true})" onchange="updateCreditField('${idv}','label',this.value,{commit:true})"><label>Description / Credit Note</label><textarea placeholder="Describe what this credit is for..." oninput="updateCreditField('${idv}','description',this.value,{live:true})" onchange="updateCreditField('${idv}','description',this.value,{commit:true})">${escT(c.description || "")}</textarea><label>Source Text or Pasted Link</label><input value="${escA(c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditField('${idv}','sourceText',this.value,{live:true})" onchange="updateCreditField('${idv}','sourceText',this.value,{commit:true})">${c.type === "nullverse_creator" ? `<label>Search Nullverse Creator</label><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)">${selected}<div id="credit-results-${idv}" class="credit-search-results"></div>` : ""}</div>`;
+            const autoPreview = `<div class="credit-auto-preview"><strong>Pill text:</strong> ${esc(creditPillText(o))}<br><span>${esc(creditPillTooltip(o) || "Hover text will appear here when credit details are added.")}</span></div>`;
+            return `<div class="group"><h4>Credit</h4><p class="credit-security-note">This uses the Comic-style credit system. The pill text fills itself from the dropdown/details. External links stay plain text; only Nullverse creator credits become internal profile links on the public showcase.</p>${autoPreview}<label>Credit Type</label><select onchange="updateCreditField('${idv}','type',this.value,{commit:true})">${creditTypeOptions(c.type)}</select>${isCustom ? `<label>Custom Credit Text</label><input value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditField('${idv}','customText',this.value,{live:true})" onchange="updateCreditField('${idv}','customText',this.value,{commit:true})">` : ""}${c.type === "own_work" ? `<p class="credit-security-note">This will automatically credit your own Nullverse profile.</p>` : ""}${c.type === "nullverse_creator" ? `<label>Nullverse Username</label><input value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditField('${idv}','creatorUsername',this.value,{live:true})"><div style="margin-top:-6px;margin-bottom:12px;"><label>Search Nullverse Creator</label><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"></div>${selected}<div id="credit-results-${idv}" class="credit-search-results"></div>` : ""}${["external_artist", "photographer", "stock_public_domain"].includes(c.type) ? `<label>Artist / Creator / Source Name</label><input value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditField('${idv}','name',this.value,{live:true})" onchange="updateCreditField('${idv}','name',this.value,{commit:true})">` : ""}${["external_artist", "photographer", "stock_public_domain", "custom"].includes(c.type) ? `<label>Source Text or Pasted Link</label><input value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditField('${idv}','url',this.value,{live:true})" onchange="updateCreditField('${idv}','url',this.value,{commit:true})">` : ""}${c.type !== "custom" ? `<label>Permission / Source Note</label><textarea rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditField('${idv}','note',this.value,{live:true})" onchange="updateCreditField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>` : `<label>Hover Note</label><textarea rows="3" placeholder="Optional hover note for the credit pill." oninput="updateCreditField('${idv}','note',this.value,{live:true})" onchange="updateCreditField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>`}${["own_work", "nullverse_creator", "external_artist", "photographer"].includes(c.type) ? `<label style="display:flex;align-items:center;gap:10px;"><input type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>` : ""}</div>`;
         }
 
         function creditTypeOptions(active) {
+            const normalized = normalizeCreditType(active);
             const options = [
+                ["custom", "Custom text"],
                 ["own_work", "My own work"],
-                ["nullverse_creator", "Nullverse creator"],
-                ["external", "External artist / source"],
+                ["nullverse_creator", "Another Nullverse creator"],
+                ["external_artist", "External artist"],
                 ["photographer", "Photographer"],
-                ["stock", "Stock / licensed source"],
-                ["public_domain", "Public domain"],
+                ["stock_public_domain", "Stock / public domain"],
                 ["no_credit_needed", "No credit needed"]
             ];
-            return options.map(([value, label]) => `<option value="${value}" ${active === value ? "selected" : ""}>${label}</option>`).join("");
+            return options.map(([value, label]) => `<option value="${value}" ${normalized === value ? "selected" : ""}>${label}</option>`).join("");
         }
 
         function updateCreditField(id, key, value, options = {}) {
             const o = find(id); if (!o || o.type !== "credit_pill") return;
             if (options.live || options.commit) paintHistory(`${id}:${key}:credit`, options);
             o.credit = normalizeCreditData(o.credit || {}, o.text || "");
-            o.credit[key] = value;
 
-            if (key === "type" && value !== "nullverse_creator") {
-                o.credit.creatorId = "";
-                o.credit.creatorUsername = "";
-                o.credit.creatorDisplayName = "";
+            if (key === "type") {
+                const nextType = normalizeCreditType(value);
+                if (nextType === "custom" && !o.credit.customText) o.credit.customText = o.text || "Custom credit";
+                o.credit.type = nextType;
+                if (nextType !== "nullverse_creator") {
+                    o.credit.creatorId = "";
+                    o.credit.creatorUsername = "";
+                    o.credit.creatorDisplayName = "";
+                }
+            } else if (key === "creatorUsername") {
+                o.credit.creatorUsername = String(value || "").replace(/^@+/, "");
+            } else if (key === "url") {
+                o.credit.url = String(value || "");
+                o.credit.sourceText = String(value || "");
+            } else {
+                o.credit[key] = value;
             }
 
             updateCreditText(o);
@@ -2403,6 +2489,7 @@
                             .from(table.name)
                             .select(table.columns)
                             .or(`username.ilike.%${clean}%,display_name.ilike.%${clean}%`)
+                            .order("username", { ascending: true })
                             .limit(8);
 
                         if (error) {
@@ -2437,9 +2524,7 @@
             o.credit.creatorId = creatorId || "";
             o.credit.creatorUsername = String(username || "").replace(/^@+/, "");
             o.credit.creatorDisplayName = displayName || o.credit.creatorUsername;
-            if (!o.credit.label || /^Credit:/i.test(o.credit.label)) {
-                o.credit.label = `${o.credit.relation || "Credit"}: @${o.credit.creatorUsername}`;
-            }
+            o.credit.name = displayName || o.credit.creatorUsername;
             updateCreditText(o);
             renderAll();
             toast(`Linked credit pill to @${o.credit.creatorUsername}.`, "good");
@@ -2452,12 +2537,10 @@
             o.credit.creatorId = "";
             o.credit.creatorUsername = "";
             o.credit.creatorDisplayName = "";
-            o.credit.label = o.credit.label || "Credit: Nullverse creator";
             updateCreditText(o);
             renderAll();
             toast("Removed linked Nullverse creator from this credit pill.", "warn");
         }
-
 
         function multiInspector(sel) {
             const hasText = sel.some(isTextCapable);
@@ -2754,7 +2837,7 @@
         function rgbaFromHex(v, alpha = 1) { const { r, g, b } = hexToRgb(v); return `rgba(${r}, ${g}, ${b}, ${clamp(num(alpha, 1), 0, 1)})`; }
 
         function updateObjectField(id, field, value) { const o = find(id); if (!o) return; if (["x", "y", "w", "h", "z", "rotation"].includes(field)) { o[field] = Number(value) || 0; if (field === "w" || field === "h") clampSize(o) } else o[field] = value; renderCanvas(); renderLayers(); syncLiveInspectorControls() }
-        function updateObjectText(id, value) { const o = find(id); if (!o) return; o.text = value; if (o.type === "credit_pill") { o.credit = normalizeCreditData(o.credit || {}, value); o.credit.label = value; updateCreditText(o); } renderCanvas(); syncObjectTextInspector(id, o.text) }
+        function updateObjectText(id, value) { const o = find(id); if (!o) return; if (o.type === "credit_pill") { o.credit = normalizeCreditData(o.credit || {}, o.text || ""); o.credit.type = "custom"; o.credit.customText = value; updateCreditText(o); } else { o.text = value; } renderCanvas(); syncObjectTextInspector(id, o.text) }
         function updateObjectStyle(id, key, value, options = {}) { const o = find(id); if (!o) return; if (options.live || options.commit) paintHistory(`${id}:${key}:style`, options); o.styles = o.styles || normalizeStyles({}, o.type); o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding"].includes(key) ? Number(value) : value; renderCanvas(); renderLayers(); syncLiveInspectorControls(); if (options.commit) renderInspector() }
         function applyObjectGradient(id, target) { const o = find(id); if (!o) return; const field = target === "border" ? "borderPaint" : "background"; updateObjectGradientPaint(id, target === "border" ? "borderColor" : "background", field, `${id}-${target}`, { commit: true }) }
         function applyTextGradient(id) { const o = find(id); if (!o) return; const p = o.styles || (o.styles = {}); if (p.textPaint) p.textPaint = ""; renderAll() }

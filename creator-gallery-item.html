@@ -566,6 +566,49 @@
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
+
+        .custom-object[data-type="credit_pill"] .custom-inner {
+            overflow: visible;
+        }
+
+        .public-credit-pill {
+            position: relative;
+            overflow: visible;
+        }
+
+        .public-credit-pill-text {
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .public-credit-tooltip {
+            position: absolute;
+            left: 0;
+            bottom: calc(100% + 8px);
+            z-index: 40;
+            width: min(280px, max-content);
+            max-width: 320px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,.16);
+            background: rgba(0,0,0,.88);
+            color: var(--text-secondary, rgba(255,255,255,.72));
+            box-shadow: 0 12px 28px rgba(0,0,0,.35);
+            font-size: .78rem;
+            line-height: 1.45;
+            white-space: normal;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            text-align: left;
+        }
+
+        .public-credit-pill:hover .public-credit-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
     </style>
 </head>
 <body>
@@ -1142,44 +1185,70 @@
         }
 
 
+        function normalizePublicCreditType(type) {
+            const raw = String(type || "own_work").trim();
+            return ({
+                external: "external_artist",
+                external_source: "external_artist",
+                external_artist: "external_artist",
+                stock: "stock_public_domain",
+                public_domain: "stock_public_domain",
+                stock_public_domain: "stock_public_domain",
+                no_credit: "no_credit_needed",
+                custom_text: "custom",
+                custom: "custom"
+            })[raw] || raw || "own_work";
+        }
+
         function normalizePublicCreditData(input = {}, fallbackText = "") {
             const source = input && typeof input === "object" ? input : {};
+            const type = normalizePublicCreditType(source.type || source.creditType || source.image_credit_type || "own_work");
             return {
-                type: source.type || source.creditType || "own_work",
-                label: source.label || source.creditLabel || source.credit_label || String(fallbackText || ""),
-                description: source.description || source.creditDescription || source.credit_description || "",
-                sourceText: source.sourceText || source.source_text || source.externalText || source.external_url || "",
+                type,
+                customText: source.customText || source.custom_text || (type === "custom" ? (source.label || source.creditLabel || source.credit_label || fallbackText || "") : ""),
+                name: source.name || source.creditName || source.credit_name || source.image_credit_name || "",
+                url: source.url || source.creditUrl || source.credit_url || source.image_credit_url || "",
+                note: source.note || source.creditNote || source.credit_note || source.image_credit_note || source.description || source.creditDescription || source.credit_description || "",
+                noAi: !!(source.noAi || source.no_ai || source.credit_no_ai || source.image_credit_no_ai),
+                sourceText: source.sourceText || source.source_text || source.externalText || source.external_url || source.url || source.credit_url || "",
                 creatorId: source.creatorId || source.creator_id || "",
-                creatorUsername: String(source.creatorUsername || source.creator_username || "").replace(/^@+/, ""),
-                creatorDisplayName: source.creatorDisplayName || source.creator_display_name || "",
-                relation: source.relation || source.creditRelation || "Credit"
+                creatorUsername: String(source.creatorUsername || source.creator_username || source.nullverse_username || source.image_credit_nullverse_username || "").replace(/^@+/, ""),
+                creatorDisplayName: source.creatorDisplayName || source.creator_display_name || source.displayName || source.display_name || "",
+                relation: source.relation || source.creditRelation || "Artwork by"
             };
         }
 
         function publicCreditTypeLabel(type) {
             return ({
+                custom: "Custom text",
                 own_work: "My own work",
-                nullverse_creator: "Nullverse creator",
-                external: "External artist / source",
+                nullverse_creator: "Another Nullverse creator",
+                external_artist: "External artist",
                 photographer: "Photographer",
-                stock: "Stock / licensed source",
-                public_domain: "Public domain",
+                stock_public_domain: "Stock / public domain",
                 no_credit_needed: "No credit needed"
-            })[type] || "Credit";
+            })[normalizePublicCreditType(type)] || "Credit";
         }
 
         function publicCreditText(obj) {
             const c = normalizePublicCreditData(obj?.credit || {}, obj?.text || "");
-            if (c.label) return c.label;
+            if (c.type === "custom") return c.customText || "Custom credit";
+            if (c.type === "own_work") return "Artwork by you";
+            if (c.type === "nullverse_creator") return c.creatorUsername ? `Artwork by @${c.creatorUsername}` : "Artwork by @creator";
+            if (c.type === "external_artist" || c.type === "photographer" || c.type === "stock_public_domain") return c.name ? `Credit: ${c.name}` : "Credit needed";
             if (c.type === "no_credit_needed") return "No credit needed";
-            if (c.type === "nullverse_creator") return c.creatorUsername ? `${c.relation || "Credit"}: @${c.creatorUsername}` : "Credit: Nullverse creator";
-            if (c.type === "own_work") return "Credit: Own work";
-            return `Credit: ${c.description || c.sourceText || publicCreditTypeLabel(c.type)}`;
+            return "Credit needed";
         }
 
         function publicCreditTitle(obj) {
             const c = normalizePublicCreditData(obj?.credit || {}, obj?.text || "");
-            return [publicCreditTypeLabel(c.type), c.creatorUsername ? `@${c.creatorUsername}` : "", c.description, c.sourceText ? `Source text: ${c.sourceText}` : ""].filter(Boolean).join(" · ");
+            const parts = [publicCreditTypeLabel(c.type)];
+            if (c.type === "nullverse_creator" && c.creatorUsername) parts.push(`Nullverse creator: @${c.creatorUsername}`);
+            if (c.name && c.type !== "nullverse_creator") parts.push(c.name);
+            if (c.note) parts.push(c.note);
+            if (c.url || c.sourceText) parts.push(`Source text: ${c.url || c.sourceText}`);
+            if (c.noAi) parts.push("Confirmed not AI-generated artwork");
+            return parts.filter(Boolean).join(" · ");
         }
 
         function publicCreditProfileHref(obj) {
@@ -1189,13 +1258,15 @@
         }
 
         function renderPublicCreditPill(obj) {
-            const text = renderStudioTextPaintTarget(obj, publicCreditText(obj));
-            const title = escapeAttr(publicCreditTitle(obj));
+            const label = renderStudioTextPaintTarget(obj, publicCreditText(obj), "public-credit-pill-text");
+            const title = escapeHtml(publicCreditTitle(obj));
+            const titleAttr = escapeAttr(publicCreditTitle(obj));
+            const tooltip = title ? `<span class="public-credit-tooltip">${title}</span>` : "";
             const href = publicCreditProfileHref(obj);
             if (href) {
-                return `<a class="public-credit-pill clickable" href="${escapeAttr(href)}" title="${title}">${text}</a>`;
+                return `<a class="public-credit-pill clickable" href="${escapeAttr(href)}" title="${titleAttr}">${label}${tooltip}</a>`;
             }
-            return `<span class="public-credit-pill" title="${title}">${text}</span>`;
+            return `<span class="public-credit-pill" title="${titleAttr}">${label}${tooltip}</span>`;
         }
 
 
