@@ -1746,12 +1746,12 @@
                 ? ` data-folder-id="${escapeAttr(folder.id)}" ondragover="allowGalleryItemDrop(event)" ondragleave="clearGalleryDropHover(event)" ondrop="dropGalleryItemOnFolder(event, '${escapeAttr(folder.id)}')"`
                 : ` data-folder-id="${escapeAttr(folder.id)}"`;
             return `<article class="${classes.join(" ")}"${dropAttrs} onclick="openFolder('${escapeAttr(folder.id)}')">
-                            ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, folder)}
-                            <div class="card-top"><span class="status-pill">${escapeHtml(folder.icon || "📁")} Folder</span>${agePill(folder.age_rating)}</div>
-                            ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', 1)">↓</button></div>` : ""}
-                            ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openFolderModal('${escapeAttr(folder.id)}')">Edit</button></div>` : ""}
-                            <div class="card-content"><h3>${escapeHtml(folder.name)}</h3><p>${escapeHtml(folder.description || `${childCount} folder${childCount === 1 ? "" : "s"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`)}</p><div class="card-meta-row">${visibilityPill(folder)} ${warningCountPill(folder)}</div></div>
-                        </article>`;
+                                ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, folder)}
+                                <div class="card-top"><span class="status-pill">${escapeHtml(folder.icon || "📁")} Folder</span>${agePill(folder.age_rating)}</div>
+                                ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', 1)">↓</button></div>` : ""}
+                                ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openFolderModal('${escapeAttr(folder.id)}')">Edit</button></div>` : ""}
+                                <div class="card-content"><h3>${escapeHtml(folder.name)}</h3><p>${escapeHtml(folder.description || `${childCount} folder${childCount === 1 ? "" : "s"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`)}</p><div class="card-meta-row">${visibilityPill(folder)} ${warningCountPill(folder)}</div></div>
+                            </article>`;
         }
 
 
@@ -1773,12 +1773,12 @@
                 ? `<button class="button tiny soft move-out" type="button" onclick="event.stopPropagation(); moveGalleryItemToFolder('${escapeAttr(item.id)}', null)">Move Out</button>`
                 : "";
             return `<article class="${classes.join(" ")}"${dragAttrs} onclick="openItemPreview('${escapeAttr(item.id)}')">
-                            ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, item)}
-                            <div class="card-top"><span class="status-pill">${escapeHtml(formatType(item.proof_type))}</span>${agePill(item.age_rating)}</div>
-                            ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', 1)">↓</button>${moveOutButton}</div>` : ""}
-                            ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openItemModal('${escapeAttr(item.id)}')">Edit</button></div>` : ""}
-                            <div class="card-content"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description || "No description provided.")}</p><div class="card-meta-row">${visibilityPill(item)} ${warningCountPill(item)}</div></div>
-                        </article>`;
+                                ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, item)}
+                                <div class="card-top"><span class="status-pill">${escapeHtml(formatType(item.proof_type))}</span>${agePill(item.age_rating)}</div>
+                                ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', 1)">↓</button>${moveOutButton}</div>` : ""}
+                                ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openItemModal('${escapeAttr(item.id)}')">Edit</button></div>` : ""}
+                                <div class="card-content"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description || "No description provided.")}</p><div class="card-meta-row">${visibilityPill(item)} ${warningCountPill(item)}</div></div>
+                            </article>`;
         }
 
 
@@ -1794,11 +1794,38 @@
             if (!folder) return;
             const safety = canShowRecord(folder);
             if (safety.reason === "blocked") return showBlockedSafety(folder, safety);
-            if (safety.needsGate && !isOwner) return showSafetyGate(folder, () => { currentFolderId = folder.id; activeType = "all"; renderEverything(); });
-            currentFolderId = folder.id;
+            if (folderNeedsOpenChoice(folder, safety)) return showFolderSafetyGate(folder);
+            enterFolder(folder.id);
+        }
+
+        function enterFolder(folderId) {
+            currentFolderId = folderId || null;
             activeType = "all";
             renderEverything();
             window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        function folderNeedsOpenChoice(folder, safety = {}) {
+            if (!folder || isOwner) return false;
+            const warnings = normalizeWarnings(folder.content_warnings);
+            const age = normalizeAgeRating(folder.age_rating);
+            const censor = normalizeCensorMode(folder.censor_mode);
+            return !!safety.needsGate || warnings.length > 0 || censor !== "none" || age === "teen" || age === "mature";
+        }
+
+        function showFolderSafetyGate(folder) {
+            const ageLabel = AGE_RATINGS.find(([value]) => value === normalizeAgeRating(folder.age_rating))?.[1] || "All Ages";
+            const warnings = normalizeWarnings(folder.content_warnings);
+            const warningText = warnings.length ? warnings.join(", ") : "No extra warnings listed";
+            showSafetyModal(
+                folder,
+                {
+                    reason: "gate",
+                    title: "Open Folder With Warnings?",
+                    message: `This folder is marked ${ageLabel}. Warnings: ${warningText}. Choose Continue to open the folder.`
+                },
+                () => enterFolder(folder.id)
+            );
         }
 
         function navigateBreadcrumb(folderId) {
@@ -1871,14 +1898,17 @@
         }
 
         function showSafetyModal(record, safety, onContinue) {
-            $("safety-modal-title").textContent = safety.reason === "blocked" ? "Restricted Gallery Content" : "Content Warning";
-            $("safety-modal-subtitle").textContent = record.name || record.title || "Gallery entry";
+            const isFolderRecord = !!record?.name && !record?.title;
+            $("safety-modal-title").textContent = safety.title || (safety.reason === "blocked" ? (isFolderRecord ? "Restricted Gallery Folder" : "Restricted Gallery Content") : (isFolderRecord ? "Open Folder With Warnings?" : "Content Warning"));
+            $("safety-modal-subtitle").textContent = isFolderRecord ? `Folder: ${record.name || "Gallery folder"}` : (record.name || record.title || "Gallery entry");
             $("safety-modal-body").innerHTML = `<p>${escapeHtml(safety.message || safetySummary(record))}</p>${warningsHtml(record)}${normalizeAgeRating(record.age_rating) === "mature" ? `<p class="status-message warn">This entry is marked Mature / 18+.</p>` : ""}`;
             const button = $("safety-continue-button");
             if (onContinue) {
+                button.textContent = isFolderRecord ? "Open Folder" : "Continue";
                 button.style.display = "inline-flex";
                 button.onclick = () => { closeSafetyModal(); onContinue(); };
             } else {
+                button.textContent = "Continue";
                 button.style.display = "none";
                 button.onclick = null;
             }
