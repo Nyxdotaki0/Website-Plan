@@ -530,6 +530,42 @@
             box-shadow: none !important;
             margin: 0 !important;
         }
+
+
+        /* Public Gallery Studio credit pill object */
+        .public-credit-pill {
+            width: 100%;
+            height: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 14px;
+            border-radius: inherit;
+            color: inherit;
+            text-decoration: none;
+            font-weight: 850;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            cursor: default;
+        }
+
+            .public-credit-pill.clickable {
+                cursor: pointer;
+            }
+
+                .public-credit-pill.clickable:hover {
+                    filter: brightness(1.12);
+                }
+
+            .public-credit-pill .studio-text-paint-target {
+                max-width: 100%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
     </style>
 </head>
 <body>
@@ -1022,7 +1058,8 @@
                 required: isRequiredType(type) || input.required === true,
                 text: input.text ?? input.content ?? "",
                 imageUrl: input.imageUrl || input.image_url || input.src || "",
-                styles: normalizeObjectStyles(input.styles || {}, type)
+                styles: normalizeObjectStyles(input.styles || {}, type),
+                credit: normalizePublicCreditData(input.credit || input.creditData || input, input.text ?? input.content ?? "")
             };
         }
 
@@ -1103,6 +1140,64 @@
             });
             layout.objects.sort((a, b) => (isRequiredType(a.type) ? 1 : 0) - (isRequiredType(b.type) ? 1 : 0));
         }
+
+
+        function normalizePublicCreditData(input = {}, fallbackText = "") {
+            const source = input && typeof input === "object" ? input : {};
+            return {
+                type: source.type || source.creditType || "own_work",
+                label: source.label || source.creditLabel || source.credit_label || String(fallbackText || ""),
+                description: source.description || source.creditDescription || source.credit_description || "",
+                sourceText: source.sourceText || source.source_text || source.externalText || source.external_url || "",
+                creatorId: source.creatorId || source.creator_id || "",
+                creatorUsername: String(source.creatorUsername || source.creator_username || "").replace(/^@+/, ""),
+                creatorDisplayName: source.creatorDisplayName || source.creator_display_name || "",
+                relation: source.relation || source.creditRelation || "Credit"
+            };
+        }
+
+        function publicCreditTypeLabel(type) {
+            return ({
+                own_work: "My own work",
+                nullverse_creator: "Nullverse creator",
+                external: "External artist / source",
+                photographer: "Photographer",
+                stock: "Stock / licensed source",
+                public_domain: "Public domain",
+                no_credit_needed: "No credit needed"
+            })[type] || "Credit";
+        }
+
+        function publicCreditText(obj) {
+            const c = normalizePublicCreditData(obj?.credit || {}, obj?.text || "");
+            if (c.label) return c.label;
+            if (c.type === "no_credit_needed") return "No credit needed";
+            if (c.type === "nullverse_creator") return c.creatorUsername ? `${c.relation || "Credit"}: @${c.creatorUsername}` : "Credit: Nullverse creator";
+            if (c.type === "own_work") return "Credit: Own work";
+            return `Credit: ${c.description || c.sourceText || publicCreditTypeLabel(c.type)}`;
+        }
+
+        function publicCreditTitle(obj) {
+            const c = normalizePublicCreditData(obj?.credit || {}, obj?.text || "");
+            return [publicCreditTypeLabel(c.type), c.creatorUsername ? `@${c.creatorUsername}` : "", c.description, c.sourceText ? `Source text: ${c.sourceText}` : ""].filter(Boolean).join(" · ");
+        }
+
+        function publicCreditProfileHref(obj) {
+            const c = normalizePublicCreditData(obj?.credit || {}, obj?.text || "");
+            const username = String(c.creatorUsername || "").replace(/^@+/, "").trim();
+            return c.type === "nullverse_creator" && username ? `profile.html?user=${encodeURIComponent(username)}` : "";
+        }
+
+        function renderPublicCreditPill(obj) {
+            const text = renderStudioTextPaintTarget(obj, publicCreditText(obj));
+            const title = escapeAttr(publicCreditTitle(obj));
+            const href = publicCreditProfileHref(obj);
+            if (href) {
+                return `<a class="public-credit-pill clickable" href="${escapeAttr(href)}" title="${title}">${text}</a>`;
+            }
+            return `<span class="public-credit-pill" title="${title}">${text}</span>`;
+        }
+
 
         function renderObject(obj) {
             const s = obj.styles || {};
@@ -1220,6 +1315,10 @@
 
             if (obj.type === "credit_badge") {
                 return `<div class="credit-badge"><span class="studio-button-label">${renderStudioTextPaintTarget(obj, obj.text || 'Creator credited')}</span></div>`;
+            }
+
+            if (obj.type === "credit_pill") {
+                return renderPublicCreditPill(obj);
             }
 
             if (obj.type === "noai_badge") {
