@@ -2119,7 +2119,61 @@
             const username = state.ownerProfile?.username || state.item?.owner_username || state.item?.username || "";
             return username ? `creator-gallery.html?user=${encodeURIComponent(username)}` : "creator-gallery.html";
         }
-        async function loadLayouts() { state.layouts = createBundle(); if (!state.item || state.item.id === "local-preview") return; const { data, error } = await supabase.from("creator_gallery_item_layouts").select("draft_layout_json,published_layout_json").eq("gallery_item_id", state.item.id).maybeSingle(); if (error) { toast("Could not load saved layout: " + error.message, "warn", 7000); return } const src = data?.draft_layout_json || data?.published_layout_json; if (src) state.layouts = createBundle(src); sanitizeAll() }
+        async function loadLayouts() {
+            state.layouts = createBundle();
+            if (!state.item || state.item.id === "local-preview") return;
+
+            const { data, error } = await supabase
+                .from("creator_gallery_item_layouts")
+                .select("draft_layout_json,published_layout_json")
+                .eq("gallery_item_id", state.item.id)
+                .maybeSingle();
+
+            if (error) {
+                toast("Could not load saved layout: " + error.message, "warn", 7000);
+                return;
+            }
+
+            const src = data?.draft_layout_json || data?.published_layout_json;
+            const studioSrc = unwrapShowcaseModePayloadForStudio(src);
+            if (studioSrc) state.layouts = createBundle(studioSrc);
+            sanitizeAll();
+        }
+
+        function parseMaybeJson(value) {
+            if (typeof value === "string") {
+                try { return JSON.parse(value); } catch { return null; }
+            }
+            return value && typeof value === "object" ? value : null;
+        }
+
+        function isShowcaseModePayload(value) {
+            const parsed = parseMaybeJson(value);
+            if (!parsed || typeof parsed !== "object") return false;
+            const version = String(parsed.version || "");
+            return version.startsWith("gallery-showcase-mode") || "showcaseMode" in parsed || "defaultShowcase" in parsed || "customLayout" in parsed || "studioLayout" in parsed;
+        }
+
+        function unwrapShowcaseModePayloadForStudio(value) {
+            const parsed = parseMaybeJson(value);
+            if (!parsed) return null;
+            if (!isShowcaseModePayload(parsed)) return parsed;
+            return parsed.customLayout || parsed.custom_layout || parsed.studioLayout || parsed.studio_layout || null;
+        }
+
+        function wrapStudioLayoutIntoShowcasePayload(existing, studioPayload, publish = false) {
+            const parsed = parseMaybeJson(existing);
+            if (!isShowcaseModePayload(parsed)) return studioPayload;
+
+            return {
+                ...parsed,
+                version: "gallery-showcase-mode-v1",
+                showcaseMode: publish ? "custom" : (parsed.showcaseMode || parsed.showcase_mode || "custom"),
+                customLayout: studioPayload,
+                updated_at: new Date().toISOString()
+            };
+        }
+
         function getStoredPublishedLayoutSnapshot(layout) {
             if (!layout || typeof layout !== "object") return null;
 
@@ -2498,56 +2552,56 @@
                 : `<p class="credit-security-note">Search a Nullverse username, then press Add Creator. This is the only credit type that becomes a clickable profile link.</p>`;
 
             return `<div class="group credit-system-overhaul" data-credit-inspector="${idv}">
-                    <h4>Credit Pill System</h4>
-                    <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
-                    <div class="credit-live-preview">
-                        <span class="credit-live-label">Live credit pill</span>
-                        <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
-                        <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
-                    </div>
-                    <label>Credit Type</label>
-                    <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
-
-                    <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
-                        <label>Custom Credit Text</label>
-                        <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
-                    </div>
-
-                    <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
-                        <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
-                    </div>
-
-                    <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
-                        <label>Nullverse Username</label>
-                        <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
-                        <div style="margin-top:-6px;margin-bottom:12px;">
-                            <label>Search Nullverse Creator</label>
-                            <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+                        <h4>Credit Pill System</h4>
+                        <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
+                        <div class="credit-live-preview">
+                            <span class="credit-live-label">Live credit pill</span>
+                            <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
+                            <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
                         </div>
-                        ${selectedCreator}
-                        <div id="credit-results-${idv}" class="credit-search-results"></div>
-                    </div>
+                        <label>Credit Type</label>
+                        <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
 
-                    <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
-                        <label>Artist / Creator / Source Name</label>
-                        <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
-                    </div>
+                        <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
+                            <label>Custom Credit Text</label>
+                            <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
+                        </div>
 
-                    <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
-                        <label>Credit Link / Source Text</label>
-                        <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
-                        <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
-                    </div>
+                        <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
+                            <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
+                        </div>
 
-                    <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
-                        <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
-                        <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
-                    </div>
+                        <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
+                            <label>Nullverse Username</label>
+                            <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
+                            <div style="margin-top:-6px;margin-bottom:12px;">
+                                <label>Search Nullverse Creator</label>
+                                <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+                            </div>
+                            ${selectedCreator}
+                            <div id="credit-results-${idv}" class="credit-search-results"></div>
+                        </div>
 
-                    <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
-                        <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
-                    </div>
-                </div>`;
+                        <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
+                            <label>Artist / Creator / Source Name</label>
+                            <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
+                        </div>
+
+                        <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
+                            <label>Credit Link / Source Text</label>
+                            <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
+                            <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
+                        </div>
+
+                        <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
+                            <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
+                            <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
+                        </div>
+
+                        <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
+                            <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
+                        </div>
+                    </div>`;
         }
 
         function creditTypeOptions(active) {
@@ -3345,6 +3399,28 @@
         }
 
         async function savePayload(row) {
+            try {
+                const { data } = await supabase
+                    .from("creator_gallery_item_layouts")
+                    .select("draft_layout_json,published_layout_json")
+                    .eq("gallery_item_id", row.gallery_item_id)
+                    .maybeSingle();
+
+                const existingDraft = data?.draft_layout_json || null;
+                const existingPublished = data?.published_layout_json || null;
+                const wrapperSource = isShowcaseModePayload(existingDraft) ? existingDraft : isShowcaseModePayload(existingPublished) ? existingPublished : null;
+
+                if (wrapperSource) {
+                    row.draft_layout_json = wrapStudioLayoutIntoShowcasePayload(wrapperSource, row.draft_layout_json, false);
+
+                    if (row.published_layout_json) {
+                        row.published_layout_json = wrapStudioLayoutIntoShowcasePayload(row.draft_layout_json, row.published_layout_json, true);
+                    }
+                }
+            } catch (error) {
+                console.warn("Could not preserve default showcase wrapper while saving Studio layout:", error);
+            }
+
             const { error } = await supabase.from("creator_gallery_item_layouts").upsert(row, { onConflict: "gallery_item_id" });
             if (error) throw error;
         }
