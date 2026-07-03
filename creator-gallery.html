@@ -431,6 +431,87 @@
                 margin: 0;
             }
 
+        .owner-card-edit-action {
+            position: absolute;
+            right: 12px;
+            bottom: 12px;
+            z-index: 8;
+            display: flex;
+            gap: 6px;
+            justify-content: flex-end;
+            pointer-events: none;
+        }
+
+            .owner-card-edit-action .button {
+                margin: 0;
+                pointer-events: auto;
+                background: rgba(0,0,0,.66);
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+            }
+
+        .gallery-card.drag-ready {
+            cursor: grab;
+        }
+
+            .gallery-card.drag-ready:active {
+                cursor: grabbing;
+            }
+
+        .gallery-card.dragging-card {
+            opacity: .46;
+            transform: scale(.985);
+            border-color: rgba(135,210,255,.46);
+        }
+
+        .folder-card.drop-ready {
+            outline: 1px dashed rgba(135,210,255,.50);
+            outline-offset: -8px;
+        }
+
+        .folder-card.drop-hover,
+        .gallery-grid.drop-hover {
+            border-color: rgba(135,210,255,.72) !important;
+            box-shadow: 0 0 0 3px rgba(135,210,255,.10), 0 22px 52px rgba(0,0,0,.30);
+        }
+
+            .folder-card.drop-hover::after {
+                content: "Drop item here";
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                z-index: 12;
+                transform: translate(-50%, -50%);
+                padding: 9px 12px;
+                border-radius: 999px;
+                border: 1px solid rgba(135,210,255,.38);
+                background: rgba(0,0,0,.76);
+                color: #e7f5ff;
+                font-size: .82rem;
+                font-weight: 850;
+                pointer-events: none;
+                white-space: nowrap;
+            }
+
+        .gallery-grid.organize-drop-zone {
+            position: relative;
+            min-height: 180px;
+            padding: 10px;
+            margin: -10px;
+            border: 1px dashed rgba(255,255,255,.10);
+            border-radius: 24px;
+        }
+
+            .gallery-grid.organize-drop-zone::before {
+                content: "Drag gallery items into folders. Drop here to move into the current folder.";
+                position: absolute;
+                left: 14px;
+                top: -30px;
+                color: var(--text-muted,rgba(255,255,255,.54));
+                font-size: .78rem;
+                pointer-events: none;
+            }
+
         .blur-preview img, .blur-preview .folder-cover, .blur-preview .gallery-cover {
             filter: blur(15px) brightness(.72);
             transform: scale(1.03);
@@ -1211,6 +1292,8 @@
         let pendingPlacement = null;
         let imagePlacementStudio = null;
         let activePreviewItemId = null;
+        let draggedGalleryItemId = null;
+        let galleryDragEndedAt = 0;
         let toastTimer = null;
 
         window.logOut = async function () { await supabase.auth.signOut(); location.href = "login.html"; };
@@ -1239,7 +1322,13 @@
             nudgeImagePlacement,
             setTypeFilter,
             moveFolderOrder,
-            moveItemOrder
+            moveItemOrder,
+            startGalleryItemDrag,
+            finishGalleryItemDrag,
+            allowGalleryItemDrop,
+            clearGalleryDropHover,
+            dropGalleryItemOnFolder,
+            dropGalleryItemToCurrentFolder
         });
 
         document.addEventListener("keydown", event => {
@@ -1508,7 +1597,10 @@
         function toggleOwnerTools() {
             if (!isOwner) return;
             ownerToolsOpen = !ownerToolsOpen;
+            if (!ownerToolsOpen) draggedGalleryItemId = null;
             renderOwnerBar();
+            renderEverything();
+            if (ownerToolsOpen) toast("Organizer on: drag gallery items into folders, or drop them on the current item area.", "good", 5200);
         }
 
         function renderGalleryBrowser() {
@@ -1536,6 +1628,7 @@
             $("gallery-grid").innerHTML = items.length
                 ? items.map(renderItemCard).join("")
                 : `<p class="empty-panel">${currentFolderId ? "No gallery items in this folder yet." : "No gallery items found."}</p>`;
+            setupOrganizerDropZones();
             $("gallery-count").textContent = `${childFolders.length} folder${childFolders.length === 1 ? "" : "s"} · ${items.length} item${items.length === 1 ? "" : "s"}`;
         }
 
@@ -1549,12 +1642,16 @@
             const cover = folder.cover_image_url
                 ? `<div class="folder-cover"><img src="${escapeAttr(folder.cover_image_url)}" alt="${escapeAttr(folder.name)}" style="${placementCss(folder.cover_image_placement)}"></div>`
                 : `<div class="folder-cover no-cover"><span>${escapeHtml(folder.icon || "📁")}</span></div>`;
-            return `<article class="${classes.join(" ")}" onclick="openFolder('${escapeAttr(folder.id)}')">
-                    ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, folder)}
-                    <div class="card-top"><span class="status-pill">${escapeHtml(folder.icon || "📁")} Folder</span>${agePill(folder.age_rating)}</div>
-                    ${isOwner ? `<div class="owner-card-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openFolderModal('${escapeAttr(folder.id)}')">Edit</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', 1)">↓</button></div>` : ""}
-                    <div class="card-content"><h3>${escapeHtml(folder.name)}</h3><p>${escapeHtml(folder.description || `${childCount} folder${childCount === 1 ? "" : "s"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`)}</p><div>${visibilityPill(folder)} ${warningCountPill(folder)}</div></div>
-                </article>`;
+            if (isOwner && ownerToolsOpen) classes.push("drop-ready");
+            const dropAttrs = isOwner && ownerToolsOpen
+                ? ` data-folder-id="${escapeAttr(folder.id)}" ondragover="allowGalleryItemDrop(event)" ondragleave="clearGalleryDropHover(event)" ondrop="dropGalleryItemOnFolder(event, '${escapeAttr(folder.id)}')"`
+                : ` data-folder-id="${escapeAttr(folder.id)}"`;
+            return `<article class="${classes.join(" ")}"${dropAttrs} onclick="openFolder('${escapeAttr(folder.id)}')">
+                        ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, folder)}
+                        <div class="card-top"><span class="status-pill">${escapeHtml(folder.icon || "📁")} Folder</span>${agePill(folder.age_rating)}</div>
+                        ${isOwner ? `<div class="owner-card-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openFolderModal('${escapeAttr(folder.id)}')">Edit</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', 1)">↓</button></div>` : ""}
+                        <div class="card-content"><h3>${escapeHtml(folder.name)}</h3><p>${escapeHtml(folder.description || `${childCount} folder${childCount === 1 ? "" : "s"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`)}</p><div>${visibilityPill(folder)} ${warningCountPill(folder)}</div></div>
+                    </article>`;
         }
 
         function renderItemCard(item) {
@@ -1565,12 +1662,17 @@
             const cover = item.image_url
                 ? `<div class="gallery-cover"><img src="${escapeAttr(item.image_url)}" alt="${escapeAttr(item.title)}" style="${placementCss(item.image_placement)}"></div>`
                 : `<div class="gallery-cover"></div>`;
-            return `<article class="${classes.join(" ")}" onclick="openItemPreview('${escapeAttr(item.id)}')">
-                    ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, item)}
-                    <div class="card-top"><span class="status-pill">${escapeHtml(formatType(item.proof_type))}</span>${agePill(item.age_rating)}</div>
-                    ${isOwner ? `<div class="owner-card-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openItemModal('${escapeAttr(item.id)}')">Edit</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', 1)">↓</button></div>` : ""}
-                    <div class="card-content"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description || "No description provided.")}</p><div>${visibilityPill(item)} ${warningCountPill(item)}</div></div>
-                </article>`;
+            if (isOwner && ownerToolsOpen) classes.push("drag-ready");
+            if (draggedGalleryItemId && sameId(draggedGalleryItemId, item.id)) classes.push("dragging-card");
+            const dragAttrs = isOwner && ownerToolsOpen
+                ? ` draggable="true" data-gallery-item-id="${escapeAttr(item.id)}" ondragstart="startGalleryItemDrag(event, '${escapeAttr(item.id)}')" ondragend="finishGalleryItemDrag(event)"`
+                : ` draggable="false" data-gallery-item-id="${escapeAttr(item.id)}"`;
+            return `<article class="${classes.join(" ")}"${dragAttrs} onclick="openItemPreview('${escapeAttr(item.id)}')">
+                        ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, item)}
+                        <div class="card-top"><span class="status-pill">${escapeHtml(formatType(item.proof_type))}</span>${agePill(item.age_rating)}</div>
+                        ${isOwner ? `<div class="owner-card-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', 1)">↓</button></div><div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openItemModal('${escapeAttr(item.id)}')">Edit</button></div>` : ""}
+                        <div class="card-content"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description || "No description provided.")}</p><div>${visibilityPill(item)} ${warningCountPill(item)}</div></div>
+                    </article>`;
         }
 
         function safetyOverlayHtml(safety, record) {
@@ -1598,6 +1700,7 @@
         }
 
         function openItemPreview(itemId) {
+            if (Date.now() - galleryDragEndedAt < 280) return;
             const item = allItems.find(i => i.id === itemId);
             if (!item) return;
             const safety = canShowRecord(item);
@@ -2079,6 +2182,110 @@
 
         function readWarningChecks(containerId) {
             return [...$(containerId).querySelectorAll("input[type=checkbox]:checked")].map(input => input.value);
+        }
+
+        function setupOrganizerDropZones() {
+            const grid = $("gallery-grid");
+            if (!grid) return;
+            grid.classList.toggle("organize-drop-zone", isOwner && ownerToolsOpen);
+            if (isOwner && ownerToolsOpen) {
+                grid.ondragover = allowGalleryItemDrop;
+                grid.ondragleave = clearGalleryDropHover;
+                grid.ondrop = dropGalleryItemToCurrentFolder;
+            } else {
+                grid.ondragover = null;
+                grid.ondragleave = null;
+                grid.ondrop = null;
+                grid.classList.remove("drop-hover");
+            }
+        }
+
+        function startGalleryItemDrag(event, itemId) {
+            if (!isOwner || !ownerToolsOpen) {
+                event.preventDefault();
+                return;
+            }
+            draggedGalleryItemId = itemId;
+            try {
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", itemId);
+                event.dataTransfer.setData("application/x-nullverse-gallery-item", itemId);
+            } catch { }
+            event.currentTarget?.classList.add("dragging-card");
+        }
+
+        function finishGalleryItemDrag(event = null) {
+            galleryDragEndedAt = Date.now();
+            draggedGalleryItemId = null;
+            event?.currentTarget?.classList.remove("dragging-card");
+            document.querySelectorAll(".drop-hover").forEach(el => el.classList.remove("drop-hover"));
+        }
+
+        function allowGalleryItemDrop(event) {
+            if (!isOwner || !ownerToolsOpen) return;
+            const itemId = draggedGalleryItemId || event.dataTransfer?.getData("application/x-nullverse-gallery-item") || event.dataTransfer?.getData("text/plain");
+            if (!itemId) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            const target = event.currentTarget;
+            if (target?.classList) target.classList.add("drop-hover");
+        }
+
+        function clearGalleryDropHover(event) {
+            const target = event.currentTarget;
+            if (!target?.classList) return;
+            const next = event.relatedTarget;
+            if (next && target.contains(next)) return;
+            target.classList.remove("drop-hover");
+        }
+
+        async function dropGalleryItemOnFolder(event, folderId) {
+            if (!isOwner || !ownerToolsOpen) return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget?.classList.remove("drop-hover");
+            const itemId = draggedGalleryItemId || event.dataTransfer?.getData("application/x-nullverse-gallery-item") || event.dataTransfer?.getData("text/plain");
+            finishGalleryItemDrag();
+            await moveGalleryItemToFolder(itemId, folderId || null);
+        }
+
+        async function dropGalleryItemToCurrentFolder(event) {
+            if (!isOwner || !ownerToolsOpen) return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget?.classList.remove("drop-hover");
+            const itemId = draggedGalleryItemId || event.dataTransfer?.getData("application/x-nullverse-gallery-item") || event.dataTransfer?.getData("text/plain");
+            finishGalleryItemDrag();
+            await moveGalleryItemToFolder(itemId, currentFolderId || null);
+        }
+
+        async function moveGalleryItemToFolder(itemId, folderId) {
+            if (!isOwner || !itemId) return;
+            const item = allItems.find(i => sameId(i.id, itemId));
+            if (!item) return toast("That gallery item could not be found.", "bad");
+            const targetFolder = folderId ? folders.find(f => sameId(f.id, folderId)) : null;
+            if (folderId && !targetFolder) return toast("That folder could not be found.", "bad");
+            const targetId = folderId || null;
+            if (sameId(item.folder_id, targetId)) return toast(targetFolder ? `Already inside ${targetFolder.name}.` : "Already at Gallery Home.", "warn", 2800);
+            try {
+                const nextOrder = nextSortOrder(allItems.filter(i => sameId(i.folder_id, targetId)));
+                const { error } = await supabase
+                    .from("creator_proof_gallery")
+                    .update({
+                        folder_id: targetId,
+                        sort_order: nextOrder,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq("id", item.id)
+                    .eq("owner_id", currentUser.id);
+                if (error) throw error;
+                await loadGalleryItems();
+                renderEverything();
+                toast(targetFolder ? `Moved “${item.title}” into ${targetFolder.name}.` : `Moved “${item.title}” to Gallery Home.`, "good");
+            } catch (error) {
+                console.error(error);
+                toast(error.message || "Could not move that gallery item.", "bad", 6500);
+            }
         }
 
         async function moveFolderOrder(folderId, delta) {
