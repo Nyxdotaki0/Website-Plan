@@ -820,6 +820,23 @@
                 display: flex;
             }
 
+            .floating-owner-actions .button {
+                margin-top: 0;
+                min-height: 42px;
+            }
+
+            .floating-owner-actions button.button {
+                font: inherit;
+            }
+
+            .floating-owner-actions .owner-only-action {
+                display: none;
+            }
+
+            .floating-owner-actions.owner-view .owner-only-action {
+                display: inline-flex;
+            }
+
         @media(max-width:860px) {
             header {
                 flex-direction: column;
@@ -1904,6 +1921,52 @@
                 font-weight: 850;
             }
 
+
+        /* Default sheet mini-studio patch: persistent actions, dense snap fill, and block fonts/sizes */
+        .sheet-showcase-card {
+            font-family: var(--sheet-showcase-font, Arial, sans-serif);
+        }
+
+        .sheet-content-grid {
+            grid-auto-flow: dense;
+        }
+
+        .sheet-block {
+            min-height: var(--sheet-block-min-height, 92px);
+            font-family: var(--sheet-block-font, var(--sheet-showcase-font, Arial, sans-serif));
+        }
+
+            .sheet-block.compact {
+                --sheet-block-min-height: 72px;
+            }
+
+            .sheet-block.normal {
+                --sheet-block-min-height: 104px;
+            }
+
+            .sheet-block.tall {
+                --sheet-block-min-height: 170px;
+            }
+
+            .sheet-block.feature {
+                --sheet-block-min-height: 260px;
+            }
+
+        .sheet-actions {
+            display: none !important;
+        }
+
+        .sheet-mini-studio-note {
+            margin: 10px 0 0;
+            padding: 10px 11px;
+            border: 1px solid rgba(135,210,255,.18);
+            border-radius: 10px;
+            background: rgba(135,210,255,.045);
+            color: var(--text-secondary);
+            line-height: 1.45;
+            font-size: .86rem;
+        }
+
         @media(max-width: 980px) {
             .sheet-showcase-topbar,
             .sheet-showcase-grid,
@@ -1947,9 +2010,10 @@
     <main id="page-root">
         <section class="default-shell"><div class="default-card"><p class="muted">Loading gallery showcase...</p></div></section>
     </main>
-    <div id="owner-actions" class="floating-owner-actions">
-        <a id="customize-link" class="button" href="#">Customize Showcase</a>
+    <div id="owner-actions" class="floating-owner-actions" aria-label="Gallery showcase actions">
         <a id="back-link" class="button" href="creator-gallery.html">Back to Gallery</a>
+        <button id="floating-report-button" class="button" type="button" onclick="openGalleryItemReport()">Report</button>
+        <a id="customize-link" class="button owner-only-action" href="#">Showcase Manager</a>
     </div>
     <div id="gallery-report-modal" class="modal-backdrop" aria-hidden="true" onclick="closeGalleryItemReport(event)">
         <div class="modal-panel gallery-report-panel" role="dialog" aria-modal="true" aria-labelledby="gallery-report-heading" onclick="event.stopPropagation()">
@@ -2126,6 +2190,10 @@
                                 <input id="manager-default-subtitle" placeholder="Character sheet, OC reference, finished art..." oninput="updateDefaultShowcaseField('subtitle', this.value)">
                             </div>
                             <div>
+                                <label>Sheet Font</label>
+                                <select id="manager-default-font" onchange="updateDefaultShowcaseField('sheetFont', this.value)"></select>
+                            </div>
+                            <div>
                                 <label>Credit / Proof Line</label>
                                 <input id="manager-default-credit" placeholder="Artwork by you, credit, proof note..." oninput="updateDefaultShowcaseField('credit', this.value)">
                             </div>
@@ -2144,7 +2212,8 @@
                         <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
                             <div>
                                 <h3 style="margin:0;">Snap Sheet Blocks</h3>
-                                <p class="muted" style="margin:7px 0 0;">Blocks stack into a sharp table automatically. Pick how much width a block should take, then reorder it like Lego pieces.</p>
+                                <p class="muted" style="margin:7px 0 0;">Blocks stack into a sharp table automatically. Pick width, height, font, and order like Lego pieces without unlocking colors, rotation, or full free placement.</p>
+                                <p class="sheet-mini-studio-note">This is the default mini studio: creators control the sheet structure and typography, while Nullverse keeps the page clean and readable for viewers.</p>
                             </div>
                         </div>
                         <div class="sheet-builder-toolbar">
@@ -2185,6 +2254,7 @@
         let ownerLayoutRow = null;
         let managerState = null;
         let currentRenderedCustomLayout = null;
+        let currentPublicMode = "default";
         let publicResizeTimer = null;
         let bootFinished = false;
         const requiredObjectTypes = ["back_gallery_button", "report_button"];
@@ -2700,11 +2770,12 @@
         }
 
         function renderDefault(defaultData = null) {
+            currentPublicMode = "default";
+            currentRenderedCustomLayout = null;
             const data = normalizeDefaultShowcase(defaultData || defaultShowcaseFromItem());
             const creatorName = profile?.display_name || profile?.username || "Nullverse Creator";
             const username = profile?.username ? `@${profile.username}` : "Creator profile";
             const avatar = profile?.avatar_url || defaultAvatarUrl();
-            const isOwner = currentUser && item && currentUser.id === item.owner_id;
             const placement = normalizeImagePlacement(data.imagePlacement || item?.image_placement);
             const mainImageHtml = item.image_url
                 ? `<img src="${escapeAttr(item.image_url)}" alt="${escapeAttr(data.title || item.title || 'Gallery artwork')}" style="${sheetImagePlacementCssVars(placement)}">`
@@ -2714,39 +2785,34 @@
 
             document.getElementById("page-root").innerHTML = `
 <section class="default-shell sheet-default-shell">
-                    <article class="default-card sheet-showcase-card">
-                        <header class="sheet-showcase-topbar">
-                            <a class="sheet-creator-avatar" href="${creatorProfileHref()}" title="Open creator profile">
-                                <img src="${escapeAttr(avatar)}" alt="${escapeAttr(creatorName)}">
-                            </a>
-                            <div class="sheet-creator-title">
-                                <p class="kicker">Gallery Showcase by ${escapeHtml(username)}</p>
-                                <h1>${escapeHtml(data.title || item.title || "Untitled")}</h1>
-                                <p>${escapeHtml(data.subtitle || formatType(item.proof_type || "gallery_item"))}</p>
-                            </div>
-                            <a class="button" href="${creatorProfileHref()}">Creator Profile</a>
-                        </header>
-
-                        <div class="sheet-showcase-grid">
-                            <aside class="sheet-media-column">
-                                <div class="sheet-media-frame">
-                                    ${mainImageHtml}
-                                    <span class="sheet-media-label">${escapeHtml(data.credit || galleryItemCreditLabel())}</span>
+                        <article class="default-card sheet-showcase-card" style="--sheet-showcase-font:${escapeAttr(safeFontCss(data.sheetFont))};">
+                            <header class="sheet-showcase-topbar">
+                                <a class="sheet-creator-avatar" href="${creatorProfileHref()}" title="Open creator profile">
+                                    <img src="${escapeAttr(avatar)}" alt="${escapeAttr(creatorName)}">
+                                </a>
+                                <div class="sheet-creator-title">
+                                    <p class="kicker">Gallery Showcase by ${escapeHtml(username)}</p>
+                                    <h1>${escapeHtml(data.title || item.title || "Untitled")}</h1>
+                                    <p>${escapeHtml(data.subtitle || formatType(item.proof_type || "gallery_item"))}</p>
                                 </div>
-                                ${mediaItems.map((media, index) => renderDefaultMediaFrame(media, index)).join("")}
-                            </aside>
+                                <a class="button" href="${creatorProfileHref()}">Creator Profile</a>
+                            </header>
 
-                            <section class="sheet-content-grid" aria-label="Showcase information">
-                                ${blocks.map(block => renderDefaultSheetBlock(block)).join("")}
-                            </section>
-                        </div>
+                            <div class="sheet-showcase-grid">
+                                <aside class="sheet-media-column">
+                                    <div class="sheet-media-frame">
+                                        ${mainImageHtml}
+                                        <span class="sheet-media-label">${escapeHtml(data.credit || galleryItemCreditLabel())}</span>
+                                    </div>
+                                    ${mediaItems.map((media, index) => renderDefaultMediaFrame(media, index)).join("")}
+                                </aside>
 
-                        <div class="sheet-actions">
-                            <a class="button" href="${galleryBackHref()}">Back to Creator Gallery</a>
-                            ${isOwner ? `<button class="button" type="button" onclick="openShowcaseManager()">Showcase Manager</button>` : ""}
-                            <button class="button" type="button" onclick="openGalleryItemReport()">Report</button>
-                        </div>
-                    </article>
+                                <section class="sheet-content-grid" aria-label="Showcase information">
+                                    ${blocks.map(block => renderDefaultSheetBlock(block)).join("")}
+                                </section>
+                            </div>
+
+                        </article>
 </section>`;
         }
 
@@ -2756,26 +2822,28 @@
             const placement = normalizeImagePlacement(media.placement || {});
             const label = media.title || media.label || `Reference ${index + 1}`;
             return `
-                    <div class="sheet-media-frame extra">
-                        <img src="${escapeAttr(source)}" alt="${escapeAttr(label)}" style="${sheetImagePlacementCssVars(placement)}">
-                        <span class="sheet-media-label">${escapeHtml(label)}</span>
-                    </div>
-                `;
+                        <div class="sheet-media-frame extra">
+                            <img src="${escapeAttr(source)}" alt="${escapeAttr(label)}" style="${sheetImagePlacementCssVars(placement)}">
+                            <span class="sheet-media-label">${escapeHtml(label)}</span>
+                        </div>
+                    `;
         }
 
         function renderDefaultSheetBlock(block) {
             const safe = normalizeDefaultBlock(block, {});
             const span = ["small", "medium", "wide"].includes(safe.span) ? safe.span : "medium";
             const kind = ["title", "proof", "credit"].includes(safe.kind) ? safe.kind : "";
+            const height = normalizeBlockHeight(safe.height);
             return `
-                    <article class="sheet-block ${escapeAttr(span)} ${escapeAttr(kind)}">
-                        <strong>${escapeHtml(safe.heading || "Info")}</strong>
-                        <p class="sheet-block-text">${escapeHtml(safe.body || "No details added yet.")}</p>
-                    </article>
-                `;
+                        <article class="sheet-block ${escapeAttr(span)} ${escapeAttr(kind)} ${escapeAttr(height)}" style="${sheetBlockInlineStyle(safe)}">
+                            <strong>${escapeHtml(safe.heading || "Info")}</strong>
+                            <p class="sheet-block-text">${escapeHtml(safe.body || "No details added yet.")}</p>
+                        </article>
+                    `;
         }
 
         function renderCustom(layout) {
+            currentPublicMode = "custom";
             layout = normalizeLayout(layout, layout?.layoutMode || layout?.mode || "desktop");
             currentRenderedCustomLayout = layout;
             const root = document.getElementById("page-root");
@@ -3293,18 +3361,33 @@
             const actions = document.getElementById("owner-actions");
             const customize = document.getElementById("customize-link");
             const back = document.getElementById("back-link");
-            if (!actions || !customize || !back) return;
+            const report = document.getElementById("floating-report-button");
+            if (!actions || !customize || !back || !report) return;
 
+            actions.classList.remove("show", "owner-view");
             back.href = galleryBackHref();
+            report.onclick = event => {
+                event.preventDefault();
+                openGalleryItemReport();
+            };
+
+            customize.textContent = "Showcase Manager";
+            customize.href = "#";
+            customize.onclick = event => {
+                event.preventDefault();
+                openShowcaseManager();
+            };
+
+            /* Custom Studio layouts keep their own required Back/Report objects.
+               The persistent bottom-right actions are only for the default sheet
+               so the page does not show duplicate controls. */
+            if (currentPublicMode === "custom") return;
+
             if (currentUser && item && currentUser.id === item.owner_id) {
-                customize.textContent = "Showcase Manager";
-                customize.href = "#";
-                customize.onclick = event => {
-                    event.preventDefault();
-                    openShowcaseManager();
-                };
-                actions.classList.add("show");
+                actions.classList.add("owner-view");
             }
+
+            actions.classList.add("show");
         }
 
         function isShowcaseConfig(value) {
@@ -3382,6 +3465,7 @@
                 description,
                 proof,
                 credit,
+                sheetFont: "Arial",
                 imagePlacement: normalizeImagePlacement(item?.image_placement),
                 mediaItems: [],
                 blocks: [
@@ -3407,13 +3491,15 @@
                 description,
                 proof,
                 credit,
+                sheetFont: normalizeSheetFont(source.sheetFont || source.sheet_font || source.fontFamily || source.font_family || "Arial"),
                 imagePlacement: normalizeImagePlacement(source.imagePlacement || source.image_placement || item?.image_placement),
                 mediaItems: normalizeDefaultMediaItems(source.mediaItems || source.extraImages || source.images || [], source),
                 blocks: normalizeDefaultBlocks(source.blocks || migrateLegacyDefaultBlocks(source), {
                     description,
                     proof,
                     credit,
-                    subtitle: source.subtitle
+                    subtitle: source.subtitle,
+                    sheetFont: normalizeSheetFont(source.sheetFont || source.sheet_font || source.fontFamily || source.font_family || "Arial")
                 }),
                 updatedAt: source.updatedAt || source.updated_at || new Date().toISOString()
             };
@@ -3468,9 +3554,47 @@
                 id: String(source.id || makeId("block")),
                 kind,
                 span,
+                height: normalizeBlockHeight(source.height || source.blockHeight || source.rowSize || source.block_height || "normal"),
+                fontFamily: normalizeSheetFont(source.fontFamily || source.font_family || source.font || fallback.sheetFont || "Arial"),
                 heading: String(source.heading || source.title || `Info ${index + 1}`),
-                body: String(source.body || source.content || source.text || "")
+                body: String(source.body || source.content || source.text || ""),
+                userEdited: !!source.userEdited
             };
+        }
+
+        function normalizeBlockHeight(value = "normal") {
+            const safe = String(value || "normal").trim().toLowerCase();
+            return ["compact", "normal", "tall", "feature"].includes(safe) ? safe : "normal";
+        }
+
+        const SHEET_FONT_CHOICES = [
+            "Arial",
+            "Georgia",
+            "Times New Roman",
+            "Verdana",
+            "Trebuchet MS",
+            "Courier New",
+            "Lucida Console",
+            "Impact"
+        ];
+
+        function normalizeSheetFont(value = "Arial") {
+            const text = String(value || "Arial").trim();
+            return SHEET_FONT_CHOICES.includes(text) ? text : "Arial";
+        }
+
+        function safeFontCss(value = "Arial") {
+            return normalizeSheetFont(value);
+        }
+
+        function sheetFontOptions(active = "Arial") {
+            const selected = normalizeSheetFont(active);
+            return SHEET_FONT_CHOICES.map(font => `<option value="${escapeAttr(font)}" ${font === selected ? "selected" : ""}>${escapeHtml(font)}</option>`).join("");
+        }
+
+        function sheetBlockInlineStyle(block = {}) {
+            const font = safeFontCss(block.fontFamily || "Arial");
+            return `--sheet-block-font:${escapeAttr(font)};`;
         }
 
         function normalizeDefaultMediaItems(mediaItems = [], source = {}) {
@@ -3582,6 +3706,11 @@
             if (previewImage) previewImage.src = item?.image_url || "";
             setValue("manager-default-title", data.title);
             setValue("manager-default-subtitle", data.subtitle);
+            const fontSelect = document.getElementById("manager-default-font");
+            if (fontSelect) {
+                fontSelect.innerHTML = sheetFontOptions(data.sheetFont);
+                fontSelect.value = normalizeSheetFont(data.sheetFont);
+            }
             setValue("manager-default-credit", data.credit);
             setValue("manager-default-description", data.description);
             setValue("manager-default-proof", data.proof);
@@ -3600,7 +3729,14 @@
 
         window.updateDefaultShowcaseField = function (field, value) {
             if (!managerState) return;
-            managerState.defaultData[field] = String(value || "");
+            managerState.defaultData[field] = field === "sheetFont" ? normalizeSheetFont(value) : String(value || "");
+            if (field === "sheetFont") {
+                managerState.defaultData.blocks = normalizeDefaultBlocks(managerState.defaultData.blocks || [], managerState.defaultData).map(block => ({
+                    ...block,
+                    fontFamily: block.userEdited && block.fontFamily ? block.fontFamily : normalizeSheetFont(value)
+                }));
+                renderManagerBlocks();
+            }
             syncBuiltInSheetBlocks();
         };
 
@@ -3625,28 +3761,28 @@
                 return;
             }
             box.innerHTML = mediaItems.map((media, index) => `
-                    <article class="sheet-manager-media-card" data-manager-media="${escapeAttr(media.id)}">
-                        <div class="sheet-manager-card-top">
-                            <span class="sheet-manager-handle">☰</span>
-                            <span class="sheet-manager-block-title">${escapeHtml(media.title || `Reference ${index + 1}`)}</span>
-                            <span class="sheet-manager-actions">
-                                <button class="button-muted" type="button" onclick="moveDefaultShowcaseMedia('${escapeAttr(media.id)}',-1)" ${index === 0 ? "disabled" : ""}>↑</button>
-                                <button class="button-muted" type="button" onclick="moveDefaultShowcaseMedia('${escapeAttr(media.id)}',1)" ${index === mediaItems.length - 1 ? "disabled" : ""}>↓</button>
-                                <button class="button-muted" type="button" onclick="removeDefaultShowcaseMedia('${escapeAttr(media.id)}')">Remove</button>
-                            </span>
-                        </div>
-                        <div class="sheet-field-grid">
-                            <div>
-                                <label>Image Label</label>
-                                <input value="${escapeAttr(media.title)}" oninput="updateDefaultShowcaseMedia('${escapeAttr(media.id)}','title',this.value)">
+                        <article class="sheet-manager-media-card" data-manager-media="${escapeAttr(media.id)}">
+                            <div class="sheet-manager-card-top">
+                                <span class="sheet-manager-handle">☰</span>
+                                <span class="sheet-manager-block-title">${escapeHtml(media.title || `Reference ${index + 1}`)}</span>
+                                <span class="sheet-manager-actions">
+                                    <button class="button-muted" type="button" onclick="moveDefaultShowcaseMedia('${escapeAttr(media.id)}',-1)" ${index === 0 ? "disabled" : ""}>↑</button>
+                                    <button class="button-muted" type="button" onclick="moveDefaultShowcaseMedia('${escapeAttr(media.id)}',1)" ${index === mediaItems.length - 1 ? "disabled" : ""}>↓</button>
+                                    <button class="button-muted" type="button" onclick="removeDefaultShowcaseMedia('${escapeAttr(media.id)}')">Remove</button>
+                                </span>
                             </div>
-                            <div>
-                                <label>Image URL</label>
-                                <input value="${escapeAttr(media.url)}" placeholder="Paste image URL for this reference slot" oninput="updateDefaultShowcaseMedia('${escapeAttr(media.id)}','url',this.value)">
+                            <div class="sheet-field-grid">
+                                <div>
+                                    <label>Image Label</label>
+                                    <input value="${escapeAttr(media.title)}" oninput="updateDefaultShowcaseMedia('${escapeAttr(media.id)}','title',this.value)">
+                                </div>
+                                <div>
+                                    <label>Image URL</label>
+                                    <input value="${escapeAttr(media.url)}" placeholder="Paste image URL for this reference slot" oninput="updateDefaultShowcaseMedia('${escapeAttr(media.id)}','url',this.value)">
+                                </div>
                             </div>
-                        </div>
-                    </article>
-                `).join("");
+                        </article>
+                    `).join("");
         }
 
         window.addDefaultShowcaseMedia = function () {
@@ -3684,42 +3820,54 @@
             const blocks = normalizeDefaultBlocks(managerState.defaultData.blocks, managerState.defaultData);
             managerState.defaultData.blocks = blocks;
             box.innerHTML = blocks.map((block, index) => `
-                    <article class="sheet-manager-block-card" data-manager-block="${escapeAttr(block.id)}">
-                        <div class="sheet-manager-card-top">
-                            <span class="sheet-manager-handle">☰</span>
-                            <span class="sheet-manager-block-title">${escapeHtml(block.heading || `Block ${index + 1}`)} · ${escapeHtml(block.span)}</span>
-                            <span class="sheet-manager-actions">
-                                <button class="button-muted" type="button" onclick="moveDefaultShowcaseBlock('${escapeAttr(block.id)}',-1)" ${index === 0 ? "disabled" : ""}>↑</button>
-                                <button class="button-muted" type="button" onclick="moveDefaultShowcaseBlock('${escapeAttr(block.id)}',1)" ${index === blocks.length - 1 ? "disabled" : ""}>↓</button>
-                                <button class="button-muted" type="button" onclick="removeDefaultShowcaseBlock('${escapeAttr(block.id)}')">Remove</button>
-                            </span>
-                        </div>
-                        <div class="sheet-field-grid">
-                            <div>
-                                <label>Block Title</label>
-                                <input value="${escapeAttr(block.heading)}" oninput="updateDefaultShowcaseBlock('${escapeAttr(block.id)}','heading',this.value)">
+                        <article class="sheet-manager-block-card" data-manager-block="${escapeAttr(block.id)}">
+                            <div class="sheet-manager-card-top">
+                                <span class="sheet-manager-handle">☰</span>
+                                <span class="sheet-manager-block-title">${escapeHtml(block.heading || `Block ${index + 1}`)} · ${escapeHtml(block.span)} · ${escapeHtml(block.height || "normal")}</span>
+                                <span class="sheet-manager-actions">
+                                    <button class="button-muted" type="button" onclick="moveDefaultShowcaseBlock('${escapeAttr(block.id)}',-1)" ${index === 0 ? "disabled" : ""}>↑</button>
+                                    <button class="button-muted" type="button" onclick="moveDefaultShowcaseBlock('${escapeAttr(block.id)}',1)" ${index === blocks.length - 1 ? "disabled" : ""}>↓</button>
+                                    <button class="button-muted" type="button" onclick="removeDefaultShowcaseBlock('${escapeAttr(block.id)}')">Remove</button>
+                                </span>
                             </div>
-                            <div>
-                                <label>Snap Width</label>
-                                <select onchange="updateDefaultShowcaseBlock('${escapeAttr(block.id)}','span',this.value)">
-                                    <option value="small" ${block.span === "small" ? "selected" : ""}>Small / 1 row chunk</option>
-                                    <option value="medium" ${block.span === "medium" ? "selected" : ""}>Medium / half row</option>
-                                    <option value="wide" ${block.span === "wide" ? "selected" : ""}>Wide / full row</option>
-                                </select>
+                            <div class="sheet-field-grid">
+                                <div>
+                                    <label>Block Title</label>
+                                    <input value="${escapeAttr(block.heading)}" oninput="updateDefaultShowcaseBlock('${escapeAttr(block.id)}','heading',this.value)">
+                                </div>
+                                <div>
+                                    <label>Snap Width</label>
+                                    <select onchange="updateDefaultShowcaseBlock('${escapeAttr(block.id)}','span',this.value)">
+                                        <option value="small" ${block.span === "small" ? "selected" : ""}>Small / 1 row chunk</option>
+                                        <option value="medium" ${block.span === "medium" ? "selected" : ""}>Medium / half row</option>
+                                        <option value="wide" ${block.span === "wide" ? "selected" : ""}>Wide / full row</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label>Block Type</label>
+                                    <select onchange="updateDefaultShowcaseBlock('${escapeAttr(block.id)}','kind',this.value)">
+                                        ${["text", "title", "stat", "lore", "ability", "relationship", "rules", "credit", "proof"].map(kind => `<option value="${kind}" ${block.kind === kind ? "selected" : ""}>${formatType(kind)}</option>`).join("")}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label>Block Height</label>
+                                    <select onchange="updateDefaultShowcaseBlock('${escapeAttr(block.id)}','height',this.value)">
+                                        ${["compact", "normal", "tall", "feature"].map(size => `<option value="${size}" ${block.height === size ? "selected" : ""}>${formatType(size)}</option>`).join("")}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label>Block Font</label>
+                                    <select onchange="updateDefaultShowcaseBlock('${escapeAttr(block.id)}','fontFamily',this.value)">
+                                        ${sheetFontOptions(block.fontFamily || managerState.defaultData.sheetFont || "Arial")}
+                                    </select>
+                                </div>
+                                <div class="wide">
+                                    <label>Block Text</label>
+                                    <textarea oninput="updateDefaultShowcaseBlock('${escapeAttr(block.id)}','body',this.value)">${escapeHtml(block.body)}</textarea>
+                                </div>
                             </div>
-                            <div>
-                                <label>Block Type</label>
-                                <select onchange="updateDefaultShowcaseBlock('${escapeAttr(block.id)}','kind',this.value)">
-                                    ${["text", "title", "stat", "lore", "ability", "relationship", "rules", "credit", "proof"].map(kind => `<option value="${kind}" ${block.kind === kind ? "selected" : ""}>${formatType(kind)}</option>`).join("")}
-                                </select>
-                            </div>
-                            <div class="wide">
-                                <label>Block Text</label>
-                                <textarea oninput="updateDefaultShowcaseBlock('${escapeAttr(block.id)}','body',this.value)">${escapeHtml(block.body)}</textarea>
-                            </div>
-                        </div>
-                    </article>
-                `).join("");
+                        </article>
+                    `).join("");
         }
 
         window.updateDefaultShowcaseBlock = function (id, field, value) {
@@ -3728,7 +3876,7 @@
             if (!block) return;
             block[field] = String(value || "");
             block.userEdited = true;
-            if (field === "span" || field === "kind") renderManagerBlocks();
+            if (["span", "kind", "height", "fontFamily"].includes(field)) renderManagerBlocks();
         };
 
         window.addDefaultShowcaseBlock = function (span = "medium") {
@@ -3738,6 +3886,8 @@
                 id: makeId("block"),
                 kind: "text",
                 span: ["small", "medium", "wide"].includes(span) ? span : "medium",
+                height: "normal",
+                fontFamily: normalizeSheetFont(managerState.defaultData.sheetFont || "Arial"),
                 heading: "New Section",
                 body: "Add details here.",
                 userEdited: true
@@ -3756,7 +3906,7 @@
                 ["medium", "rules", "Usage Rules", "Explain permissions, trades, repost rules, or commission limits."],
                 ["wide", "lore", "Lore", "Add backstory, personality, relationships, or timeline notes."]
             ].forEach(([span, kind, heading, body]) => {
-                managerState.defaultData.blocks.push({ id: makeId("block"), span, kind, heading, body, userEdited: true });
+                managerState.defaultData.blocks.push({ id: makeId("block"), span, kind, height: span === "wide" ? "tall" : "normal", fontFamily: normalizeSheetFont(managerState.defaultData.sheetFont || "Arial"), heading, body, userEdited: true });
             });
             renderManagerBlocks();
         };
@@ -3868,6 +4018,7 @@
                 ...managerState.defaultData,
                 title: document.getElementById("manager-default-title")?.value || managerState.defaultData.title,
                 subtitle: document.getElementById("manager-default-subtitle")?.value || managerState.defaultData.subtitle,
+                sheetFont: normalizeSheetFont(document.getElementById("manager-default-font")?.value || managerState.defaultData.sheetFont || "Arial"),
                 credit: document.getElementById("manager-default-credit")?.value || managerState.defaultData.credit,
                 description: document.getElementById("manager-default-description")?.value || managerState.defaultData.description,
                 proof: document.getElementById("manager-default-proof")?.value || managerState.defaultData.proof,
