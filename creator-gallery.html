@@ -1184,6 +1184,483 @@
                 padding: 16px;
             }
         }
+
+
+        /* ============================================================
+           CREATOR GALLERY MOBILE ORGANIZER / VIEWING OPTIMIZATION PATCH
+           Makes the public creator gallery cleaner on phones and adds
+           touch-first drag/drop organization for owner-managed galleries.
+           Desktop HTML drag/drop, save logic, safety gates, and uploads stay intact.
+        ============================================================ */
+
+        body.mobile-gallery-dragging {
+            overflow: hidden !important;
+            overscroll-behavior: none !important;
+            touch-action: none !important;
+        }
+
+        .mobile-gallery-drag-ghost {
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 2147482600;
+            pointer-events: none;
+            opacity: .94;
+            transform-origin: center center;
+            border-radius: 20px;
+            box-shadow: 0 26px 80px rgba(0,0,0,.62), 0 0 0 2px rgba(135,210,255,.34);
+            filter: saturate(1.08) brightness(1.06);
+        }
+
+            .mobile-gallery-drag-ghost::after {
+                content: "Drop into folder";
+                position: absolute;
+                left: 50%;
+                top: -42px;
+                transform: translateX(-50%);
+                padding: 8px 11px;
+                border-radius: 999px;
+                border: 1px solid rgba(135,210,255,.38);
+                background: rgba(0,0,0,.78);
+                color: #e7f5ff;
+                font-size: .78rem;
+                font-weight: 850;
+                white-space: nowrap;
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+            }
+
+        .mobile-touch-drag-source {
+            opacity: .38 !important;
+            transform: scale(.975) !important;
+            border-color: rgba(135,210,255,.46) !important;
+        }
+
+        .mobile-drop-target {
+            outline: 2px solid rgba(135,210,255,.72) !important;
+            outline-offset: -5px !important;
+            box-shadow: 0 0 0 4px rgba(135,210,255,.12), 0 22px 52px rgba(0,0,0,.34) !important;
+        }
+
+        .chip.mobile-drop-target {
+            outline-offset: 3px !important;
+        }
+
+        @media(max-width: 760px) {
+            header {
+                position: sticky;
+                padding: 9px 12px;
+                gap: 8px;
+                align-items: center;
+            }
+
+            .site-logo {
+                height: 38px;
+            }
+
+            nav {
+                width: 100%;
+                display: flex;
+                gap: 11px;
+                justify-content: flex-start;
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                padding-bottom: 2px;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+            }
+
+                nav::-webkit-scrollbar {
+                    display: none;
+                }
+
+                nav a, nav button {
+                    flex: 0 0 auto;
+                    font-size: .84rem;
+                    white-space: nowrap;
+                }
+
+            main {
+                width: calc(100% - 14px);
+                padding: 12px 0 118px;
+            }
+
+            .hero {
+                padding: 16px;
+                margin-bottom: 12px;
+                border-radius: 22px;
+                gap: 14px;
+            }
+
+            .hero-kicker {
+                margin-bottom: 8px;
+                padding: 6px 9px;
+                font-size: .67rem;
+            }
+
+            .hero h1 {
+                margin-bottom: 7px;
+                font-size: clamp(1.75rem, 10vw, 3.05rem);
+                letter-spacing: -.05em;
+            }
+
+            .hero p {
+                font-size: .9rem;
+                line-height: 1.48;
+                display: -webkit-box;
+                -webkit-line-clamp: 3;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+            }
+
+            .hero-actions {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0,1fr));
+                gap: 8px;
+                width: 100%;
+                justify-content: stretch;
+            }
+
+                .hero-actions .button {
+                    width: 100%;
+                    min-height: 38px;
+                    padding: 8px 9px;
+                    border-radius: 12px;
+                    font-size: .78rem;
+                    text-align: center;
+                }
+
+            .toolbar {
+                padding: 12px;
+                margin-bottom: 12px;
+                border-radius: 18px;
+                gap: 10px;
+            }
+
+            .breadcrumb,
+            .gallery-tabs {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                padding-bottom: 3px;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+            }
+
+                .breadcrumb::-webkit-scrollbar,
+                .gallery-tabs::-webkit-scrollbar {
+                    display: none;
+                }
+
+            .chip, .folder-chip, .warning-pill, .status-pill {
+                flex: 0 0 auto;
+                padding: 6px 9px;
+                font-size: .72rem;
+                max-width: 76vw;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .section-heading {
+                margin-top: 0;
+                gap: 8px;
+            }
+
+                .section-heading h2 {
+                    font-size: 1rem;
+                }
+
+                .section-heading p {
+                    font-size: .82rem;
+                    line-height: 1.35;
+                }
+
+            .folder-grid,
+            .gallery-grid {
+                grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+                gap: 10px !important;
+            }
+
+            .folder-card,
+            .gallery-card {
+                aspect-ratio: .82 / 1;
+                min-height: 0 !important;
+                border-radius: 18px;
+            }
+
+                .folder-card:hover, .gallery-card:hover {
+                    transform: none;
+                }
+
+            .card-top {
+                top: 8px;
+                left: 8px;
+                right: 8px;
+                gap: 5px;
+            }
+
+                .card-top .status-pill {
+                    max-width: calc(50% - 3px);
+                    padding: 5px 7px;
+                    font-size: .62rem;
+                }
+
+            .card-content {
+                padding: 10px;
+                gap: 6px;
+            }
+
+                .card-content h3 {
+                    font-size: .92rem;
+                    line-height: 1.08;
+                }
+
+                .card-content p {
+                    font-size: .76rem;
+                    line-height: 1.28;
+                    -webkit-line-clamp: 2;
+                }
+
+            .card-meta-row {
+                gap: 4px;
+            }
+
+                .card-meta-row .status-pill {
+                    padding: 5px 7px;
+                    font-size: .62rem;
+                }
+
+            .owner-managed-card .card-content,
+            .owner-managed-card.organizing-card .card-content {
+                padding-bottom: 74px !important;
+            }
+
+            .owner-card-edit-action,
+            .owner-card-organize-actions {
+                left: 8px !important;
+                right: 8px !important;
+            }
+
+            .owner-card-edit-action {
+                bottom: 8px;
+                justify-content: flex-end;
+            }
+
+            .owner-card-organize-actions {
+                bottom: 42px;
+                justify-content: flex-start;
+            }
+
+                .owner-card-edit-action .button,
+                .owner-card-organize-actions .button {
+                    min-height: 28px;
+                    padding: 5px 7px;
+                    font-size: .66rem;
+                }
+
+            .gallery-card.drag-ready,
+            .gallery-card.drag-ready * {
+                -webkit-user-select: none;
+                user-select: none;
+            }
+
+            .gallery-card.drag-ready {
+                touch-action: none;
+            }
+
+            .folder-card.drop-ready,
+            .chip.drop-ready,
+            .gallery-grid.organize-drop-zone {
+                touch-action: manipulation;
+            }
+
+            .gallery-grid.organize-drop-zone {
+                min-height: 150px;
+                padding: 7px;
+                margin: -7px;
+                border-radius: 20px;
+            }
+
+            .organizer-hint-pill {
+                display: none;
+            }
+
+            .owner-manage-bar {
+                left: 8px;
+                right: 8px;
+                bottom: max(8px, env(safe-area-inset-bottom));
+                width: auto;
+                transform: none;
+                display: none;
+                grid-template-columns: repeat(2, minmax(0,1fr));
+                gap: 7px;
+                padding: 8px;
+                border-radius: 18px;
+            }
+
+                .owner-manage-bar.show {
+                    display: grid;
+                }
+
+                .owner-manage-bar .button {
+                    min-height: 38px;
+                    padding: 8px 9px;
+                    border-radius: 13px;
+                    font-size: .74rem;
+                }
+
+            .empty-panel {
+                padding: 22px;
+                border-radius: 18px;
+                font-size: .9rem;
+            }
+
+            .modal-backdrop {
+                align-items: stretch;
+                padding: 8px;
+            }
+
+            .modal-card {
+                width: 100%;
+                max-height: calc(100dvh - 16px);
+                border-radius: 22px;
+            }
+
+            .modal-top {
+                padding: 14px;
+                gap: 10px;
+            }
+
+                .modal-top h2 {
+                    font-size: 1.45rem;
+                }
+
+                .modal-top p {
+                    font-size: .84rem;
+                    line-height: 1.38;
+                }
+
+            .modal-body {
+                padding: 14px;
+            }
+
+            .field-grid, .warning-grid, .tiny-grid {
+                grid-template-columns: 1fr !important;
+                gap: 10px;
+            }
+
+            input, textarea, select {
+                min-height: 42px;
+                padding: 10px 11px;
+                border-radius: 12px;
+                font-size: 16px;
+            }
+
+            .check-card {
+                padding: 9px;
+                border-radius: 11px;
+                font-size: .86rem;
+            }
+
+            .modal-actions {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .item-preview-layout {
+                gap: 14px;
+            }
+
+            .item-preview-art {
+                min-height: 280px;
+                border-radius: 18px;
+            }
+
+                .item-preview-art img {
+                    min-height: 280px;
+                }
+
+            .item-preview-details h2 {
+                font-size: 1.8rem;
+            }
+
+            .image-placement-overlay.open {
+                grid-template-rows: auto minmax(0,1fr);
+            }
+
+            .image-placement-topbar {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 10px;
+                padding: max(10px, env(safe-area-inset-top)) 10px 10px;
+            }
+
+            .image-placement-actions {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0,1fr));
+                gap: 7px;
+            }
+
+                .image-placement-actions .button {
+                    min-height: 36px;
+                    padding: 7px 8px;
+                    font-size: .74rem;
+                }
+
+            .image-placement-body {
+                min-height: 0;
+                display: grid;
+                grid-template-columns: 1fr !important;
+                grid-template-rows: minmax(0,1fr) auto;
+                gap: 9px;
+                padding: 9px;
+            }
+
+            .image-placement-workspace,
+            .image-placement-sidebar {
+                border-radius: 18px;
+            }
+
+            .image-placement-frame-shell {
+                min-height: 100%;
+                padding: 18px;
+            }
+
+            .image-placement-frame {
+                width: min(var(--fit-frame-width,640px), calc(100vw - 58px));
+                height: min(var(--fit-frame-height,640px), calc(100vw - 58px));
+            }
+
+            .image-placement-sidebar {
+                max-height: 34dvh;
+                padding: 12px;
+            }
+
+            .placement-row {
+                grid-template-columns: minmax(0,1fr) 70px;
+            }
+
+            .toast {
+                top: 74px;
+                width: calc(100vw - 18px);
+                padding: 12px 13px;
+                border-radius: 15px;
+                font-size: .86rem;
+            }
+        }
+
+        @media(max-width: 380px) {
+            .folder-grid,
+            .gallery-grid {
+                grid-template-columns: 1fr !important;
+            }
+
+            .hero-actions,
+            .owner-manage-bar {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1376,6 +1853,7 @@
         let imagePlacementStudio = null;
         let activePreviewItemId = null;
         let draggedGalleryItemId = null;
+        let mobileGalleryDrag = null;
         let galleryDragEndedAt = 0;
         let toastTimer = null;
 
@@ -1656,8 +2134,8 @@
         function renderBreadcrumb() {
             const trail = folderTrail(currentFolderId);
             const makeDropAttrs = folderId => isOwner && ownerToolsOpen
-                ? ` ondragover="allowGalleryItemDrop(event)" ondragleave="clearGalleryDropHover(event)" ondrop="dropGalleryItemOnFolder(event, '${escapeAttr(folderId || "")}')"`
-                : "";
+                ? ` data-mobile-drop-folder="${escapeAttr(folderId || "")}" ondragover="allowGalleryItemDrop(event)" ondragleave="clearGalleryDropHover(event)" ondrop="dropGalleryItemOnFolder(event, '${escapeAttr(folderId || "")}')"`
+                : ` data-mobile-drop-folder="${escapeAttr(folderId || "")}"`;
             const makeDropClass = () => isOwner && ownerToolsOpen ? " drop-ready" : "";
             const html = [`<button type="button" class="chip ${!currentFolderId ? "active" : ""}${makeDropClass()}"${makeDropAttrs("")} onclick="navigateBreadcrumb(null)">Gallery Home</button>`]
                 .concat(trail.map(folder => `<button type="button" class="chip ${folder.id === currentFolderId ? "active" : ""}${makeDropClass()}"${makeDropAttrs(folder.id)} onclick="navigateBreadcrumb('${escapeAttr(folder.id)}')">${escapeHtml(folder.icon || "📁")} ${escapeHtml(folder.name)}</button>`));
@@ -1686,10 +2164,13 @@
         function toggleOwnerTools() {
             if (!isOwner) return;
             ownerToolsOpen = !ownerToolsOpen;
-            if (!ownerToolsOpen) draggedGalleryItemId = null;
+            if (!ownerToolsOpen) {
+                draggedGalleryItemId = null;
+                cleanupMobileGalleryDrag(false);
+            }
             renderOwnerBar();
             renderEverything();
-            if (ownerToolsOpen) toast("Organizer on: drag gallery items into folders, or drop them on the current item area.", "good", 5200);
+            if (ownerToolsOpen) toast(isMobileGalleryOrganizer() ? "Organizer on: press and drag gallery cards into folders or breadcrumbs." : "Organizer on: drag gallery items into folders, or drop them on the current item area.", "good", 5200);
         }
 
         function renderGalleryBrowser() {
@@ -1746,12 +2227,12 @@
                 ? ` data-folder-id="${escapeAttr(folder.id)}" ondragover="allowGalleryItemDrop(event)" ondragleave="clearGalleryDropHover(event)" ondrop="dropGalleryItemOnFolder(event, '${escapeAttr(folder.id)}')"`
                 : ` data-folder-id="${escapeAttr(folder.id)}"`;
             return `<article class="${classes.join(" ")}"${dropAttrs} onclick="openFolder('${escapeAttr(folder.id)}')">
-                                ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, folder)}
-                                <div class="card-top"><span class="status-pill">${escapeHtml(folder.icon || "📁")} Folder</span>${agePill(folder.age_rating)}</div>
-                                ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', 1)">↓</button></div>` : ""}
-                                ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openFolderModal('${escapeAttr(folder.id)}')">Edit</button></div>` : ""}
-                                <div class="card-content"><h3>${escapeHtml(folder.name)}</h3><p>${escapeHtml(folder.description || `${childCount} folder${childCount === 1 ? "" : "s"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`)}</p><div class="card-meta-row">${visibilityPill(folder)} ${warningCountPill(folder)}</div></div>
-                            </article>`;
+                                    ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, folder)}
+                                    <div class="card-top"><span class="status-pill">${escapeHtml(folder.icon || "📁")} Folder</span>${agePill(folder.age_rating)}</div>
+                                    ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', 1)">↓</button></div>` : ""}
+                                    ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openFolderModal('${escapeAttr(folder.id)}')">Edit</button></div>` : ""}
+                                    <div class="card-content"><h3>${escapeHtml(folder.name)}</h3><p>${escapeHtml(folder.description || `${childCount} folder${childCount === 1 ? "" : "s"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`)}</p><div class="card-meta-row">${visibilityPill(folder)} ${warningCountPill(folder)}</div></div>
+                                </article>`;
         }
 
 
@@ -1773,12 +2254,12 @@
                 ? `<button class="button tiny soft move-out" type="button" onclick="event.stopPropagation(); moveGalleryItemToFolder('${escapeAttr(item.id)}', null)">Move Out</button>`
                 : "";
             return `<article class="${classes.join(" ")}"${dragAttrs} onclick="openItemPreview('${escapeAttr(item.id)}')">
-                                ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, item)}
-                                <div class="card-top"><span class="status-pill">${escapeHtml(formatType(item.proof_type))}</span>${agePill(item.age_rating)}</div>
-                                ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', 1)">↓</button>${moveOutButton}</div>` : ""}
-                                ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openItemModal('${escapeAttr(item.id)}')">Edit</button></div>` : ""}
-                                <div class="card-content"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description || "No description provided.")}</p><div class="card-meta-row">${visibilityPill(item)} ${warningCountPill(item)}</div></div>
-                            </article>`;
+                                    ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, item)}
+                                    <div class="card-top"><span class="status-pill">${escapeHtml(formatType(item.proof_type))}</span>${agePill(item.age_rating)}</div>
+                                    ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', 1)">↓</button>${moveOutButton}</div>` : ""}
+                                    ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openItemModal('${escapeAttr(item.id)}')">Edit</button></div>` : ""}
+                                    <div class="card-content"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description || "No description provided.")}</p><div class="card-meta-row">${visibilityPill(item)} ${warningCountPill(item)}</div></div>
+                                </article>`;
         }
 
 
@@ -1834,7 +2315,7 @@
         }
 
         function openItemPreview(itemId) {
-            if (Date.now() - galleryDragEndedAt < 280) return;
+            if (Date.now() - galleryDragEndedAt < 420) return;
             const item = allItems.find(i => i.id === itemId);
             if (!item) return;
             const safety = canShowRecord(item);
@@ -2321,10 +2802,177 @@
             return [...$(containerId).querySelectorAll("input[type=checkbox]:checked")].map(input => input.value);
         }
 
+
+        function isMobileGalleryOrganizer() {
+            return !!(isOwner && ownerToolsOpen && (window.matchMedia?.("(pointer: coarse)")?.matches || window.innerWidth <= 900));
+        }
+
+        function setupMobileOrganizerDrag() {
+            document.body.classList.toggle("gallery-organizer-mobile-ready", isMobileGalleryOrganizer());
+            document.querySelectorAll(".gallery-card[data-gallery-item-id]").forEach(card => {
+                if (card.dataset.mobileOrganizerBound === "1") return;
+                card.dataset.mobileOrganizerBound = "1";
+                card.addEventListener("pointerdown", beginMobileGalleryItemDrag, { passive: false });
+                card.addEventListener("contextmenu", event => {
+                    if (isMobileGalleryOrganizer()) event.preventDefault();
+                });
+            });
+        }
+
+        function beginMobileGalleryItemDrag(event) {
+            if (!isMobileGalleryOrganizer()) return;
+            if (event.pointerType && event.pointerType !== "touch" && event.pointerType !== "pen") return;
+            if (event.target?.closest?.("button,a,input,textarea,select,label,.owner-card-edit-action,.owner-card-organize-actions")) return;
+            const card = event.currentTarget;
+            const itemId = card?.dataset?.galleryItemId || "";
+            if (!itemId) return;
+
+            cleanupMobileGalleryDrag(false);
+            const rect = card.getBoundingClientRect();
+            mobileGalleryDrag = {
+                itemId,
+                pointerId: event.pointerId,
+                card,
+                startX: event.clientX,
+                startY: event.clientY,
+                lastX: event.clientX,
+                lastY: event.clientY,
+                rect,
+                started: false,
+                dropTarget: null,
+                ghost: null,
+                autoScrollTimer: null
+            };
+            card.setPointerCapture?.(event.pointerId);
+            card.addEventListener("pointermove", updateMobileGalleryItemDrag, { passive: false });
+            card.addEventListener("pointerup", endMobileGalleryItemDrag, { passive: false, once: true });
+            card.addEventListener("pointercancel", cancelMobileGalleryItemDrag, { passive: false, once: true });
+        }
+
+        function startMobileGalleryDragVisual(event) {
+            if (!mobileGalleryDrag || mobileGalleryDrag.started) return;
+            const { card, rect, itemId } = mobileGalleryDrag;
+            const ghost = card.cloneNode(true);
+            ghost.removeAttribute("onclick");
+            ghost.removeAttribute("draggable");
+            ghost.classList.add("mobile-gallery-drag-ghost");
+            ghost.style.width = `${Math.min(rect.width, 220)}px`;
+            ghost.style.height = `${Math.min(rect.height, 270)}px`;
+            ghost.style.transform = `translate(${event.clientX - rect.width / 2}px, ${event.clientY - rect.height / 2}px) scale(.92)`;
+            document.body.appendChild(ghost);
+            mobileGalleryDrag.ghost = ghost;
+            mobileGalleryDrag.started = true;
+            draggedGalleryItemId = itemId;
+            card.classList.add("mobile-touch-drag-source");
+            document.body.classList.add("mobile-gallery-dragging");
+            if (navigator.vibrate) navigator.vibrate(10);
+        }
+
+        function updateMobileGalleryItemDrag(event) {
+            const drag = mobileGalleryDrag;
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            drag.lastX = event.clientX;
+            drag.lastY = event.clientY;
+            const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+            if (!drag.started && distance < 9) return;
+            if (!drag.started) startMobileGalleryDragVisual(event);
+            if (!drag.started) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const rect = drag.rect;
+            if (drag.ghost) {
+                drag.ghost.style.transform = `translate(${event.clientX - Math.min(rect.width, 220) / 2}px, ${event.clientY - Math.min(rect.height, 270) / 2}px) scale(.92)`;
+            }
+
+            setMobileGalleryDropHover(findMobileGalleryDropTarget(event.clientX, event.clientY));
+            mobileGalleryAutoScroll(event.clientY);
+        }
+
+        function findMobileGalleryDropTarget(clientX, clientY) {
+            const el = document.elementFromPoint(clientX, clientY);
+            if (!el) return null;
+            const folderTarget = el.closest?.(".folder-card[data-folder-id], [data-mobile-drop-folder]");
+            if (folderTarget && !folderTarget.closest?.(".gallery-card")) {
+                return {
+                    element: folderTarget,
+                    folderId: folderTarget.dataset.mobileDropFolder ?? folderTarget.dataset.folderId ?? ""
+                };
+            }
+            const grid = el.closest?.("#gallery-grid.organize-drop-zone");
+            if (grid) return { element: grid, folderId: currentFolderId || "" };
+            return null;
+        }
+
+        function setMobileGalleryDropHover(target) {
+            if (mobileGalleryDrag?.dropTarget?.element && mobileGalleryDrag.dropTarget.element !== target?.element) {
+                mobileGalleryDrag.dropTarget.element.classList.remove("drop-hover", "mobile-drop-target");
+            }
+            mobileGalleryDrag.dropTarget = target || null;
+            if (target?.element) target.element.classList.add("drop-hover", "mobile-drop-target");
+        }
+
+        function mobileGalleryAutoScroll(clientY) {
+            if (!mobileGalleryDrag?.started) return;
+            const edge = 84;
+            const speed = clientY < edge ? -14 : clientY > window.innerHeight - edge ? 14 : 0;
+            if (!speed) {
+                clearInterval(mobileGalleryDrag.autoScrollTimer);
+                mobileGalleryDrag.autoScrollTimer = null;
+                return;
+            }
+            if (mobileGalleryDrag.autoScrollTimer) return;
+            mobileGalleryDrag.autoScrollTimer = setInterval(() => {
+                window.scrollBy({ top: speed, behavior: "auto" });
+                if (mobileGalleryDrag) setMobileGalleryDropHover(findMobileGalleryDropTarget(mobileGalleryDrag.lastX, mobileGalleryDrag.lastY));
+            }, 32);
+        }
+
+        async function endMobileGalleryItemDrag(event) {
+            const drag = mobileGalleryDrag;
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            const shouldDrop = !!drag.started;
+            const target = drag.dropTarget;
+            if (shouldDrop) {
+                event.preventDefault();
+                event.stopPropagation();
+                galleryDragEndedAt = Date.now();
+            }
+            const itemId = drag.itemId;
+            cleanupMobileGalleryDrag(false);
+            if (!shouldDrop) return;
+            if (!target) return toast("Drag onto a folder, breadcrumb, or the current gallery area.", "warn", 3200);
+            await moveGalleryItemToFolder(itemId, target.folderId || null);
+        }
+
+        function cancelMobileGalleryItemDrag(event = null) {
+            if (mobileGalleryDrag?.started) galleryDragEndedAt = Date.now();
+            cleanupMobileGalleryDrag(false);
+        }
+
+        function cleanupMobileGalleryDrag(setEndedAt = true) {
+            if (!mobileGalleryDrag) return;
+            const drag = mobileGalleryDrag;
+            clearInterval(drag.autoScrollTimer);
+            drag.card?.classList?.remove("mobile-touch-drag-source");
+            drag.card?.removeEventListener?.("pointermove", updateMobileGalleryItemDrag);
+            drag.card?.removeEventListener?.("pointerup", endMobileGalleryItemDrag);
+            drag.card?.removeEventListener?.("pointercancel", cancelMobileGalleryItemDrag);
+            drag.ghost?.remove?.();
+            drag.dropTarget?.element?.classList?.remove("drop-hover", "mobile-drop-target");
+            document.querySelectorAll(".mobile-drop-target").forEach(el => el.classList.remove("mobile-drop-target"));
+            document.body.classList.remove("mobile-gallery-dragging");
+            mobileGalleryDrag = null;
+            draggedGalleryItemId = null;
+            if (setEndedAt) galleryDragEndedAt = Date.now();
+        }
+
         function setupOrganizerDropZones() {
             const grid = $("gallery-grid");
             if (!grid) return;
             grid.classList.toggle("organize-drop-zone", isOwner && ownerToolsOpen);
+            grid.dataset.mobileCurrentDrop = currentFolderId || "";
             if (isOwner && ownerToolsOpen) {
                 grid.ondragover = allowGalleryItemDrop;
                 grid.ondragleave = clearGalleryDropHover;
@@ -2333,8 +2981,9 @@
                 grid.ondragover = null;
                 grid.ondragleave = null;
                 grid.ondrop = null;
-                grid.classList.remove("drop-hover");
+                grid.classList.remove("drop-hover", "mobile-drop-target");
             }
+            setupMobileOrganizerDrag();
         }
 
         function startGalleryItemDrag(event, itemId) {
