@@ -683,6 +683,76 @@
             z-index: 6;
         }
 
+        /* Gallery item warning gate session patch: warning cards stay image-only until the viewer continues. */
+        .gallery-card.safety-label-only-card {
+            --gallery-safe-overlay-bottom: 0px;
+        }
+
+            .gallery-card.safety-label-only-card .card-content,
+            .gallery-card.safety-label-only-card .card-top,
+            .gallery-card.safety-label-only-card .owner-card-edit-action,
+            .gallery-card.safety-label-only-card .owner-card-organize-actions {
+                display: none !important;
+            }
+
+            .gallery-card.safety-label-only-card .card-shade {
+                z-index: 1;
+                background: radial-gradient(circle at 50% 20%, rgba(255,255,255,.08), transparent 36%), rgba(0,0,0,.36);
+            }
+
+            .gallery-card.safety-label-only-card .safety-screen {
+                inset: 0 !important;
+                z-index: 8 !important;
+                border-radius: inherit !important;
+                padding: 18px !important;
+                background: radial-gradient(circle at 50% 12%, rgba(255,255,255,.12), transparent 34%), rgba(0,0,0,.54) !important;
+                pointer-events: none !important;
+            }
+
+                .gallery-card.safety-label-only-card .safety-screen strong {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-height: 38px;
+                    padding: 9px 13px;
+                    border-radius: 999px;
+                    border: 1px solid rgba(255,255,255,.22);
+                    background: rgba(0,0,0,.70);
+                    color: #fff;
+                    font-size: .92rem;
+                    font-weight: 900;
+                    letter-spacing: .045em;
+                    text-transform: uppercase;
+                    box-shadow: 0 12px 30px rgba(0,0,0,.36);
+                    backdrop-filter: blur(14px);
+                    -webkit-backdrop-filter: blur(14px);
+                }
+
+                .gallery-card.safety-label-only-card .safety-screen span {
+                    display: none !important;
+                }
+
+            .gallery-card.safety-label-only-card.blur-preview .gallery-cover img {
+                filter: blur(18px) brightness(.52) !important;
+            }
+
+            .gallery-card.safety-label-only-card.hide-preview .gallery-cover {
+                background: radial-gradient(circle at 50% 18%, rgba(255,255,255,.10), transparent 34%), rgba(0,0,0,.58);
+            }
+
+        @media(max-width: 760px) {
+            .gallery-card.safety-label-only-card .safety-screen {
+                padding: 12px !important;
+            }
+
+                .gallery-card.safety-label-only-card .safety-screen strong {
+                    min-height: 34px;
+                    padding: 8px 11px;
+                    font-size: .72rem;
+                    letter-spacing: .035em;
+                }
+        }
+
         .empty-panel {
             border: 1px dashed rgba(255,255,255,.16);
             border-radius: 22px;
@@ -1934,6 +2004,7 @@
         let pendingPlacement = null;
         let imagePlacementStudio = null;
         let activePreviewItemId = null;
+        let sessionUnlockedSafetyItemIds = new Set();
         let draggedGalleryItemId = null;
         let mobileGalleryDrag = null;
         let galleryDragEndedAt = 0;
@@ -2308,6 +2379,29 @@
         }
 
 
+        function isGalleryItemRecord(record) {
+            return !!record && Object.prototype.hasOwnProperty.call(record, "proof_type") && Object.prototype.hasOwnProperty.call(record, "title");
+        }
+
+        function isItemSafetyUnlockedForSession(itemId) {
+            return sessionUnlockedSafetyItemIds.has(String(itemId || ""));
+        }
+
+        function unlockItemSafetyForSession(itemId) {
+            const id = String(itemId || "");
+            if (!id) return;
+            sessionUnlockedSafetyItemIds.add(id);
+            renderEverything();
+            toast("Preview unlocked for this page visit. Tap it again to open.", "good", 3600);
+        }
+
+        function shouldShowSafetyLabelOnly(record, safety = {}) {
+            return isGalleryItemRecord(record)
+                && !isOwner
+                && !isItemSafetyUnlockedForSession(record.id)
+                && (safety.preview === "blur" || safety.preview === "hide" || safety.reason === "blocked");
+        }
+
         function renderFolderCard(folder) {
             const safety = canShowRecord(folder);
             const classes = ["folder-card"];
@@ -2324,20 +2418,22 @@
                 ? ` data-folder-id="${escapeAttr(folder.id)}" ondragover="allowGalleryItemDrop(event)" ondragleave="clearGalleryDropHover(event)" ondrop="dropGalleryItemOnFolder(event, '${escapeAttr(folder.id)}')"`
                 : ` data-folder-id="${escapeAttr(folder.id)}"`;
             return `<article class="${classes.join(" ")}"${dropAttrs} onclick="openFolder('${escapeAttr(folder.id)}')">
-                                    ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, folder)}
-                                    <div class="card-top"><span class="status-pill">${escapeHtml(folder.icon || "📁")} Folder</span>${agePill(folder.age_rating)}</div>
-                                    ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', 1)">↓</button></div>` : ""}
-                                    ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openFolderModal('${escapeAttr(folder.id)}')">Edit</button></div>` : ""}
-                                    <div class="card-content"><h3>${escapeHtml(folder.name)}</h3><p>${escapeHtml(folder.description || `${childCount} folder${childCount === 1 ? "" : "s"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`)}</p><div class="card-meta-row">${visibilityPill(folder)} ${warningCountPill(folder)}</div></div>
-                                </article>`;
+                                        ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, folder)}
+                                        <div class="card-top"><span class="status-pill">${escapeHtml(folder.icon || "📁")} Folder</span>${agePill(folder.age_rating)}</div>
+                                        ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', 1)">↓</button></div>` : ""}
+                                        ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openFolderModal('${escapeAttr(folder.id)}')">Edit</button></div>` : ""}
+                                        <div class="card-content"><h3>${escapeHtml(folder.name)}</h3><p>${escapeHtml(folder.description || `${childCount} folder${childCount === 1 ? "" : "s"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`)}</p><div class="card-meta-row">${visibilityPill(folder)} ${warningCountPill(folder)}</div></div>
+                                    </article>`;
         }
 
 
         function renderItemCard(item) {
             const safety = canShowRecord(item);
+            const labelOnlySafety = shouldShowSafetyLabelOnly(item, safety);
             const classes = ["gallery-card"];
             if (safety.preview === "blur") classes.push("blur-preview");
             if (safety.preview === "hide") classes.push("hide-preview");
+            if (labelOnlySafety) classes.push("safety-label-only-card");
             if (isOwner) classes.push("owner-managed-card");
             if (isOwner && ownerToolsOpen) classes.push("organizing-card", "drag-ready");
             if (draggedGalleryItemId && sameId(draggedGalleryItemId, item.id)) classes.push("dragging-card");
@@ -2351,14 +2447,13 @@
                 ? `<button class="button tiny soft move-out" type="button" onclick="event.stopPropagation(); moveGalleryItemToFolder('${escapeAttr(item.id)}', null)">Move Out</button>`
                 : "";
             return `<article class="${classes.join(" ")}"${dragAttrs} onclick="openItemPreview('${escapeAttr(item.id)}')">
-                                    ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, item)}
-                                    <div class="card-top"><span class="status-pill">${escapeHtml(formatType(item.proof_type))}</span>${agePill(item.age_rating)}</div>
-                                    ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', 1)">↓</button>${moveOutButton}</div>` : ""}
-                                    ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openItemModal('${escapeAttr(item.id)}')">Edit</button></div>` : ""}
-                                    <div class="card-content"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description || "No description provided.")}</p><div class="card-meta-row">${visibilityPill(item)} ${warningCountPill(item)}</div></div>
-                                </article>`;
+                                        ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, item)}
+                                        ${labelOnlySafety ? "" : `<div class="card-top"><span class="status-pill">${escapeHtml(formatType(item.proof_type))}</span>${agePill(item.age_rating)}</div>`}
+                                        ${!labelOnlySafety && isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', 1)">↓</button>${moveOutButton}</div>` : ""}
+                                        ${!labelOnlySafety && isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openItemModal('${escapeAttr(item.id)}')">Edit</button></div>` : ""}
+                                        ${labelOnlySafety ? "" : `<div class="card-content"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description || "No description provided.")}</p><div class="card-meta-row">${visibilityPill(item)} ${warningCountPill(item)}</div></div>`}
+                                    </article>`;
         }
-
 
         function safetyOverlayHtml(safety, record) {
             if (safety.reason === "blocked") return `<div class="safety-screen"><strong>Restricted</strong><span>${escapeHtml(safety.message)}</span></div>`;
@@ -2429,7 +2524,7 @@
             if (!item) return;
             const safety = canShowRecord(item);
             if (safety.reason === "blocked") return showBlockedSafety(item, safety);
-            if (safety.needsGate && !isOwner) return showSafetyGate(item, () => openItemPreviewUnlocked(itemId));
+            if (safety.needsGate && !isOwner) return showSafetyGate(item, () => unlockItemSafetyForSession(itemId));
             openItemPreviewUnlocked(itemId);
         }
 
@@ -2461,6 +2556,7 @@
             const experience = viewerExperience();
             if (age === "mature" && !adult) return { showCard: true, preview: "hide", needsGate: false, reason: "blocked", message: "18+ content is blocked for guests and minors." };
             if (age === "mature" && experience !== "adult") return { showCard: true, preview: "hide", needsGate: false, reason: "blocked", message: "Switch to adult experience to view mature gallery work." };
+            if (isGalleryItemRecord(record) && isItemSafetyUnlockedForSession(record.id)) return { showCard: true, preview: "none", needsGate: false, reason: "ok", message: "" };
             if (censor === "hide") return { showCard: true, preview: "hide", needsGate: true, reason: "gate", message: safetySummary(record) };
             if (censor === "blur") return { showCard: true, preview: "blur", needsGate: true, reason: "gate", message: safetySummary(record) };
             if (warnings.length && experience !== "adult") return { showCard: true, preview: "blur", needsGate: true, reason: "gate", message: safetySummary(record) };
@@ -2484,7 +2580,7 @@
         }
 
         function showSafetyGate(record, onContinue) {
-            showSafetyModal(record, { reason: "gate", message: safetySummary(record) }, onContinue);
+            showSafetyModal(record, { reason: "gate", message: safetySummary(record), continueLabel: isGalleryItemRecord(record) ? "Show Preview" : "Continue" }, onContinue);
         }
 
         function showSafetyModal(record, safety, onContinue) {
@@ -2494,7 +2590,7 @@
             $("safety-modal-body").innerHTML = `<p>${escapeHtml(safety.message || safetySummary(record))}</p>${warningsHtml(record)}${normalizeAgeRating(record.age_rating) === "mature" ? `<p class="status-message warn">This entry is marked Mature / 18+.</p>` : ""}`;
             const button = $("safety-continue-button");
             if (onContinue) {
-                button.textContent = isFolderRecord ? "Open Folder" : "Continue";
+                button.textContent = safety.continueLabel || (isFolderRecord ? "Open Folder" : "Continue");
                 button.style.display = "inline-flex";
                 button.onclick = () => { closeSafetyModal(); onContinue(); };
             } else {
