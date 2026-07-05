@@ -290,6 +290,25 @@
                 margin: 0;
             }
 
+        .breadcrumb-back {
+            border-color: rgba(135,210,255,.28) !important;
+            background: rgba(135,210,255,.08) !important;
+            color: #dff4ff !important;
+            font-weight: 850;
+        }
+
+        .breadcrumb-arrow {
+            flex: 0 0 auto;
+            color: var(--text-muted,rgba(255,255,255,.54));
+            opacity: .82;
+            font-weight: 900;
+            user-select: none;
+        }
+
+        .breadcrumb-current {
+            box-shadow: 0 0 0 3px rgba(255,255,255,.045);
+        }
+
         .content-shell {
             display: grid;
             gap: 18px;
@@ -623,6 +642,46 @@
             .safety-screen strong {
                 font-size: 1rem;
             }
+
+        /* Gallery safety preview clipping fix: keep warning overlays out of the title/meta area. */
+        .folder-card, .gallery-card {
+            isolation: isolate;
+            --gallery-safe-overlay-bottom: clamp(104px, 34%, 136px);
+        }
+
+        .blur-preview .folder-cover,
+        .blur-preview .gallery-cover {
+            filter: none !important;
+            transform: none !important;
+            clip-path: inset(0 round 24px);
+        }
+
+            .blur-preview .folder-cover img,
+            .blur-preview .gallery-cover img {
+                filter: blur(15px) brightness(.72) !important;
+            }
+
+        .blur-preview .safety-screen,
+        .hide-preview .safety-screen {
+            inset: 0 0 var(--gallery-safe-overlay-bottom) 0;
+            border-radius: inherit inherit 0 0;
+            z-index: 2;
+        }
+
+        .safety-screen span {
+            max-width: min(230px, calc(100% - 18px));
+            line-height: 1.35;
+        }
+
+        .blur-preview .card-content,
+        .hide-preview .card-content {
+            z-index: 5;
+        }
+
+        .blur-preview .card-top,
+        .hide-preview .card-top {
+            z-index: 6;
+        }
 
         .empty-panel {
             border: 1px dashed rgba(255,255,255,.16);
@@ -1421,6 +1480,29 @@
                     -webkit-line-clamp: 2;
                 }
 
+            .folder-card,
+            .gallery-card {
+                --gallery-safe-overlay-bottom: 88px;
+            }
+
+            .safety-screen {
+                gap: 5px;
+                padding: 10px;
+            }
+
+                .safety-screen strong {
+                    font-size: .78rem;
+                }
+
+                .safety-screen span {
+                    font-size: .66rem;
+                    line-height: 1.18;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                }
+
             .card-meta-row {
                 gap: 4px;
             }
@@ -1872,6 +1954,7 @@
             openItemPlacement,
             openFolder,
             navigateBreadcrumb,
+            goBackOneFolder,
             openItemPreview,
             closeItemPreview,
             closeSafetyModal,
@@ -2137,8 +2220,22 @@
                 ? ` data-mobile-drop-folder="${escapeAttr(folderId || "")}" ondragover="allowGalleryItemDrop(event)" ondragleave="clearGalleryDropHover(event)" ondrop="dropGalleryItemOnFolder(event, '${escapeAttr(folderId || "")}')"`
                 : ` data-mobile-drop-folder="${escapeAttr(folderId || "")}"`;
             const makeDropClass = () => isOwner && ownerToolsOpen ? " drop-ready" : "";
-            const html = [`<button type="button" class="chip ${!currentFolderId ? "active" : ""}${makeDropClass()}"${makeDropAttrs("")} onclick="navigateBreadcrumb(null)">Gallery Home</button>`]
-                .concat(trail.map(folder => `<button type="button" class="chip ${folder.id === currentFolderId ? "active" : ""}${makeDropClass()}"${makeDropAttrs(folder.id)} onclick="navigateBreadcrumb('${escapeAttr(folder.id)}')">${escapeHtml(folder.icon || "📁")} ${escapeHtml(folder.name)}</button>`));
+            const crumbs = [{ id: null, icon: "🏠", name: "Gallery Home" }, ...trail];
+            const html = [];
+
+            if (currentFolderId) {
+                const parent = parentFolderId(currentFolderId);
+                const parentLabel = parent ? (folders.find(f => sameId(f.id, parent))?.name || "Parent Folder") : "Gallery Home";
+                html.push(`<button type="button" class="chip breadcrumb-back" onclick="goBackOneFolder()" title="Back to ${escapeAttr(parentLabel)}">← Back</button>`);
+            }
+
+            crumbs.forEach((folder, index) => {
+                const id = folder.id || "";
+                const isCurrent = sameId(id, currentFolderId);
+                if (index > 0) html.push(`<span class="breadcrumb-arrow" aria-hidden="true">›</span>`);
+                html.push(`<button type="button" class="chip ${isCurrent ? "active breadcrumb-current" : ""}${index === 0 ? " breadcrumb-home" : ""}${makeDropClass()}"${makeDropAttrs(id)} onclick="navigateBreadcrumb(${id ? `'${escapeAttr(id)}'` : "null"})" title="${escapeAttr(index === 0 ? "Gallery Home" : folder.name)}">${index === 0 ? "🏠" : escapeHtml(folder.icon || "📁")} ${escapeHtml(folder.name)}</button>`);
+            });
+
             $("breadcrumb").innerHTML = html.join("");
             const editBtn = $("edit-current-folder-btn");
             if (editBtn) editBtn.style.display = isOwner && currentFolderId ? "inline-flex" : "none";
@@ -2286,6 +2383,17 @@
             window.scrollTo({ top: 0, behavior: "smooth" });
         }
 
+        function parentFolderId(folderId) {
+            const current = folders.find(folder => sameId(folder.id, folderId));
+            return current?.parent_id || null;
+        }
+
+        function goBackOneFolder() {
+            if (!currentFolderId) return;
+            navigateBreadcrumb(parentFolderId(currentFolderId));
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
         function folderNeedsOpenChoice(folder, safety = {}) {
             if (!folder || isOwner) return false;
             const warnings = normalizeWarnings(folder.content_warnings);
@@ -2311,6 +2419,7 @@
 
         function navigateBreadcrumb(folderId) {
             currentFolderId = folderId || null;
+            activeType = "all";
             renderEverything();
         }
 
