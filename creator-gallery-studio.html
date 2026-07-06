@@ -2939,6 +2939,36 @@
             -webkit-user-select: none !important;
             user-select: none !important;
         }
+
+
+        /* ============================================================
+           GALLERY STUDIO BULLETPROOF SAFETY MODE
+           Prevents browser/GPU lockups from runaway renders, huge layer
+           counts, expensive blur/animation effects, and live-input storms.
+        ============================================================ */
+        body.gallery-studio-safe-mode *,
+        body.gallery-studio-safe-mode *::before,
+        body.gallery-studio-safe-mode *::after {
+            animation: none !important;
+            transition: none !important;
+            scroll-behavior: auto !important;
+        }
+
+        body.gallery-studio-safe-mode .studio-topbar,
+        body.gallery-studio-safe-mode .sidebar,
+        body.gallery-studio-safe-mode .inspector,
+        body.gallery-studio-safe-mode .toast,
+        body.gallery-studio-safe-mode .fixed-nav,
+        body.gallery-studio-safe-mode .button-content,
+        body.gallery-studio-safe-mode .badge-content,
+        body.gallery-studio-safe-mode .credit-pill-object {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+        }
+
+        body.gallery-studio-safe-mode .obj {
+            box-shadow: none !important;
+        }
     </style>
 </head>
 <body>
@@ -3010,6 +3040,244 @@
         state.layouts = createBundle();
 
         Object.assign(window, { switchLayout, setSnapMode, togglePanel, zoomStudio, centerView, copyPcLayoutToMobile, addObject, saveDraft, publishLayout, enterPreviewMode, exitPreviewMode, undoStudio, redoStudio, filterGalleryItems, chooseGalleryItem, selectObject, updateObjectField, updateObjectStyle, updateObjectText, updateCanvasStyle, applyObjectGradient, applyCanvasGradient, applyTextGradient, applySharedStyle, applySharedTextGradient, applySharedBorderGradient, deleteSelected, duplicateSelected, toggleObjectLock, toggleObjectVisibility, moveLayer, pickImageForObject, pickImageForCanvas, selectRequiredObject, updateObjectSolidPaint, updateObjectGradientPaint, updateObjectManualPaint, updateObjectPaintOpacity, updateCanvasSolidPaint, updateCanvasGradientPaint, updateCanvasManualPaint, updateCanvasPaintOpacity, lockSelected, unlockSelected, showSelected, hideSelected, clearObjectTextGradient, clearSharedTextGradient, updateSharedSolidPaint, updateSharedGradientPaint, updateSharedManualPaint, updateSharedPaintOpacity, syncMetricControl, syncPaintOpacityControl, stopStudioColorEvent, startTextEdit, updateCreditType, updateCreditPillField, updateCreditField, searchCreditCreators, selectCreditCreator, clearCreditCreator });
+
+
+        /* ============================================================
+           Gallery Studio bulletproof runtime guard.
+           This does not delete user layouts. It caps only what the DOM tries
+           to paint, throttles live-input storms, and keeps a broken render
+           from recursively locking the browser.
+        ============================================================ */
+        const STUDIO_SAFETY = {
+            MAX_OBJECTS: 220,
+            MAX_RENDER_OBJECTS: 260,
+            MAX_HISTORY: 35,
+            MAX_HISTORY_BYTES: 1800000,
+            SLOW_RENDER_MS: 650,
+            WARN_COOLDOWN_MS: 4200
+        };
+
+        state.safety = {
+            rendering: false,
+            renderQueued: false,
+            renderErrors: 0,
+            lastWarnAt: 0,
+            layerTimer: null,
+            safeMode: false
+        };
+
+        function studioSafetyNow() {
+            return (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+        }
+
+        function studioSafetyWarn(message, type = "warn") {
+            const now = studioSafetyNow();
+            if (now - (state.safety?.lastWarnAt || 0) < STUDIO_SAFETY.WARN_COOLDOWN_MS) return;
+            state.safety.lastWarnAt = now;
+            try { toast(message, type, 7000); } catch (error) { console.warn(message); }
+        }
+
+        function studioSafetyMode(reason = "heavy layout") {
+            if (state.safety?.safeMode) return;
+            state.safety.safeMode = true;
+            document.body.classList.add("gallery-studio-safe-mode");
+            studioSafetyWarn(`Safety mode turned on for this Gallery Studio session because the ${reason} was too heavy. Your layout was not deleted.`, "warn");
+        }
+
+        function studioSafetyRun(label, fn, fallback) {
+            const started = studioSafetyNow();
+            try {
+                const result = fn();
+                const took = studioSafetyNow() - started;
+                if (took > STUDIO_SAFETY.SLOW_RENDER_MS) studioSafetyMode(`${label} render`);
+                return result;
+            } catch (error) {
+                console.error(`[Gallery Studio safety] ${label} failed:`, error);
+                state.safety.renderErrors = (state.safety.renderErrors || 0) + 1;
+                studioSafetyMode(`${label} step`);
+                studioSafetyWarn(`${label} was stopped before it could lock the editor. Try removing a few layers or refreshing.`, "bad");
+                return fallback;
+            }
+        }
+
+        function studioSafetyCappedObjects(objects = []) {
+            const all = Array.isArray(objects) ? objects : [];
+            if (all.length <= STUDIO_SAFETY.MAX_RENDER_OBJECTS) return all;
+            const keepIds = new Set(state.selected || []);
+            const required = new Set(REQUIRED || []);
+            const sorted = [...all].sort((a, b) => (Number(a.z) || 0) - (Number(b.z) || 0));
+            const important = sorted.filter(o => keepIds.has(o.id) || required.has(o.type));
+            const visible = sorted.filter(o => !o.hidden && !keepIds.has(o.id) && !required.has(o.type));
+            const hidden = sorted.filter(o => o.hidden && !keepIds.has(o.id) && !required.has(o.type));
+            const remaining = Math.max(0, STUDIO_SAFETY.MAX_RENDER_OBJECTS - important.length);
+            const capped = [...important, ...visible.slice(-remaining), ...hidden.slice(0, Math.max(0, remaining - visible.length))];
+            const unique = [...new Map(capped.map(o => [o.id, o])).values()].slice(0, STUDIO_SAFETY.MAX_RENDER_OBJECTS);
+            studioSafetyMode(`${all.length}-layer layout`);
+            studioSafetyWarn(`This Gallery Studio layout has ${all.length} layers, so the editor is only painting the safest ${unique.length} layers right now to prevent freezing.`, "warn");
+            return unique.sort((a, b) => (Number(a.z) || 0) - (Number(b.z) || 0));
+        }
+
+        function studioSafetyWithCappedLayout(label, fn) {
+            const layout = state.layouts?.[state.mode];
+            const original = layout?.objects;
+            if (!layout || !Array.isArray(original) || original.length <= STUDIO_SAFETY.MAX_RENDER_OBJECTS) {
+                return studioSafetyRun(label, fn);
+            }
+            layout.objects = studioSafetyCappedObjects(original);
+            try {
+                return studioSafetyRun(label, fn);
+            } finally {
+                layout.objects = original;
+                if (state.layouts?.[state.mode]) state.layouts[state.mode].objects = original;
+            }
+        }
+
+        function studioSafetyQueueLayers() {
+            clearTimeout(state.safety.layerTimer);
+            state.safety.layerTimer = setTimeout(() => studioSafetyRun("Layer refresh", () => renderLayers()), 120);
+        }
+
+        const __galleryStudioRawRenderAll = renderAll;
+        const __galleryStudioRawRenderCanvas = renderCanvas;
+        const __galleryStudioRawRenderLayers = renderLayers;
+        const __galleryStudioRawRenderInspector = renderInspector;
+        const __galleryStudioRawPushHistory = pushHistory;
+        const __galleryStudioRawAddObject = addObject;
+        const __galleryStudioRawUpdateObjectField = updateObjectField;
+        const __galleryStudioRawUpdateObjectStyle = updateObjectStyle;
+        const __galleryStudioRawApplySharedStyle = applySharedStyle;
+        const __galleryStudioRawUpdateObjectText = updateObjectText;
+
+        renderAll = function galleryStudioSafeRenderAll() {
+            if (state.safety.rendering) {
+                if (!state.safety.renderQueued) {
+                    state.safety.renderQueued = true;
+                    setTimeout(() => {
+                        state.safety.renderQueued = false;
+                        renderAll();
+                    }, 0);
+                }
+                return;
+            }
+            state.safety.rendering = true;
+            try {
+                return studioSafetyRun("Full render", () => __galleryStudioRawRenderAll());
+            } finally {
+                state.safety.rendering = false;
+            }
+        };
+
+        renderCanvas = function galleryStudioSafeRenderCanvas() {
+            return studioSafetyWithCappedLayout("Canvas", () => __galleryStudioRawRenderCanvas());
+        };
+
+        renderLayers = function galleryStudioSafeRenderLayers() {
+            return studioSafetyWithCappedLayout("Layers", () => {
+                __galleryStudioRawRenderLayers();
+                const total = state.layouts?.[state.mode]?.objects?.length || 0;
+                if (total > STUDIO_SAFETY.MAX_RENDER_OBJECTS && dom.layers) {
+                    dom.layers.insertAdjacentHTML("afterbegin", `<p class="warnbox">Safety mode: showing a capped layer list from ${total} total layers so the browser stays responsive.</p>`);
+                }
+            });
+        };
+
+        renderInspector = function galleryStudioSafeRenderInspector() {
+            return studioSafetyRun("Inspector", () => __galleryStudioRawRenderInspector());
+        };
+
+        pushHistory = function galleryStudioSafePushHistory() {
+            return studioSafetyRun("History snapshot", () => {
+                const snap = JSON.stringify({ mode: state.mode, layouts: state.layouts });
+                if (snap.length > STUDIO_SAFETY.MAX_HISTORY_BYTES) {
+                    studioSafetyMode("history snapshot");
+                    studioSafetyWarn("Undo history was paused because this layout is too large. Saving still works, but this prevents memory lockups.", "warn");
+                    state.redo = [];
+                    return;
+                }
+                if (state.history[state.history.length - 1] === snap) return;
+                state.history.push(snap);
+                if (state.history.length > STUDIO_SAFETY.MAX_HISTORY) state.history.shift();
+                state.redo = [];
+            });
+        };
+
+        addObject = function galleryStudioSafeAddObject(type) {
+            const count = state.layouts?.[state.mode]?.objects?.length || 0;
+            if (count >= STUDIO_SAFETY.MAX_OBJECTS && !REQUIRED.includes(type)) {
+                studioSafetyMode("layer limit");
+                studioSafetyWarn(`This item already has ${count} layers. Remove or merge a few layers before adding more so beta testers do not freeze their browser.`, "bad");
+                return;
+            }
+            return studioSafetyRun("Add layer", () => __galleryStudioRawAddObject(type));
+        };
+
+        updateObjectField = function galleryStudioSafeUpdateObjectField(id, field, value, live = false) {
+            const o = find(id);
+            const metricField = ["x", "y", "w", "h", "z", "rotation"].includes(field);
+            if (o && metricField && live) {
+                return studioSafetyRun("Live metric update", () => {
+                    o[field] = Number(value) || 0;
+                    if (field === "w" || field === "h") clampSize(o);
+                    updateTransformDom([o], { group: state.selected.length > 1 });
+                    studioSafetyQueueLayers();
+                });
+            }
+            return studioSafetyRun("Field update", () => __galleryStudioRawUpdateObjectField(id, field, value, live));
+        };
+
+        updateObjectStyle = function galleryStudioSafeUpdateObjectStyle(id, key, value, options = {}) {
+            const o = find(id);
+            if (o && options?.live && !options?.commit) {
+                return studioSafetyRun("Live style update", () => {
+                    paintHistory(`${id}:${key}:style`, options);
+                    o.styles = o.styles || normalizeStyles({}, o.type);
+                    o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding"].includes(key) ? Number(value) : value;
+                    updateObjectNode(o);
+                    syncLiveInspectorControls();
+                });
+            }
+            return studioSafetyRun("Style update", () => __galleryStudioRawUpdateObjectStyle(id, key, value, options));
+        };
+
+        applySharedStyle = function galleryStudioSafeApplySharedStyle(key, value, options = {}) {
+            if (options?.live && !options?.commit) {
+                return studioSafetyRun("Live shared style update", () => {
+                    paintHistory(`shared:${key}:style`, options);
+                    const changed = [];
+                    selectedEditable().forEach(o => {
+                        o.styles = o.styles || normalizeStyles({}, o.type);
+                        o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding"].includes(key) ? Number(value) : value;
+                        changed.push(o);
+                    });
+                    updateTransformDom(changed, { group: state.selected.length > 1 });
+                });
+            }
+            return studioSafetyRun("Shared style update", () => __galleryStudioRawApplySharedStyle(key, value, options));
+        };
+
+        updateObjectText = function galleryStudioSafeUpdateObjectText(id, value) {
+            const o = find(id);
+            if (!o) return;
+            return studioSafetyRun("Text update", () => {
+                if (o.type === "credit_pill") {
+                    o.credit = normalizeCreditData(o.credit || {}, o.text || "");
+                    o.credit.type = "custom";
+                    o.credit.customText = value;
+                    updateCreditText(o);
+                } else {
+                    o.text = value;
+                }
+                const node = dom.canvas.querySelector(`[data-id="${CSS.escape(o.id)}"]`);
+                const inner = node?.querySelector?.(".inner");
+                if (inner) {
+                    inner.innerHTML = innerHtml(o);
+                    styleObj(node, o);
+                } else {
+                    renderCanvas();
+                }
+                syncObjectTextInspector(id, o.text);
+            });
+        };
 
         window.addEventListener("error", e => { console.error(e.error || e.message); toast("Editor error: " + (e.message || "unknown error"), "bad", 7000) });
         window.addEventListener("unhandledrejection", e => { console.error(e.reason); toast("Editor error: " + (e.reason?.message || e.reason || "unknown error"), "bad", 7000) });
@@ -3543,56 +3811,56 @@
                 : `<p class="credit-security-note">Search a Nullverse username, then press Add Creator. This is the only credit type that becomes a clickable profile link.</p>`;
 
             return `<div class="group credit-system-overhaul" data-credit-inspector="${idv}">
-                                                            <h4>Credit Pill System</h4>
-                                                            <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
-                                                            <div class="credit-live-preview">
-                                                                <span class="credit-live-label">Live credit pill</span>
-                                                                <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
-                                                                <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
-                                                            </div>
-                                                            <label>Credit Type</label>
-                                                            <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
-
-                                                            <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
-                                                                <label>Custom Credit Text</label>
-                                                                <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
-                                                            </div>
-
-                                                            <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
-                                                                <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
-                                                            </div>
-
-                                                            <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
-                                                                <label>Nullverse Username</label>
-                                                                <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
-                                                                <div style="margin-top:-6px;margin-bottom:12px;">
-                                                                    <label>Search Nullverse Creator</label>
-                                                                    <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+                                                                <h4>Credit Pill System</h4>
+                                                                <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
+                                                                <div class="credit-live-preview">
+                                                                    <span class="credit-live-label">Live credit pill</span>
+                                                                    <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
+                                                                    <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
                                                                 </div>
-                                                                ${selectedCreator}
-                                                                <div id="credit-results-${idv}" class="credit-search-results"></div>
-                                                            </div>
+                                                                <label>Credit Type</label>
+                                                                <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
 
-                                                            <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
-                                                                <label>Artist / Creator / Source Name</label>
-                                                                <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
-                                                            </div>
+                                                                <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
+                                                                    <label>Custom Credit Text</label>
+                                                                    <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
+                                                                </div>
 
-                                                            <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
-                                                                <label>Credit Link / Source Text</label>
-                                                                <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
-                                                                <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
-                                                            </div>
+                                                                <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
+                                                                    <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
+                                                                </div>
 
-                                                            <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
-                                                                <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
-                                                                <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
-                                                            </div>
+                                                                <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
+                                                                    <label>Nullverse Username</label>
+                                                                    <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
+                                                                    <div style="margin-top:-6px;margin-bottom:12px;">
+                                                                        <label>Search Nullverse Creator</label>
+                                                                        <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+                                                                    </div>
+                                                                    ${selectedCreator}
+                                                                    <div id="credit-results-${idv}" class="credit-search-results"></div>
+                                                                </div>
 
-                                                            <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
-                                                                <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
-                                                            </div>
-                                                        </div>`;
+                                                                <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
+                                                                    <label>Artist / Creator / Source Name</label>
+                                                                    <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
+                                                                </div>
+
+                                                                <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
+                                                                    <label>Credit Link / Source Text</label>
+                                                                    <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
+                                                                    <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
+                                                                </div>
+
+                                                                <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
+                                                                    <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
+                                                                    <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
+                                                                </div>
+
+                                                                <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
+                                                                    <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
+                                                                </div>
+                                                            </div>`;
         }
 
         function creditTypeOptions(active) {
