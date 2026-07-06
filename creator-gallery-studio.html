@@ -2969,6 +2969,115 @@
         body.gallery-studio-safe-mode .obj {
             box-shadow: none !important;
         }
+
+
+        /* ============================================================
+           GALLERY STUDIO IMAGE BOX + PREVIEW LAYERING PARITY PATCH
+           Image Box layers stay visually frameless for PNG/transparent art;
+           snapgrid/starfield stays behind user objects instead of clipping
+           over images; Studio preview nav mirrors the public Dashboard-style
+           gallery item nav.
+        ============================================================ */
+        .canvas .grid,
+        .canvas.snap .grid {
+            z-index: 1 !important;
+            pointer-events: none !important;
+            mix-blend-mode: normal !important;
+        }
+
+        .workspace,
+        .canvas {
+            isolation: isolate;
+        }
+
+        .obj[data-type="image"],
+        .obj[data-type="image_box"] {
+            border-color: transparent !important;
+            border-width: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+        }
+
+            .obj[data-type="image"]::before,
+            .obj[data-type="image"]::after,
+            .obj[data-type="image_box"]::before,
+            .obj[data-type="image_box"]::after {
+                display: none !important;
+            }
+
+            .obj[data-type="image"] .inner,
+            .obj[data-type="image_box"] .inner,
+            .obj[data-type="image"] .image-box,
+            .obj[data-type="image_box"] .image-box,
+            .obj[data-type="image"] .placeholder,
+            .obj[data-type="image_box"] .placeholder {
+                border: 0 !important;
+                background: transparent !important;
+                box-shadow: none !important;
+            }
+
+            .obj[data-type="image"].selected,
+            .obj[data-type="image"].multi,
+            .obj[data-type="image_box"].selected,
+            .obj[data-type="image_box"].multi {
+                outline-color: rgba(255,255,255,.58) !important;
+                outline-offset: 3px !important;
+            }
+
+        .preview-nav,
+        .fixed-nav {
+            height: 88px !important;
+            padding: 12px 40px !important;
+            gap: 22px !important;
+            background: rgba(12,12,14,.72) !important;
+            backdrop-filter: blur(18px) !important;
+            -webkit-backdrop-filter: blur(18px) !important;
+            box-shadow: 0 10px 35px rgba(0,0,0,.28) !important;
+        }
+
+            .preview-nav img,
+            .fixed-nav img {
+                height: 64px !important;
+                width: auto !important;
+                max-width: none !important;
+            }
+
+        .preview-links {
+            display: flex !important;
+            gap: 22px !important;
+            align-items: center !important;
+            flex-wrap: wrap !important;
+            color: var(--text-secondary, rgba(255,255,255,.72)) !important;
+            font-size: .95rem !important;
+        }
+
+            .preview-links span.active {
+                color: white !important;
+                background: linear-gradient(180deg, #35353b 0%, #1d1d22 45%, #101014 100%) !important;
+                padding: 8px 12px !important;
+                border-radius: 999px !important;
+                border: 1px solid rgba(255,255,255,0.12) !important;
+                box-shadow: 0 0 18px rgba(255,255,255,0.10), inset 0 1px 0 rgba(255,255,255,0.07) !important;
+            }
+
+        @media(max-width:1180px) and (any-pointer:coarse) {
+            .preview-mode.mobile-preview .fixed-nav,
+            .canvas.mobile .preview-nav {
+                height: 74px !important;
+                padding: 10px 16px !important;
+            }
+
+                .preview-mode.mobile-preview .fixed-nav img,
+                .canvas.mobile .preview-nav img {
+                    height: 48px !important;
+                }
+
+            .preview-mode.mobile-preview .preview-links,
+            .canvas.mobile .preview-links {
+                gap: 8px !important;
+                font-size: .72rem !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -2990,7 +3099,7 @@
             <main id="workspace" class="workspace">
                 <div id="wrap" class="canvas-wrap">
                     <section id="canvas" class="canvas">
-                        <div class="preview-nav"><img src="Nullverse-3.png" alt="Nullverse"><div class="preview-links"><span class="active">Creator Gallery</span><span>Showcase</span><span>Back</span><span>Report</span></div></div>
+                        <div class="preview-nav"><img src="Nullverse-3.png" alt="Nullverse"><div class="preview-links"><span>Home</span><span>Notifications</span><span>Explore</span><span class="active">Profile</span><span>Dashboard</span><span>Log Out</span></div></div>
                         <div class="grid"></div><div id="empty-note" class="empty-note">Choose a gallery item, then add artwork, text, shapes, badges, lore boxes, and custom image layers.</div>
                     </section>
                 </div>
@@ -3016,7 +3125,7 @@
             <aside id="inspector-panel" class="inspector open"><h3 class="panel-title">Inspector</h3><div id="inspector" class="empty">Select a layer or click the canvas.</div></aside>
             <div class="mobile-tabs"><button type="button" data-mobile-action="tools">Tools</button><button type="button" data-mobile-action="inspector">Inspector</button><button type="button" data-mobile-action="zoom-out">Zoom -</button><button type="button" data-mobile-action="zoom-in">Zoom +</button></div>
         </div>
-        <div class="fixed-nav"><img src="Nullverse-3.png" alt="Nullverse"><div class="preview-links"><span class="active">Creator Gallery</span><span>Showcase</span><span>Back</span><span>Report</span></div></div>
+        <div class="fixed-nav"><img src="Nullverse-3.png" alt="Nullverse"><div class="preview-links"><span>Home</span><span>Notifications</span><span>Explore</span><span class="active">Profile</span><span>Dashboard</span><span>Log Out</span></div></div>
         <button id="exit-preview" class="exit-preview" onclick="exitPreviewMode()">Exit Preview</button>
     </div>
     <div id="toast" class="toast"></div><input id="img-input" type="file" accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.avif,.svg,.heic,.heif,.bmp,.ico,.jfif" style="display:none">
@@ -3582,15 +3691,16 @@
 
         function normalizeStyles(s = {}, type = "text") {
             const text = ["text", "title", "description", "bio", "section", "image_text", "credit_pill"].includes(type);
+            const isImageBoxLayer = ["image", "image_box"].includes(type);
 
             return {
-                background: s.background ?? s.fill ?? defaultBg(type),
+                background: isImageBoxLayer ? "transparent" : (s.background ?? s.fill ?? defaultBg(type)),
                 color: s.color ?? s.textColor ?? "#fff",
                 textPaint: s.textPaint || s.textColor || "",
-                borderColor: s.borderColor || "rgba(255,255,255,.12)",
-                borderPaint: s.borderPaint || s.borderGradient || "",
-                borderWidth: num(s.borderWidth, type === "text" || type === "title" ? 0 : 1),
-                radius: num(s.radius, type === "shape" ? 0 : (type === "circle" || type === "credit_pill") ? 999 : 18),
+                borderColor: isImageBoxLayer ? "transparent" : (s.borderColor || "rgba(255,255,255,.12)"),
+                borderPaint: isImageBoxLayer ? "" : (s.borderPaint || s.borderGradient || ""),
+                borderWidth: isImageBoxLayer ? 0 : num(s.borderWidth, type === "text" || type === "title" ? 0 : 1),
+                radius: num(s.radius, type === "shape" ? 0 : (type === "circle" || type === "credit_pill") ? 999 : isImageBoxLayer ? 0 : 18),
                 opacity: clamp(num(s.opacity, 1), .05, 1),
                 fontFamily: s.fontFamily || "Arial",
                 fontSize: num(s.fontSize, text ? (type === "title" ? 58 : 22) : 18),
@@ -3598,7 +3708,7 @@
                 textAlign: s.textAlign || "left",
                 imageFit: s.imageFit || s.objectFit || "cover",
                 padding: num(s.padding, ["bio", "section", "image_text"].includes(type) ? 18 : 0),
-                shadow: s.shadow ?? "0 12px 30px rgba(0,0,0,.22)",
+                shadow: isImageBoxLayer ? "none" : (s.shadow ?? "0 12px 30px rgba(0,0,0,.22)"),
 
                 /* Paint inspector metadata. These keys are intentionally
                    preserved so required Back/Report buttons keep live
@@ -3627,7 +3737,7 @@
             };
         }
 
-        function defaultBg(t) { if (["text", "title", "description"].includes(t)) return "transparent"; if (["back_gallery_button", "report_button"].includes(t)) return "linear-gradient(180deg,#35353b 0%,#1d1d22 45%,#101014 100%)"; if (t === "credit_pill") return "rgba(0,0,0,.62)"; if (t === "circle") return "rgba(255,255,255,.12)"; if (t === "star") return "rgba(255,231,170,.28)"; return "rgba(255,255,255,.055)" }
+        function defaultBg(t) { if (["text", "title", "description", "image", "image_box"].includes(t)) return "transparent"; if (["back_gallery_button", "report_button"].includes(t)) return "linear-gradient(180deg,#35353b 0%,#1d1d22 45%,#101014 100%)"; if (t === "credit_pill") return "rgba(0,0,0,.62)"; if (t === "circle") return "rgba(255,255,255,.12)"; if (t === "star") return "rgba(255,231,170,.28)"; return "rgba(255,255,255,.055)" }
         function defaultText(t) { const i = state.item || localItem(); return { title: i.title || "Untitled Work", description: i.description || "Add a description, bio, lore, or notes about this work.", type_badge: formatType(i.proof_type || "Gallery Item"), credit_badge: "Credit / Source", credit_pill: "Credit: Own work", noai_badge: "NO AI · HUMAN MADE", back_gallery_button: "Back to Creator Gallery", report_button: "Report", text: "New text", bio: "Character Bio\nAdd personality, lore, powers, reference notes, or story details here.", image_text: "Image + Text\nAdd notes beside an image.", section: "Section Title\nWrite extra details here.", divider: "" }[t] ?? "" }
 
         function normalizeCreditType(type) {
@@ -3741,7 +3851,7 @@
         function textMarkup(text, o) { const p = o.styles?.textPaint || "", cls = p ? "paint-target gradient-text" : "paint-target", st = p ? ` style="background:${escA(p)}"` : ""; return `<span class="${cls}"${st}>${esc(text || "")}</span>` }
         function credit(i) { return `<div class="credit-pill">${esc(i.credit_label || i.credit || i.artist_credit || "Credit / No-AI proof")}</div>` }
         function handles() { return ["nw", "n", "ne", "e", "se", "s", "sw", "w"].map(h => `<div class="handle ${h}" data-resize="${h}"></div>`).join("") }
-        function styleObj(n, o) { if (!n) return; const s = o.styles || {}; Object.assign(n.style, { left: `${o.x}px`, top: `${o.y}px`, width: `${o.w}px`, height: `${o.h}px`, zIndex: String(o.z || 1), transform: `rotate(${o.rotation || 0}deg)`, background: s.background || "transparent", color: s.color || "#fff", borderColor: s.borderColor || "rgba(255,255,255,.12)", borderWidth: `${num(s.borderWidth, 1)}px`, borderRadius: (o.type === "circle" || o.type === "credit_pill") ? "999px" : `${num(s.radius, o.type === "shape" ? 0 : 18)}px`, opacity: String(clamp(num(s.opacity, 1), .05, 1)), boxShadow: s.shadow || "0 12px 30px rgba(0,0,0,.22)", textAlign: s.textAlign || "left" }); n.style.setProperty("--obj-font", cssFont(s.fontFamily)); n.style.setProperty("--obj-size", `${num(s.fontSize, 18)}px`); n.style.setProperty("--obj-line", String(num(s.lineHeight, 1.16))); n.style.setProperty("--img-fit", s.imageFit || "cover"); n.style.setProperty("--obj-pad", `${num(s.padding, 0)}px`); n.style.setProperty("--radius", (o.type === "circle" || o.type === "credit_pill") ? "999px" : `${num(s.radius, o.type === "shape" ? 0 : 18)}px`); n.style.setProperty("--border-w", `${num(s.borderWidth, 1)}px`); n.style.setProperty("--border-paint", s.borderPaint || "transparent"); n.classList.toggle("grad-border", !!s.borderPaint) }
+        function styleObj(n, o) { if (!n) return; const s = o.styles || {}; const isImageBoxLayer = ["image", "image_box"].includes(o.type); const cleanRadius = (o.type === "circle" || o.type === "credit_pill") ? "999px" : `${num(s.radius, o.type === "shape" ? 0 : isImageBoxLayer ? 0 : 18)}px`; const cleanBorderWidth = isImageBoxLayer ? 0 : num(s.borderWidth, 1); const cleanBorderPaint = isImageBoxLayer ? "" : (s.borderPaint || ""); Object.assign(n.style, { left: `${o.x}px`, top: `${o.y}px`, width: `${o.w}px`, height: `${o.h}px`, zIndex: String(o.z || 1), transform: `rotate(${o.rotation || 0}deg)`, background: isImageBoxLayer ? "transparent" : (s.background || "transparent"), color: s.color || "#fff", borderColor: isImageBoxLayer ? "transparent" : (s.borderColor || "rgba(255,255,255,.12)"), borderWidth: `${cleanBorderWidth}px`, borderRadius: cleanRadius, opacity: String(clamp(num(s.opacity, 1), .05, 1)), boxShadow: isImageBoxLayer ? "none" : (s.shadow || "0 12px 30px rgba(0,0,0,.22)"), textAlign: s.textAlign || "left" }); n.style.setProperty("--obj-font", cssFont(s.fontFamily)); n.style.setProperty("--obj-size", `${num(s.fontSize, 18)}px`); n.style.setProperty("--obj-line", String(num(s.lineHeight, 1.16))); n.style.setProperty("--img-fit", s.imageFit || "cover"); n.style.setProperty("--obj-pad", `${num(s.padding, 0)}px`); n.style.setProperty("--radius", cleanRadius); n.style.setProperty("--border-w", `${cleanBorderWidth}px`); n.style.setProperty("--border-paint", cleanBorderPaint || "transparent"); n.classList.toggle("grad-border", !!cleanBorderPaint) }
         function renderGroupBox() {
             const l = getLayout();
             if (state.selected.length <= 1) return;
@@ -3811,56 +3921,56 @@
                 : `<p class="credit-security-note">Search a Nullverse username, then press Add Creator. This is the only credit type that becomes a clickable profile link.</p>`;
 
             return `<div class="group credit-system-overhaul" data-credit-inspector="${idv}">
-                                                                <h4>Credit Pill System</h4>
-                                                                <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
-                                                                <div class="credit-live-preview">
-                                                                    <span class="credit-live-label">Live credit pill</span>
-                                                                    <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
-                                                                    <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
-                                                                </div>
-                                                                <label>Credit Type</label>
-                                                                <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
-
-                                                                <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
-                                                                    <label>Custom Credit Text</label>
-                                                                    <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
-                                                                </div>
-
-                                                                <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
-                                                                    <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
-                                                                </div>
-
-                                                                <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
-                                                                    <label>Nullverse Username</label>
-                                                                    <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
-                                                                    <div style="margin-top:-6px;margin-bottom:12px;">
-                                                                        <label>Search Nullverse Creator</label>
-                                                                        <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+                                                                    <h4>Credit Pill System</h4>
+                                                                    <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
+                                                                    <div class="credit-live-preview">
+                                                                        <span class="credit-live-label">Live credit pill</span>
+                                                                        <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
+                                                                        <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
                                                                     </div>
-                                                                    ${selectedCreator}
-                                                                    <div id="credit-results-${idv}" class="credit-search-results"></div>
-                                                                </div>
+                                                                    <label>Credit Type</label>
+                                                                    <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
 
-                                                                <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
-                                                                    <label>Artist / Creator / Source Name</label>
-                                                                    <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
-                                                                </div>
+                                                                    <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
+                                                                        <label>Custom Credit Text</label>
+                                                                        <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
+                                                                    </div>
 
-                                                                <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
-                                                                    <label>Credit Link / Source Text</label>
-                                                                    <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
-                                                                    <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
-                                                                </div>
+                                                                    <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
+                                                                        <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
+                                                                    </div>
 
-                                                                <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
-                                                                    <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
-                                                                    <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
-                                                                </div>
+                                                                    <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
+                                                                        <label>Nullverse Username</label>
+                                                                        <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
+                                                                        <div style="margin-top:-6px;margin-bottom:12px;">
+                                                                            <label>Search Nullverse Creator</label>
+                                                                            <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+                                                                        </div>
+                                                                        ${selectedCreator}
+                                                                        <div id="credit-results-${idv}" class="credit-search-results"></div>
+                                                                    </div>
 
-                                                                <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
-                                                                    <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
-                                                                </div>
-                                                            </div>`;
+                                                                    <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
+                                                                        <label>Artist / Creator / Source Name</label>
+                                                                        <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
+                                                                    </div>
+
+                                                                    <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
+                                                                        <label>Credit Link / Source Text</label>
+                                                                        <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
+                                                                        <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
+                                                                    </div>
+
+                                                                    <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
+                                                                        <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
+                                                                        <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
+                                                                    </div>
+
+                                                                    <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
+                                                                        <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
+                                                                    </div>
+                                                                </div>`;
         }
 
         function creditTypeOptions(active) {
