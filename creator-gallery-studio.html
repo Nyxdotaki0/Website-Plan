@@ -3221,6 +3221,101 @@
                         border-radius: 999px !important;
                     }
         }
+
+
+        /* ============================================================
+           GALLERY STUDIO MOBILE BUTTON TEXT + NAV CENTERING PATCH
+           Keeps Back/Report text controllable but constrained to the
+           button, matches the editor mobile nav to preview/public nav,
+           and prevents mobile preview from drifting right.
+        ============================================================ */
+        .obj[data-type="back_gallery_button"] .button-content,
+        .obj[data-type="report_button"] .button-content {
+            font-size: var(--obj-size, 12px) !important;
+            max-width: 100% !important;
+            max-height: 100% !important;
+            min-width: 0 !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+            padding: 0 6px !important;
+            line-height: 1 !important;
+        }
+
+        .canvas.mobile .preview-nav,
+        .studio-page.preview-mode.mobile-preview .fixed-nav {
+            height: 54px !important;
+            min-height: 54px !important;
+            padding: 7px 8px !important;
+            gap: 8px !important;
+            overflow: hidden !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+        }
+
+            .canvas.mobile .preview-nav img,
+            .studio-page.preview-mode.mobile-preview .fixed-nav img {
+                height: 32px !important;
+                max-width: 96px !important;
+                object-fit: contain !important;
+                flex: 0 0 auto !important;
+            }
+
+            .canvas.mobile .preview-links,
+            .studio-page.preview-mode.mobile-preview .fixed-nav .preview-links {
+                flex: 1 1 auto !important;
+                min-width: 0 !important;
+                display: flex !important;
+                flex-wrap: nowrap !important;
+                align-items: center !important;
+                justify-content: flex-start !important;
+                gap: 5px !important;
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+                white-space: nowrap !important;
+                scrollbar-width: none !important;
+                -webkit-overflow-scrolling: touch !important;
+                font-size: .64rem !important;
+                line-height: 1 !important;
+                padding: 0 0 1px !important;
+            }
+
+                .canvas.mobile .preview-links::-webkit-scrollbar,
+                .studio-page.preview-mode.mobile-preview .fixed-nav .preview-links::-webkit-scrollbar {
+                    display: none !important;
+                }
+
+                .canvas.mobile .preview-links span,
+                .canvas.mobile .preview-links span.active,
+                .studio-page.preview-mode.mobile-preview .fixed-nav .preview-links span,
+                .studio-page.preview-mode.mobile-preview .fixed-nav .preview-links span.active {
+                    flex: 0 0 auto !important;
+                    padding: 5px 6px !important;
+                    border-radius: 999px !important;
+                    white-space: nowrap !important;
+                }
+
+        @media(max-width: 390px) {
+            .canvas.mobile .preview-nav,
+            .studio-page.preview-mode.mobile-preview .fixed-nav {
+                height: 50px !important;
+                min-height: 50px !important;
+                padding: 6px 7px !important;
+                gap: 6px !important;
+            }
+
+                .canvas.mobile .preview-nav img,
+                .studio-page.preview-mode.mobile-preview .fixed-nav img {
+                    height: 28px !important;
+                    max-width: 82px !important;
+                }
+
+                .canvas.mobile .preview-links,
+                .studio-page.preview-mode.mobile-preview .fixed-nav .preview-links {
+                    font-size: .60rem !important;
+                    gap: 4px !important;
+                }
+        }
     </style>
 </head>
 <body>
@@ -3783,6 +3878,7 @@
 
             l.objects = l.objects.filter(o => !PROFILE_ONLY.has(o.type));
             ensureRequired(l, mode);
+            l.objects.forEach(o => enforceRequiredButtonTextFit(o, mode));
             normalizeZ(l);
             return l;
         }
@@ -3882,6 +3978,34 @@
 
         function defaultBg(t) { if (["text", "title", "description", "image", "image_box"].includes(t)) return "transparent"; if (["back_gallery_button", "report_button"].includes(t)) return "linear-gradient(180deg,#35353b 0%,#1d1d22 45%,#101014 100%)"; if (t === "credit_pill") return "rgba(0,0,0,.62)"; if (t === "circle") return "rgba(255,255,255,.12)"; if (t === "star") return "rgba(255,231,170,.28)"; return "rgba(255,255,255,.055)" }
         function defaultText(t) { const i = state.item || localItem(); return { title: i.title || "Untitled Work", description: i.description || "Add a description, bio, lore, or notes about this work.", type_badge: formatType(i.proof_type || "Gallery Item"), credit_badge: "Credit / Source", credit_pill: "Credit: Own work", noai_badge: "NO AI · HUMAN MADE", back_gallery_button: "Back", report_button: "Report", text: "New text", bio: "Character Bio\nAdd personality, lore, powers, reference notes, or story details here.", image_text: "Image + Text\nAdd notes beside an image.", section: "Section Title\nWrite extra details here.", divider: "" }[t] ?? "" }
+
+
+
+        function requiredButtonFontBounds(o, mode = state.mode) {
+            if (!o || !REQUIRED.includes(o.type)) return { min: 8, max: 180 };
+            const text = String(o.text || defaultText(o.type) || "Button").trim() || "Button";
+            const min = mode === "mobile" ? 8 : 9;
+            const width = Math.max(1, num(o.w, LIMITS[o.type]?.[0] || 60));
+            const height = Math.max(1, num(o.h, LIMITS[o.type]?.[1] || 30));
+            const availableWidth = Math.max(10, width - (mode === "mobile" ? 10 : 14));
+            const byHeight = Math.floor(height * .48);
+            const byWidth = Math.floor(availableWidth / Math.max(1.9, text.length * .56));
+            const hardCap = mode === "mobile" ? 16 : 22;
+            const max = Math.max(min, Math.min(hardCap, byHeight, byWidth));
+            return { min, max };
+        }
+
+        function clampRequiredButtonFontSize(o, value, mode = state.mode) {
+            const bounds = requiredButtonFontBounds(o, mode);
+            return clamp(num(value, bounds.max), bounds.min, bounds.max);
+        }
+
+        function enforceRequiredButtonTextFit(o, mode = state.mode) {
+            if (!o || !REQUIRED.includes(o.type)) return;
+            o.styles = o.styles || {};
+            o.styles.fontSize = clampRequiredButtonFontSize(o, o.styles.fontSize ?? (mode === "mobile" ? 12 : 14), mode);
+            o.styles.lineHeight = Math.min(num(o.styles.lineHeight, 1), 1.16);
+        }
 
         function normalizeCreditType(type) {
             const raw = String(type || "own_work").trim();
@@ -3992,7 +4116,7 @@
             o.w = d.w;
             o.h = d.h;
         }
-        function ensureRequired(l, mode) { for (const d of requiredDefs(mode)) { let o = l.objects.find(x => x.type === d.type); if (!o) { o = createObj(d.type, { mode, x: d.x, y: d.y, w: d.w, h: d.h, z: d.z, required: true }); l.objects.push(o) } else { shrinkLegacyRequiredDefault(o, d, mode); } o.required = true; o.hidden = false; o.name = d.name; o.text = d.text } }
+        function ensureRequired(l, mode) { for (const d of requiredDefs(mode)) { let o = l.objects.find(x => x.type === d.type); if (!o) { o = createObj(d.type, { mode, x: d.x, y: d.y, w: d.w, h: d.h, z: d.z, required: true }); l.objects.push(o) } else { shrinkLegacyRequiredDefault(o, d, mode); } o.required = true; o.hidden = false; o.name = d.name; o.text = d.text; enforceRequiredButtonTextFit(o, mode) } }
         function getLayout() { sanitizeAll(); return state.layouts[state.mode] }
         function sanitizeAll() { for (const mode of ["desktop", "mobile"]) { const l = state.layouts[mode] || normalizeLayout(null, mode); l.objects = (l.objects || []).map(normalizeObj).filter(Boolean).filter(o => !PROFILE_ONLY.has(o.type)); ensureRequired(l, mode); normalizeZ(l); state.layouts[mode] = l } }
         function normalizeZ(l) { l.objects.forEach((o, i) => { if (!Number.isFinite(Number(o.z))) o.z = i + 10 }); protectRequired(l, false) }
@@ -4008,7 +4132,7 @@
         function textMarkup(text, o) { const p = o.styles?.textPaint || "", cls = p ? "paint-target gradient-text" : "paint-target", st = p ? ` style="background:${escA(p)}"` : ""; return `<span class="${cls}"${st}>${esc(text || "")}</span>` }
         function credit(i) { return `<div class="credit-pill">${esc(i.credit_label || i.credit || i.artist_credit || "Credit / No-AI proof")}</div>` }
         function handles() { return ["nw", "n", "ne", "e", "se", "s", "sw", "w"].map(h => `<div class="handle ${h}" data-resize="${h}"></div>`).join("") }
-        function styleObj(n, o) { if (!n) return; const s = o.styles || {}; const isImageBoxLayer = ["image", "image_box"].includes(o.type); const cleanRadius = (o.type === "circle" || o.type === "credit_pill") ? "999px" : `${num(s.radius, o.type === "shape" ? 0 : isImageBoxLayer ? 0 : 18)}px`; const cleanBorderWidth = isImageBoxLayer ? 0 : num(s.borderWidth, 1); const cleanBorderPaint = isImageBoxLayer ? "" : (s.borderPaint || ""); Object.assign(n.style, { left: `${o.x}px`, top: `${o.y}px`, width: `${o.w}px`, height: `${o.h}px`, zIndex: String(o.z || 1), transform: `rotate(${o.rotation || 0}deg)`, background: isImageBoxLayer ? "transparent" : (s.background || "transparent"), color: s.color || "#fff", borderColor: isImageBoxLayer ? "transparent" : (s.borderColor || "rgba(255,255,255,.12)"), borderWidth: `${cleanBorderWidth}px`, borderRadius: cleanRadius, opacity: String(clamp(num(s.opacity, 1), .05, 1)), boxShadow: isImageBoxLayer ? "none" : (s.shadow || "0 12px 30px rgba(0,0,0,.22)"), textAlign: s.textAlign || "left" }); n.style.setProperty("--obj-font", cssFont(s.fontFamily)); n.style.setProperty("--obj-size", `${num(s.fontSize, 18)}px`); n.style.setProperty("--obj-line", String(num(s.lineHeight, 1.16))); n.style.setProperty("--img-fit", s.imageFit || "cover"); n.style.setProperty("--obj-pad", `${num(s.padding, 0)}px`); n.style.setProperty("--radius", cleanRadius); n.style.setProperty("--border-w", `${cleanBorderWidth}px`); n.style.setProperty("--border-paint", cleanBorderPaint || "transparent"); n.classList.toggle("grad-border", !!cleanBorderPaint) }
+        function styleObj(n, o) { if (!n) return; const s = o.styles || {}; const isImageBoxLayer = ["image", "image_box"].includes(o.type); const cleanRadius = (o.type === "circle" || o.type === "credit_pill") ? "999px" : `${num(s.radius, o.type === "shape" ? 0 : isImageBoxLayer ? 0 : 18)}px`; const cleanBorderWidth = isImageBoxLayer ? 0 : num(s.borderWidth, 1); const cleanBorderPaint = isImageBoxLayer ? "" : (s.borderPaint || ""); Object.assign(n.style, { left: `${o.x}px`, top: `${o.y}px`, width: `${o.w}px`, height: `${o.h}px`, zIndex: String(o.z || 1), transform: `rotate(${o.rotation || 0}deg)`, background: isImageBoxLayer ? "transparent" : (s.background || "transparent"), color: s.color || "#fff", borderColor: isImageBoxLayer ? "transparent" : (s.borderColor || "rgba(255,255,255,.12)"), borderWidth: `${cleanBorderWidth}px`, borderRadius: cleanRadius, opacity: String(clamp(num(s.opacity, 1), .05, 1)), boxShadow: isImageBoxLayer ? "none" : (s.shadow || "0 12px 30px rgba(0,0,0,.22)"), textAlign: s.textAlign || "left" }); n.style.setProperty("--obj-font", cssFont(s.fontFamily)); const cleanFontSize = REQUIRED.includes(o.type) ? clampRequiredButtonFontSize(o, s.fontSize, state.mode) : num(s.fontSize, 18); n.style.setProperty("--obj-size", `${cleanFontSize}px`); n.style.setProperty("--obj-line", String(num(s.lineHeight, 1.16))); n.style.setProperty("--img-fit", s.imageFit || "cover"); n.style.setProperty("--obj-pad", `${num(s.padding, 0)}px`); n.style.setProperty("--radius", cleanRadius); n.style.setProperty("--border-w", `${cleanBorderWidth}px`); n.style.setProperty("--border-paint", cleanBorderPaint || "transparent"); n.classList.toggle("grad-border", !!cleanBorderPaint) }
         function renderGroupBox() {
             const l = getLayout();
             if (state.selected.length <= 1) return;
@@ -4055,7 +4179,8 @@
 
             const paintControls = `<div class="group"><h4>Paint</h4>${surfaceTypes ? paintControl("Fill / Background", "object", o.id, { solid: "background", gradient: "background" }, s.background, "rgba(255,255,255,.055)") : ""}${textTypes ? paintControl("Text Color", "object", o.id, { solid: "color", gradient: "textPaint" }, s.textPaint || s.color, "#ffffff") : ""}${borderTypes ? paintControl("Border Color", "object", o.id, { solid: "borderColor", gradient: "borderPaint" }, s.borderPaint || s.borderColor, "rgba(255,255,255,.12)") : ""}${objectOpacityControl(o)}</div>`;
 
-            const textControls = textTypes ? `<div class="group"><h4>Text & Layout</h4><label>Font</label><select onchange="updateObjectStyle('${idv}','fontFamily',this.value,{commit:true})">${FONTS.map(f => `<option value="${escA(f)}" ${fontNorm(s.fontFamily) === f ? "selected" : ""}>${esc(f)}</option>`).join("")}</select><div class="mini-grid">${metric("Font Size", s.fontSize, 8, 180, `updateObjectStyle('${idv}','fontSize',this.value,{live:true})`)}${metric("Line Height", s.lineHeight, .7, 3, `updateObjectStyle('${idv}','lineHeight',this.value,{live:true})`, .01)}${!["title", "text", "description", "type_badge", "credit_badge", "credit_pill", "noai_badge", "back_gallery_button", "report_button"].includes(o.type) ? metric("Padding", s.padding, 0, 80, `updateObjectStyle('${idv}','padding',this.value,{live:true})`) : ""}</div><label>Text Align</label><select onchange="updateObjectStyle('${idv}','textAlign',this.value,{commit:true})">${["left", "center", "right", "justify"].map(v => `<option value="${v}" ${s.textAlign === v ? "selected" : ""}>${v}</option>`).join("")}</select></div>` : "";
+            const fontBounds = requiredButtonFontBounds(o, state.mode);
+            const textControls = textTypes ? `<div class="group"><h4>Text & Layout</h4><label>Font</label><select onchange="updateObjectStyle('${idv}','fontFamily',this.value,{commit:true})">${FONTS.map(f => `<option value="${escA(f)}" ${fontNorm(s.fontFamily) === f ? "selected" : ""}>${esc(f)}</option>`).join("")}</select><div class="mini-grid">${metric("Font Size", clampRequiredButtonFontSize(o, s.fontSize, state.mode), fontBounds.min, fontBounds.max, `updateObjectStyle('${idv}','fontSize',this.value,{live:true})`)}${metric("Line Height", s.lineHeight, .7, 3, `updateObjectStyle('${idv}','lineHeight',this.value,{live:true})`, .01)}${!["title", "text", "description", "type_badge", "credit_badge", "credit_pill", "noai_badge", "back_gallery_button", "report_button"].includes(o.type) ? metric("Padding", s.padding, 0, 80, `updateObjectStyle('${idv}','padding',this.value,{live:true})`) : ""}</div><label>Text Align</label><select onchange="updateObjectStyle('${idv}','textAlign',this.value,{commit:true})">${["left", "center", "right", "justify"].map(v => `<option value="${v}" ${s.textAlign === v ? "selected" : ""}>${v}</option>`).join("")}</select></div>` : "";
 
             const actions = `<div class="group"><h4>Actions</h4><div class="actions"><button onclick="duplicateSelected()">Duplicate</button><button class="lock-button ${o.locked ? "locked" : "unlocked"}" onclick="toggleObjectLock('${idv}')">${o.locked ? "🔓 Unlock Layer" : "🔒 Lock Layer"}</button><button onclick="toggleObjectVisibility('${idv}')">${o.hidden ? "👁️ Show" : "🙈 Hide"}</button><button class="danger-button" onclick="deleteSelected()">Delete</button></div></div>`;
 
@@ -4078,56 +4203,56 @@
                 : `<p class="credit-security-note">Search a Nullverse username, then press Add Creator. This is the only credit type that becomes a clickable profile link.</p>`;
 
             return `<div class="group credit-system-overhaul" data-credit-inspector="${idv}">
-                                                                        <h4>Credit Pill System</h4>
-                                                                        <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
-                                                                        <div class="credit-live-preview">
-                                                                            <span class="credit-live-label">Live credit pill</span>
-                                                                            <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
-                                                                            <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
-                                                                        </div>
-                                                                        <label>Credit Type</label>
-                                                                        <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
-
-                                                                        <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
-                                                                            <label>Custom Credit Text</label>
-                                                                            <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
-                                                                        </div>
-
-                                                                        <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
-                                                                            <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
-                                                                        </div>
-
-                                                                        <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
-                                                                            <label>Nullverse Username</label>
-                                                                            <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
-                                                                            <div style="margin-top:-6px;margin-bottom:12px;">
-                                                                                <label>Search Nullverse Creator</label>
-                                                                                <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+                                                                            <h4>Credit Pill System</h4>
+                                                                            <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
+                                                                            <div class="credit-live-preview">
+                                                                                <span class="credit-live-label">Live credit pill</span>
+                                                                                <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
+                                                                                <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
                                                                             </div>
-                                                                            ${selectedCreator}
-                                                                            <div id="credit-results-${idv}" class="credit-search-results"></div>
-                                                                        </div>
+                                                                            <label>Credit Type</label>
+                                                                            <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
 
-                                                                        <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
-                                                                            <label>Artist / Creator / Source Name</label>
-                                                                            <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
-                                                                        </div>
+                                                                            <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
+                                                                                <label>Custom Credit Text</label>
+                                                                                <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
+                                                                            </div>
 
-                                                                        <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
-                                                                            <label>Credit Link / Source Text</label>
-                                                                            <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
-                                                                            <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
-                                                                        </div>
+                                                                            <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
+                                                                                <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
+                                                                            </div>
 
-                                                                        <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
-                                                                            <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
-                                                                            <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
-                                                                        </div>
+                                                                            <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
+                                                                                <label>Nullverse Username</label>
+                                                                                <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
+                                                                                <div style="margin-top:-6px;margin-bottom:12px;">
+                                                                                    <label>Search Nullverse Creator</label>
+                                                                                    <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+                                                                                </div>
+                                                                                ${selectedCreator}
+                                                                                <div id="credit-results-${idv}" class="credit-search-results"></div>
+                                                                            </div>
 
-                                                                        <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
-                                                                            <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
-                                                                        </div>
-                                                                    </div>`;
+                                                                            <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
+                                                                                <label>Artist / Creator / Source Name</label>
+                                                                                <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
+                                                                            </div>
+
+                                                                            <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
+                                                                                <label>Credit Link / Source Text</label>
+                                                                                <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
+                                                                                <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
+                                                                            </div>
+
+                                                                            <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
+                                                                                <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
+                                                                                <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
+                                                                            </div>
+
+                                                                            <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
+                                                                                <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
+                                                                            </div>
+                                                                        </div>`;
         }
 
         function creditTypeOptions(active) {
@@ -4682,9 +4807,9 @@
         function hexToRgb(v) { const hex = colorInput(v).slice(1); return { r: parseInt(hex.slice(0, 2), 16), g: parseInt(hex.slice(2, 4), 16), b: parseInt(hex.slice(4, 6), 16) }; }
         function rgbaFromHex(v, alpha = 1) { const { r, g, b } = hexToRgb(v); return `rgba(${r}, ${g}, ${b}, ${clamp(num(alpha, 1), 0, 1)})`; }
 
-        function updateObjectField(id, field, value) { const o = find(id); if (!o) return; if (["x", "y", "w", "h", "z", "rotation"].includes(field)) { o[field] = Number(value) || 0; if (field === "w" || field === "h") clampSize(o) } else o[field] = value; renderCanvas(); renderLayers(); syncLiveInspectorControls() }
+        function updateObjectField(id, field, value) { const o = find(id); if (!o) return; if (["x", "y", "w", "h", "z", "rotation"].includes(field)) { o[field] = Number(value) || 0; if (field === "w" || field === "h") clampSize(o) } else o[field] = value; enforceRequiredButtonTextFit(o, state.mode); renderCanvas(); renderLayers(); syncLiveInspectorControls() }
         function updateObjectText(id, value) { const o = find(id); if (!o) return; if (o.type === "credit_pill") { o.credit = normalizeCreditData(o.credit || {}, o.text || ""); o.credit.type = "custom"; o.credit.customText = value; updateCreditText(o); } else { o.text = value; } renderCanvas(); syncObjectTextInspector(id, o.text) }
-        function updateObjectStyle(id, key, value, options = {}) { const o = find(id); if (!o) return; if (options.live || options.commit) paintHistory(`${id}:${key}:style`, options); o.styles = o.styles || normalizeStyles({}, o.type); o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding"].includes(key) ? Number(value) : value; renderCanvas(); renderLayers(); syncLiveInspectorControls(); if (options.commit) renderInspector() }
+        function updateObjectStyle(id, key, value, options = {}) { const o = find(id); if (!o) return; if (options.live || options.commit) paintHistory(`${id}:${key}:style`, options); o.styles = o.styles || normalizeStyles({}, o.type); o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding"].includes(key) ? Number(value) : value; if (key === "fontSize") o.styles.fontSize = clampRequiredButtonFontSize(o, o.styles.fontSize, state.mode); enforceRequiredButtonTextFit(o, state.mode); renderCanvas(); renderLayers(); syncLiveInspectorControls(); if (options.commit) renderInspector() }
         function applyObjectGradient(id, target) { const o = find(id); if (!o) return; const field = target === "border" ? "borderPaint" : "background"; updateObjectGradientPaint(id, target === "border" ? "borderColor" : "background", field, `${id}-${target}`, { commit: true }) }
         function applyTextGradient(id) { const o = find(id); if (!o) return; const p = o.styles || (o.styles = {}); if (p.textPaint) p.textPaint = ""; renderAll() }
         function clearObjectTextGradient(id) { const o = find(id); if (!o) return; o.styles = o.styles || {}; o.styles.textPaint = ""; renderAll() }
@@ -5700,7 +5825,7 @@
             const previewScale = state.mode === "mobile"
                 ? Math.max(.55, Math.min(1, widthScale || 1))
                 : clamp(widthScale || 1, .25, 2.2);
-            const previewPanX = Math.max(0, (rect.width - canvasWidth * previewScale) / 2);
+            const previewPanX = 0;
             const previewPanY = 0;
 
             state.zoom = previewScale;
@@ -5993,7 +6118,7 @@
         function syncTitle() { const i = state.item || localItem(); dom.title.textContent = `${i.title || "Untitled"} · ${state.mode === "mobile" ? "Mobile" : "PC"} layout`; dom.topBack.href = galleryShowcaseHref(); dom.topBack.textContent = i.id && i.id !== "local-preview" ? "Back to Showcase" : "Back" }
         function find(id) { return getLayout().objects.find(o => o.id === id) || null }
         function nextZ() { return Math.max(10, ...getLayout().objects.map(o => Number(o.z) || 0)) + 1 }
-        function clampSize(o) { const [minW, minH, maxW, maxH] = LIMITS[o.type] || LIMITS.text; o.w = clamp(num(o.w, minW), minW, maxW); o.h = clamp(num(o.h, minH), minH, maxH) }
+        function clampSize(o) { const [minW, minH, maxW, maxH] = LIMITS[o.type] || LIMITS.text; o.w = clamp(num(o.w, minW), minW, maxW); o.h = clamp(num(o.h, minH), minH, maxH); enforceRequiredButtonTextFit(o, state.mode) }
         function visibleCenter() { const r = dom.workspace.getBoundingClientRect(); const p = screen({ clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }); return { x: Math.max(120, p.x), y: Math.max(120, p.y) } }
         function screen(e) { const r = dom.canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) / state.zoom, y: (e.clientY - r.top) / state.zoom } }
         function center(o) { return { x: o.x + o.w / 2, y: o.y + o.h / 2 } }
