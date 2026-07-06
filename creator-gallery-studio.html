@@ -3403,6 +3403,107 @@
             overflow-wrap: normal !important;
             tab-size: 4 !important;
         }
+
+
+        /* ============================================================
+           GALLERY STUDIO LAYER REORDER CONTROL PATCH
+           Whole-row press/hold reordering, fixed one-step arrows, and
+           inspector Move Forward / Move Backward actions.
+        ============================================================ */
+
+        .layers.reordering {
+            cursor: grabbing !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            touch-action: none !important;
+        }
+
+        .layer {
+            position: relative;
+            transition: transform .14s ease, opacity .14s ease, border-color .14s ease, background .14s ease, box-shadow .14s ease;
+        }
+
+            .layer[data-layer-reorder-row="true"] {
+                cursor: grab;
+                touch-action: pan-y;
+            }
+
+                .layer[data-layer-reorder-row="true"] .layer-select {
+                    cursor: inherit;
+                }
+
+            .layer.layer-drag-armed {
+                border-color: rgba(140,190,255,.34) !important;
+                background: rgba(120,190,255,.07) !important;
+            }
+
+            .layer.layer-dragging {
+                opacity: .52;
+                transform: scale(.985);
+                border-color: rgba(140,190,255,.72) !important;
+                background: rgba(120,190,255,.14) !important;
+                box-shadow: 0 0 0 2px rgba(120,190,255,.12), 0 14px 30px rgba(0,0,0,.32);
+                cursor: grabbing !important;
+            }
+
+            .layer.layer-drop-before::before,
+            .layer.layer-drop-after::after {
+                content: "";
+                position: absolute;
+                left: 9px;
+                right: 9px;
+                height: 2px;
+                border-radius: 999px;
+                background: rgba(140,190,255,.98);
+                box-shadow: 0 0 16px rgba(120,190,255,.52);
+                pointer-events: none;
+                z-index: 4;
+            }
+
+            .layer.layer-drop-before::before {
+                top: -5px;
+            }
+
+            .layer.layer-drop-after::after {
+                bottom: -5px;
+            }
+
+            .layer.layer-pinned .drag-handle,
+            .layer.layer-locked-reorder .drag-handle,
+            .layer.hidden-layer .drag-handle {
+                opacity: .42;
+            }
+
+        .layer-reorder-hint {
+            margin: 0 0 8px;
+            color: var(--text-muted,rgba(255,255,255,.54));
+            font-size: .78rem;
+            line-height: 1.35;
+        }
+
+        .inspector-layer-order-actions {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 8px;
+            width: 100%;
+        }
+
+            .inspector-layer-order-actions button {
+                width: 100%;
+                min-height: 38px;
+                font-size: .84rem;
+                box-shadow: none;
+            }
+
+        @media(max-width:620px) and (any-pointer:coarse) {
+            .inspector-layer-order-actions {
+                grid-template-columns: 1fr;
+            }
+
+            .layer[data-layer-reorder-row="true"] {
+                touch-action: none;
+            }
+        }
     </style>
 </head>
 <body>
@@ -4291,56 +4392,56 @@
                 : `<p class="credit-security-note">Search a Nullverse username, then press Add Creator. This is the only credit type that becomes a clickable profile link.</p>`;
 
             return `<div class="group credit-system-overhaul" data-credit-inspector="${idv}">
-                                                                                <h4>Credit Pill System</h4>
-                                                                                <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
-                                                                                <div class="credit-live-preview">
-                                                                                    <span class="credit-live-label">Live credit pill</span>
-                                                                                    <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
-                                                                                    <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
-                                                                                </div>
-                                                                                <label>Credit Type</label>
-                                                                                <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
-
-                                                                                <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
-                                                                                    <label>Custom Credit Text</label>
-                                                                                    <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
-                                                                                </div>
-
-                                                                                <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
-                                                                                    <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
-                                                                                </div>
-
-                                                                                <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
-                                                                                    <label>Nullverse Username</label>
-                                                                                    <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
-                                                                                    <div style="margin-top:-6px;margin-bottom:12px;">
-                                                                                        <label>Search Nullverse Creator</label>
-                                                                                        <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+                                                                                    <h4>Credit Pill System</h4>
+                                                                                    <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
+                                                                                    <div class="credit-live-preview">
+                                                                                        <span class="credit-live-label">Live credit pill</span>
+                                                                                        <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
+                                                                                        <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
                                                                                     </div>
-                                                                                    ${selectedCreator}
-                                                                                    <div id="credit-results-${idv}" class="credit-search-results"></div>
-                                                                                </div>
+                                                                                    <label>Credit Type</label>
+                                                                                    <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
 
-                                                                                <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
-                                                                                    <label>Artist / Creator / Source Name</label>
-                                                                                    <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
-                                                                                </div>
+                                                                                    <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
+                                                                                        <label>Custom Credit Text</label>
+                                                                                        <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
+                                                                                    </div>
 
-                                                                                <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
-                                                                                    <label>Credit Link / Source Text</label>
-                                                                                    <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
-                                                                                    <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
-                                                                                </div>
+                                                                                    <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
+                                                                                        <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
+                                                                                    </div>
 
-                                                                                <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
-                                                                                    <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
-                                                                                    <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
-                                                                                </div>
+                                                                                    <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
+                                                                                        <label>Nullverse Username</label>
+                                                                                        <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
+                                                                                        <div style="margin-top:-6px;margin-bottom:12px;">
+                                                                                            <label>Search Nullverse Creator</label>
+                                                                                            <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+                                                                                        </div>
+                                                                                        ${selectedCreator}
+                                                                                        <div id="credit-results-${idv}" class="credit-search-results"></div>
+                                                                                    </div>
 
-                                                                                <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
-                                                                                    <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
-                                                                                </div>
-                                                                            </div>`;
+                                                                                    <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
+                                                                                        <label>Artist / Creator / Source Name</label>
+                                                                                        <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
+                                                                                    </div>
+
+                                                                                    <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
+                                                                                        <label>Credit Link / Source Text</label>
+                                                                                        <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
+                                                                                        <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
+                                                                                    </div>
+
+                                                                                    <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
+                                                                                        <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
+                                                                                        <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
+                                                                                    </div>
+
+                                                                                    <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
+                                                                                        <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
+                                                                                    </div>
+                                                                                </div>`;
         }
 
         function creditTypeOptions(active) {
@@ -6576,6 +6677,405 @@
                     return result;
                 };
             }
+
+
+
+            /* ============================================================
+               GALLERY STUDIO LAYER REORDER CONTROL PATCH
+               Fixes arrows, expands hold-to-move to the whole row, and
+               adds inspector Move Forward / Move Backward controls.
+            ============================================================ */
+
+            function galleryStudioPinnedLayer(layer) {
+                return !!layer && (layer.required === true || REQUIRED.includes(layer.type));
+            }
+
+            function galleryStudioLayerStackTopFirst() {
+                const layout = getLayout();
+                const objects = Array.isArray(layout?.objects) ? layout.objects : [];
+                return [...objects].sort((a, b) => {
+                    const zDelta = (Number(b?.z) || 0) - (Number(a?.z) || 0);
+                    if (zDelta) return zDelta;
+                    return objects.indexOf(a) - objects.indexOf(b);
+                });
+            }
+
+            function galleryStudioLayerDisplayName(layer) {
+                return layer?.name || LABELS[layer?.type] || layer?.type || "Layer";
+            }
+
+            function galleryStudioCanMoveLayer(id, direction) {
+                const stack = galleryStudioLayerStackTopFirst();
+                const index = stack.findIndex(layer => layer.id === id);
+                const layer = stack[index];
+
+                if (!layer || layer.hidden || layer.locked || galleryStudioPinnedLayer(layer)) {
+                    return false;
+                }
+
+                const targetIndex = direction > 0 ? index - 1 : index + 1;
+                const target = stack[targetIndex];
+
+                if (!target || target.hidden || galleryStudioPinnedLayer(target)) {
+                    return false;
+                }
+
+                return true;
+            }
+
+            function galleryStudioApplyLayerStackTopFirst(stack) {
+                const layout = getLayout();
+                const objects = Array.isArray(layout?.objects) ? layout.objects : [];
+                const seen = new Set();
+                const normalizedTopFirst = [];
+
+                (Array.isArray(stack) ? stack : []).forEach(layer => {
+                    if (layer && layer.id && !seen.has(layer.id)) {
+                        normalizedTopFirst.push(layer);
+                        seen.add(layer.id);
+                    }
+                });
+
+                galleryStudioLayerStackTopFirst().forEach(layer => {
+                    if (layer && layer.id && !seen.has(layer.id)) {
+                        normalizedTopFirst.push(layer);
+                        seen.add(layer.id);
+                    }
+                });
+
+                normalizedTopFirst.slice().reverse().forEach((layer, index) => {
+                    layer.z = 10 + index;
+                });
+
+                objects.sort((a, b) => (Number(a.z) || 0) - (Number(b.z) || 0));
+                protectRequired(layout, false);
+            }
+
+            function galleryStudioMoveLayerMessage(id, direction) {
+                const layer = find(id);
+                if (!layer) return "Layer could not be found.";
+                if (galleryStudioPinnedLayer(layer)) return "Required Back and Report controls stay above the showcase.";
+                if (layer.locked) return "Unlock this layer before changing its order.";
+                if (layer.hidden) return "Show this layer before changing its order.";
+                return direction > 0 ? "This layer is already as far forward as it can go." : "This layer is already as far backward as it can go.";
+            }
+
+            moveLayer = function galleryStudioMoveLayerOneStep(id, direction) {
+                const stack = galleryStudioLayerStackTopFirst();
+                const index = stack.findIndex(layer => layer.id === id);
+                const layer = stack[index];
+
+                if (!layer) {
+                    toast("Layer could not be found.", "bad");
+                    return;
+                }
+
+                if (!galleryStudioCanMoveLayer(id, direction)) {
+                    toast(galleryStudioMoveLayerMessage(id, direction), "warn", 1800);
+                    return;
+                }
+
+                const targetIndex = direction > 0 ? index - 1 : index + 1;
+                pushHistory();
+                const nextStack = [...stack];
+                [nextStack[index], nextStack[targetIndex]] = [nextStack[targetIndex], nextStack[index]];
+                galleryStudioApplyLayerStackTopFirst(nextStack);
+                state.selected = [id];
+                renderAll();
+                toast(direction > 0 ? "Layer moved forward." : "Layer moved backward.", "good", 1400);
+            };
+
+            function moveSelectedLayer(direction) {
+                const id = state.selected?.[0];
+                if (!id) {
+                    toast("Select a layer first.", "warn");
+                    return;
+                }
+
+                moveLayer(id, direction);
+            }
+
+            function galleryStudioLayerDomOrder() {
+                return [...(dom.layers?.querySelectorAll?.(".layer[data-layer]") || [])]
+                    .map(row => row.dataset.layer)
+                    .filter(Boolean);
+            }
+
+            function galleryStudioCommitLayerDomOrder(draggedId = "") {
+                const displayIds = galleryStudioLayerDomOrder();
+                if (!displayIds.length) return false;
+
+                const currentStack = galleryStudioLayerStackTopFirst();
+                const currentOrder = currentStack.map(layer => layer.id).join("|");
+                const nextOrder = displayIds.join("|");
+
+                if (!draggedId || currentOrder === nextOrder) {
+                    renderLayers();
+                    return false;
+                }
+
+                const layerMap = new Map(currentStack.map(layer => [layer.id, layer]));
+                const draggedLayer = layerMap.get(draggedId);
+
+                if (!draggedLayer) {
+                    renderLayers();
+                    return false;
+                }
+
+                if (draggedLayer.locked || draggedLayer.hidden || galleryStudioPinnedLayer(draggedLayer)) {
+                    toast(galleryStudioMoveLayerMessage(draggedId, 1), "warn", 1800);
+                    renderAll();
+                    return false;
+                }
+
+                const nextStack = displayIds
+                    .map(id => layerMap.get(id))
+                    .filter(Boolean);
+
+                currentStack.forEach(layer => {
+                    if (!nextStack.includes(layer)) nextStack.push(layer);
+                });
+
+                pushHistory();
+                galleryStudioApplyLayerStackTopFirst(nextStack);
+                state.selected = [draggedId];
+                renderAll();
+                toast("Layer order updated.", "good", 1400);
+                return true;
+            }
+
+            reorderDrop = function galleryStudioReorderDrop(draggedId, targetId, placement = "before") {
+                if (!draggedId || !targetId || draggedId === targetId) return;
+                const stack = galleryStudioLayerStackTopFirst();
+                const from = stack.findIndex(layer => layer.id === draggedId);
+                const target = stack.findIndex(layer => layer.id === targetId);
+                const draggedLayer = stack[from];
+
+                if (from < 0 || target < 0 || !draggedLayer) return;
+
+                if (draggedLayer.locked || draggedLayer.hidden || galleryStudioPinnedLayer(draggedLayer)) {
+                    toast(galleryStudioMoveLayerMessage(draggedId, 1), "warn", 1800);
+                    return;
+                }
+
+                const nextStack = [...stack];
+                const [moved] = nextStack.splice(from, 1);
+                let insertAt = nextStack.findIndex(layer => layer.id === targetId);
+                if (insertAt < 0) insertAt = nextStack.length;
+                if (placement === "after") insertAt += 1;
+
+                pushHistory();
+                nextStack.splice(insertAt, 0, moved);
+                galleryStudioApplyLayerStackTopFirst(nextStack);
+                state.selected = [draggedId];
+                renderAll();
+                toast("Layer order updated.", "good", 1400);
+            };
+
+            renderLayers = function galleryStudioReorderRenderLayers() {
+                const stack = galleryStudioLayerStackTopFirst();
+
+                dom.layers.innerHTML = stack.map((layer, index) => {
+                    const idv = escA(layer.id);
+                    const isPinned = galleryStudioPinnedLayer(layer);
+                    const canUp = galleryStudioCanMoveLayer(layer.id, 1);
+                    const canDown = galleryStudioCanMoveLayer(layer.id, -1);
+                    const dragTitle = isPinned
+                        ? "Required Back and Report controls stay above the showcase."
+                        : layer.hidden
+                            ? "Show this layer before reordering it."
+                            : layer.locked
+                                ? "Unlock this layer before reordering it."
+                                : "Hold anywhere on this row, then drag to reorder.";
+
+                    return `<div class="layer ${state.selected.includes(layer.id) ? "active" : ""} ${layer.locked ? "locked layer-locked-reorder" : ""} ${layer.hidden ? "hidden-layer" : ""} ${isPinned ? "layer-pinned" : ""}" data-layer="${idv}" data-layer-reorder-row="true" title="${escA(dragTitle)}">
+                            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
+                            <button class="layer-select" type="button" onclick="selectObject('${idv}',event)"><span>${esc(layer.required ? "Required · " : "")}${esc(galleryStudioLayerDisplayName(layer))}</span></button>
+                            <div class="layer-meta">
+                                <button class="tiny" type="button" title="Move forward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',1)" ${canUp ? "" : "disabled"}>↑</button>
+                                <button class="tiny" type="button" title="Move backward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',-1)" ${canDown ? "" : "disabled"}>↓</button>
+                                <button class="tiny ${layer.hidden ? "warn" : "on"}" type="button" title="${layer.hidden ? "Hidden" : "Visible"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectVisibility('${idv}')">${layer.hidden ? "🙈" : "👁️"}</button>
+                                <button class="tiny ${layer.locked ? "locked" : "unlocked"}" type="button" title="${layer.locked ? "Locked" : "Unlocked"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectLock('${idv}')">${layer.locked ? "🔒" : "🔓"}</button>
+                            </div>
+                        </div>`;
+                }).join("") || `<p class="status">No layers yet.</p>`;
+
+                if (stack.length) {
+                    dom.layers.insertAdjacentHTML("afterbegin", `<p class="layer-reorder-hint">Hold any layer row to drag it between two layers. Use ↑ / ↓ for one-step moves.</p>`);
+                }
+
+                setupLayerDnd();
+            };
+
+            function galleryStudioLayerAfterElement(container, y) {
+                const rows = [...container.querySelectorAll(".layer[data-layer]:not(.layer-dragging)")];
+                return rows.reduce((closest, child) => {
+                    const box = child.getBoundingClientRect();
+                    const offset = y - box.top - box.height / 2;
+                    if (offset < 0 && offset > closest.offset) {
+                        return { offset, element: child };
+                    }
+                    return closest;
+                }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+            }
+
+            function galleryStudioClearLayerDropMarks() {
+                dom.layers?.querySelectorAll?.(".layer-drop-before,.layer-drop-after")?.forEach(row => {
+                    row.classList.remove("layer-drop-before", "layer-drop-after");
+                });
+            }
+
+            function galleryStudioMoveLayerRow(row, clientY) {
+                if (!row || !dom.layers) return;
+                const container = dom.layers;
+                const box = container.getBoundingClientRect();
+
+                if (clientY < box.top + 42) container.scrollTop -= 14;
+                if (clientY > box.bottom - 42) container.scrollTop += 14;
+
+                galleryStudioClearLayerDropMarks();
+                const after = galleryStudioLayerAfterElement(container, clientY);
+
+                if (!after) {
+                    container.appendChild(row);
+                    row.classList.add("layer-drop-after");
+                    return;
+                }
+
+                container.insertBefore(row, after);
+                row.classList.add("layer-drop-before");
+            }
+
+            setupLayerDnd = function galleryStudioSetupLayerDnd() {
+                if (!dom.layers || dom.layers.dataset.galleryRowReorderBound === "true") return;
+                dom.layers.dataset.galleryRowReorderBound = "true";
+
+                const cleanup = (commit = false) => {
+                    const drag = state.layerPressDrag;
+                    clearTimeout(drag?.timer);
+
+                    if (drag?.row) {
+                        try { drag.row.releasePointerCapture?.(drag.pointerId); } catch { }
+                        drag.row.classList.remove("layer-drag-armed", "layer-dragging", "layer-drop-before", "layer-drop-after");
+                    }
+
+                    dom.layers.classList.remove("reordering");
+                    galleryStudioClearLayerDropMarks();
+
+                    if (commit && drag?.active) {
+                        state.layerClickSuppressUntil = Date.now() + 350;
+                        galleryStudioCommitLayerDomOrder(drag.id);
+                    }
+
+                    state.layerPressDrag = null;
+                };
+
+                dom.layers.addEventListener("pointerdown", event => {
+                    if (event.button != null && event.button !== 0) return;
+                    if (event.target.closest(".tiny,.layer-meta,input,textarea,select")) return;
+
+                    const row = event.target.closest(".layer[data-layer]");
+                    if (!row || !dom.layers.contains(row)) return;
+
+                    const layer = find(row.dataset.layer);
+                    if (!layer || layer.hidden || layer.locked || galleryStudioPinnedLayer(layer)) return;
+
+                    clearTimeout(state.layerPressDrag?.timer);
+                    const drag = {
+                        id: layer.id,
+                        row,
+                        pointerId: event.pointerId,
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        active: false,
+                        timer: null
+                    };
+
+                    state.layerPressDrag = drag;
+                    row.classList.add("layer-drag-armed");
+                    try { row.setPointerCapture?.(event.pointerId); } catch { }
+
+                    drag.timer = setTimeout(() => {
+                        if (state.layerPressDrag !== drag) return;
+                        drag.active = true;
+                        row.classList.remove("layer-drag-armed");
+                        row.classList.add("layer-dragging");
+                        dom.layers.classList.add("reordering");
+                        state.selected = [drag.id];
+                        galleryStudioMoveLayerRow(row, drag.startY);
+                    }, 170);
+                });
+
+                dom.layers.addEventListener("pointermove", event => {
+                    const drag = state.layerPressDrag;
+                    if (!drag || drag.pointerId !== event.pointerId) return;
+
+                    const moved = Math.abs(event.clientX - drag.startX) + Math.abs(event.clientY - drag.startY);
+                    if (!drag.active && moved > 10) {
+                        clearTimeout(drag.timer);
+                        drag.active = true;
+                        drag.row.classList.remove("layer-drag-armed");
+                        drag.row.classList.add("layer-dragging");
+                        dom.layers.classList.add("reordering");
+                        state.selected = [drag.id];
+                    }
+
+                    if (!drag.active) return;
+                    event.preventDefault();
+                    galleryStudioMoveLayerRow(drag.row, event.clientY);
+                }, { passive: false });
+
+                dom.layers.addEventListener("pointerup", event => {
+                    const drag = state.layerPressDrag;
+                    if (!drag || drag.pointerId !== event.pointerId) return;
+                    cleanup(true);
+                });
+
+                dom.layers.addEventListener("pointercancel", event => {
+                    const drag = state.layerPressDrag;
+                    if (!drag || drag.pointerId !== event.pointerId) return;
+                    cleanup(false);
+                    renderLayers();
+                });
+
+                dom.layers.addEventListener("dragstart", event => {
+                    event.preventDefault();
+                });
+
+                dom.layers.addEventListener("click", event => {
+                    if (Date.now() > (state.layerClickSuppressUntil || 0)) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation?.();
+                }, true);
+            };
+
+            const __galleryStudioLayerSingleInspector = singleInspector;
+            singleInspector = function galleryStudioLayerSingleInspector(o) {
+                const html = __galleryStudioLayerSingleInspector(o);
+                if (!o?.id || !html || html.includes("inspector-layer-order-actions")) return html;
+                const idv = escA(o.id);
+                const canForward = galleryStudioCanMoveLayer(o.id, 1);
+                const canBackward = galleryStudioCanMoveLayer(o.id, -1);
+                const orderButtons = `<div class="inspector-layer-order-actions"><button type="button" class="button-muted" onclick="moveSelectedLayer(1)" ${canForward ? "" : "disabled"}>Move Forward</button><button type="button" class="button-muted" onclick="moveSelectedLayer(-1)" ${canBackward ? "" : "disabled"}>Move Backward</button></div>`;
+                return html.replace(`<div class="actions">`, `<div class="actions">${orderButtons}`);
+            };
+
+            const __galleryStudioLayerMultiInspector = multiInspector;
+            multiInspector = function galleryStudioLayerMultiInspector(sel) {
+                const html = __galleryStudioLayerMultiInspector(sel);
+                if (!html || html.includes("inspector-layer-order-actions")) return html;
+                const orderButtons = `<div class="inspector-layer-order-actions"><button type="button" class="button-muted" onclick="moveSelectedLayer(1)">Move Forward</button><button type="button" class="button-muted" onclick="moveSelectedLayer(-1)">Move Backward</button></div>`;
+                return html.replace(`<div class="actions" style="margin-top:10px">`, `<div class="actions" style="margin-top:10px">${orderButtons}`);
+            };
+
+            Object.assign(window, {
+                moveLayer,
+                reorderDrop,
+                setupLayerDnd,
+                moveSelectedLayer,
+                galleryStudioCommitLayerDomOrder
+            });
 
             ensureAutosaveStatusEl();
             autosaveStatus("Autosave ready", "good");
