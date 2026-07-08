@@ -1426,14 +1426,16 @@
            the published custom profile page.
         ============================================================ */
         .public-text-border-target {
-            -webkit-text-stroke-width: var(--public-text-border-width, 0px);
-            -webkit-text-stroke-color: var(--public-text-border-color, transparent);
-            paint-order: stroke fill;
+            --public-text-border-render-width: var(--public-text-border-width, 0px);
+            -webkit-text-stroke-width: 0px;
+            -webkit-text-stroke-color: transparent;
+            paint-order: normal;
+            text-shadow: calc(0px - var(--public-text-border-render-width, 0px)) 0 0 var(--public-text-border-color, transparent), var(--public-text-border-render-width, 0px) 0 0 var(--public-text-border-color, transparent), 0 calc(0px - var(--public-text-border-render-width, 0px)) 0 var(--public-text-border-color, transparent), 0 var(--public-text-border-render-width, 0px) 0 var(--public-text-border-color, transparent), calc(0px - var(--public-text-border-render-width, 0px)) calc(0px - var(--public-text-border-render-width, 0px)) 0 var(--public-text-border-color, transparent), var(--public-text-border-render-width, 0px) calc(0px - var(--public-text-border-render-width, 0px)) 0 var(--public-text-border-color, transparent), calc(0px - var(--public-text-border-render-width, 0px)) var(--public-text-border-render-width, 0px) 0 var(--public-text-border-color, transparent), var(--public-text-border-render-width, 0px) var(--public-text-border-render-width, 0px) 0 var(--public-text-border-color, transparent);
         }
 
             .public-text-border-target.public-text-border-gradient {
-                -webkit-text-stroke-color: var(--public-text-border-gradient-a, var(--public-text-border-color, transparent));
-                text-shadow: calc(0px - var(--public-text-border-width, 0px)) 0 0 var(--public-text-border-gradient-a, transparent), var(--public-text-border-width, 0px) 0 0 var(--public-text-border-gradient-b, transparent), 0 calc(0px - var(--public-text-border-width, 0px)) 0 var(--public-text-border-gradient-a, transparent), 0 var(--public-text-border-width, 0px) 0 var(--public-text-border-gradient-b, transparent);
+                -webkit-text-stroke-color: transparent;
+                text-shadow: calc(0px - var(--public-text-border-render-width, 0px)) 0 0 var(--public-text-border-gradient-a, transparent), var(--public-text-border-render-width, 0px) 0 0 var(--public-text-border-gradient-b, transparent), 0 calc(0px - var(--public-text-border-render-width, 0px)) 0 var(--public-text-border-gradient-a, transparent), 0 var(--public-text-border-render-width, 0px) 0 var(--public-text-border-gradient-b, transparent), calc(0px - var(--public-text-border-render-width, 0px)) calc(0px - var(--public-text-border-render-width, 0px)) 0 var(--public-text-border-gradient-a, transparent), var(--public-text-border-render-width, 0px) calc(0px - var(--public-text-border-render-width, 0px)) 0 var(--public-text-border-gradient-b, transparent), calc(0px - var(--public-text-border-render-width, 0px)) var(--public-text-border-render-width, 0px) 0 var(--public-text-border-gradient-a, transparent), var(--public-text-border-render-width, 0px) var(--public-text-border-render-width, 0px) 0 var(--public-text-border-gradient-b, transparent);
             }
 
         @media (max-width: 860px) {
@@ -2628,8 +2630,14 @@
         }
 
 
+        function clampPublicTextBorderWidth(value) {
+            const numeric = Number(value);
+            const safe = Number.isFinite(numeric) ? numeric : 0;
+            return Math.round(Math.max(0, Math.min(6, safe)) * 10) / 10;
+        }
+
         function getPublicTextBorderWidth(object = {}) {
-            return Math.max(0, Math.min(24, Number(object?.styles?.textBorderWidth ?? 0) || 0));
+            return clampPublicTextBorderWidth(object?.styles?.textBorderWidth ?? 0);
         }
 
         function getPublicTextBorderPaint(object = {}) {
@@ -2660,7 +2668,9 @@
 
             element.classList.add("public-text-border-target");
             element.classList.toggle("public-text-border-gradient", active && gradient);
-            element.style.setProperty("--public-text-border-width", active ? `${width}px` : "0px");
+            const cleanWidth = active ? clampPublicTextBorderWidth(width) : 0;
+            element.style.setProperty("--public-text-border-width", cleanWidth ? `${cleanWidth}px` : "0px");
+            element.style.setProperty("--public-text-border-render-width", cleanWidth ? `${cleanWidth}px` : "0px");
             element.style.setProperty("--public-text-border-color", active ? (solidColor || "transparent") : "transparent");
             element.style.setProperty("--public-text-border-paint", active ? (paint || "transparent") : "transparent");
             element.style.setProperty("--public-text-border-gradient-a", styles.textBorderColorGradientA || stops.first || solidColor || "#000000");
