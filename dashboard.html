@@ -270,12 +270,22 @@
             overflow: hidden;
         }
 
-            .world-cover img {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                display: block;
-            }
+        .gallery-item-hidden-notice {
+            margin-top: 10px;
+            padding: 11px 12px;
+            border: 1px solid rgba(255,120,80,.32);
+            border-radius: 14px;
+            background: rgba(255,120,80,.075);
+            color: #ffb596;
+            line-height: 1.5;
+        }
+
+        .world-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
 
         .world-body {
             padding: 20px;
@@ -500,6 +510,19 @@
                 <p class="muted">Loading worlds...</p>
             </div>
         </section>
+
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <h2>Your Gallery Items</h2>
+                    <p class="muted">Review public gallery items, moderation status, and appeals.</p>
+                </div>
+                <a id="dashboard-gallery-link" class="button" href="creator-gallery.html">Open Creator Gallery</a>
+            </div>
+            <div id="your-gallery-items" class="world-grid">
+                <p class="muted">Loading gallery items...</p>
+            </div>
+        </section>
     </main>
 
     <script type="module">
@@ -509,6 +532,7 @@
 
         let user = null;
         let profile = null;
+        let galleryItems = [];
 
         function safeRedirect(path) {
             window.location.replace(path);
@@ -624,7 +648,15 @@ ${escapeHtml(detail || "Refresh the page and try again.")}
                     "profile.html?user=" + encodeURIComponent(profile.username);
             }
 
+            if (profile.username) {
+                const galleryLink = document.getElementById("dashboard-gallery-link");
+                if (galleryLink) {
+                    galleryLink.href = "creator-gallery.html?user=" + encodeURIComponent(profile.username);
+                }
+            }
+
             await loadYourWorlds();
+            await loadYourGalleryItems();
         }
 
         async function loadYourWorlds() {
@@ -726,14 +758,14 @@ ${escapeHtml(visibility)}
 
 ${moderationStatus === "hidden" ? `
 <span
-            class="badge"
-            style="
-                border-color:rgba(255,120,80,.35);
-                color:#ffb596;
-                margin-left:8px;
-            "
+                class="badge"
+                style="
+                    border-color:rgba(255,120,80,.35);
+                    color:#ffb596;
+                    margin-left:8px;
+                "
 >
-            Hidden by Moderation
+                Hidden by Moderation
 </span>
 ` : ""}
 
@@ -749,13 +781,13 @@ ${world.featured ? "★ Featured publicly" : "Private spotlight disabled"}
 
 ${moderationStatus === "hidden" ? `
 <p
-            style="
-                color:#ffb596;
-                margin-top:10px;
-                line-height:1.5;
-            "
+                style="
+                    color:#ffb596;
+                    margin-top:10px;
+                    line-height:1.5;
+                "
 >
-            This ${contentLabel} is hidden from public view by moderation.
+                This ${contentLabel} is hidden from public view by moderation.
 <br>
 Reason: ${escapeHtml(world.moderation_reason || "No reason provided.")}
 </p>
@@ -777,6 +809,135 @@ Delete
 </article>
 `;
         }
+
+
+        function normalizeGalleryDashboardItem(item = {}) {
+            return {
+                ...item,
+                title: item.title || item.name || item.work_name || "Untitled Gallery Item",
+                description: item.description || item.details || item.notes || "",
+                proof_type: item.proof_type || item.work_type || item.kind || "gallery_item",
+                image_url: item.image_url || item.proof_image_url || item.image || item.url || "",
+                visibility: item.visibility || "public",
+                moderation_status: item.moderation_status || "approved",
+                moderation_reason: item.moderation_reason || ""
+            };
+        }
+
+        function isGalleryItemHiddenByModeration(item = {}) {
+            const status = String(item.moderation_status || "approved").toLowerCase();
+            return ["hidden", "removed", "rejected", "suspended", "banned"].includes(status);
+        }
+
+        async function loadYourGalleryItems() {
+            const container = document.getElementById("your-gallery-items");
+            if (!container) return;
+
+            const { data, error } = await supabase
+                .from("creator_proof_gallery")
+                .select("*")
+                .eq("owner_id", user.id)
+                .order("updated_at", { ascending: false });
+
+            if (error) {
+                container.innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`;
+                return;
+            }
+
+            galleryItems = (data || []).map(normalizeGalleryDashboardItem);
+
+            if (!galleryItems.length) {
+                container.innerHTML = `<p class="muted">You have not added gallery items yet.</p>`;
+                return;
+            }
+
+            container.innerHTML = galleryItems.map(renderGalleryItemCard).join("");
+        }
+
+        function renderGalleryItemCard(item) {
+            const image = item.image_url || "https://placehold.co/800x600/1b1b28/ffffff?text=Gallery";
+            const hidden = isGalleryItemHiddenByModeration(item);
+            const statusLabel = hidden ? "Hidden by Moderation" : (item.moderation_status || item.visibility || "public");
+
+            return `
+<article class="world-card">
+<div class="world-cover">
+<img src="${escapeHtml(image)}" alt="${escapeHtml(item.title || "Gallery item")}">
+</div>
+
+<div class="world-body">
+<span class="badge ${String(item.visibility).toLowerCase() === "public" ? "published" : "draft"}">
+${escapeHtml(item.visibility || "public")}
+</span>
+
+${hidden ? `
+<span class="badge" style="border-color:rgba(255,120,80,.35);color:#ffb596;margin-left:8px;">
+Hidden by Moderation
+</span>
+` : `
+<span class="badge" style="margin-left:8px;">
+${escapeHtml(statusLabel)}
+</span>
+`}
+
+<h3>${escapeHtml(item.title || "Untitled Gallery Item")}</h3>
+
+<p>${escapeHtml(item.description || "No description provided.")}</p>
+
+<p class="muted">${escapeHtml(String(item.proof_type || "gallery item").replaceAll("_", " "))}</p>
+
+${hidden ? `
+<div class="gallery-item-hidden-notice">
+<strong>This gallery item is hidden from public view.</strong><br>
+Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
+</div>
+` : ""}
+
+<div class="actions">
+<a class="button" href="creator-gallery-item.html?id=${encodeURIComponent(item.id)}">
+Open Item
+</a>
+
+<a class="button secondary" href="gallery-item-studio.html?item=${encodeURIComponent(item.id)}">
+Edit Showcase
+</a>
+
+${hidden ? `
+<button class="button secondary" onclick="submitGalleryItemAppeal('${item.id}')">
+Appeal Decision
+</button>
+` : ""}
+</div>
+</div>
+</article>
+`;
+        }
+
+        window.submitGalleryItemAppeal = async function (galleryItemId) {
+            const item = galleryItems.find(entry => entry.id === galleryItemId);
+            const message = prompt("Explain why this gallery item should be restored. This will be sent to moderation.");
+
+            if (!message || !message.trim()) {
+                return;
+            }
+
+            const { error } = await supabase
+                .from("moderation_appeals")
+                .insert({
+                    target_type: "gallery_item",
+                    target_id: galleryItemId,
+                    owner_id: user.id,
+                    appeal_message: message.trim(),
+                    status: "open"
+                });
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            alert(`Appeal submitted for "${item?.title || "this gallery item"}."`);
+        };
 
         window.deleteWorld = async function (worldId) {
             const confirmed = confirm("Delete this world? This cannot be undone.");

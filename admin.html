@@ -149,7 +149,7 @@
                 color: #ffd7d7
             }
 
-        input, select {
+        input, select, textarea {
             width: 100%;
             box-sizing: border-box;
             margin-bottom: 12px;
@@ -159,6 +159,12 @@
             background: rgba(0,0,0,.24);
             color: var(--text-primary);
             font-family: Arial,sans-serif
+        }
+
+        textarea {
+            min-height: 110px;
+            resize: vertical;
+            line-height: 1.55;
         }
 
         .actions {
@@ -432,6 +438,25 @@
             <button id="open-hidden-additions-button" class="button">
                 Open Hidden Additions Panel
             </button>
+
+            <h2 style="margin-top:28px;">Hidden Gallery Items</h2>
+            <p class="empty">
+                Review and restore creator gallery items hidden by moderation.
+            </p>
+
+            <button id="open-hidden-gallery-items-button" class="button">
+                Open Hidden Gallery Items Panel
+            </button>
+
+            <h2 style="margin-top:28px;">Appeals</h2>
+            <p class="empty">
+                Review creator appeals for worlds, additions, and gallery items.
+            </p>
+
+            <button id="open-appeals-button" class="button">
+                Open Appeals Panel
+            </button>
+
             <h2 style="margin-top:28px;">Reports</h2>
             <p class="empty">
                 Review user-submitted reports without cluttering the main admin page.
@@ -468,6 +493,45 @@
 
         <div id="hidden-additions-container">
             <p class="empty">Loading hidden additions...</p>
+        </div>
+    </div>
+
+    <div id="hidden-gallery-items-drawer" class="hidden-worlds-drawer">
+        <div class="drawer-top">
+            <h2 style="margin:0;">Hidden Gallery Items</h2>
+            <button id="close-hidden-gallery-items-button" class="button">X</button>
+        </div>
+
+        <input id="hidden-gallery-items-search"
+               placeholder="Search hidden gallery items...">
+
+        <div id="hidden-gallery-items-container">
+            <p class="empty">Loading hidden gallery items...</p>
+        </div>
+    </div>
+
+    <div id="appeals-drawer" class="hidden-worlds-drawer hidden-additions-drawer">
+        <div class="drawer-top">
+            <h2 style="margin:0;">Moderation Appeals</h2>
+            <button id="close-appeals-button" class="button">X</button>
+        </div>
+
+        <select id="appeals-status-filter">
+            <option value="open">Open Appeals</option>
+            <option value="under_review">Under Review</option>
+            <option value="resolved">Resolved</option>
+            <option value="rejected">Rejected</option>
+            <option value="all">All Appeals</option>
+        </select>
+
+        <input id="appeals-search" placeholder="Search appeals...">
+
+        <div class="actions">
+            <button id="refresh-appeals-button" class="button">Refresh Appeals</button>
+        </div>
+
+        <div id="appeals-container">
+            <p class="empty">Loading appeals...</p>
         </div>
     </div>
 
@@ -675,6 +739,30 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
 
         document.getElementById("hidden-additions-search").addEventListener("input", loadHiddenAdditions);
 
+        document.getElementById("open-hidden-gallery-items-button").addEventListener("click", async () => {
+            document.getElementById("hidden-gallery-items-drawer").classList.add("open");
+            await loadHiddenGalleryItems();
+        });
+
+        document.getElementById("close-hidden-gallery-items-button").addEventListener("click", () => {
+            document.getElementById("hidden-gallery-items-drawer").classList.remove("open");
+        });
+
+        document.getElementById("hidden-gallery-items-search").addEventListener("input", loadHiddenGalleryItems);
+
+        document.getElementById("open-appeals-button").addEventListener("click", async () => {
+            document.getElementById("appeals-drawer").classList.add("open");
+            await loadAppeals();
+        });
+
+        document.getElementById("close-appeals-button").addEventListener("click", () => {
+            document.getElementById("appeals-drawer").classList.remove("open");
+        });
+
+        document.getElementById("refresh-appeals-button").addEventListener("click", loadAppeals);
+        document.getElementById("appeals-status-filter").addEventListener("change", loadAppeals);
+        document.getElementById("appeals-search").addEventListener("input", loadAppeals);
+
         document.getElementById("close-hidden-worlds-button").addEventListener("click", () => {
             document.getElementById("hidden-worlds-drawer").classList.remove("open");
         });
@@ -733,8 +821,8 @@ ${isSelf ? `<span class="badge">You cannot change your own role here</span>` : `
             }
 
             container.innerHTML = data.map(world => `
-                            <article class="drawer-card">
-                                <strong>
+                                <article class="drawer-card">
+                                    <strong>
 ${escapeHtml(world.title || "Untitled")}
 </strong>
 
@@ -745,29 +833,29 @@ ${escapeHtml(
             )}
 </div>
 
-                                <p class="empty">
-                                    ${escapeHtml(world.summary || "No summary.")}
-                                </p>
+                                    <p class="empty">
+                                        ${escapeHtml(world.summary || "No summary.")}
+                                    </p>
 
-                                <div class="meta">
-                        Status: Hidden
+                                    <div class="meta">
+                            Status: Hidden
 </div>
 
 <p class="empty">
-                        Reason: ${escapeHtml(world.moderation_reason || "No reason provided.")}
+                            Reason: ${escapeHtml(world.moderation_reason || "No reason provided.")}
 </p>
 
-                                <div class="actions">
-                                    <a class="button" href="${getContentUrl(world)}">
-                                        Open
-                                    </a>
+                                    <div class="actions">
+                                        <a class="button" href="${getContentUrl(world)}">
+                                            Open
+                                        </a>
 
-                                    <button class="button" onclick="restoreWorld('${world.id}')">
-                                        Restore
-                                    </button>
-                                </div>
-                            </article>
-                        `).join("");
+                                        <button class="button" onclick="restoreWorld('${world.id}')">
+                                            Restore
+                                        </button>
+                                    </div>
+                                </article>
+                            `).join("");
         }
 
         async function loadHiddenAdditions() {
@@ -785,13 +873,13 @@ ${escapeHtml(
             let query = supabase
                 .from("world_additions")
                 .select(`
-                            id,
-                            title,
-                            author_id,
-                            summary,
-                            moderation_reason,
-                            moderation_status
-                        `)
+                                id,
+                                title,
+                                author_id,
+                                summary,
+                                moderation_reason,
+                                moderation_status
+                            `)
                 .eq("moderation_status", "hidden");
 
             if (search) {
@@ -815,41 +903,41 @@ ${escapeHtml(
             }
 
             container.innerHTML = data.map(addition => `
-                        <article class="drawer-card">
+                            <article class="drawer-card">
 
-                            <strong>
-                                ${escapeHtml(addition.title || "Untitled Addition")}
-                            </strong>
+                                <strong>
+                                    ${escapeHtml(addition.title || "Untitled Addition")}
+                                </strong>
 
-                            <p class="empty">
-                                ${escapeHtml(addition.summary || "No summary.")}
-                            </p>
+                                <p class="empty">
+                                    ${escapeHtml(addition.summary || "No summary.")}
+                                </p>
 
-                            <div class="meta">
-                                Status: Hidden
-                            </div>
+                                <div class="meta">
+                                    Status: Hidden
+                                </div>
 
-                            <p class="empty">
-                                Reason:
-                                ${escapeHtml(addition.moderation_reason || "No reason provided.")}
-                            </p>
+                                <p class="empty">
+                                    Reason:
+                                    ${escapeHtml(addition.moderation_reason || "No reason provided.")}
+                                </p>
 
-                            <div class="actions">
+                                <div class="actions">
 
-                                <a class="button"
-                                   href="addition.html?id=${encodeURIComponent(addition.id)}">
-                                    Open
-                                </a>
+                                    <a class="button"
+                                       href="addition.html?id=${encodeURIComponent(addition.id)}">
+                                        Open
+                                    </a>
 
-                                <button class="button"
-                                        onclick="restoreAddition('${addition.id}')">
-                                    Restore
-                                </button>
+                                    <button class="button"
+                                            onclick="restoreAddition('${addition.id}')">
+                                        Restore
+                                    </button>
 
-                            </div>
+                                </div>
 
-                        </article>
-                    `).join("");
+                            </article>
+                        `).join("");
         }
 
         window.restoreWorld = async function (worldId) {
@@ -1093,97 +1181,97 @@ ${report.reported_text || ""}`;
 
             return `
 <article class="report-card">
-            <span class="report-status">${escapeHtml(report.status || "open")}</span>
+                <span class="report-status">${escapeHtml(report.status || "open")}</span>
 
-            <h3 style="margin:0 0 8px;">
-                ${escapeHtml(
+                <h3 style="margin:0 0 8px;">
+                    ${escapeHtml(
                 report.report_type
                     .replaceAll("_", " ")
                     .replace(/\b\w/g, c => c.toUpperCase())
             )}
-            </h3>
+                </h3>
 
-            <div class="report-reason">
-                Reason: ${escapeHtml(report.reason || "No reason provided")}
-            </div>
+                <div class="report-reason">
+                    Reason: ${escapeHtml(report.reason || "No reason provided")}
+                </div>
 
-            <p class="meta">
-                Target: ${escapeHtml(targetTitle)}
-            </p>
+                <p class="meta">
+                    Target: ${escapeHtml(targetTitle)}
+                </p>
 
-            <p class="meta">
-                Reporter:
-                ${escapeHtml(reporter?.display_name || reporter?.username || "Unknown")}
-            </p>
+                <p class="meta">
+                    Reporter:
+                    ${escapeHtml(reporter?.display_name || reporter?.username || "Unknown")}
+                </p>
 
-            <p class="meta">
-                Reported User:
-                ${escapeHtml(reportedUser?.display_name || reportedUser?.username || "Unknown")}
-            </p>
+                <p class="meta">
+                    Reported User:
+                    ${escapeHtml(reportedUser?.display_name || reportedUser?.username || "Unknown")}
+                </p>
 
-            ${galleryItem ? `
-            <p class="meta">
-                Gallery Item Type: ${escapeHtml(galleryItem.proof_type || "gallery item")}
-                ${galleryItem.moderation_status ? `• Status: ${escapeHtml(galleryItem.moderation_status)}` : ""}
-            </p>
+                ${galleryItem ? `
+                <p class="meta">
+                    Gallery Item Type: ${escapeHtml(galleryItem.proof_type || "gallery item")}
+                    ${galleryItem.moderation_status ? `• Status: ${escapeHtml(galleryItem.moderation_status)}` : ""}
+                </p>
 ` : ""}
 
-            ${report.reported_text ? `
-            <div class="report-details" style="margin-top:14px;">
-                <strong>Reported Text Snapshot:</strong>
-                <p>${escapeHtml(report.reported_text)}</p>
-            </div>
+                ${report.reported_text ? `
+                <div class="report-details" style="margin-top:14px;">
+                    <strong>Reported Text Snapshot:</strong>
+                    <p>${escapeHtml(report.reported_text)}</p>
+                </div>
 ` : ""}
 
 <p class="report-details">
-            <strong>Reporter Details:</strong><br>
-            ${escapeHtml(report.details || "No additional details.")}
+                <strong>Reporter Details:</strong><br>
+                ${escapeHtml(report.details || "No additional details.")}
 </p>
 
-            <input id="report-note-${report.id}"
-                   placeholder="Resolution note or moderation reason...">
+                <input id="report-note-${report.id}"
+                       placeholder="Resolution note or moderation reason...">
 
-            <div class="actions">
-                <a class="button" href="${targetLink}">
-                    Open Target
-                </a>
+                <div class="actions">
+                    <a class="button" href="${targetLink}">
+                        Open Target
+                    </a>
 
-                <button class="button" onclick="updateReportStatus('${report.id}', 'under_review')">
-                    Mark Under Review
-                </button>
+                    <button class="button" onclick="updateReportStatus('${report.id}', 'under_review')">
+                        Mark Under Review
+                    </button>
 
-                ${world ? `
-                    <button class="button danger" onclick="hideReportedWorld('${report.id}', '${world.id}', '${world.owner_id}', '${escapeHtmlForAttribute(world.title || "Untitled")}', '${escapeHtmlForAttribute(world.content_type || "world")}')">
-            Hide World
+                    ${world ? `
+                        <button class="button danger" onclick="hideReportedWorld('${report.id}', '${world.id}', '${world.owner_id}', '${escapeHtmlForAttribute(world.title || "Untitled")}', '${escapeHtmlForAttribute(world.content_type || "world")}')">
+                Hide World
 </button>
-                ` : ""}
+                    ` : ""}
 
-                ${addition ? `
-                    <button class="button danger" onclick="hideReportedAddition('${report.id}', '${addition.id}', '${addition.author_id}', '${escapeHtmlForAttribute(addition.title || "Untitled Addition")}')">
-                        Hide Addition
+                    ${addition ? `
+                        <button class="button danger" onclick="hideReportedAddition('${report.id}', '${addition.id}', '${addition.author_id}', '${escapeHtmlForAttribute(addition.title || "Untitled Addition")}')">
+                            Hide Addition
+                        </button>
+                    ` : ""}
+
+                    ${galleryItem ? `
+                        <button class="button danger" onclick="hideReportedGalleryItem('${report.id}', '${galleryItem.id}', '${galleryItem.owner_id}', '${escapeHtmlForAttribute(galleryItem.title || "Untitled Gallery Item")}')">
+                            Hide Gallery Item
+                        </button>
+                    ` : ""}
+
+                    <button class="button" onclick="updateReportStatus('${report.id}', 'resolved')">
+                        Mark Resolved
                     </button>
-                ` : ""}
 
-                ${galleryItem ? `
-                    <button class="button danger" onclick="hideReportedGalleryItem('${report.id}', '${galleryItem.id}', '${galleryItem.owner_id}', '${escapeHtmlForAttribute(galleryItem.title || "Untitled Gallery Item")}')">
-                        Hide Gallery Item
+                    <button class="button" onclick="updateReportStatus('${report.id}', 'dismissed')">
+                        Dismiss
                     </button>
-                ` : ""}
 
-                <button class="button" onclick="updateReportStatus('${report.id}', 'resolved')">
-                    Mark Resolved
+                    ${report.status !== "archived" ? `
+                <button class="button" onclick="archiveReport('${report.id}')">
+                    Archive
                 </button>
-
-                <button class="button" onclick="updateReportStatus('${report.id}', 'dismissed')">
-                    Dismiss
-                </button>
-
-                ${report.status !== "archived" ? `
-            <button class="button" onclick="archiveReport('${report.id}')">
-                Archive
-            </button>
 ` : ""}
-            </div>
+                </div>
 </article>
 `;
         }
@@ -1332,7 +1420,7 @@ ${report.reported_text || ""}`;
                 return;
             }
 
-            const hideResult = await hideCreatorGalleryItemRecord(galleryItemId);
+            const hideResult = await hideCreatorGalleryItemRecord(galleryItemId, note);
 
             if (!hideResult.ok) {
                 alert(hideResult.error?.message || "Could not hide this gallery item.");
@@ -1361,8 +1449,25 @@ ${report.reported_text || ""}`;
             await loadReports();
         };
 
-        async function hideCreatorGalleryItemRecord(galleryItemId) {
+        async function hideCreatorGalleryItemRecord(galleryItemId, reason = "") {
+            const now = new Date().toISOString();
             const attempts = [
+                {
+                    label: "full_gallery_moderation_payload",
+                    payload: {
+                        moderation_status: "hidden",
+                        moderation_reason: reason || null,
+                        moderated_by: currentUser.id,
+                        moderated_at: now
+                    }
+                },
+                {
+                    label: "status_and_reason_payload",
+                    payload: {
+                        moderation_status: "hidden",
+                        moderation_reason: reason || null
+                    }
+                },
                 {
                     label: "moderation_status_only",
                     payload: { moderation_status: "hidden" }
@@ -1423,6 +1528,234 @@ ${report.reported_text || ""}`;
         window.logOut = async function () {
             await supabase.auth.signOut();
             window.location.href = "login.html";
+        };
+
+
+        function normalizeHiddenGalleryItem(item = {}) {
+            return {
+                ...item,
+                title: item.title || item.name || item.work_name || "Untitled Gallery Item",
+                description: item.description || item.details || item.notes || "",
+                proof_type: item.proof_type || item.work_type || item.kind || "gallery_item",
+                owner_id: item.owner_id || item.author_id || item.user_id || "",
+                image_url: item.image_url || item.proof_image_url || item.image || item.url || "",
+                visibility: item.visibility || "public",
+                moderation_status: item.moderation_status || "hidden",
+                moderation_reason: item.moderation_reason || ""
+            };
+        }
+
+        function galleryItemIsHidden(item = {}) {
+            const status = String(item.moderation_status || "").toLowerCase();
+            const visibility = String(item.visibility || "").toLowerCase();
+            return visibility === "private" || ["hidden", "removed", "rejected", "suspended", "banned"].includes(status);
+        }
+
+        async function loadHiddenGalleryItems() {
+            const container = document.getElementById("hidden-gallery-items-container");
+            const search = document.getElementById("hidden-gallery-items-search").value.trim().toLowerCase();
+
+            container.innerHTML = `<p class="empty">Loading hidden gallery items...</p>`;
+
+            const { data, error } = await supabase
+                .from("creator_proof_gallery")
+                .select("*")
+                .order("updated_at", { ascending: false });
+
+            if (error) {
+                container.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
+                return;
+            }
+
+            const items = (data || [])
+                .map(normalizeHiddenGalleryItem)
+                .filter(galleryItemIsHidden)
+                .filter(item => {
+                    if (!search) return true;
+                    const haystack = [item.title, item.description, item.proof_type, item.moderation_reason, item.visibility, item.moderation_status]
+                        .join(" ")
+                        .toLowerCase();
+                    return haystack.includes(search);
+                });
+
+            if (!items.length) {
+                container.innerHTML = `<p class="empty">No hidden gallery items found.</p>`;
+                return;
+            }
+
+            container.innerHTML = items.map(item => `
+<article class="drawer-card">
+<strong>${escapeHtml(item.title || "Untitled Gallery Item")}</strong>
+<div class="meta">${escapeHtml(item.proof_type || "gallery item")} • ${escapeHtml(item.moderation_status || "hidden")}</div>
+<p class="empty">${escapeHtml(item.description || "No description.")}</p>
+<p class="empty">Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}</p>
+<div class="actions">
+<a class="button" href="creator-gallery-item.html?id=${encodeURIComponent(item.id)}">Open Item</a>
+<button class="button" onclick="restoreGalleryItem('${item.id}')">Restore</button>
+</div>
+</article>
+`).join("");
+        }
+
+        window.restoreGalleryItem = async function (galleryItemId) {
+            const { data: item, error: itemError } = await supabase
+                .from("creator_proof_gallery")
+                .select("id,title,owner_id")
+                .eq("id", galleryItemId)
+                .maybeSingle();
+
+            if (itemError || !item) {
+                alert(itemError?.message || "Gallery item not found.");
+                return;
+            }
+
+            const attempts = [
+                {
+                    moderation_status: "approved",
+                    moderation_reason: null,
+                    moderated_by: currentUser.id,
+                    moderated_at: new Date().toISOString(),
+                    visibility: "public"
+                },
+                {
+                    moderation_status: "approved",
+                    moderation_reason: null,
+                    visibility: "public"
+                },
+                {
+                    moderation_status: "approved",
+                    visibility: "public"
+                },
+                {
+                    visibility: "public"
+                }
+            ];
+
+            let lastError = null;
+
+            for (const payload of attempts) {
+                const { error } = await supabase
+                    .from("creator_proof_gallery")
+                    .update(payload)
+                    .eq("id", galleryItemId);
+
+                if (!error) {
+                    await supabase
+                        .from("moderation_logs")
+                        .insert({
+                            target_user_id: item.owner_id,
+                            moderator_id: currentUser.id,
+                            action: "gallery_item_restored",
+                            reason: `Gallery item "${item.title || "Untitled"}" restored from admin.`,
+                            expires_at: null
+                        });
+
+                    await createNotification({
+                        recipientId: item.owner_id,
+                        actorId: currentUser.id,
+                        type: "gallery_item_restored",
+                        message: `Your gallery item "${item.title || "Untitled"}" was restored by moderation.`,
+                        link: `creator-gallery-item.html?id=${encodeURIComponent(galleryItemId)}`
+                    });
+
+                    await loadHiddenGalleryItems();
+                    return;
+                }
+
+                lastError = error;
+                if (!isSchemaColumnError(error)) break;
+            }
+
+            alert(lastError?.message || "Could not restore gallery item.");
+        };
+
+        async function loadAppeals() {
+            const container = document.getElementById("appeals-container");
+            const status = document.getElementById("appeals-status-filter").value;
+            const search = document.getElementById("appeals-search").value.trim().toLowerCase();
+
+            container.innerHTML = `<p class="empty">Loading appeals...</p>`;
+
+            let query = supabase
+                .from("moderation_appeals")
+                .select("*")
+                .order("created_at", { ascending: false });
+
+            if (status !== "all") {
+                query = query.eq("status", status);
+            }
+
+            const { data, error } = await query;
+
+            if (error) {
+                container.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
+                return;
+            }
+
+            let appeals = data || [];
+
+            if (search) {
+                appeals = appeals.filter(appeal => {
+                    const haystack = [
+                        appeal.target_type,
+                        appeal.target_id,
+                        appeal.appeal_message,
+                        appeal.status,
+                        appeal.resolution_note
+                    ].join(" ").toLowerCase();
+                    return haystack.includes(search);
+                });
+            }
+
+            if (!appeals.length) {
+                container.innerHTML = `<p class="empty">No appeals found.</p>`;
+                return;
+            }
+
+            container.innerHTML = appeals.map(renderAppealCard).join("");
+        }
+
+        function renderAppealCard(appeal) {
+            const targetType = appeal.target_type || "content";
+            const targetId = appeal.target_id || "";
+
+            return `
+<article class="drawer-card">
+<strong>${escapeHtml(targetType.replaceAll("_", " "))}</strong>
+<div class="meta">Status: ${escapeHtml(appeal.status || "open")}</div>
+<p class="empty">${escapeHtml(appeal.appeal_message || "No appeal message.")}</p>
+
+<textarea id="appeal-note-${appeal.id}" placeholder="Resolution note..."></textarea>
+
+<div class="actions">
+${targetType === "gallery_item" && targetId ? `<a class="button" href="creator-gallery-item.html?id=${encodeURIComponent(targetId)}">Open Target</a>` : ""}
+${targetType === "gallery_item" && targetId ? `<button class="button" onclick="restoreGalleryItem('${targetId}')">Restore Item</button>` : ""}
+<button class="button" onclick="resolveAppeal('${appeal.id}', 'resolved')">Resolve</button>
+<button class="button danger" onclick="resolveAppeal('${appeal.id}', 'rejected')">Reject</button>
+</div>
+</article>
+`;
+        }
+
+        window.resolveAppeal = async function (appealId, status) {
+            const note = document.getElementById(`appeal-note-${appealId}`)?.value.trim() || "";
+
+            const { error } = await supabase
+                .from("moderation_appeals")
+                .update({
+                    status,
+                    reviewed_by: currentUser.id,
+                    resolution_note: note || null,
+                    reviewed_at: new Date().toISOString()
+                })
+                .eq("id", appealId);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            await loadAppeals();
         };
 
         window.restoreAddition = async function (additionId) {
