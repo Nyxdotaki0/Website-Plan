@@ -840,6 +840,90 @@
             }
         }
 
+
+
+        /* Staff gallery moderation controls */
+        .staff-moderate-card-action {
+            position: absolute;
+            right: 12px;
+            bottom: 12px;
+            z-index: 12;
+            display: inline-flex;
+            pointer-events: auto;
+        }
+
+            .staff-moderate-card-action .button {
+                margin: 0;
+                background: rgba(80,20,20,.78);
+                border-color: rgba(255,120,120,.36);
+                color: #ffe2e2;
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+                box-shadow: 0 8px 24px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.08);
+            }
+
+        .gallery-staff-moderation-panel::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: radial-gradient(circle at 84% 8%, rgba(255,110,110,.16), transparent 28%), linear-gradient(120deg, rgba(255,255,255,.10), transparent 32%);
+        }
+
+        .gallery-staff-moderation-body,
+        .gallery-staff-moderation-top {
+            position: relative;
+            z-index: 2;
+        }
+
+        .gallery-staff-moderation-target {
+            display: grid;
+            grid-template-columns: 86px minmax(0, 1fr);
+            gap: 14px;
+            align-items: center;
+            margin-bottom: 16px;
+            padding: 12px;
+            border: 1px solid rgba(255,255,255,.12);
+            border-radius: 18px;
+            background: rgba(255,255,255,.04);
+        }
+
+            .gallery-staff-moderation-target img {
+                width: 86px;
+                height: 86px;
+                object-fit: cover;
+                border-radius: 14px;
+                background: rgba(0,0,0,.34);
+                border: 1px solid rgba(255,255,255,.12);
+            }
+
+            .gallery-staff-moderation-target h3 {
+                margin: 0 0 6px;
+                color: #fff;
+                overflow-wrap: anywhere;
+            }
+
+            .gallery-staff-moderation-target p {
+                margin: 0;
+                color: var(--text-secondary,rgba(255,255,255,.72));
+                line-height: 1.45;
+            }
+
+        .gallery-staff-moderation-panel textarea {
+            min-height: 128px;
+        }
+
+        @media(max-width: 620px) {
+            .gallery-staff-moderation-target {
+                grid-template-columns: 1fr;
+            }
+
+                .gallery-staff-moderation-target img {
+                    width: 100%;
+                    height: 180px;
+                }
+        }
+
         .empty-panel {
             border: 1px dashed rgba(255,255,255,.16);
             border-radius: 22px;
@@ -4844,6 +4928,7 @@
     <script type="module">
         import { supabase } from "./supabaseClient.js";
         import { optimizeImage } from "./imageUtils.js";
+        import { createNotification } from "./notifications.js";
 
         const params = new URLSearchParams(location.search);
         const usernameFromUrl = params.get("user") || "";
@@ -5286,6 +5371,167 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
             return `<span class="status-pill moderation-hidden">Hidden</span>`;
         }
 
+
+        function ensureGalleryStaffModerationModal() {
+            let modal = $("gallery-staff-moderation-modal");
+            if (modal) return modal;
+
+            modal = document.createElement("div");
+            modal.id = "gallery-staff-moderation-modal";
+            modal.className = "modal-backdrop";
+            modal.setAttribute("aria-hidden", "true");
+            modal.onclick = event => closeGalleryStaffModeration(event);
+            modal.innerHTML = `
+<div class="modal-card gallery-staff-moderation-panel" role="dialog" aria-modal="true" aria-labelledby="gallery-staff-moderation-heading" onclick="event.stopPropagation()">
+        <div class="modal-top gallery-staff-moderation-top">
+            <div>
+                <span class="gallery-report-kicker">Staff Moderation</span>
+                <h2 id="gallery-staff-moderation-heading">Moderate Gallery Item</h2>
+                <p>Hide the item from public view or permanently delete it. The reason is saved for admin review.</p>
+            </div>
+            <button class="modal-close button" type="button" aria-label="Close moderation tools" onclick="closeGalleryStaffModeration()">×</button>
+        </div>
+        <div class="modal-body gallery-staff-moderation-body">
+            <section id="gallery-staff-moderation-target" class="gallery-staff-moderation-target"></section>
+            <label for="gallery-staff-moderation-reason">Moderation reason</label>
+            <textarea id="gallery-staff-moderation-reason" placeholder="Explain why this item is being hidden or deleted. This appears in admin moderation records."></textarea>
+            <p id="gallery-staff-moderation-message" class="status-message"></p>
+            <div class="modal-actions">
+                <button class="button soft" type="button" onclick="closeGalleryStaffModeration()">Cancel</button>
+                <button class="button danger" type="button" onclick="runGalleryStaffModeration('hide')">Hide Item</button>
+                <button class="button danger" type="button" onclick="runGalleryStaffModeration('delete')">Delete Permanently</button>
+            </div>
+        </div>
+</div>`;
+            document.body.appendChild(modal);
+            return modal;
+        }
+
+        function galleryStaffModerationMessage(text = "", type = "") {
+            const message = $("gallery-staff-moderation-message");
+            if (!message) return;
+            message.textContent = text;
+            message.className = `status-message ${type}`.trim();
+        }
+
+        window.openGalleryStaffModeration = function (galleryItemId, event = null) {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+
+            if (!viewerIsGalleryStaff()) {
+                toast("Only moderators and Void Architects can moderate gallery items here.", "bad");
+                return;
+            }
+
+            const target = allItems.find(entry => sameId(entry.id, galleryItemId));
+            if (!target) {
+                toast("Could not find this gallery item in the current gallery view.", "bad");
+                return;
+            }
+
+            activePreviewItemId = target.id;
+            const modal = ensureGalleryStaffModerationModal();
+            const targetBox = $("gallery-staff-moderation-target");
+            const reasonBox = $("gallery-staff-moderation-reason");
+            const status = isGalleryItemHiddenByModeration(target) ? "Hidden" : "Visible";
+            if (targetBox) {
+                targetBox.innerHTML = `${target.image_url ? `<img src="${escapeAttr(target.image_url)}" alt="${escapeAttr(target.title)}">` : `<img alt="No image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='86' height='86'%3E%3Crect width='100%25' height='100%25' fill='%23101014'/%3E%3C/svg%3E">`}<div><h3>${escapeHtml(target.title || "Untitled Gallery Item")}</h3><p>${escapeHtml(formatType(target.proof_type))} · ${escapeHtml(status)}</p><p>Current reason: ${escapeHtml(target.moderation_reason || "No moderation reason yet.")}</p></div>`;
+            }
+            if (reasonBox) reasonBox.value = target.moderation_reason || "";
+            galleryStaffModerationMessage("");
+            modal.classList.add("open");
+            modal.setAttribute("aria-hidden", "false");
+            setTimeout(() => reasonBox?.focus(), 80);
+        };
+
+        window.closeGalleryStaffModeration = function (event = null) {
+            if (event && event.target !== event.currentTarget) return;
+            const modal = $("gallery-staff-moderation-modal");
+            if (!modal) return;
+            modal.classList.remove("open");
+            modal.setAttribute("aria-hidden", "true");
+        };
+
+        window.runGalleryStaffModeration = async function (action) {
+            if (!viewerIsGalleryStaff()) {
+                galleryStaffModerationMessage("Only moderators and Void Architects can moderate gallery items here.", "bad");
+                return;
+            }
+
+            const target = allItems.find(entry => sameId(entry.id, activePreviewItemId));
+            if (!target) {
+                galleryStaffModerationMessage("Could not find this gallery item.", "bad");
+                return;
+            }
+
+            const reason = $("gallery-staff-moderation-reason")?.value.trim() || "";
+            if (!reason) {
+                galleryStaffModerationMessage("Enter a reason before moderating this item.", "bad");
+                return;
+            }
+
+            if (action === "delete") {
+                const ok = confirm(`Permanently delete gallery item "${target.title || "Untitled Gallery Item"}"? This cannot be undone.`);
+                if (!ok) return;
+            }
+
+            galleryStaffModerationMessage(action === "delete" ? "Deleting gallery item..." : "Hiding gallery item...", "warn");
+            const result = await moderateGalleryItemFromStaff(target, action, reason);
+
+            if (!result.ok) {
+                galleryStaffModerationMessage(result.error?.message || "Could not moderate this gallery item.", "bad");
+                return;
+            }
+
+            await loadGalleryItems();
+            closeGalleryStaffModeration();
+            closeItemPreview();
+            renderEverything();
+            toast(action === "delete" ? "Gallery item deleted by moderation." : "Gallery item hidden by moderation.", "good");
+        };
+
+        async function moderateGalleryItemFromStaff(target, action, reason) {
+            const { data, error } = await supabase.rpc("moderate_creator_gallery_item_from_staff", {
+                p_gallery_item_id: target.id,
+                p_action: action,
+                p_reason: reason
+            });
+
+            if (error) return { ok: false, error };
+
+            const normalizedAction = action === "delete" ? "gallery_item_deleted" : "gallery_item_hidden";
+
+            try {
+                await supabase.from("moderation_logs").insert({
+                    target_user_id: target.owner_id || profile?.id || null,
+                    moderator_id: currentUser.id,
+                    action: normalizedAction,
+                    reason,
+                    expires_at: null
+                });
+            } catch (logError) {
+                console.warn("Could not write gallery moderation log:", logError);
+            }
+
+            try {
+                if (target.owner_id) {
+                    await createNotification({
+                        recipientId: target.owner_id,
+                        actorId: currentUser.id,
+                        type: normalizedAction,
+                        message: action === "delete"
+                            ? `Your gallery item "${target.title || "Untitled Gallery Item"}" was removed by moderation. Reason: ${reason}`
+                            : `Your gallery item "${target.title || "Untitled Gallery Item"}" was hidden by moderation. Reason: ${reason}`,
+                        link: action === "delete" ? "dashboard.html" : `creator-gallery-item.html?id=${encodeURIComponent(target.id)}`
+                    });
+                }
+            } catch (notifyError) {
+                console.warn("Could not send gallery moderation notification:", notifyError);
+            }
+
+            return { ok: true, data };
+        }
+
         window.submitGalleryItemAppeal = async function (galleryItemId) {
             if (!currentUser || !profile || currentUser.id !== profile.id) {
                 toast("Only the owner can appeal this moderation decision.", "bad");
@@ -5547,6 +5793,7 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
             if (safety.preview === "blur") classes.push("blur-preview");
             if (safety.preview === "hide") classes.push("hide-preview");
             if (isOwner) classes.push("owner-managed-card");
+            if (viewerIsGalleryStaff()) classes.push("staff-moderatable-card");
             if (isOwner && ownerToolsOpen) classes.push("organizing-card", "drop-ready");
             const childCount = folders.filter(f => sameId(f.parent_id, folder.id)).length;
             const itemCount = allItems.filter(i => sameId(i.folder_id, folder.id)).length;
@@ -5557,12 +5804,12 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
                 ? ` data-folder-id="${escapeAttr(folder.id)}" ondragover="allowGalleryItemDrop(event)" ondragleave="clearGalleryDropHover(event)" ondrop="dropGalleryItemOnFolder(event, '${escapeAttr(folder.id)}')"`
                 : ` data-folder-id="${escapeAttr(folder.id)}"`;
             return `<article class="${classes.join(" ")}"${dropAttrs} onclick="openFolder('${escapeAttr(folder.id)}')">
-                                                                                                                                            ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, folder)}
-                                                                                                                                            <div class="card-top"><span class="status-pill">${escapeHtml(folder.icon || "📁")} Folder</span>${agePill(folder.age_rating)}</div>
-                                                                                                                                            ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', 1)">↓</button></div>` : ""}
-                                                                                                                                            ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openFolderModal('${escapeAttr(folder.id)}')">Edit</button></div>` : ""}
-                                                                                                                                            <div class="card-content"><h3>${escapeHtml(folder.name)}</h3><p>${escapeHtml(folder.description || `${childCount} folder${childCount === 1 ? "" : "s"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`)}</p><div class="card-meta-row">${visibilityPill(folder)} ${warningCountPill(folder)}</div></div>
-                                                                                                                                        </article>`;
+                                                                                                                                                ${cover}<div class="card-shade"></div>${safetyOverlayHtml(safety, folder)}
+                                                                                                                                                <div class="card-top"><span class="status-pill">${escapeHtml(folder.icon || "📁")} Folder</span>${agePill(folder.age_rating)}</div>
+                                                                                                                                                ${isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveFolderOrder('${escapeAttr(folder.id)}', 1)">↓</button></div>` : ""}
+                                                                                                                                                ${isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openFolderModal('${escapeAttr(folder.id)}')">Edit</button></div>` : ""}
+                                                                                                                                                <div class="card-content"><h3>${escapeHtml(folder.name)}</h3><p>${escapeHtml(folder.description || `${childCount} folder${childCount === 1 ? "" : "s"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`)}</p><div class="card-meta-row">${visibilityPill(folder)} ${warningCountPill(folder)}</div></div>
+                                                                                                                                            </article>`;
         }
 
 
@@ -5585,13 +5832,17 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
             const moveOutButton = isOwner && ownerToolsOpen && item.folder_id
                 ? `<button class="button tiny soft move-out" type="button" onclick="event.stopPropagation(); moveGalleryItemToFolder('${escapeAttr(item.id)}', null)">Move Out</button>`
                 : "";
+            const staffModerationCardButton = viewerIsGalleryStaff()
+                ? `<div class="staff-moderate-card-action"><button class="button tiny danger" type="button" onclick="openGalleryStaffModeration('${escapeAttr(item.id)}', event)">Moderate</button></div>`
+                : "";
             return `<article class="${classes.join(" ")}"${dragAttrs} onclick="openItemPreview('${escapeAttr(item.id)}')">
-                                                                                                                                            ${cover}<div class="card-shade"></div>${labelOnlySafety ? safetyLabelOnlyOverlayHtml(safety, item) : safetyOverlayHtml(safety, item)}
-                                                                                                                                            ${labelOnlySafety ? "" : `<div class="card-top"><span class="status-pill">${escapeHtml(formatType(item.proof_type))}</span>${agePill(item.age_rating)}${galleryHiddenBadgeHtml(item)}</div>`}
-                                                                                                                                            ${!labelOnlySafety && isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', 1)">↓</button>${moveOutButton}</div>` : ""}
-                                                                                                                                            ${!labelOnlySafety && isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openItemModal('${escapeAttr(item.id)}')">Edit</button>${isGalleryItemHiddenByModeration(item) ? `<button class="button tiny soft" type="button" onclick="event.stopPropagation(); submitGalleryItemAppeal('${escapeAttr(item.id)}')">Appeal</button>` : ""}</div>` : ""}
-                                                                                                                                            ${labelOnlySafety ? "" : `<div class="card-content"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description || "No description provided.")}</p><div class="card-meta-row">${showcaseAccessPill(item)} ${visibilityPill(item)} ${warningCountPill(item)} ${galleryHiddenBadgeHtml(item)}</div>${galleryHiddenNoticeHtml(item)}</div>`}
-                                                                                                                                        </article>`;
+                                                                                                                                                ${cover}<div class="card-shade"></div>${labelOnlySafety ? safetyLabelOnlyOverlayHtml(safety, item) : safetyOverlayHtml(safety, item)}
+                                                                                                                                                ${labelOnlySafety ? "" : `<div class="card-top"><span class="status-pill">${escapeHtml(formatType(item.proof_type))}</span>${agePill(item.age_rating)}${galleryHiddenBadgeHtml(item)}</div>`}
+                                                                                                                                                ${staffModerationCardButton}
+                                                                                                                                                ${!labelOnlySafety && isOwner && ownerToolsOpen ? `<div class="owner-card-organize-actions"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', -1)">↑</button><button class="button tiny soft" type="button" onclick="event.stopPropagation(); moveItemOrder('${escapeAttr(item.id)}', 1)">↓</button>${moveOutButton}</div>` : ""}
+                                                                                                                                                ${!labelOnlySafety && isOwner ? `<div class="owner-card-edit-action"><button class="button tiny soft" type="button" onclick="event.stopPropagation(); openItemModal('${escapeAttr(item.id)}')">Edit</button>${isGalleryItemHiddenByModeration(item) ? `<button class="button tiny soft" type="button" onclick="event.stopPropagation(); submitGalleryItemAppeal('${escapeAttr(item.id)}')">Appeal</button>` : ""}</div>` : ""}
+                                                                                                                                                ${labelOnlySafety ? "" : `<div class="card-content"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description || "No description provided.")}</p><div class="card-meta-row">${showcaseAccessPill(item)} ${visibilityPill(item)} ${warningCountPill(item)} ${galleryHiddenBadgeHtml(item)}</div>${galleryHiddenNoticeHtml(item)}</div>`}
+                                                                                                                                            </article>`;
         }
 
         function safetyOverlayHtml(safety, record) {
@@ -5688,6 +5939,9 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
                 ? `<a class="button" href="${showcaseHref}">Showcase Manager</a><button class="button soft" type="button" onclick="closeItemPreview(); openItemModal('${escapeAttr(item.id)}')">Edit Gallery Details</button>`
                 : "";
             const canBypassLockedShowcase = isOwner || viewerCanSeeModeratedGalleryItem(item) || viewerIsGalleryStaff();
+            const staffControls = viewerIsGalleryStaff()
+                ? `<button class="button danger" type="button" onclick="openGalleryStaffModeration('${escapeAttr(item.id)}', event)">Moderate Item</button>`
+                : "";
             const showcaseControls = locked && !canBypassLockedShowcase
                 ? `<span class="button soft" aria-disabled="true" title="The creator has locked this showcase for now.">🔒 Showcase Locked</span>`
                 : `<a class="button primary" href="${showcaseHref}">${locked && canBypassLockedShowcase ? "Open Locked Showcase" : "Open Showcase"}</a>`;
@@ -5699,7 +5953,7 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
             const previewImageHtml = item.image_url
                 ? `<div class="item-preview-art item-preview-zoomable" role="button" tabindex="0" aria-label="Open full image preview" title="Open full image" data-gallery-lightbox-src="${escapeAttr(item.image_url)}" data-gallery-lightbox-alt="${escapeAttr(item.title || "Gallery item image")}" onclick="openGalleryItemImageLightboxFromPreview(event)" onkeydown="handleGalleryItemImagePreviewKeydown(event)"><img src="${escapeAttr(item.image_url)}" alt="${escapeAttr(item.title)}"><span class="item-preview-zoom-hint">Click image to enlarge</span></div>`
                 : `<div class="item-preview-art"><div class="safety-screen"><strong>No image</strong></div></div>`;
-            $("item-preview-content").innerHTML = `${previewImageHtml}<div class="item-preview-details"><h2>${escapeHtml(item.title)}</h2><div>${agePill(item.age_rating)} ${showcaseAccessPill(item)} ${visibilityPill(item)} ${warningCountPill(item)}</div><p class="muted">${escapeHtml(item.description || "No description provided.")}</p>${warningsHtml(item)}${lockNote}<div class="modal-actions" style="justify-content:flex-start;">${showcaseControls}${ownerControls}</div></div>`;
+            $("item-preview-content").innerHTML = `${previewImageHtml}<div class="item-preview-details"><h2>${escapeHtml(item.title)}</h2><div>${agePill(item.age_rating)} ${showcaseAccessPill(item)} ${visibilityPill(item)} ${warningCountPill(item)}</div><p class="muted">${escapeHtml(item.description || "No description provided.")}</p>${warningsHtml(item)}${lockNote}<div class="modal-actions" style="justify-content:flex-start;">${showcaseControls}${ownerControls}${staffControls}</div></div>`;
             $("item-preview-modal").classList.add("open");
         }
 
@@ -6973,29 +7227,29 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
         function renderGalleryGlobalControls() {
             const g = normalizeGalleryStyle(galleryStyleDraft).global;
             return `
-                                                                                                        <div class="gallery-style-control-card wide gallery-style-section-card">${galleryInfoLabel("Text", "Controls the main gallery title, intro copy, and section copy. Gallery item cards stay locked to their original design.", "h3")}<p>Fonts, solid text colors, and gradient text colors for page-level text only.</p></div>
-                                                                                                        <div class="gallery-style-control-card wide">${galleryInfoLabel("Heading Font", "Changes the font used by the gallery title and page section headings.")}<select oninput="updateGalleryStyleGlobal('headingFont', this.value)">${fontOptions(g.headingFont)}</select>${galleryInfoLabel("Body Font", "Changes the font used by the gallery intro and supporting page copy.")}<select oninput="updateGalleryStyleGlobal('bodyFont', this.value)">${fontOptions(g.bodyFont)}</select>${galleryInfoLabel("Muted Text Color", "Changes lower-emphasis text, such as helper copy, breadcrumb arrows, and count text.")}<input class="paint-fine-input" value="${escapeAttr(g.mutedColor)}" oninput="updateGalleryStyleGlobal('mutedColor', this.value)"></div>
-                                                                                                        ${renderGalleryTextPaintCard({ title: 'Heading Text', help: 'Controls the title and section heading text color. Use Live gradient for gradient lettering.', fillMode: g.headingFillMode, color: g.headingColor, color2: g.headingColor2, direction: g.headingDirection, strength: g.headingStrength, activePrefix: 'heading' })}
-                                                                                                        ${renderGalleryTextPaintCard({ title: 'Body Text', help: 'Controls the main gallery description text. Use gradient spread to decide how strongly the second color appears.', fillMode: g.textFillMode, color: g.textColor, color2: g.textColor2, direction: g.textDirection, strength: g.textStrength, activePrefix: 'text' })}`;
+                                                                                                            <div class="gallery-style-control-card wide gallery-style-section-card">${galleryInfoLabel("Text", "Controls the main gallery title, intro copy, and section copy. Gallery item cards stay locked to their original design.", "h3")}<p>Fonts, solid text colors, and gradient text colors for page-level text only.</p></div>
+                                                                                                            <div class="gallery-style-control-card wide">${galleryInfoLabel("Heading Font", "Changes the font used by the gallery title and page section headings.")}<select oninput="updateGalleryStyleGlobal('headingFont', this.value)">${fontOptions(g.headingFont)}</select>${galleryInfoLabel("Body Font", "Changes the font used by the gallery intro and supporting page copy.")}<select oninput="updateGalleryStyleGlobal('bodyFont', this.value)">${fontOptions(g.bodyFont)}</select>${galleryInfoLabel("Muted Text Color", "Changes lower-emphasis text, such as helper copy, breadcrumb arrows, and count text.")}<input class="paint-fine-input" value="${escapeAttr(g.mutedColor)}" oninput="updateGalleryStyleGlobal('mutedColor', this.value)"></div>
+                                                                                                            ${renderGalleryTextPaintCard({ title: 'Heading Text', help: 'Controls the title and section heading text color. Use Live gradient for gradient lettering.', fillMode: g.headingFillMode, color: g.headingColor, color2: g.headingColor2, direction: g.headingDirection, strength: g.headingStrength, activePrefix: 'heading' })}
+                                                                                                            ${renderGalleryTextPaintCard({ title: 'Body Text', help: 'Controls the main gallery description text. Use gradient spread to decide how strongly the second color appears.', fillMode: g.textFillMode, color: g.textColor, color2: g.textColor2, direction: g.textDirection, strength: g.textStrength, activePrefix: 'text' })}`;
         }
 
 
         function renderGalleryButtonControls() {
             const g = normalizeGalleryStyle(galleryStyleDraft).global;
             return `
-                                                                                                        <div class="gallery-style-control-card wide gallery-style-section-card">${galleryInfoLabel("Buttons", "Controls only the main page buttons, like Back to Profile, Organize Gallery, Edit Gallery Look, and Add Gallery Item. Card edit buttons and popups stay original.", "h3")}<p>Main page buttons only. Gallery card edit/organize buttons and all popups stay original.</p></div>
-                                                                                                        <div class="gallery-style-control-card wide">${galleryInfoLabel("Button Font", "Changes the font on the main page buttons.")}<select oninput="updateGalleryStyleGlobal('buttonFont', this.value)">${fontOptions(g.buttonFont)}</select>${galleryInfoLabel("Button Text Color", "Changes the text color inside the main page buttons.")}<div class="paint-row"><input data-gallery-style-color-input="1" type="color" value="${toHex(g.buttonText)}" oninput="updateGalleryStyleGlobal('buttonText', this.value)"><input class="paint-fine-input" value="${escapeAttr(g.buttonText)}" oninput="updateGalleryStyleGlobal('buttonText', this.value)"></div></div>
-                                                                                                        ${renderGalleryPaintCard({ title: 'Button Fill', help: 'Controls the button background. Solid uses one color. Live gradient blends two colors, and strength controls how strong that second color feels.', fillMode: g.buttonFillMode, color: g.buttonColor, color2: g.buttonColor2, direction: g.buttonDirection, strength: g.buttonStrength, border: g.buttonBorder, radius: g.buttonRadius, updatePrefix: 'updateGalleryStyleGlobal', activePrefix: 'button' })}`;
+                                                                                                            <div class="gallery-style-control-card wide gallery-style-section-card">${galleryInfoLabel("Buttons", "Controls only the main page buttons, like Back to Profile, Organize Gallery, Edit Gallery Look, and Add Gallery Item. Card edit buttons and popups stay original.", "h3")}<p>Main page buttons only. Gallery card edit/organize buttons and all popups stay original.</p></div>
+                                                                                                            <div class="gallery-style-control-card wide">${galleryInfoLabel("Button Font", "Changes the font on the main page buttons.")}<select oninput="updateGalleryStyleGlobal('buttonFont', this.value)">${fontOptions(g.buttonFont)}</select>${galleryInfoLabel("Button Text Color", "Changes the text color inside the main page buttons.")}<div class="paint-row"><input data-gallery-style-color-input="1" type="color" value="${toHex(g.buttonText)}" oninput="updateGalleryStyleGlobal('buttonText', this.value)"><input class="paint-fine-input" value="${escapeAttr(g.buttonText)}" oninput="updateGalleryStyleGlobal('buttonText', this.value)"></div></div>
+                                                                                                            ${renderGalleryPaintCard({ title: 'Button Fill', help: 'Controls the button background. Solid uses one color. Live gradient blends two colors, and strength controls how strong that second color feels.', fillMode: g.buttonFillMode, color: g.buttonColor, color2: g.buttonColor2, direction: g.buttonDirection, strength: g.buttonStrength, border: g.buttonBorder, radius: g.buttonRadius, updatePrefix: 'updateGalleryStyleGlobal', activePrefix: 'button' })}`;
         }
 
 
         function renderGalleryPillControls() {
             const g = normalizeGalleryStyle(galleryStyleDraft).global;
             return `
-                                                                                                        <div class="gallery-style-control-card wide gallery-style-section-card">${galleryInfoLabel("Filter Chips", "Controls only the top Gallery Home, breadcrumb, and filter chips. Gallery card warning/status pills stay untouched.", "h3")}<p>Only the top filter and breadcrumb chips are editable here.</p></div>
-                                                                                                        <div class="gallery-style-control-card wide">${galleryInfoLabel("Chip Font", "Changes the font on the top filter and breadcrumb chips only.")}<select oninput="updateGalleryStyleGlobal('pillFont', this.value)">${fontOptions(g.pillFont)}</select>${galleryInfoLabel("Chip Text Color", "Changes normal filter chip text.")}<div class="paint-row"><input data-gallery-style-color-input="1" type="color" value="${toHex(g.pillText)}" oninput="updateGalleryStyleGlobal('pillText', this.value)"><input class="paint-fine-input" value="${escapeAttr(g.pillText)}" oninput="updateGalleryStyleGlobal('pillText', this.value)"></div>${galleryInfoLabel("Active Chip Text", "Changes the selected chip text, such as the active filter or current breadcrumb.")}<div class="paint-row"><input data-gallery-style-color-input="1" type="color" value="${toHex(g.pillActiveText)}" oninput="updateGalleryStyleGlobal('pillActiveText', this.value)"><input class="paint-fine-input" value="${escapeAttr(g.pillActiveText)}" oninput="updateGalleryStyleGlobal('pillActiveText', this.value)"></div></div>
-                                                                                                        ${renderGalleryPaintCard({ title: 'Normal Chip Fill', help: 'Background style for normal filter and breadcrumb chips.', fillMode: g.pillFillMode, color: g.pillColor, color2: g.pillColor2, direction: g.pillDirection, strength: g.pillStrength, border: g.pillBorder, radius: g.pillRadius, updatePrefix: 'updateGalleryStyleGlobal', activePrefix: 'pill' })}
-                                                                                                        ${renderGalleryPaintCard({ title: 'Active Chip Fill', help: 'Background style for selected filters and the current breadcrumb chip.', fillMode: g.pillActiveFillMode, color: g.pillActiveColor, color2: g.pillActiveColor2, direction: g.pillActiveDirection, strength: g.pillActiveStrength, border: g.pillActiveBorder, radius: null, updatePrefix: 'updateGalleryStyleGlobal', activePrefix: 'pillActive' })}`;
+                                                                                                            <div class="gallery-style-control-card wide gallery-style-section-card">${galleryInfoLabel("Filter Chips", "Controls only the top Gallery Home, breadcrumb, and filter chips. Gallery card warning/status pills stay untouched.", "h3")}<p>Only the top filter and breadcrumb chips are editable here.</p></div>
+                                                                                                            <div class="gallery-style-control-card wide">${galleryInfoLabel("Chip Font", "Changes the font on the top filter and breadcrumb chips only.")}<select oninput="updateGalleryStyleGlobal('pillFont', this.value)">${fontOptions(g.pillFont)}</select>${galleryInfoLabel("Chip Text Color", "Changes normal filter chip text.")}<div class="paint-row"><input data-gallery-style-color-input="1" type="color" value="${toHex(g.pillText)}" oninput="updateGalleryStyleGlobal('pillText', this.value)"><input class="paint-fine-input" value="${escapeAttr(g.pillText)}" oninput="updateGalleryStyleGlobal('pillText', this.value)"></div>${galleryInfoLabel("Active Chip Text", "Changes the selected chip text, such as the active filter or current breadcrumb.")}<div class="paint-row"><input data-gallery-style-color-input="1" type="color" value="${toHex(g.pillActiveText)}" oninput="updateGalleryStyleGlobal('pillActiveText', this.value)"><input class="paint-fine-input" value="${escapeAttr(g.pillActiveText)}" oninput="updateGalleryStyleGlobal('pillActiveText', this.value)"></div></div>
+                                                                                                            ${renderGalleryPaintCard({ title: 'Normal Chip Fill', help: 'Background style for normal filter and breadcrumb chips.', fillMode: g.pillFillMode, color: g.pillColor, color2: g.pillColor2, direction: g.pillDirection, strength: g.pillStrength, border: g.pillBorder, radius: g.pillRadius, updatePrefix: 'updateGalleryStyleGlobal', activePrefix: 'pill' })}
+                                                                                                            ${renderGalleryPaintCard({ title: 'Active Chip Fill', help: 'Background style for selected filters and the current breadcrumb chip.', fillMode: g.pillActiveFillMode, color: g.pillActiveColor, color2: g.pillActiveColor2, direction: g.pillActiveDirection, strength: g.pillActiveStrength, border: g.pillActiveBorder, radius: null, updatePrefix: 'updateGalleryStyleGlobal', activePrefix: 'pillActive' })}`;
         }
 
 
@@ -7014,10 +7268,10 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
                     : "Controls the big title box that holds the creator gallery name and intro text.";
             const imageHelp = safeTarget === "page" ? "Choose Image backdrop to show a full-page background image behind the gallery." : `Choose Image backdrop to place an image inside the ${label.toLowerCase()}.`;
             return `
-                                                                                                        <div class="gallery-style-control-card wide gallery-style-section-card">${galleryInfoLabel(label, surfaceHelp, "h3")}<p>${escapeHtml(surfaceHelp)}</p></div>
-                                                                                                        <div class="gallery-style-control-card wide paint-card is-compact">${galleryInfoLabel("Paint", "Choose Default glass, Solid color, Live gradient, or Image backdrop for this part of the gallery.")}<label class="paint-sub-label">Fill Mode</label><select oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'paintMode', this.value, true)"><option value="default" ${s.paintMode === 'default' ? 'selected' : ''}>Default Nullverse glass</option><option value="solid" ${s.paintMode === 'solid' ? 'selected' : ''}>Solid color</option><option value="gradient" ${s.paintMode === 'gradient' ? 'selected' : ''}>Live gradient</option><option value="image" ${s.paintMode === 'image' ? 'selected' : ''}>Image backdrop</option></select>${s.paintMode === 'gradient' ? `<label class="paint-sub-label">Gradient</label><div class="gallery-gradient-grid"><select oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'direction', this.value)">${directionOptions(s.direction)}</select><input data-gallery-style-color-input="1" type="color" value="${toHex(s.color)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'color', this.value)"><input data-gallery-style-color-input="1" type="color" value="${toHex(s.color2)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'color2', this.value)"></div><label class="paint-sub-label">Gradient Spread</label><div class="gallery-style-strength-row"><input type="range" min="0" max="100" step="1" value="${escapeAttr(s.gradientStrength)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'gradientStrength', this.value)"><input type="number" min="0" max="100" step="1" value="${escapeAttr(s.gradientStrength)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'gradientStrength', this.value)"></div>` : ""}<div id="gallery-style-preview-${escapeAttr(safeTarget)}" class="paint-preview"><span style="background:${escapeAttr(previewPaint)}"></span></div>${s.paintMode !== 'default' && s.paintMode !== 'gradient' ? `<label class="paint-sub-label">Color</label><div class="paint-row"><input data-gallery-style-color-input="1" type="color" value="${toHex(s.color)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'color', this.value)"><input class="paint-fine-input" value="${escapeAttr(s.color)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'color', this.value)"></div>` : ""}${s.paintMode === 'gradient' ? `<label class="paint-sub-label">Manual Color One</label><input class="paint-fine-input" value="${escapeAttr(s.color)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'color', this.value)"><label class="paint-sub-label">Manual Color Two</label><input class="paint-fine-input" value="${escapeAttr(s.color2)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'color2', this.value)">` : ""}${s.paintMode === 'solid' ? `${galleryInfoLabel("Fill Opacity", "Controls how transparent this solid color is. 100% is fully visible. Lower values let the original glass/background show through.")}<div class="paint-alpha-row"><input type="range" min="0" max="100" step="1" value="${escapeAttr(s.opacity)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'opacity', this.value)"><span class="paint-alpha-value">${escapeHtml(String(Math.round(Number(s.opacity) || 0)))}%</span></div>` : ""}</div>
-                                                                                                        ${s.paintMode === 'image' ? `<div class="gallery-style-control-card wide gallery-style-image-controls">${galleryInfoLabel("Image Backdrop", imageHelp, "h3")}<p>${escapeHtml(imageHelp)}</p><input id="gallery-style-image-input-${escapeAttr(safeTarget)}" type="file" accept="image/*" onchange="setGalleryStyleSurfaceImage('${escapeAttr(safeTarget)}', this.files && this.files[0]); this.value='';"><div class="gallery-style-image-preview ${hasImage ? '' : 'empty'}">${hasImage ? `<img src="${escapeAttr(s.imageUrl)}" style="${placementCss(s.imagePlacement)};opacity:${clamp(Number(s.imageOpacity ?? 100), 0, 100) / 100};">` : 'No backdrop image selected.'}</div><div class="paint-actions-row"><button class="button soft" type="button" onclick="openGalleryStyleSurfacePlacement('${escapeAttr(safeTarget)}')">Resize / Position Image</button><button class="button soft" type="button" onclick="clearGalleryStyleSurfaceImage('${escapeAttr(safeTarget)}')">Clear Image</button></div>${galleryInfoLabel("Image Opacity", "Controls how visible the backdrop image is inside this surface.")}<div class="gallery-style-slider-row"><input type="range" min="0" max="100" step="1" value="${escapeAttr(s.imageOpacity)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'imageOpacity', this.value)"><input type="number" min="0" max="100" step="1" value="${escapeAttr(s.imageOpacity)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'imageOpacity', this.value)"></div></div>` : ""}
-                                                                                                        ${safeTarget !== 'page' ? `<div class="gallery-style-control-card wide">${galleryInfoLabel(frameTitle, "Controls the border and corner rounding for this box.", "h3")}${galleryInfoLabel("Border Color", "Controls the outline around this box. You can use hex, rgb, or rgba values.")}<input class="paint-fine-input" value="${escapeAttr(s.borderColor)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'borderColor', this.value)">${galleryInfoLabel("Corner Radius", "Rounds the box corners. Higher values make the box softer.")}<div class="gallery-style-slider-row"><input type="range" min="0" max="80" step="1" value="${escapeAttr(s.radius)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'radius', this.value)"><input type="number" min="0" max="80" step="1" value="${escapeAttr(s.radius)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'radius', this.value)"></div></div>` : ""}`;
+                                                                                                            <div class="gallery-style-control-card wide gallery-style-section-card">${galleryInfoLabel(label, surfaceHelp, "h3")}<p>${escapeHtml(surfaceHelp)}</p></div>
+                                                                                                            <div class="gallery-style-control-card wide paint-card is-compact">${galleryInfoLabel("Paint", "Choose Default glass, Solid color, Live gradient, or Image backdrop for this part of the gallery.")}<label class="paint-sub-label">Fill Mode</label><select oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'paintMode', this.value, true)"><option value="default" ${s.paintMode === 'default' ? 'selected' : ''}>Default Nullverse glass</option><option value="solid" ${s.paintMode === 'solid' ? 'selected' : ''}>Solid color</option><option value="gradient" ${s.paintMode === 'gradient' ? 'selected' : ''}>Live gradient</option><option value="image" ${s.paintMode === 'image' ? 'selected' : ''}>Image backdrop</option></select>${s.paintMode === 'gradient' ? `<label class="paint-sub-label">Gradient</label><div class="gallery-gradient-grid"><select oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'direction', this.value)">${directionOptions(s.direction)}</select><input data-gallery-style-color-input="1" type="color" value="${toHex(s.color)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'color', this.value)"><input data-gallery-style-color-input="1" type="color" value="${toHex(s.color2)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'color2', this.value)"></div><label class="paint-sub-label">Gradient Spread</label><div class="gallery-style-strength-row"><input type="range" min="0" max="100" step="1" value="${escapeAttr(s.gradientStrength)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'gradientStrength', this.value)"><input type="number" min="0" max="100" step="1" value="${escapeAttr(s.gradientStrength)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'gradientStrength', this.value)"></div>` : ""}<div id="gallery-style-preview-${escapeAttr(safeTarget)}" class="paint-preview"><span style="background:${escapeAttr(previewPaint)}"></span></div>${s.paintMode !== 'default' && s.paintMode !== 'gradient' ? `<label class="paint-sub-label">Color</label><div class="paint-row"><input data-gallery-style-color-input="1" type="color" value="${toHex(s.color)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'color', this.value)"><input class="paint-fine-input" value="${escapeAttr(s.color)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'color', this.value)"></div>` : ""}${s.paintMode === 'gradient' ? `<label class="paint-sub-label">Manual Color One</label><input class="paint-fine-input" value="${escapeAttr(s.color)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'color', this.value)"><label class="paint-sub-label">Manual Color Two</label><input class="paint-fine-input" value="${escapeAttr(s.color2)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'color2', this.value)">` : ""}${s.paintMode === 'solid' ? `${galleryInfoLabel("Fill Opacity", "Controls how transparent this solid color is. 100% is fully visible. Lower values let the original glass/background show through.")}<div class="paint-alpha-row"><input type="range" min="0" max="100" step="1" value="${escapeAttr(s.opacity)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'opacity', this.value)"><span class="paint-alpha-value">${escapeHtml(String(Math.round(Number(s.opacity) || 0)))}%</span></div>` : ""}</div>
+                                                                                                            ${s.paintMode === 'image' ? `<div class="gallery-style-control-card wide gallery-style-image-controls">${galleryInfoLabel("Image Backdrop", imageHelp, "h3")}<p>${escapeHtml(imageHelp)}</p><input id="gallery-style-image-input-${escapeAttr(safeTarget)}" type="file" accept="image/*" onchange="setGalleryStyleSurfaceImage('${escapeAttr(safeTarget)}', this.files && this.files[0]); this.value='';"><div class="gallery-style-image-preview ${hasImage ? '' : 'empty'}">${hasImage ? `<img src="${escapeAttr(s.imageUrl)}" style="${placementCss(s.imagePlacement)};opacity:${clamp(Number(s.imageOpacity ?? 100), 0, 100) / 100};">` : 'No backdrop image selected.'}</div><div class="paint-actions-row"><button class="button soft" type="button" onclick="openGalleryStyleSurfacePlacement('${escapeAttr(safeTarget)}')">Resize / Position Image</button><button class="button soft" type="button" onclick="clearGalleryStyleSurfaceImage('${escapeAttr(safeTarget)}')">Clear Image</button></div>${galleryInfoLabel("Image Opacity", "Controls how visible the backdrop image is inside this surface.")}<div class="gallery-style-slider-row"><input type="range" min="0" max="100" step="1" value="${escapeAttr(s.imageOpacity)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'imageOpacity', this.value)"><input type="number" min="0" max="100" step="1" value="${escapeAttr(s.imageOpacity)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'imageOpacity', this.value)"></div></div>` : ""}
+                                                                                                            ${safeTarget !== 'page' ? `<div class="gallery-style-control-card wide">${galleryInfoLabel(frameTitle, "Controls the border and corner rounding for this box.", "h3")}${galleryInfoLabel("Border Color", "Controls the outline around this box. You can use hex, rgb, or rgba values.")}<input class="paint-fine-input" value="${escapeAttr(s.borderColor)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'borderColor', this.value)">${galleryInfoLabel("Corner Radius", "Rounds the box corners. Higher values make the box softer.")}<div class="gallery-style-slider-row"><input type="range" min="0" max="80" step="1" value="${escapeAttr(s.radius)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'radius', this.value)"><input type="number" min="0" max="80" step="1" value="${escapeAttr(s.radius)}" oninput="updateGalleryStyleSurface('${escapeAttr(safeTarget)}', 'radius', this.value)"></div></div>` : ""}`;
         }
 
 
@@ -7266,10 +7520,10 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
             const tabs = $("gallery-style-tabs");
             if (!tabs) return;
             tabs.innerHTML = GALLERY_STYLE_TARGETS.map(([id, label, help]) => `
-                                                                                <button type="button" class="${galleryStyleActiveTarget === id ? "active" : ""}" onclick="switchGalleryStyleTab('${escapeAttr(id)}')" title="${escapeAttr(help)}">
-                                                                                    <span>${escapeHtml(label)}</span>
-                                                                                </button>
-                                                                            `).join("");
+                                                                                    <button type="button" class="${galleryStyleActiveTarget === id ? "active" : ""}" onclick="switchGalleryStyleTab('${escapeAttr(id)}')" title="${escapeAttr(help)}">
+                                                                                        <span>${escapeHtml(label)}</span>
+                                                                                    </button>
+                                                                                `).join("");
         };
 
         renderGalleryStylePanel = function () {
@@ -7455,18 +7709,18 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
             const p = activePrefix;
             const previewId = `gallery-style-preview-paint-${p || title.replace(/\s+/g, "-").toLowerCase()}`;
             return `<div class="gallery-style-control-card wide paint-card is-compact" data-paint-card="${escapeAttr(previewId)}">
-                                                        ${galleryInfoLabel(title, help || "Choose a solid color or live gradient. Gradient Spread controls how far the blend opens from the center toward the left and right edges.")}
-                                                        <label class="paint-sub-label">Fill Mode</label>
-                                                        <select oninput="${prefix}('${p}FillMode', this.value); renderGalleryStylePanel();">
-                                                            <option value="solid" ${mode === "solid" ? "selected" : ""}>Solid color</option>
-                                                            <option value="gradient" ${mode === "gradient" ? "selected" : ""}>Live gradient</option>
-                                                        </select>
-                                                        ${mode === "gradient" ? `<label class="paint-sub-label">Gradient</label><div class="gallery-gradient-grid"><select oninput="${prefix}('${p}Direction', this.value)">${directionOptions(direction)}</select><input data-gallery-style-color-input="1" type="color" value="${toHex(color)}" oninput="${prefix}('${p}Color', this.value)"><input data-gallery-style-color-input="1" type="color" value="${toHex(color2)}" oninput="${prefix}('${p}Color2', this.value)"></div><label class="paint-sub-label">Gradient Spread</label><div class="gallery-style-strength-row"><input type="range" min="0" max="100" step="1" value="${escapeAttr(spread)}" oninput="${prefix}('${p}Strength', this.value)"><input type="number" min="0" max="100" step="1" value="${escapeAttr(spread)}" oninput="${prefix}('${p}Strength', this.value)"></div>` : `<label class="paint-sub-label">Color</label><div class="paint-row"><input data-gallery-style-color-input="1" type="color" value="${toHex(color)}" oninput="${prefix}('${p}Color', this.value)"><input class="paint-fine-input" value="${escapeAttr(color)}" oninput="${prefix}('${p}Color', this.value)"></div>`}
-                                                        ${galleryStylePaintPreviewHtml(previewId, paint)}
-                                                        ${mode === "gradient" ? `<label class="paint-sub-label">Manual Color One</label><input class="paint-fine-input" value="${escapeAttr(color)}" oninput="${prefix}('${p}Color', this.value)"><label class="paint-sub-label">Manual Color Two</label><input class="paint-fine-input" value="${escapeAttr(color2)}" oninput="${prefix}('${p}Color2', this.value)">` : ""}
-                                                        ${border !== null ? `${galleryInfoLabel("Border", "Controls the outline color around this element. You can use hex, rgb, or rgba values.")}<input class="paint-fine-input" value="${escapeAttr(border)}" oninput="${prefix}('${p}Border', this.value)">` : ""}
-                                                        ${radius !== null ? `${galleryInfoLabel("Radius", "Rounds the corners. Higher numbers make the shape softer and more pill-like.")}<div class="gallery-style-slider-row"><input type="range" min="0" max="999" step="1" value="${escapeAttr(radius)}" oninput="${prefix}('${p}Radius', this.value)"><input type="number" min="0" max="999" step="1" value="${escapeAttr(radius)}" oninput="${prefix}('${p}Radius', this.value)"></div>` : ""}
-                                                    </div>`;
+                                                            ${galleryInfoLabel(title, help || "Choose a solid color or live gradient. Gradient Spread controls how far the blend opens from the center toward the left and right edges.")}
+                                                            <label class="paint-sub-label">Fill Mode</label>
+                                                            <select oninput="${prefix}('${p}FillMode', this.value); renderGalleryStylePanel();">
+                                                                <option value="solid" ${mode === "solid" ? "selected" : ""}>Solid color</option>
+                                                                <option value="gradient" ${mode === "gradient" ? "selected" : ""}>Live gradient</option>
+                                                            </select>
+                                                            ${mode === "gradient" ? `<label class="paint-sub-label">Gradient</label><div class="gallery-gradient-grid"><select oninput="${prefix}('${p}Direction', this.value)">${directionOptions(direction)}</select><input data-gallery-style-color-input="1" type="color" value="${toHex(color)}" oninput="${prefix}('${p}Color', this.value)"><input data-gallery-style-color-input="1" type="color" value="${toHex(color2)}" oninput="${prefix}('${p}Color2', this.value)"></div><label class="paint-sub-label">Gradient Spread</label><div class="gallery-style-strength-row"><input type="range" min="0" max="100" step="1" value="${escapeAttr(spread)}" oninput="${prefix}('${p}Strength', this.value)"><input type="number" min="0" max="100" step="1" value="${escapeAttr(spread)}" oninput="${prefix}('${p}Strength', this.value)"></div>` : `<label class="paint-sub-label">Color</label><div class="paint-row"><input data-gallery-style-color-input="1" type="color" value="${toHex(color)}" oninput="${prefix}('${p}Color', this.value)"><input class="paint-fine-input" value="${escapeAttr(color)}" oninput="${prefix}('${p}Color', this.value)"></div>`}
+                                                            ${galleryStylePaintPreviewHtml(previewId, paint)}
+                                                            ${mode === "gradient" ? `<label class="paint-sub-label">Manual Color One</label><input class="paint-fine-input" value="${escapeAttr(color)}" oninput="${prefix}('${p}Color', this.value)"><label class="paint-sub-label">Manual Color Two</label><input class="paint-fine-input" value="${escapeAttr(color2)}" oninput="${prefix}('${p}Color2', this.value)">` : ""}
+                                                            ${border !== null ? `${galleryInfoLabel("Border", "Controls the outline color around this element. You can use hex, rgb, or rgba values.")}<input class="paint-fine-input" value="${escapeAttr(border)}" oninput="${prefix}('${p}Border', this.value)">` : ""}
+                                                            ${radius !== null ? `${galleryInfoLabel("Radius", "Rounds the corners. Higher numbers make the shape softer and more pill-like.")}<div class="gallery-style-slider-row"><input type="range" min="0" max="999" step="1" value="${escapeAttr(radius)}" oninput="${prefix}('${p}Radius', this.value)"><input type="number" min="0" max="999" step="1" value="${escapeAttr(radius)}" oninput="${prefix}('${p}Radius', this.value)"></div>` : ""}
+                                                        </div>`;
         };
 
         renderGalleryTextPaintCard = function ({ title, help = "", fillMode, color, color2, direction, strength = 100, activePrefix = "heading" }) {
@@ -7475,16 +7729,16 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
             const paint = galleryTextPaintFor(mode, color, color2, direction, spread);
             const previewId = `gallery-style-preview-text-${activePrefix}`;
             return `<div class="gallery-style-control-card wide paint-card is-compact" data-paint-card="${escapeAttr(previewId)}">
-                                                        ${galleryInfoLabel(title, help || "Choose a solid text color or a live gradient text color. Gradient Spread controls how far the blend opens from the center toward the left and right edges.")}
-                                                        <label class="paint-sub-label">Text Mode</label>
-                                                        <select oninput="updateGalleryStyleGlobal('${activePrefix}FillMode', this.value); renderGalleryStylePanel();">
-                                                            <option value="solid" ${mode === "solid" ? "selected" : ""}>Solid color</option>
-                                                            <option value="gradient" ${mode === "gradient" ? "selected" : ""}>Live gradient</option>
-                                                        </select>
-                                                        ${mode === "gradient" ? `<label class="paint-sub-label">Gradient</label><div class="gallery-gradient-grid"><select oninput="updateGalleryStyleGlobal('${activePrefix}Direction', this.value)">${directionOptions(direction)}</select><input data-gallery-style-color-input="1" type="color" value="${toHex(color)}" oninput="updateGalleryStyleGlobal('${activePrefix}Color', this.value)"><input data-gallery-style-color-input="1" type="color" value="${toHex(color2)}" oninput="updateGalleryStyleGlobal('${activePrefix}Color2', this.value)"></div><label class="paint-sub-label">Gradient Spread</label><div class="gallery-style-strength-row"><input type="range" min="0" max="100" step="1" value="${escapeAttr(spread)}" oninput="updateGalleryStyleGlobal('${activePrefix}Strength', this.value)"><input type="number" min="0" max="100" step="1" value="${escapeAttr(spread)}" oninput="updateGalleryStyleGlobal('${activePrefix}Strength', this.value)"></div>` : `<label class="paint-sub-label">Color</label><div class="paint-row"><input data-gallery-style-color-input="1" type="color" value="${toHex(color)}" oninput="updateGalleryStyleGlobal('${activePrefix}Color', this.value)"><input class="paint-fine-input" value="${escapeAttr(color)}" oninput="updateGalleryStyleGlobal('${activePrefix}Color', this.value)"></div>`}
-                                                        ${galleryStylePaintPreviewHtml(previewId, paint)}
-                                                        ${mode === "gradient" ? `<label class="paint-sub-label">Manual Color One</label><input class="paint-fine-input" value="${escapeAttr(color)}" oninput="updateGalleryStyleGlobal('${activePrefix}Color', this.value)"><label class="paint-sub-label">Manual Color Two</label><input class="paint-fine-input" value="${escapeAttr(color2)}" oninput="updateGalleryStyleGlobal('${activePrefix}Color2', this.value)">` : ""}
-                                                    </div>`;
+                                                            ${galleryInfoLabel(title, help || "Choose a solid text color or a live gradient text color. Gradient Spread controls how far the blend opens from the center toward the left and right edges.")}
+                                                            <label class="paint-sub-label">Text Mode</label>
+                                                            <select oninput="updateGalleryStyleGlobal('${activePrefix}FillMode', this.value); renderGalleryStylePanel();">
+                                                                <option value="solid" ${mode === "solid" ? "selected" : ""}>Solid color</option>
+                                                                <option value="gradient" ${mode === "gradient" ? "selected" : ""}>Live gradient</option>
+                                                            </select>
+                                                            ${mode === "gradient" ? `<label class="paint-sub-label">Gradient</label><div class="gallery-gradient-grid"><select oninput="updateGalleryStyleGlobal('${activePrefix}Direction', this.value)">${directionOptions(direction)}</select><input data-gallery-style-color-input="1" type="color" value="${toHex(color)}" oninput="updateGalleryStyleGlobal('${activePrefix}Color', this.value)"><input data-gallery-style-color-input="1" type="color" value="${toHex(color2)}" oninput="updateGalleryStyleGlobal('${activePrefix}Color2', this.value)"></div><label class="paint-sub-label">Gradient Spread</label><div class="gallery-style-strength-row"><input type="range" min="0" max="100" step="1" value="${escapeAttr(spread)}" oninput="updateGalleryStyleGlobal('${activePrefix}Strength', this.value)"><input type="number" min="0" max="100" step="1" value="${escapeAttr(spread)}" oninput="updateGalleryStyleGlobal('${activePrefix}Strength', this.value)"></div>` : `<label class="paint-sub-label">Color</label><div class="paint-row"><input data-gallery-style-color-input="1" type="color" value="${toHex(color)}" oninput="updateGalleryStyleGlobal('${activePrefix}Color', this.value)"><input class="paint-fine-input" value="${escapeAttr(color)}" oninput="updateGalleryStyleGlobal('${activePrefix}Color', this.value)"></div>`}
+                                                            ${galleryStylePaintPreviewHtml(previewId, paint)}
+                                                            ${mode === "gradient" ? `<label class="paint-sub-label">Manual Color One</label><input class="paint-fine-input" value="${escapeAttr(color)}" oninput="updateGalleryStyleGlobal('${activePrefix}Color', this.value)"><label class="paint-sub-label">Manual Color Two</label><input class="paint-fine-input" value="${escapeAttr(color2)}" oninput="updateGalleryStyleGlobal('${activePrefix}Color2', this.value)">` : ""}
+                                                        </div>`;
         };
 
         const originalRenderGallerySurfaceControlsForStudioPreview = renderGallerySurfaceControls;
