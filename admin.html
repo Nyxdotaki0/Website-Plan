@@ -1113,56 +1113,14 @@ ${escapeHtml(
             }).join("");
         }
 
-        function extractUuidFromLooseValue(value = "") {
-            const text = String(value || "");
-            const match = text.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-            return match ? match[0] : "";
-        }
-
         function getReportGalleryItemId(report = {}) {
-            const typeText = `${report.report_type || ""} ${report.target_type || ""}`.toLowerCase();
-            const directCandidates = [
-                report.gallery_item_id,
-                report.creator_gallery_item_id,
-                report.target_gallery_item_id,
-                typeText.includes("gallery") ? report.target_id : "",
-                report.item_id,
-                report.content_id
-            ];
+            const direct = report.gallery_item_id || report.creator_gallery_item_id || report.target_gallery_item_id || "";
+            if (direct) return String(direct);
 
-            for (const candidate of directCandidates) {
-                const id = extractUuidFromLooseValue(candidate);
-                if (id) return id;
-            }
-
-            const looseText = [
-                report.details,
-                report.reported_text,
-                report.target_url,
-                report.link,
-                report.url,
-                (() => { try { return JSON.stringify(report.target_snapshot || {}); } catch { return ""; } })(),
-                (() => { try { return JSON.stringify(report.metadata || {}); } catch { return ""; } })(),
-                (() => { try { return JSON.stringify(report.extra || {}); } catch { return ""; } })()
-            ].filter(Boolean).join("\n");
-
-            const patterns = [
-                /Gallery item ID:\s*([0-9a-f-]{32,40})/i,
-                /creator-gallery-item\.html\?id=([0-9a-f-]{32,40})/i,
-                /gallery_item_id["'\s:=]+([0-9a-f-]{32,40})/i,
-                /target_id["'\s:=]+([0-9a-f-]{32,40})/i,
-                /id["'\s:=]+([0-9a-f-]{32,40})/i
-            ];
-
-            for (const pattern of patterns) {
-                const match = looseText.match(pattern);
-                if (match?.[1]) {
-                    const id = extractUuidFromLooseValue(match[1]);
-                    if (id) return id;
-                }
-            }
-
-            return extractUuidFromLooseValue(looseText);
+            const text = `${report.details || ""}
+${report.reported_text || ""}`;
+            const match = text.match(/Gallery item ID:\s*([a-f0-9-]{12,})/i) || text.match(/creator-gallery-item\.html\?id=([a-f0-9-]{12,})/i);
+            return match ? match[1] : "";
         }
 
         function normalizeGalleryReportItem(item = {}) {
@@ -1173,7 +1131,7 @@ ${escapeHtml(
                 proof_type: item.proof_type || item.work_type || item.kind || "gallery_item",
                 owner_id: item.owner_id || item.author_id || item.user_id || "",
                 visibility: item.visibility || "public",
-                moderation_status: item.moderation_status || "approved"
+                moderation_status: item.moderation_status || item.visibility || "visible"
             };
         }
 
@@ -1462,94 +1420,33 @@ ${escapeHtml(
                 return;
             }
 
-            const resolved = await resolveGalleryItemForModeration(reportId, galleryItemId);
-
-            if (!resolved.item) {
-                alert(resolved.error?.message || "Could not find the real gallery item row for this report. Open the target and report it again, or check that the report contains a gallery item ID.");
-                return;
-            }
-
-            const targetItem = resolved.item;
-            const targetOwnerId = targetItem.owner_id || ownerId || null;
-            const targetTitle = targetItem.title || title || "Untitled Gallery Item";
-
-            const hideResult = await hideCreatorGalleryItemRecord(targetItem.id, note);
+            const hideResult = await hideCreatorGalleryItemRecord(galleryItemId, note);
 
             if (!hideResult.ok) {
-                alert(hideResult.error?.message || "Could not hide this gallery item. The database row was not updated.");
+                alert(hideResult.error?.message || "Could not hide this gallery item.");
                 return;
             }
 
-            if (targetOwnerId) {
-                await supabase
-                    .from("moderation_logs")
-                    .insert({
-                        target_user_id: targetOwnerId,
-                        moderator_id: currentUser.id,
-                        action: "gallery_item_hidden",
-                        reason: note,
-                        expires_at: null
-                    });
-
-                await createNotification({
-                    recipientId: targetOwnerId,
-                    actorId: currentUser.id,
-                    type: "gallery_item_hidden",
-                    message: `Your gallery item "${targetTitle}" was hidden by moderation. Reason: ${note}`,
-                    link: `creator-gallery-item.html?id=${encodeURIComponent(targetItem.id)}`
+            await supabase
+                .from("moderation_logs")
+                .insert({
+                    target_user_id: ownerId,
+                    moderator_id: currentUser.id,
+                    action: "gallery_item_hidden",
+                    reason: note,
+                    expires_at: null
                 });
-            }
+
+            await createNotification({
+                recipientId: ownerId,
+                actorId: currentUser.id,
+                type: "gallery_item_hidden",
+                message: `Your gallery item "${title}" was hidden by moderation. Reason: ${note}`,
+                link: `creator-gallery-item.html?id=${encodeURIComponent(galleryItemId)}`
+            });
 
             await updateReportStatus(reportId, "resolved");
             await loadReports();
-            await loadHiddenGalleryItems();
-            alert(`Gallery item hidden: ${targetTitle}`);
-        };
-
-        async function resolveGalleryItemForModeration(reportId, fallbackItemId = "") {
-            const candidateIds = [];
-            const addCandidate = value => {
-                const id = extractUuidFromLooseValue(value);
-                if (id && !candidateIds.includes(id)) candidateIds.push(id);
-            };
-
-            addCandidate(fallbackItemId);
-
-            if (reportId) {
-                const { data: report, error: reportError } = await supabase
-                    .from("reports")
-                    .select("*")
-                    .eq("id", reportId)
-                    .maybeSingle();
-
-                if (!reportError && report) {
-                    addCandidate(getReportGalleryItemId(report));
-                }
-            }
-
-            if (!candidateIds.length) {
-                return { item: null, error: new Error("No gallery item ID was found in this report.") };
-            }
-
-            let lastError = null;
-            for (const id of candidateIds) {
-                const { data, error } = await supabase
-                    .from("creator_proof_gallery")
-                    .select("*")
-                    .eq("id", id)
-                    .maybeSingle();
-
-                if (error) {
-                    lastError = error;
-                    continue;
-                }
-
-                if (data?.id) {
-                    return { item: normalizeGalleryReportItem(data), error: null };
-                }
-            }
-
-            return { item: null, error: lastError || new Error(`No creator_proof_gallery row matched: ${candidateIds.join(", ")}`) };
         };
 
         async function hideCreatorGalleryItemRecord(galleryItemId, reason = "") {
@@ -1558,6 +1455,48 @@ ${escapeHtml(
 
             if (!targetId) {
                 return { ok: false, error: new Error("Missing or invalid gallery item ID.") };
+            }
+
+            // Preferred path: RPC runs as a security-definer database function.
+            // This avoids the silent zero-row UPDATE problem that can happen with RLS.
+            const rpcResult = await supabase.rpc("hide_creator_gallery_item_for_moderation", {
+                p_gallery_item_id: targetId,
+                p_reason: reason || "Hidden by moderation"
+            });
+
+            if (!rpcResult.error) {
+                const rpcRow = Array.isArray(rpcResult.data) ? rpcResult.data[0] : rpcResult.data;
+                if (rpcRow?.id) {
+                    const normalized = normalizeHiddenGalleryItem(rpcRow);
+                    if (galleryItemIsHidden(normalized)) {
+                        return { ok: true, method: "rpc_hide_creator_gallery_item_for_moderation", item: normalized };
+                    }
+                }
+
+                const { data: checkData, error: checkError } = await supabase
+                    .from("creator_proof_gallery")
+                    .select("*")
+                    .eq("id", targetId)
+                    .maybeSingle();
+
+                if (checkError) {
+                    return { ok: true, method: "rpc_hide_creator_gallery_item_for_moderation", warning: checkError };
+                }
+
+                const normalized = normalizeHiddenGalleryItem(checkData || {});
+                if (checkData?.id && galleryItemIsHidden(normalized)) {
+                    return { ok: true, method: "rpc_hide_creator_gallery_item_for_moderation", item: normalized };
+                }
+
+                return {
+                    ok: false,
+                    error: new Error(`RPC ran, but the row still came back as moderation_status="${checkData?.moderation_status || ""}" and visibility="${checkData?.visibility || ""}".`)
+                };
+            }
+
+            // If the RPC has not been installed yet, fall back to direct updates so old databases still work.
+            if (!isMissingRpcError(rpcResult.error)) {
+                return { ok: false, error: rpcResult.error };
             }
 
             const attempts = [
@@ -1620,7 +1559,7 @@ ${escapeHtml(
                         return { ok: true, method: attempt.label, item: normalized };
                     }
 
-                    lastError = new Error("The row was found, but it still does not look hidden after the update.");
+                    lastError = new Error(`Direct update ran, but the row still came back as moderation_status="${checkData?.moderation_status || ""}" and visibility="${checkData?.visibility || ""}". Run the RPC SQL fix.`);
                     continue;
                 }
 
@@ -1639,6 +1578,13 @@ ${escapeHtml(
         function isSchemaColumnError(error) {
             const text = String(error?.message || error || "").toLowerCase();
             return text.includes("schema cache") || text.includes("could not find") || text.includes("column");
+        }
+
+        function isMissingRpcError(error) {
+            const text = String(error?.message || error || "").toLowerCase();
+            return text.includes("could not find the function") ||
+                text.includes("function") && text.includes("does not exist") ||
+                text.includes("schema cache") && text.includes("rpc");
         }
 
         function escapeHtmlForAttribute(value) {
@@ -1691,10 +1637,26 @@ ${escapeHtml(
 
             container.innerHTML = `<p class="empty">Loading hidden gallery items...</p>`;
 
-            const { data, error } = await supabase
-                .from("creator_proof_gallery")
-                .select("*")
-                .order("updated_at", { ascending: false });
+            let data = [];
+            let error = null;
+
+            const rpcResult = await supabase.rpc("list_hidden_creator_gallery_items_for_moderation");
+
+            if (!rpcResult.error) {
+                data = rpcResult.data || [];
+            } else {
+                if (!isMissingRpcError(rpcResult.error)) {
+                    console.warn("Hidden gallery RPC failed, falling back to table select:", rpcResult.error.message || rpcResult.error);
+                }
+
+                const tableResult = await supabase
+                    .from("creator_proof_gallery")
+                    .select("*")
+                    .order("updated_at", { ascending: false });
+
+                data = tableResult.data || [];
+                error = tableResult.error;
+            }
 
             if (error) {
                 container.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
@@ -1740,6 +1702,38 @@ ${escapeHtml(
 
             if (itemError || !item) {
                 alert(itemError?.message || "Gallery item not found.");
+                return;
+            }
+
+            const restoreRpc = await supabase.rpc("restore_creator_gallery_item_from_moderation", {
+                p_gallery_item_id: galleryItemId
+            });
+
+            if (!restoreRpc.error) {
+                await supabase
+                    .from("moderation_logs")
+                    .insert({
+                        target_user_id: item.owner_id,
+                        moderator_id: currentUser.id,
+                        action: "gallery_item_restored",
+                        reason: `Gallery item "${item.title || "Untitled"}" restored from admin.`,
+                        expires_at: null
+                    });
+
+                await createNotification({
+                    recipientId: item.owner_id,
+                    actorId: currentUser.id,
+                    type: "gallery_item_restored",
+                    message: `Your gallery item "${item.title || "Untitled"}" was restored by moderation.`,
+                    link: `creator-gallery-item.html?id=${encodeURIComponent(galleryItemId)}`
+                });
+
+                await loadHiddenGalleryItems();
+                return;
+            }
+
+            if (!isMissingRpcError(restoreRpc.error)) {
+                alert(restoreRpc.error.message || "Could not restore gallery item.");
                 return;
             }
 
