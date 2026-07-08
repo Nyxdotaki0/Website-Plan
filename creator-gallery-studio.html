@@ -442,6 +442,46 @@
             -webkit-text-fill-color: transparent !important
         }
 
+        .text-border-stack {
+            position: relative;
+            display: inline-block;
+            max-width: 100%;
+            white-space: inherit;
+            line-height: inherit;
+        }
+
+        .text-border-fill {
+            position: relative;
+            z-index: 2;
+        }
+
+        .text-border-stroke {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            display: inline-block;
+            max-width: 100%;
+            pointer-events: none;
+            white-space: inherit;
+            font: inherit;
+            line-height: inherit;
+            color: var(--text-border-color, transparent);
+            -webkit-text-fill-color: var(--text-border-color, transparent);
+            -webkit-text-stroke-width: var(--text-border-width, 0px);
+            -webkit-text-stroke-color: var(--text-border-color, transparent);
+            paint-order: stroke fill;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+            .text-border-stroke.gradient-text-border {
+                background: var(--text-border-paint, transparent);
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-stroke-color: var(--text-border-gradient-a, var(--text-border-color, transparent));
+                text-shadow: calc(0px - var(--text-border-width, 0px)) 0 0 var(--text-border-gradient-a, transparent), var(--text-border-width, 0px) 0 0 var(--text-border-gradient-b, transparent), 0 calc(0px - var(--text-border-width, 0px)) 0 var(--text-border-gradient-a, transparent), 0 var(--text-border-width, 0px) 0 var(--text-border-gradient-b, transparent);
+            }
+
         .image-box, .art-hero, .art-card {
             width: 100%;
             height: 100%;
@@ -3843,7 +3883,7 @@
                 return studioSafetyRun("Live style update", () => {
                     paintHistory(`${id}:${key}:style`, options);
                     o.styles = o.styles || normalizeStyles({}, o.type);
-                    o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding"].includes(key) ? Number(value) : value;
+                    o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding", "textBorderWidth"].includes(key) ? Number(value) : value;
                     updateObjectNode(o);
                     syncLiveInspectorControls();
                 });
@@ -3858,7 +3898,7 @@
                     const changed = [];
                     selectedEditable().forEach(o => {
                         o.styles = o.styles || normalizeStyles({}, o.type);
-                        o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding"].includes(key) ? Number(value) : value;
+                        o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding", "textBorderWidth"].includes(key) ? Number(value) : value;
                         changed.push(o);
                     });
                     updateTransformDom(changed, { group: state.selected.length > 1 });
@@ -4233,6 +4273,16 @@
                 textPaintGradientA: s.textPaintGradientA || gradientStops(s.textPaint || "", "#8ecbff", "#b7a7ff").a,
                 textPaintGradientB: s.textPaintGradientB || gradientStops(s.textPaint || "", "#8ecbff", "#b7a7ff").b,
 
+                textBorderWidth: num(s.textBorderWidth, 0),
+                textBorderColor: s.textBorderColor || "transparent",
+                textBorderPaint: s.textBorderPaint || "",
+                textBorderColorSolid: s.textBorderColorSolid || colorInput(s.textBorderColor || s.textBorderPaint || "#000000"),
+                textBorderPaintPaintMode: s.textBorderPaintPaintMode || (isGradient(s.textBorderPaint || "") ? "gradient" : "solid"),
+                textBorderPaintOpacity: s.textBorderPaintOpacity ?? getPaintAlpha(s.textBorderPaint || s.textBorderColor || "transparent", s.textBorderColor === "transparent" ? 0 : 1),
+                textBorderPaintGradientDirection: s.textBorderPaintGradientDirection || gradientDirection(s.textBorderPaint || ""),
+                textBorderPaintGradientA: s.textBorderPaintGradientA || gradientStops(s.textBorderPaint || "", "#000000", "#ffffff").a,
+                textBorderPaintGradientB: s.textBorderPaintGradientB || gradientStops(s.textBorderPaint || "", "#000000", "#ffffff").b,
+
                 borderColorSolid: s.borderColorSolid || colorInput(s.borderColor || "rgba(255,255,255,.12)"),
                 borderPaintPaintMode: s.borderPaintPaintMode || (isGradient(s.borderPaint || s.borderGradient || "") ? "gradient" : "solid"),
                 borderPaintOpacity: s.borderPaintOpacity ?? getPaintAlpha(s.borderPaint || s.borderColor || "rgba(255,255,255,.12)", 1),
@@ -4395,10 +4445,17 @@
         function objHtml(o) { const sel = state.selected.includes(o.id), multi = sel && state.selected.length > 1, cls = ["obj", sel ? "selected" : "", multi ? "multi" : "", o.locked ? "locked" : "", o.hidden ? "hidden" : "", o.required ? "required" : "", ["text", "title", "description"].includes(o.type) ? "textlike" : "", o.styles?.borderPaint ? "grad-border" : ""].filter(Boolean).join(" "); return `<div class="${cls}" data-id="${escA(o.id)}" data-type="${escA(o.type)}"><div class="inner">${innerHtml(o)}</div>${handles()}<div class="rotate" data-rotate="1"></div></div>` }
         function innerHtml(o) { const text = textMarkup(o.text || "", o), img = o.imageUrl || (["art_hero", "art_card"].includes(o.type) ? state.item?.image_url || "" : ""); const item = state.item || localItem(); switch (o.type) { case "art_hero": return `<div class="art-hero">${imageHtml(img, "Artwork")}${credit(item)}</div>`; case "art_card": return `<div class="art-card">${imageHtml(img, "Artwork")}<div class="card-body"><h3>${esc(item.title || "Untitled")}</h3><p>${esc(item.description || "Gallery item description")}</p></div>${credit(item)}</div>`; case "title": return `<div class="text-content" style="font-weight:850;line-height:1.05!important">${text}</div>`; case "description": case "text": return `<div class="text-content">${text}</div>`; case "bio": case "section": return `<div class="text-content" style="padding:var(--obj-pad,18px)">${text}</div>`; case "type_badge": case "credit_badge": case "noai_badge": return `<div class="badge-content">${text}</div>`; case "credit_pill": return creditPillStudioMarkup(o); case "back_gallery_button": case "report_button": return `<div class="button-content"><span class="button-label">${esc(o.text || LABELS[o.type])}</span></div>`; case "image": return `<div class="image-box">${imageHtml(img, "Custom image")}</div>`; case "image_text": return `<div class="image-text"><div class="image-text-thumb">${imageHtml(img, "Custom image")}</div><div class="text-content">${text}</div></div>`; case "shape": return `<div class="shape"></div>`; case "circle": return `<div class="shape circle"></div>`; case "star": return `<div class="shape star"></div>`; case "divider": return `<div class="divider"></div>`; default: return `<div class="text-content">${text}</div>` } }
         function imageHtml(url, label) { return url ? `<img src="${escA(url)}" alt="${escA(label)}">` : `<div class="placeholder">Upload image from Inspector</div>` }
-        function textMarkup(text, o) { const p = o.styles?.textPaint || "", cls = p ? "paint-target gradient-text" : "paint-target", st = p ? ` style="background:${escA(p)}"` : ""; return `<span class="${cls}"${st}>${esc(text || "")}</span>` }
+        function textMarkup(text, o) {
+            const styles = o?.styles || {};
+            const fillPaint = styles.textPaint || "";
+            const fillClass = fillPaint ? "paint-target text-border-fill gradient-text" : "paint-target text-border-fill";
+            const fillStyle = fillPaint ? ` style="background:${escA(fillPaint)}"` : "";
+            const content = esc(text || "");
+            return `<span class="text-border-stack"><span class="text-border-stroke ${isGradient(styles.textBorderPaint || "") ? "gradient-text-border" : ""}" aria-hidden="true">${content}</span><span class="${fillClass}"${fillStyle}>${content}</span></span>`;
+        }
         function credit(i) { return `<div class="credit-pill">${esc(i.credit_label || i.credit || i.artist_credit || "Credit / No-AI proof")}</div>` }
         function handles() { return ["nw", "n", "ne", "e", "se", "s", "sw", "w"].map(h => `<div class="handle ${h}" data-resize="${h}"></div>`).join("") }
-        function styleObj(n, o) { if (!n) return; const s = o.styles || {}; const isImageBoxLayer = ["image", "image_box"].includes(o.type); const cleanRadius = (o.type === "circle" || o.type === "credit_pill") ? "999px" : `${num(s.radius, o.type === "shape" ? 0 : isImageBoxLayer ? 0 : 18)}px`; const cleanBorderWidth = isImageBoxLayer ? 0 : num(s.borderWidth, 1); const cleanBorderPaint = isImageBoxLayer ? "" : (s.borderPaint || ""); Object.assign(n.style, { left: `${o.x}px`, top: `${o.y}px`, width: `${o.w}px`, height: `${o.h}px`, zIndex: String(o.z || 1), transform: `rotate(${o.rotation || 0}deg)`, background: isImageBoxLayer ? "transparent" : (s.background || "transparent"), color: s.color || "#fff", borderColor: isImageBoxLayer ? "transparent" : (s.borderColor || "rgba(255,255,255,.12)"), borderWidth: `${cleanBorderWidth}px`, borderRadius: cleanRadius, opacity: String(clamp(num(s.opacity, 1), .05, 1)), boxShadow: isImageBoxLayer ? "none" : (s.shadow || "0 12px 30px rgba(0,0,0,.22)"), textAlign: s.textAlign || "left" }); n.style.setProperty("--obj-font", cssFont(s.fontFamily)); const cleanFontSize = REQUIRED.includes(o.type) ? clampRequiredButtonFontSize(o, s.fontSize, state.mode) : num(s.fontSize, 18); n.style.setProperty("--obj-size", `${cleanFontSize}px`); n.style.setProperty("--obj-line", String(num(s.lineHeight, 1.16))); n.style.setProperty("--img-fit", s.imageFit || "cover"); n.style.setProperty("--obj-pad", `${num(s.padding, 0)}px`); n.style.setProperty("--radius", cleanRadius); n.style.setProperty("--border-w", `${cleanBorderWidth}px`); n.style.setProperty("--border-paint", cleanBorderPaint || "transparent"); n.classList.toggle("grad-border", !!cleanBorderPaint) }
+        function styleObj(n, o) { if (!n) return; const s = o.styles || {}; const isImageBoxLayer = ["image", "image_box"].includes(o.type); const cleanRadius = (o.type === "circle" || o.type === "credit_pill") ? "999px" : `${num(s.radius, o.type === "shape" ? 0 : isImageBoxLayer ? 0 : 18)}px`; const cleanBorderWidth = isImageBoxLayer ? 0 : num(s.borderWidth, 1); const cleanBorderPaint = isImageBoxLayer ? "" : (s.borderPaint || ""); Object.assign(n.style, { left: `${o.x}px`, top: `${o.y}px`, width: `${o.w}px`, height: `${o.h}px`, zIndex: String(o.z || 1), transform: `rotate(${o.rotation || 0}deg)`, background: isImageBoxLayer ? "transparent" : (s.background || "transparent"), color: s.color || "#fff", borderColor: isImageBoxLayer ? "transparent" : (s.borderColor || "rgba(255,255,255,.12)"), borderWidth: `${cleanBorderWidth}px`, borderRadius: cleanRadius, opacity: String(clamp(num(s.opacity, 1), .05, 1)), boxShadow: isImageBoxLayer ? "none" : (s.shadow || "0 12px 30px rgba(0,0,0,.22)"), textAlign: s.textAlign || "left" }); n.style.setProperty("--obj-font", cssFont(s.fontFamily)); const cleanFontSize = REQUIRED.includes(o.type) ? clampRequiredButtonFontSize(o, s.fontSize, state.mode) : num(s.fontSize, 18); n.style.setProperty("--obj-size", `${cleanFontSize}px`); n.style.setProperty("--obj-line", String(num(s.lineHeight, 1.16))); n.style.setProperty("--img-fit", s.imageFit || "cover"); n.style.setProperty("--obj-pad", `${num(s.padding, 0)}px`); n.style.setProperty("--radius", cleanRadius); n.style.setProperty("--border-w", `${cleanBorderWidth}px`); n.style.setProperty("--border-paint", cleanBorderPaint || "transparent"); const textBorderPaint = s.textBorderPaint || s.textBorderColor || "transparent"; const textBorderWidth = Math.max(0, num(s.textBorderWidth, 0)); const borderStops = gradientStops(textBorderPaint, s.textBorderPaintGradientA || "#000000", s.textBorderPaintGradientB || "#ffffff"); const textBorderColor = isGradient(textBorderPaint) ? colorInput(s.textBorderPaintGradientA || borderStops.a || "#000000") : (textBorderPaint || "transparent"); n.style.setProperty("--text-border-width", `${textBorderWidth}px`); n.style.setProperty("--text-border-paint", textBorderPaint || "transparent"); n.style.setProperty("--text-border-color", textBorderColor || "transparent"); n.style.setProperty("--text-border-gradient-a", s.textBorderPaintGradientA || borderStops.a || textBorderColor || "#000000"); n.style.setProperty("--text-border-gradient-b", s.textBorderPaintGradientB || borderStops.b || textBorderColor || "#ffffff"); n.classList.toggle("grad-border", !!cleanBorderPaint) }
         function renderGroupBox() {
             const l = getLayout();
             if (state.selected.length <= 1) return;
@@ -4443,7 +4500,7 @@
 
             const imageControls = imgs ? `<div class="group"><h4>Image</h4><button onclick="pickImageForObject('${idv}')">Upload / Replace Image</button><label>Image URL</label><input value="${escA(o.imageUrl || "")}" oninput="updateObjectField('${idv}','imageUrl',this.value,false)"><label>Image Fit</label><select onchange="updateObjectStyle('${idv}','imageFit',this.value,{commit:true})">${["cover", "contain", "fill", "none", "scale-down"].map(v => `<option value="${v}" ${s.imageFit === v ? "selected" : ""}>${v}</option>`).join("")}</select></div>` : "";
 
-            const paintControls = `<div class="group"><h4>Paint</h4>${surfaceTypes ? paintControl("Fill / Background", "object", o.id, { solid: "background", gradient: "background" }, s.background, "rgba(255,255,255,.055)") : ""}${textTypes ? paintControl("Text Color", "object", o.id, { solid: "color", gradient: "textPaint" }, s.textPaint || s.color, "#ffffff") : ""}${borderTypes ? paintControl("Border Color", "object", o.id, { solid: "borderColor", gradient: "borderPaint" }, s.borderPaint || s.borderColor, "rgba(255,255,255,.12)") : ""}${objectOpacityControl(o)}</div>`;
+            const paintControls = `<div class="group"><h4>Paint</h4>${surfaceTypes ? paintControl("Fill / Background", "object", o.id, { solid: "background", gradient: "background" }, s.background, "rgba(255,255,255,.055)") : ""}${textTypes ? paintControl("Text Color", "object", o.id, { solid: "color", gradient: "textPaint" }, s.textPaint || s.color, "#ffffff") : ""}${textTypes ? textBorderControl(o) : ""}${borderTypes ? paintControl("Border Color", "object", o.id, { solid: "borderColor", gradient: "borderPaint" }, s.borderPaint || s.borderColor, "rgba(255,255,255,.12)") : ""}${objectOpacityControl(o)}</div>`;
 
             const fontBounds = requiredButtonFontBounds(o, state.mode);
             const textControls = textTypes ? `<div class="group"><h4>Text & Layout</h4><label>Font</label><select onchange="updateObjectStyle('${idv}','fontFamily',this.value,{commit:true})">${FONTS.map(f => `<option value="${escA(f)}" ${fontNorm(s.fontFamily) === f ? "selected" : ""}>${esc(f)}</option>`).join("")}</select><div class="mini-grid">${metric("Font Size", clampRequiredButtonFontSize(o, s.fontSize, state.mode), fontBounds.min, fontBounds.max, `updateObjectStyle('${idv}','fontSize',this.value,{live:true})`)}${metric("Line Height", s.lineHeight, .7, 3, `updateObjectStyle('${idv}','lineHeight',this.value,{live:true})`, .01)}${!["title", "text", "description", "type_badge", "credit_badge", "credit_pill", "noai_badge", "back_gallery_button", "report_button"].includes(o.type) ? metric("Padding", s.padding, 0, 80, `updateObjectStyle('${idv}','padding',this.value,{live:true})`) : ""}</div><label>Text Align</label><select onchange="updateObjectStyle('${idv}','textAlign',this.value,{commit:true})">${["left", "center", "right", "justify"].map(v => `<option value="${v}" ${s.textAlign === v ? "selected" : ""}>${v}</option>`).join("")}</select></div>` : "";
@@ -4469,56 +4526,56 @@
                 : `<p class="credit-security-note">Search a Nullverse username, then press Add Creator. This is the only credit type that becomes a clickable profile link.</p>`;
 
             return `<div class="group credit-system-overhaul" data-credit-inspector="${idv}">
-                                                                                        <h4>Credit Pill System</h4>
-                                                                                        <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
-                                                                                        <div class="credit-live-preview">
-                                                                                            <span class="credit-live-label">Live credit pill</span>
-                                                                                            <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
-                                                                                            <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
-                                                                                        </div>
-                                                                                        <label>Credit Type</label>
-                                                                                        <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
-
-                                                                                        <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
-                                                                                            <label>Custom Credit Text</label>
-                                                                                            <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
-                                                                                        </div>
-
-                                                                                        <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
-                                                                                            <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
-                                                                                        </div>
-
-                                                                                        <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
-                                                                                            <label>Nullverse Username</label>
-                                                                                            <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
-                                                                                            <div style="margin-top:-6px;margin-bottom:12px;">
-                                                                                                <label>Search Nullverse Creator</label>
-                                                                                                <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+                                                                                            <h4>Credit Pill System</h4>
+                                                                                            <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
+                                                                                            <div class="credit-live-preview">
+                                                                                                <span class="credit-live-label">Live credit pill</span>
+                                                                                                <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
+                                                                                                <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
                                                                                             </div>
-                                                                                            ${selectedCreator}
-                                                                                            <div id="credit-results-${idv}" class="credit-search-results"></div>
-                                                                                        </div>
+                                                                                            <label>Credit Type</label>
+                                                                                            <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
 
-                                                                                        <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
-                                                                                            <label>Artist / Creator / Source Name</label>
-                                                                                            <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
-                                                                                        </div>
+                                                                                            <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
+                                                                                                <label>Custom Credit Text</label>
+                                                                                                <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
+                                                                                            </div>
 
-                                                                                        <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
-                                                                                            <label>Credit Link / Source Text</label>
-                                                                                            <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
-                                                                                            <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
-                                                                                        </div>
+                                                                                            <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
+                                                                                                <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
+                                                                                            </div>
 
-                                                                                        <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
-                                                                                            <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
-                                                                                            <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
-                                                                                        </div>
+                                                                                            <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
+                                                                                                <label>Nullverse Username</label>
+                                                                                                <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
+                                                                                                <div style="margin-top:-6px;margin-bottom:12px;">
+                                                                                                    <label>Search Nullverse Creator</label>
+                                                                                                    <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+                                                                                                </div>
+                                                                                                ${selectedCreator}
+                                                                                                <div id="credit-results-${idv}" class="credit-search-results"></div>
+                                                                                            </div>
 
-                                                                                        <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
-                                                                                            <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
-                                                                                        </div>
-                                                                                    </div>`;
+                                                                                            <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
+                                                                                                <label>Artist / Creator / Source Name</label>
+                                                                                                <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
+                                                                                            </div>
+
+                                                                                            <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
+                                                                                                <label>Credit Link / Source Text</label>
+                                                                                                <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
+                                                                                                <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
+                                                                                            </div>
+
+                                                                                            <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
+                                                                                                <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
+                                                                                                <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
+                                                                                            </div>
+
+                                                                                            <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
+                                                                                                <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
+                                                                                            </div>
+                                                                                        </div>`;
         }
 
         function creditTypeOptions(active) {
@@ -4689,7 +4746,7 @@
             const hasBorder = sel.some(isBorderPaintCapable);
             const lockedCount = sel.filter(o => o.locked).length;
             const status = lockedCount === sel.length ? "🔒 All selected layers are locked" : lockedCount ? `🔐 ${lockedCount} locked · ${sel.length - lockedCount} unlocked` : "🔓 All selected layers are unlocked";
-            return `<div class="group"><h4>${sel.length} layers selected</h4><p class="note">Drag the blue group box to move everything together. Shared controls only appear for layer types that can use them.</p><span class="lock-state-pill ${lockedCount ? "locked" : "unlocked"}">${esc(status)}</span><div class="actions" style="margin-top:10px"><button class="lock-button locked" onclick="lockSelected()">🔒 Lock Group</button><button class="lock-button unlocked" onclick="unlockSelected()">🔓 Unlock Group</button><button onclick="showSelected()">👁️ Show Group</button><button onclick="hideSelected()">🙈 Hide Group</button><button onclick="duplicateSelected()">Duplicate Group</button><button class="danger-button" onclick="deleteSelected()">Delete Group</button></div></div><div class="group"><h4>Shared Paint</h4>${hasSurface ? paintControl("Fill / Background", "shared", "shared", { solid: "background", gradient: "background" }, "", "rgba(255,255,255,.055)") : ""}${hasText ? paintControl("Text Color", "shared", "shared", { solid: "color", gradient: "textPaint" }, "", "#ffffff") : ""}${hasBorder ? paintControl("Border Color", "shared", "shared", { solid: "borderColor", gradient: "borderPaint" }, "", "rgba(255,255,255,.12)") : ""}${groupOpacityControl(sel)}</div>${hasText ? `<div class="group"><h4>Shared Text</h4><label>Font</label><select onchange="applySharedStyle('fontFamily',this.value,{commit:true})"><option value="">Choose font...</option>${FONTS.map(f => `<option value="${escA(f)}">${esc(f)}</option>`).join("")}</select><div class="mini-grid">${metric("Font Size", 22, 8, 180, `applySharedStyle('fontSize',this.value,{live:true})`)}${metric("Line Height", 1.16, .7, 3, `applySharedStyle('lineHeight',this.value,{live:true})`, .01)}</div></div>` : ""}`;
+            return `<div class="group"><h4>${sel.length} layers selected</h4><p class="note">Drag the blue group box to move everything together. Shared controls only appear for layer types that can use them.</p><span class="lock-state-pill ${lockedCount ? "locked" : "unlocked"}">${esc(status)}</span><div class="actions" style="margin-top:10px"><button class="lock-button locked" onclick="lockSelected()">🔒 Lock Group</button><button class="lock-button unlocked" onclick="unlockSelected()">🔓 Unlock Group</button><button onclick="showSelected()">👁️ Show Group</button><button onclick="hideSelected()">🙈 Hide Group</button><button onclick="duplicateSelected()">Duplicate Group</button><button class="danger-button" onclick="deleteSelected()">Delete Group</button></div></div><div class="group"><h4>Shared Paint</h4>${hasSurface ? paintControl("Fill / Background", "shared", "shared", { solid: "background", gradient: "background" }, "", "rgba(255,255,255,.055)") : ""}${hasText ? paintControl("Text Color", "shared", "shared", { solid: "color", gradient: "textPaint" }, "", "#ffffff") : ""}${hasText ? paintControl("Text Border", "shared", "shared", { solid: "textBorderColor", gradient: "textBorderPaint" }, "", "#000000") : ""}${hasBorder ? paintControl("Border Color", "shared", "shared", { solid: "borderColor", gradient: "borderPaint" }, "", "rgba(255,255,255,.12)") : ""}${groupOpacityControl(sel)}</div>${hasText ? `<div class="group"><h4>Shared Text</h4><label>Font</label><select onchange="applySharedStyle('fontFamily',this.value,{commit:true})"><option value="">Choose font...</option>${FONTS.map(f => `<option value="${escA(f)}">${esc(f)}</option>`).join("")}</select><div class="mini-grid">${metric("Font Size", 22, 8, 180, `applySharedStyle('fontSize',this.value,{live:true})`)}${metric("Line Height", 1.16, .7, 3, `applySharedStyle('lineHeight',this.value,{live:true})`, .01)}${metric("Text Border Width", 0, 0, 24, `applySharedStyle('textBorderWidth',this.value,{live:true})`)}</div></div>` : ""}`;
         }
 
         function canvasInspector(l) {
@@ -4712,6 +4769,12 @@
             const avg = sel.length ? sel.reduce((n, o) => n + clamp(num(o.styles?.opacity, 1), .05, 1), 0) / sel.length : 1;
             const p = Math.round(avg * 100);
             return `<label>Whole Layer Opacity <span class="note">${p}% average</span></label><div class="opacity-row"><input type="range" min=".05" max="1" step=".01" value="${p / 100}" oninput="applySharedStyle('opacity',this.value,{live:true});this.nextElementSibling.textContent=Math.round(this.value*100)+'%'"><span class="opacity-value">${p}%</span></div>`;
+        }
+
+        function textBorderControl(o) {
+            const width = clamp(num(o?.styles?.textBorderWidth, 0), 0, 24);
+            const idv = escA(o.id);
+            return `${paintControl("Text Border", "object", o.id, { solid: "textBorderColor", gradient: "textBorderPaint" }, o.styles?.textBorderPaint || o.styles?.textBorderColor || "transparent", "#000000")}<label>Text Border Width <span class="note">${width}px</span></label><div class="opacity-row"><input type="range" min="0" max="24" step="1" value="${width}" oninput="updateObjectStyle('${idv}','textBorderWidth',this.value,{live:true});this.nextElementSibling.textContent=this.value+'px'" onchange="updateObjectStyle('${idv}','textBorderWidth',this.value,{commit:true})"><span class="opacity-value">${width}px</span></div>`;
         }
 
         function paintControl(label, owner, id, fields, value, fallback = "#ffffff") {
@@ -4825,9 +4888,13 @@
             if (!node) return;
             styleObj(node, o);
             const textPaint = o.styles?.textPaint || "";
+            const textBorderPaint = o.styles?.textBorderPaint || "";
             node.querySelectorAll(".paint-target,.button-label").forEach(target => {
                 target.classList.toggle("gradient-text", !!textPaint);
                 target.style.background = textPaint || "";
+            });
+            node.querySelectorAll(".text-border-stroke").forEach(target => {
+                target.classList.toggle("gradient-text-border", isGradient(textBorderPaint));
             });
         }
 
@@ -5075,14 +5142,14 @@
 
         function updateObjectField(id, field, value) { const o = find(id); if (!o) return; if (["x", "y", "w", "h", "z", "rotation"].includes(field)) { o[field] = Number(value) || 0; if (field === "w" || field === "h") clampSize(o) } else o[field] = value; enforceRequiredButtonTextFit(o, state.mode); renderCanvas(); renderLayers(); syncLiveInspectorControls() }
         function updateObjectText(id, value) { const o = find(id); if (!o) return; if (o.type === "credit_pill") { o.credit = normalizeCreditData(o.credit || {}, o.text || ""); o.credit.type = "custom"; o.credit.customText = value; updateCreditText(o); } else { o.text = value; } renderCanvas(); syncObjectTextInspector(id, o.text) }
-        function updateObjectStyle(id, key, value, options = {}) { const o = find(id); if (!o) return; if (options.live || options.commit) paintHistory(`${id}:${key}:style`, options); o.styles = o.styles || normalizeStyles({}, o.type); o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding"].includes(key) ? Number(value) : value; if (key === "fontSize") o.styles.fontSize = clampRequiredButtonFontSize(o, o.styles.fontSize, state.mode); enforceRequiredButtonTextFit(o, state.mode); renderCanvas(); renderLayers(); syncLiveInspectorControls(); if (options.commit) renderInspector() }
+        function updateObjectStyle(id, key, value, options = {}) { const o = find(id); if (!o) return; if (options.live || options.commit) paintHistory(`${id}:${key}:style`, options); o.styles = o.styles || normalizeStyles({}, o.type); o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding", "textBorderWidth"].includes(key) ? Number(value) : value; if (key === "fontSize") o.styles.fontSize = clampRequiredButtonFontSize(o, o.styles.fontSize, state.mode); enforceRequiredButtonTextFit(o, state.mode); renderCanvas(); renderLayers(); syncLiveInspectorControls(); if (options.commit) renderInspector() }
         function applyObjectGradient(id, target) { const o = find(id); if (!o) return; const field = target === "border" ? "borderPaint" : "background"; updateObjectGradientPaint(id, target === "border" ? "borderColor" : "background", field, `${id}-${target}`, { commit: true }) }
         function applyTextGradient(id) { const o = find(id); if (!o) return; const p = o.styles || (o.styles = {}); if (p.textPaint) p.textPaint = ""; renderAll() }
         function clearObjectTextGradient(id) { const o = find(id); if (!o) return; o.styles = o.styles || {}; o.styles.textPaint = ""; renderAll() }
         function applySharedTextGradient() { /* compatibility hook: gradients now update live from the Text Color control */ }
         function applySharedBorderGradient() { /* compatibility hook: gradients now update live from the Border Color control */ }
         function clearSharedTextGradient() { selectedEditable().forEach(o => { o.styles = o.styles || {}; o.styles.textPaint = "" }); renderAll() }
-        function applySharedStyle(key, value, options = {}) { if (options.live || options.commit) paintHistory(`shared:${key}:style`, options); selectedEditable().forEach(o => { o.styles = o.styles || normalizeStyles({}, o.type); o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding"].includes(key) ? Number(value) : value }); renderCanvas(); renderLayers(); syncLiveInspectorControls(); if (options.commit) renderInspector() }
+        function applySharedStyle(key, value, options = {}) { if (options.live || options.commit) paintHistory(`shared:${key}:style`, options); selectedEditable().forEach(o => { o.styles = o.styles || normalizeStyles({}, o.type); o.styles[key] = ["borderWidth", "radius", "opacity", "fontSize", "lineHeight", "padding", "textBorderWidth"].includes(key) ? Number(value) : value }); renderCanvas(); renderLayers(); syncLiveInspectorControls(); if (options.commit) renderInspector() }
         function updateCanvasStyle(key, value) { const l = getLayout(); l.canvas[key] = ["width", "height"].includes(key) ? Number(value) || DEFAULT[state.mode][key] : value; renderCanvas(); syncLiveInspectorControls(); if (!["width", "height"].includes(key)) renderInspector() }
         function applyCanvasGradient() { /* compatibility hook: canvas gradients now update live from the Page Background control */ }
 
@@ -5115,11 +5182,11 @@
             let values = {};
             if (sel.length === 1) {
                 const o = sel[0], s = o.styles || {};
-                values = { "X": o.x, "Y": o.y, "Width": o.w, "Height": o.h, "Z / Layer": o.z, "Rotation": o.rotation, "Font Size": s.fontSize, "Line Height": s.lineHeight, "Padding": s.padding };
+                values = { "X": o.x, "Y": o.y, "Width": o.w, "Height": o.h, "Z / Layer": o.z, "Rotation": o.rotation, "Font Size": s.fontSize, "Line Height": s.lineHeight, "Padding": s.padding, "Text Border Width": s.textBorderWidth };
             } else if (sel.length > 1) {
                 const textSel = sel.filter(isTextCapable);
                 const avg = (key, fallback) => textSel.length ? textSel.reduce((n, o) => n + num(o.styles?.[key], fallback), 0) / textSel.length : fallback;
-                values = { "Font Size": avg("fontSize", 22), "Line Height": avg("lineHeight", 1.16) };
+                values = { "Font Size": avg("fontSize", 22), "Line Height": avg("lineHeight", 1.16), "Text Border Width": avg("textBorderWidth", 0) };
             } else {
                 values = { "Canvas Width": l.canvas.width, "Canvas Height": l.canvas.height };
             }
@@ -6966,15 +7033,15 @@
                                 : "Hold anywhere on this row, then drag to reorder.";
 
                     return `<div class="layer ${state.selected.includes(layer.id) ? "active" : ""} ${layer.locked ? "locked layer-locked-reorder" : ""} ${layer.hidden ? "hidden-layer" : ""} ${isPinned ? "layer-pinned" : ""}" data-layer="${idv}" data-layer-reorder-row="true" title="${escA(dragTitle)}">
-                                <div class="drag-handle" aria-hidden="true">⋮⋮</div>
-                                <button class="layer-select" type="button" onclick="selectObject('${idv}',event)"><span>${esc(layer.required ? "Required · " : "")}${esc(galleryStudioLayerDisplayName(layer))}</span></button>
-                                <div class="layer-meta">
-                                    <button class="tiny" type="button" title="Move forward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',1)" ${canUp ? "" : "disabled"}>↑</button>
-                                    <button class="tiny" type="button" title="Move backward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',-1)" ${canDown ? "" : "disabled"}>↓</button>
-                                    <button class="tiny ${layer.hidden ? "warn" : "on"}" type="button" title="${layer.hidden ? "Hidden" : "Visible"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectVisibility('${idv}')">${layer.hidden ? "🙈" : "👁️"}</button>
-                                    <button class="tiny ${layer.locked ? "locked" : "unlocked"}" type="button" title="${layer.locked ? "Locked" : "Unlocked"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectLock('${idv}')">${layer.locked ? "🔒" : "🔓"}</button>
-                                </div>
-                            </div>`;
+                                    <div class="drag-handle" aria-hidden="true">⋮⋮</div>
+                                    <button class="layer-select" type="button" onclick="selectObject('${idv}',event)"><span>${esc(layer.required ? "Required · " : "")}${esc(galleryStudioLayerDisplayName(layer))}</span></button>
+                                    <div class="layer-meta">
+                                        <button class="tiny" type="button" title="Move forward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',1)" ${canUp ? "" : "disabled"}>↑</button>
+                                        <button class="tiny" type="button" title="Move backward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',-1)" ${canDown ? "" : "disabled"}>↓</button>
+                                        <button class="tiny ${layer.hidden ? "warn" : "on"}" type="button" title="${layer.hidden ? "Hidden" : "Visible"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectVisibility('${idv}')">${layer.hidden ? "🙈" : "👁️"}</button>
+                                        <button class="tiny ${layer.locked ? "locked" : "unlocked"}" type="button" title="${layer.locked ? "Locked" : "Unlocked"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectLock('${idv}')">${layer.locked ? "🔒" : "🔓"}</button>
+                                    </div>
+                                </div>`;
                 }).join("") || `<p class="status">No layers yet.</p>`;
 
                 if (stack.length) {
@@ -7443,15 +7510,15 @@
                     : "Hold anywhere on this row, then drag it between two layers.";
 
                 return `<div class="layer ${state.selected.includes(layer.id) ? "active" : ""} ${layer.locked ? "locked" : ""} ${layer.hidden ? "hidden-layer" : ""} ${isPinned ? "layer-pinned" : ""}" data-layer="${idv}" data-layer-reorder-row="true" draggable="false" title="${escA(title)}">
-                        <div class="drag-handle" aria-hidden="true">⋮⋮</div>
-                        <button class="layer-select" type="button" onclick="event.preventDefault();event.stopPropagation();selectObject('${idv}',event)"><span>${esc(layer.required ? "Required · " : "")}${esc(galleryStudioLayerDisplayName(layer))}</span></button>
-                        <div class="layer-meta">
-                            <button class="tiny" type="button" title="Move forward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',1)" ${canUp ? "" : "disabled"}>↑</button>
-                            <button class="tiny" type="button" title="Move backward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',-1)" ${canDown ? "" : "disabled"}>↓</button>
-                            <button class="tiny ${layer.hidden ? "warn" : "on"}" type="button" title="${layer.hidden ? "Hidden" : "Visible"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectVisibility('${idv}')">${layer.hidden ? "🙈" : "👁️"}</button>
-                            <button class="tiny ${layer.locked ? "locked" : "unlocked"}" type="button" title="${layer.locked ? "Locked" : "Unlocked"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectLock('${idv}')">${layer.locked ? "🔒" : "🔓"}</button>
-                        </div>
-                    </div>`;
+                            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
+                            <button class="layer-select" type="button" onclick="event.preventDefault();event.stopPropagation();selectObject('${idv}',event)"><span>${esc(layer.required ? "Required · " : "")}${esc(galleryStudioLayerDisplayName(layer))}</span></button>
+                            <div class="layer-meta">
+                                <button class="tiny" type="button" title="Move forward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',1)" ${canUp ? "" : "disabled"}>↑</button>
+                                <button class="tiny" type="button" title="Move backward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',-1)" ${canDown ? "" : "disabled"}>↓</button>
+                                <button class="tiny ${layer.hidden ? "warn" : "on"}" type="button" title="${layer.hidden ? "Hidden" : "Visible"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectVisibility('${idv}')">${layer.hidden ? "🙈" : "👁️"}</button>
+                                <button class="tiny ${layer.locked ? "locked" : "unlocked"}" type="button" title="${layer.locked ? "Locked" : "Unlocked"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectLock('${idv}')">${layer.locked ? "🔒" : "🔓"}</button>
+                            </div>
+                        </div>`;
             }
 
             renderLayers = function galleryStudioRenderLayersAuthoritative() {

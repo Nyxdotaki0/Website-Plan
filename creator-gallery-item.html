@@ -930,6 +930,46 @@
             -webkit-text-fill-color: transparent !important;
         }
 
+        .studio-text-border-stack {
+            position: relative;
+            display: inline-block;
+            max-width: 100%;
+            white-space: inherit;
+            line-height: inherit;
+        }
+
+        .studio-text-border-fill {
+            position: relative;
+            z-index: 2;
+        }
+
+        .studio-text-border-stroke {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            display: inline-block;
+            max-width: 100%;
+            pointer-events: none;
+            white-space: inherit;
+            font: inherit;
+            line-height: inherit;
+            color: var(--text-border-color, transparent);
+            -webkit-text-fill-color: var(--text-border-color, transparent);
+            -webkit-text-stroke-width: var(--text-border-width, 0px);
+            -webkit-text-stroke-color: var(--text-border-color, transparent);
+            paint-order: stroke fill;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+            .studio-text-border-stroke.gradient-text-border {
+                background: var(--text-border-paint, transparent);
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-stroke-color: var(--text-border-gradient-a, var(--text-border-color, transparent));
+                text-shadow: calc(0px - var(--text-border-width, 0px)) 0 0 var(--text-border-gradient-a, transparent), var(--text-border-width, 0px) 0 0 var(--text-border-gradient-b, transparent), 0 calc(0px - var(--text-border-width, 0px)) 0 var(--text-border-gradient-a, transparent), 0 var(--text-border-width, 0px) 0 var(--text-border-gradient-b, transparent);
+            }
+
         .custom-object,
         .custom-object .custom-inner,
         .title-object,
@@ -10305,6 +10345,15 @@
                 textColor: solidTextColor,
                 color: solidTextColor,
                 textPaint,
+                textBorderWidth: publicNumber(source.textBorderWidth ?? source.text_border_width, 0),
+                textBorderColor: source.textBorderColor || source.text_border_color || "transparent",
+                textBorderPaint: source.textBorderPaint || source.text_border_paint || "",
+                textBorderColorSolid: source.textBorderColorSolid || source.text_border_color_solid || source.textBorderColor || "#000000",
+                textBorderPaintPaintMode: source.textBorderPaintPaintMode || (isStudioTextGradientPaint(source.textBorderPaint || source.text_border_paint || "") ? "gradient" : "solid"),
+                textBorderPaintOpacity: source.textBorderPaintOpacity ?? source.text_border_paint_opacity ?? 1,
+                textBorderPaintGradientDirection: source.textBorderPaintGradientDirection || source.text_border_paint_gradient_direction || "135deg",
+                textBorderPaintGradientA: source.textBorderPaintGradientA || source.text_border_paint_gradient_a || "#000000",
+                textBorderPaintGradientB: source.textBorderPaintGradientB || source.text_border_paint_gradient_b || "#ffffff",
                 borderColor: isImageBoxLayer ? "transparent" : (source.borderColor || "transparent"),
                 borderGradient: isImageBoxLayer ? "" : (source.borderGradient || source.borderPaint || ""),
                 borderPaint: isImageBoxLayer ? "" : (source.borderPaint || source.borderGradient || ""),
@@ -10530,6 +10579,13 @@
             el.style.setProperty("--studio-surface-radius", `${radius}px`);
             el.style.setProperty("--studio-border-width", `${borderWidth}px`);
             el.style.setProperty("--studio-border-paint", borderPaint || "transparent");
+            const textBorderPaint = s.textBorderPaint || s.textBorderColor || "transparent";
+            const textBorderWidth = Math.max(0, publicNumber(s.textBorderWidth, 0));
+            el.style.setProperty("--text-border-width", `${textBorderWidth}px`);
+            el.style.setProperty("--text-border-paint", textBorderPaint || "transparent");
+            el.style.setProperty("--text-border-color", publicTextBorderStrokeColor(s));
+            el.style.setProperty("--text-border-gradient-a", s.textBorderPaintGradientA || publicTextBorderStrokeColor(s));
+            el.style.setProperty("--text-border-gradient-b", s.textBorderPaintGradientB || publicTextBorderStrokeColor(s));
         }
 
         function renderObject(obj) {
@@ -10595,12 +10651,33 @@
                 "--studio-object-line-height": String(lineHeight),
                 "--studio-surface-radius": radius + "px",
                 "--studio-border-width": borderWidth + "px",
-                "--studio-border-paint": borderPaint || "transparent"
+                "--studio-border-paint": borderPaint || "transparent",
+                "--text-border-width": Math.max(0, publicNumber(s.textBorderWidth, 0)) + "px",
+                "--text-border-paint": (s.textBorderPaint || s.textBorderColor || "transparent"),
+                "--text-border-color": publicTextBorderStrokeColor(s),
+                "--text-border-gradient-a": s.textBorderPaintGradientA || publicTextBorderStrokeColor(s),
+                "--text-border-gradient-b": s.textBorderPaintGradientB || publicTextBorderStrokeColor(s)
             };
         }
 
         function isStudioTextGradientPaint(value) {
             return /linear-gradient|radial-gradient/i.test(String(value || ""));
+        }
+
+        function publicTextBorderPaint(styles = {}) {
+            return String(styles.textBorderPaint || styles.textBorderColor || "transparent").trim();
+        }
+
+        function publicTextBorderStrokeColor(styles = {}) {
+            const paint = publicTextBorderPaint(styles);
+            if (!paint || paint === "transparent") return "transparent";
+            if (!isStudioTextGradientPaint(paint)) return paint;
+            const stops = String(paint).match(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g) || [];
+            return styles.textBorderPaintGradientA || stops[0] || "#000000";
+        }
+
+        function getTextBorderPaint(obj) {
+            return publicTextBorderPaint(obj?.styles || {});
         }
 
         function getTextPaint(obj) {
@@ -10620,7 +10697,10 @@
         }
 
         function renderStudioTextPaintTarget(obj, text, extraClass = "") {
-            return `<span class="${escapeAttr(getStudioTextPaintClass(obj, extraClass))}" style="${getStudioTextPaintInlineStyle(obj)}">${escapeHtml(text)}</span>`;
+            const content = escapeHtml(text);
+            const strokeClass = isStudioTextGradientPaint(getTextBorderPaint(obj)) ? "studio-text-border-stroke gradient-text-border" : "studio-text-border-stroke";
+            const fillClass = `${getStudioTextPaintClass(obj, extraClass)} studio-text-border-fill`.trim();
+            return `<span class="studio-text-border-stack"><span class="${escapeAttr(strokeClass)}" aria-hidden="true">${content}</span><span class="${escapeAttr(fillClass)}" style="${getStudioTextPaintInlineStyle(obj)}">${content}</span></span>`;
         }
 
 
