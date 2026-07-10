@@ -236,6 +236,15 @@
         const AUTH_REDIRECT_LANDING =
             hasAuthRedirectParams();
 
+        const SAFE_RETURN_PATH =
+            getSafeReturnPath();
+
+        const backLink = document.querySelector(".back-link");
+        if (backLink && SAFE_RETURN_PATH) {
+            backLink.href = SAFE_RETURN_PATH;
+            backLink.textContent = "Back to Literature";
+        }
+
         async function withTimeout(promise, ms = 8000) {
             let timeout;
 
@@ -272,17 +281,17 @@
                 escapeHtml(normalizeEmail(email));
 
             message.innerHTML = `
-                        Nullverse is currently invite-only.<br><br>
-                        <strong>${safeEmail || "This email"}</strong> is not on the approved beta access list.<br><br>
-                        If this person should be a beta tester, add this exact email to the <strong>beta_access</strong> table first.
-                    `;
+                            Nullverse is currently invite-only.<br><br>
+                            <strong>${safeEmail || "This email"}</strong> is not on the approved beta access list.<br><br>
+                            If this person should be a beta tester, add this exact email to the <strong>beta_access</strong> table first.
+                        `;
         }
 
         function showBetaCheckSetupMessage() {
             message.innerHTML = `
-                        Nullverse could not verify the beta access list yet.<br><br>
-                        Run the beta email check SQL first, then refresh this page and try again.
-                    `;
+                            Nullverse could not verify the beta access list yet.<br><br>
+                            Run the beta email check SQL first, then refresh this page and try again.
+                        `;
         }
 
         async function checkBetaInviteEmail(email) {
@@ -391,6 +400,41 @@
                     "Nullverse could not verify your beta access. Please refresh, try again later, or switch networks.";
 
                 return false;
+            }
+        }
+
+        function getSafeReturnPath() {
+            const rawReturn = new URLSearchParams(window.location.search).get("return");
+            if (!rawReturn) return "";
+
+            try {
+                const candidate = new URL(rawReturn, window.location.origin);
+                const normalizedPath = candidate.pathname.replace(/\/+/g, "/");
+
+                if (candidate.origin !== window.location.origin) {
+                    return "";
+                }
+
+                if (!normalizedPath.endsWith("/literature.html")) {
+                    return "";
+                }
+
+                const id = candidate.searchParams.get("id");
+                if (!id || !/^[a-zA-Z0-9-]{8,}$/.test(id)) {
+                    return "";
+                }
+
+                const safeParams = new URLSearchParams({ id });
+                const chapter = Number(candidate.searchParams.get("chapter"));
+
+                if (Number.isInteger(chapter) && chapter > 0 && chapter <= 100000) {
+                    safeParams.set("chapter", String(chapter));
+                }
+
+                return `literature.html?${safeParams.toString()}`;
+            } catch (error) {
+                console.warn("Ignored unsafe login return path:", error);
+                return "";
             }
         }
 
@@ -512,7 +556,7 @@
 
             message.textContent =
                 "Login successful. Redirecting...";
-            window.location.replace("dashboard.html");
+            window.location.replace(SAFE_RETURN_PATH || "dashboard.html");
             return true;
         }
 
@@ -623,11 +667,11 @@
                 document.getElementById("login-email").value = email;
 
                 message.innerHTML = `
-                            Account created successfully.<br><br>
-                            A verification email has been sent to your inbox.<br><br>
-                            Open the verification email and complete the verification process.<br><br>
-                            After verification, Nullverse will send you to profile setup.
-                        `;
+                                Account created successfully.<br><br>
+                                A verification email has been sent to your inbox.<br><br>
+                                Open the verification email and complete the verification process.<br><br>
+                                After verification, Nullverse will send you to profile setup.
+                            `;
 
             } catch (error) {
                 console.warn("Signup connection failed:", error);
@@ -694,9 +738,9 @@
                 }
 
                 message.innerHTML = `
-                            Password reset email sent.<br><br>
-                            Check your inbox and follow the reset link to create a new password.
-                        `;
+                                Password reset email sent.<br><br>
+                                Check your inbox and follow the reset link to create a new password.
+                            `;
 
             } catch (error) {
                 console.warn("Password reset connection failed:", error);

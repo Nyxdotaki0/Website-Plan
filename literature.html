@@ -879,6 +879,11 @@
             --reader-heading-align: center;
         }
 
+        body.reader-airy .chapter-main-text,
+        body.reader-airy .chapter-main-text.rich-chapter-content {
+            line-height: 2.08 !important;
+        }
+
         .author-note {
             clear: both;
             max-width: var(--reader-width, 820px);
@@ -1176,6 +1181,812 @@
                 max-width: 100%;
             }
         }
+
+        /* ============================================================
+           PUBLIC LITERATURE READER OVERHAUL
+           Guest-safe navigation, single chapter rendering, mobile drawer,
+           dedicated focus reader, and persistent reading controls.
+        ============================================================ */
+        * {
+            box-sizing: border-box;
+        }
+
+        body.literature-drawer-open,
+        body.literature-focus-open,
+        body.beta-feature-modal-open {
+            overflow: hidden !important;
+        }
+
+        .literature-site-header {
+            min-height: 68px;
+        }
+
+        .literature-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .literature-mobile-menu-button {
+            display: none;
+            width: 38px;
+            height: 38px;
+            padding: 0;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255,255,255,.12);
+            border-radius: 12px;
+            background: rgba(255,255,255,.045);
+            color: #fff;
+            cursor: pointer;
+            font-size: 1.05rem;
+        }
+
+        .literature-guest-login {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 36px;
+            padding: 8px 12px;
+            border: 1px solid rgba(255,255,255,.14);
+            border-radius: 999px;
+            background: linear-gradient(180deg,#2a2a2f 0%,#16161a 52%,#0d0d10 100%);
+            color: #fff !important;
+            font-weight: 750;
+            white-space: nowrap;
+        }
+
+        .literature-nav-scrim {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 899;
+            background: rgba(0,0,0,.58);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+            .literature-nav-scrim.open {
+                display: block;
+            }
+
+        .chapter-index-close {
+            display: none;
+            position: absolute !important;
+            right: 12px;
+            top: 12px;
+            z-index: 4 !important;
+            width: 38px;
+            height: 38px;
+            padding: 0;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.14);
+            background: rgba(0,0,0,.46);
+            color: #fff;
+            cursor: pointer;
+        }
+
+        .chapter-nav-link {
+            width: 100%;
+            text-align: left;
+            font: inherit;
+            cursor: pointer;
+        }
+
+            .chapter-nav-link.active {
+                box-shadow: 0 0 0 2px rgba(255,255,255,.10);
+            }
+
+        .active-chapter-shell {
+            display: grid;
+            gap: 16px;
+        }
+
+        .chapter-switcher {
+            display: grid;
+            grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+            gap: 10px;
+            align-items: stretch;
+            margin-bottom: 22px;
+        }
+
+            .chapter-switcher.bottom {
+                margin: 2px 0 0;
+            }
+
+        .chapter-switch-button,
+        .chapter-list-button {
+            min-height: 48px;
+            border: 1px solid rgba(255,255,255,.11);
+            border-radius: 16px;
+            background: linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.025)),rgba(8,8,12,.72);
+            color: var(--text-primary);
+            cursor: pointer;
+            padding: 10px 13px;
+            font: inherit;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 14px 34px rgba(0,0,0,.22);
+        }
+
+        .chapter-switch-button {
+            display: grid;
+            gap: 3px;
+            text-align: left;
+        }
+
+            .chapter-switch-button.next {
+                text-align: right;
+            }
+
+            .chapter-switch-button small,
+            .chapter-list-button small {
+                color: var(--text-muted);
+                font-size: .72rem;
+                text-transform: uppercase;
+                letter-spacing: .08em;
+            }
+
+            .chapter-switch-button strong,
+            .chapter-list-button strong {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .chapter-switch-button:disabled {
+                opacity: .38;
+                cursor: not-allowed;
+            }
+
+        .chapter-list-button {
+            min-width: 132px;
+            display: grid;
+            place-items: center;
+            gap: 3px;
+            text-align: center;
+        }
+
+        .current-chapter-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            color: var(--text-muted);
+            font-size: .82rem;
+        }
+
+        .reader-tool-button.primary-reader-action {
+            color: #fff;
+            border-color: rgba(255,255,255,.22);
+            background: rgba(255,255,255,.11);
+        }
+
+        .literature-focus-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 50000;
+            display: none;
+            grid-template-rows: auto minmax(0,1fr) auto;
+            background: radial-gradient(circle at 50% 0%, rgba(255,255,255,.075), transparent 32%), rgba(2,2,4,.97);
+            color: var(--text-primary);
+        }
+
+            .literature-focus-overlay.open {
+                display: grid;
+            }
+
+        .literature-focus-topbar,
+        .literature-focus-footer {
+            position: relative;
+            z-index: 4;
+            display: grid;
+            align-items: center;
+            gap: 12px;
+            padding: 11px 16px;
+            border-color: rgba(255,255,255,.10);
+            background: rgba(10,10,13,.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 12px 38px rgba(0,0,0,.34);
+        }
+
+        .literature-focus-topbar {
+            grid-template-columns: minmax(0,1fr) auto;
+            border-bottom: 1px solid rgba(255,255,255,.10);
+        }
+
+        .literature-focus-footer {
+            grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+            border-top: 1px solid rgba(255,255,255,.10);
+            padding-bottom: max(11px, env(safe-area-inset-bottom));
+        }
+
+        .focus-reader-heading {
+            min-width: 0;
+        }
+
+            .focus-reader-heading strong,
+            .focus-reader-heading span {
+                display: block;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .focus-reader-heading span {
+                margin-top: 3px;
+                color: var(--text-muted);
+                font-size: .82rem;
+            }
+
+        .focus-reader-actions {
+            display: flex;
+            gap: 7px;
+            align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+            .focus-reader-actions button,
+            .focus-reader-close,
+            .focus-reader-chapter-menu {
+                min-height: 36px;
+                padding: 7px 10px;
+                border: 1px solid rgba(255,255,255,.12);
+                border-radius: 999px;
+                background: rgba(255,255,255,.045);
+                color: #fff;
+                cursor: pointer;
+                font: inherit;
+                white-space: nowrap;
+            }
+
+        .focus-reader-close {
+            width: 38px;
+            padding: 0;
+            font-size: 1.2rem;
+        }
+
+        .literature-focus-scroll {
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            overscroll-behavior: contain;
+            scroll-behavior: smooth;
+            padding: 24px clamp(10px, 4vw, 56px) 48px;
+        }
+
+        .literature-focus-content {
+            width: min(1180px, 100%);
+            margin: 0 auto;
+        }
+
+        body.reader-wide .literature-focus-content {
+            width: min(1420px, 100%);
+        }
+
+        .literature-focus-content .literature-chapter {
+            min-height: calc(100dvh - 190px);
+            margin: 0;
+        }
+
+        .literature-focus-content .chapter-main-text,
+        .literature-focus-content .chapter-title-row,
+        .literature-focus-content .chapter-header-image-wrap,
+        .literature-focus-content .author-note {
+            max-width: var(--reader-width, 900px);
+        }
+
+        body.reader-wide .literature-focus-content .chapter-main-text,
+        body.reader-wide .literature-focus-content .chapter-title-row,
+        body.reader-wide .literature-focus-content .chapter-header-image-wrap,
+        body.reader-wide .literature-focus-content .author-note {
+            max-width: 1180px;
+        }
+
+        .focus-footer-button {
+            min-width: 0;
+            min-height: 46px;
+            display: grid;
+            gap: 2px;
+            padding: 8px 12px;
+            border: 1px solid rgba(255,255,255,.12);
+            border-radius: 14px;
+            background: rgba(255,255,255,.045);
+            color: #fff;
+            cursor: pointer;
+            text-align: left;
+            font: inherit;
+        }
+
+            .focus-footer-button.next {
+                text-align: right;
+            }
+
+            .focus-footer-button:disabled {
+                opacity: .38;
+                cursor: not-allowed;
+            }
+
+            .focus-footer-button small {
+                color: var(--text-muted);
+                font-size: .68rem;
+                letter-spacing: .07em;
+                text-transform: uppercase;
+            }
+
+            .focus-footer-button strong {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+        .focus-reader-chapter-menu {
+            min-width: 122px;
+        }
+
+        .beta-feature-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 60000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            background: radial-gradient(circle at 18% 10%, rgba(255,255,255,.10), transparent 30%), rgba(0,0,0,.80);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+
+            .beta-feature-backdrop.open {
+                display: flex;
+            }
+
+        .beta-feature-card {
+            width: min(520px, 100%);
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,.15);
+            border-radius: 26px;
+            background: radial-gradient(circle at 15% 0%, rgba(255,255,255,.12), transparent 34%), linear-gradient(135deg,rgba(255,255,255,.075),rgba(255,255,255,.02)),rgba(8,8,12,.98);
+            box-shadow: 0 30px 100px rgba(0,0,0,.62);
+        }
+
+        .beta-feature-card-header {
+            display: grid;
+            grid-template-columns: minmax(0,1fr) auto;
+            gap: 14px;
+            align-items: start;
+            padding: 22px 22px 16px;
+            border-bottom: 1px solid rgba(255,255,255,.09);
+        }
+
+            .beta-feature-card-header h2 {
+                margin: 0;
+                font-size: clamp(1.65rem, 5vw, 2.35rem);
+                line-height: 1;
+                letter-spacing: -.035em;
+            }
+
+            .beta-feature-card-header button {
+                width: 40px;
+                height: 40px;
+                padding: 0;
+                border-radius: 999px;
+                border: 1px solid rgba(255,255,255,.12);
+                background: rgba(255,255,255,.045);
+                color: #fff;
+                cursor: pointer;
+                font-size: 1.15rem;
+            }
+
+        .beta-feature-card-body {
+            padding: 20px 22px 22px;
+        }
+
+            .beta-feature-card-body p {
+                margin: 0;
+                color: var(--text-secondary);
+                line-height: 1.65;
+            }
+
+        .beta-feature-note {
+            margin-top: 14px !important;
+            padding: 11px 12px;
+            border: 1px solid rgba(135,210,255,.18);
+            border-radius: 14px;
+            background: rgba(135,210,255,.055);
+            font-size: .88rem;
+        }
+
+        .beta-feature-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 9px;
+            flex-wrap: wrap;
+            margin-top: 18px;
+        }
+
+        .chapter-index-mobile-scrim {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 29990;
+            background: rgba(0,0,0,.68);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+            .chapter-index-mobile-scrim.open {
+                display: block;
+            }
+
+        body.literature-focus-open .left-sidebar {
+            position: fixed !important;
+            left: 18px;
+            top: 86px;
+            bottom: 18px;
+            width: min(360px, calc(100vw - 36px));
+            height: auto;
+            transform: translateX(calc(-100% - 40px));
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: transform .22s ease, opacity .22s ease, visibility .22s ease;
+        }
+
+            body.literature-focus-open .left-sidebar.mobile-open {
+                transform: translateX(0);
+                opacity: 1;
+                visibility: visible;
+                pointer-events: auto;
+            }
+
+        body.literature-focus-open .chapter-index,
+        body.literature-focus-open .chapter-index.mobile-open {
+            display: block !important;
+            width: 100%;
+            height: 100%;
+            max-height: 100%;
+            min-height: 0;
+            padding-top: 58px;
+        }
+
+        body.literature-focus-open .chapter-index-close {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        body.literature-focus-open #chapter-nav-links {
+            max-height: calc(100dvh - 330px);
+        }
+
+        body.literature-focus-open .chapter-index-mobile-scrim {
+            z-index: 55000;
+        }
+
+        body.literature-focus-open .left-sidebar {
+            z-index: 55010;
+        }
+
+        @media (max-width: 1050px) {
+            .left-sidebar {
+                position: fixed !important;
+                left: 10px;
+                right: 10px;
+                bottom: max(10px, env(safe-area-inset-bottom));
+                top: auto;
+                width: auto;
+                z-index: 30000;
+                transform: translateY(calc(100% + 30px));
+                opacity: 0;
+                visibility: hidden;
+                transition: transform .22s ease, opacity .22s ease, visibility .22s ease;
+                pointer-events: none;
+            }
+
+                .left-sidebar.mobile-open {
+                    transform: translateY(0);
+                    opacity: 1;
+                    visibility: visible;
+                    pointer-events: auto;
+                }
+
+            .chapter-index,
+            .chapter-index.mobile-open {
+                display: block !important;
+                width: 100%;
+                height: min(76dvh, 720px);
+                max-height: min(76dvh, 720px);
+                min-height: 320px;
+                border-radius: 24px;
+                padding-top: 58px;
+            }
+
+            .chapter-index-close {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            #chapter-nav-links {
+                max-height: calc(min(76dvh, 720px) - 245px);
+            }
+        }
+
+        @media (max-width: 760px) {
+            header.literature-site-header {
+                min-height: 54px;
+                flex-direction: row !important;
+                padding: max(7px, env(safe-area-inset-top)) 10px 7px !important;
+                gap: 8px !important;
+            }
+
+                header.literature-site-header .site-logo {
+                    height: 36px !important;
+                }
+
+            .literature-mobile-menu-button {
+                display: inline-flex;
+            }
+
+            header.literature-site-header nav {
+                position: fixed;
+                right: 10px;
+                top: max(62px, calc(env(safe-area-inset-top) + 54px));
+                z-index: 900;
+                width: min(300px, calc(100vw - 20px));
+                max-height: calc(100dvh - 82px);
+                display: grid;
+                align-content: start;
+                gap: 4px;
+                padding: 10px;
+                overflow-y: auto;
+                border: 1px solid rgba(255,255,255,.12);
+                border-radius: 18px;
+                background: rgba(10,10,13,.96);
+                box-shadow: 0 24px 70px rgba(0,0,0,.54);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                transform: translateY(-12px) scale(.98);
+                transform-origin: top right;
+                opacity: 0;
+                visibility: hidden;
+                pointer-events: none;
+                transition: .18s ease;
+            }
+
+                header.literature-site-header nav.open {
+                    transform: translateY(0) scale(1);
+                    opacity: 1;
+                    visibility: visible;
+                    pointer-events: auto;
+                }
+
+                header.literature-site-header nav a,
+                header.literature-site-header nav button {
+                    width: 100%;
+                    min-height: 42px;
+                    display: flex;
+                    align-items: center;
+                    padding: 9px 11px;
+                    border-radius: 11px;
+                    text-align: left;
+                    background: rgba(255,255,255,.035);
+                    font-size: .88rem;
+                }
+
+                header.literature-site-header nav.guest-nav {
+                    position: static;
+                    width: auto;
+                    max-height: none;
+                    display: flex;
+                    padding: 0;
+                    border: 0;
+                    background: transparent;
+                    box-shadow: none;
+                    backdrop-filter: none;
+                    -webkit-backdrop-filter: none;
+                    transform: none;
+                    opacity: 1;
+                    visibility: visible;
+                    pointer-events: auto;
+                    overflow: visible;
+                }
+
+                    header.literature-site-header nav.guest-nav a {
+                        width: auto;
+                        min-height: 34px;
+                        padding: 7px 11px;
+                        background: linear-gradient(180deg,#2a2a2f 0%,#16161a 52%,#0d0d10 100%);
+                    }
+
+            header.literature-site-header .literature-mobile-menu-button.guest-hidden {
+                display: none;
+            }
+
+            main {
+                width: 100%;
+                padding: 14px 8px 74px !important;
+                gap: 12px;
+            }
+
+            .book-hero {
+                padding: 16px;
+                margin-bottom: 12px;
+                border-radius: 20px;
+            }
+
+            .book-layout {
+                gap: 16px;
+            }
+
+            .cover-wrap {
+                max-width: 210px;
+                border-radius: 16px;
+            }
+
+            .book-hero h1 {
+                font-size: clamp(2rem, 12vw, 3.25rem);
+            }
+
+            .action-row {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0,1fr));
+                gap: 8px;
+            }
+
+                .action-row .button,
+                .action-row .like-button {
+                    width: 100%;
+                    margin: 0;
+                    min-height: 40px;
+                    padding: 8px 9px;
+                    font-size: .78rem;
+                }
+
+            .like-count {
+                grid-column: 1 / -1;
+                order: 10;
+            }
+
+            .reader-tools {
+                position: sticky;
+                top: 51px;
+                margin-bottom: 12px;
+                padding: 8px;
+                border-radius: 16px;
+                gap: 7px;
+            }
+
+            .reader-tools-left,
+            .reader-tools-right {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                scrollbar-width: none;
+            }
+
+                .reader-tools-left::-webkit-scrollbar,
+                .reader-tools-right::-webkit-scrollbar {
+                    display: none;
+                }
+
+            .reader-tool-button {
+                flex: 0 0 auto;
+                min-height: 34px;
+                padding: 7px 10px;
+                font-size: .72rem;
+            }
+
+            .chapter-switcher {
+                grid-template-columns: minmax(0,1fr) 78px minmax(0,1fr);
+                gap: 6px;
+                margin-bottom: 10px;
+            }
+
+            .chapter-switch-button,
+            .chapter-list-button {
+                min-height: 43px;
+                border-radius: 13px;
+                padding: 7px 8px;
+                font-size: .74rem;
+            }
+
+            .chapter-list-button {
+                min-width: 0;
+            }
+
+                .chapter-switch-button small,
+                .chapter-list-button small {
+                    display: none;
+                }
+
+            .literature-chapter {
+                margin-bottom: 10px;
+                padding: 15px;
+                padding-bottom: 70px;
+                border-radius: 18px;
+            }
+
+            .chapter-title-row {
+                margin-bottom: 18px;
+            }
+
+                .chapter-title-row h2 {
+                    font-size: clamp(1.75rem, 9vw, 2.55rem);
+                }
+
+            .chapter-main-text {
+                padding: 17px;
+                border-radius: 15px;
+                overflow-wrap: anywhere;
+            }
+
+            .literature-focus-topbar {
+                padding: max(8px, env(safe-area-inset-top)) 8px 8px;
+            }
+
+            .focus-reader-actions {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                justify-content: flex-start;
+                grid-column: 1 / -1;
+            }
+
+            .literature-focus-topbar {
+                grid-template-columns: minmax(0,1fr) auto;
+            }
+
+            .literature-focus-scroll {
+                padding: 8px 6px 24px;
+            }
+
+            .literature-focus-content .literature-chapter {
+                min-height: calc(100dvh - 176px);
+                padding: 14px;
+                padding-bottom: 68px;
+                border-radius: 16px;
+            }
+
+            .literature-focus-footer {
+                grid-template-columns: minmax(0,1fr) 76px minmax(0,1fr);
+                gap: 6px;
+                padding: 7px;
+                padding-bottom: max(7px, env(safe-area-inset-bottom));
+            }
+
+            .focus-footer-button,
+            .focus-reader-chapter-menu {
+                min-height: 42px;
+                padding: 6px 7px;
+                border-radius: 12px;
+                font-size: .72rem;
+            }
+
+                .focus-footer-button small {
+                    display: none;
+                }
+
+            .focus-reader-chapter-menu {
+                min-width: 0;
+                font-size: .68rem;
+            }
+
+            .beta-feature-backdrop {
+                align-items: flex-end;
+                padding: 8px;
+            }
+
+            .beta-feature-card {
+                width: 100%;
+                border-radius: 22px 22px 14px 14px;
+            }
+
+            .beta-feature-actions {
+                display: grid;
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1186,21 +1997,28 @@
         <div id="literature-background-image" class="literature-background-image"></div>
         <div id="literature-background-overlay" class="literature-background-overlay"></div>
     </div>
-    <header>
-        <div class="logo"><a href="index.html"><img src="Nullverse-3.png" alt="Nullverse" class="site-logo"></a></div>
-        <nav>
-            <a href="index.html">Home</a>
-            <a href="notifications.html">Notifications</a>
-            <a href="explore.html">Explore</a>
-            <a href="profile.html">Profile</a>
-            <a href="dashboard.html">Dashboard</a>
-            <a href="messages.html">Messages</a>
-            <button onclick="logOut()">Log Out</button>
-        </nav>
+    <header class="literature-site-header">
+        <div class="logo">
+            <a id="literature-logo-link" href="javascript:void(0)" aria-label="Nullverse">
+                <img src="Nullverse-3.png" alt="Nullverse" class="site-logo">
+            </a>
+        </div>
+        <div class="literature-header-actions">
+            <nav id="literature-main-nav" aria-label="Main navigation"></nav>
+            <button id="literature-mobile-menu-button"
+                    class="literature-mobile-menu-button"
+                    type="button"
+                    aria-label="Open navigation"
+                    aria-expanded="false">
+                ☰
+            </button>
+        </div>
     </header>
+    <div id="literature-nav-scrim" class="literature-nav-scrim" aria-hidden="true"></div>
     <main>
         <aside class="left-sidebar">
             <section id="chapter-index" class="chapter-index" style="display:none;">
+                <button id="chapter-index-close" class="chapter-index-close" type="button" aria-label="Close chapter list">×</button>
                 <div class="index-header">
                     <h2>Chapter Index</h2>
                     <p>Search and jump between chapters instantly.</p>
@@ -1221,11 +2039,11 @@
                         <div id="reading-meta" class="reading-meta"></div>
                         <div id="book-summary" class="summary"></div>
                         <div class="action-row">
-                            <button id="like-button" class="like-button">♡ Like</button>
+                            <button id="like-button" class="like-button" type="button">♡ Like</button>
                             <span id="like-count" class="like-count">0 Likes</span>
-                            <a class="button" id="comments-link">Comments</a>
-                            <a class="button" id="qa-link">Q&A</a>
-                            <button class="button" id="report-literature-btn">Report</button>
+                            <a class="button" id="comments-link" role="button">Comments</a>
+                            <a class="button" id="qa-link" role="button">Q&amp;A</a>
+                            <button class="button" id="report-literature-btn" type="button">Report</button>
                         </div>
                         <div id="owner-actions" class="owner-actions"></div>
                     </div>
@@ -1234,13 +2052,16 @@
             <section class="reader-tools" id="reader-tools" style="display:none;">
                 <div class="reader-tools-left">
                     <button class="reader-tool-button mobile-index-toggle" type="button" onclick="toggleMobileIndex()">Chapters</button>
-                    <button class="reader-tool-button" type="button" onclick="scrollToFirstChapter()">Start Reading</button>
-                    <button class="reader-tool-button" type="button" onclick="toggleReaderFocus()">Focus</button>
+                    <button class="reader-tool-button" id="start-reading-button" type="button" onclick="scrollToFirstChapter()">Start Reading</button>
+                    <button class="reader-tool-button primary-reader-action" id="focus-reader-open-button" type="button" onclick="toggleReaderFocus()">Focus Reader</button>
                 </div>
                 <div class="reader-tools-right">
-                    <button class="reader-tool-button" type="button" onclick="toggleLargeText()">Text +</button>
-                    <button class="reader-tool-button" type="button" onclick="toggleWideReader()">Wide</button>
-                    <button class="reader-tool-button" type="button" onclick="toggleCenteredHeadings()">Center Titles</button>
+                    <span id="current-chapter-status" class="current-chapter-status"></span>
+                    <button class="reader-tool-button" id="reader-text-button" type="button" onclick="toggleLargeText()">Text +</button>
+                    <button class="reader-tool-button" id="reader-wide-button" type="button" onclick="toggleWideReader()">Wide</button>
+                    <button class="reader-tool-button" id="reader-center-button" type="button" onclick="toggleCenteredHeadings()">Center Titles</button>
+                    <button class="reader-tool-button" id="reader-spacing-button" type="button" onclick="toggleReaderSpacing()">Line +</button>
+                    <button class="reader-tool-button" type="button" onclick="resetReaderPreferences()">Reset</button>
                 </div>
             </section>
             <section id="chapters-container">
@@ -1248,6 +2069,7 @@
             </section>
         </div>
     </main>
+    <div id="chapter-index-mobile-scrim" class="chapter-index-mobile-scrim" aria-hidden="true"></div>
     <div id="report-modal">
         <div class="report-box">
             <h2>Report Literature</h2>
@@ -1268,8 +2090,66 @@
             </div>
         </div>
     </div>
+
+    <div id="literature-focus-overlay"
+         class="literature-focus-overlay"
+         role="dialog"
+         aria-modal="true"
+         aria-hidden="true"
+         aria-label="Focus reader">
+        <div class="literature-focus-topbar">
+            <div class="focus-reader-heading">
+                <strong id="focus-reader-book-title">Literature</strong>
+                <span id="focus-reader-chapter-label">Chapter</span>
+            </div>
+            <div class="focus-reader-actions">
+                <button type="button" onclick="toggleLargeText()">Text +</button>
+                <button type="button" onclick="toggleWideReader()">Wide</button>
+                <button type="button" onclick="toggleCenteredHeadings()">Center Titles</button>
+                <button type="button" onclick="toggleReaderSpacing()">Line +</button>
+                <button type="button" onclick="resetReaderPreferences()">Reset</button>
+                <button id="focus-reader-close" class="focus-reader-close" type="button" aria-label="Close focus reader">×</button>
+            </div>
+        </div>
+        <div id="literature-focus-scroll" class="literature-focus-scroll">
+            <div id="literature-focus-content" class="literature-focus-content"></div>
+        </div>
+        <div class="literature-focus-footer">
+            <button id="focus-prev-button" class="focus-footer-button" type="button">
+                <small>Previous Chapter</small>
+                <strong id="focus-prev-label">Beginning</strong>
+            </button>
+            <button id="focus-chapter-menu-button" class="focus-reader-chapter-menu" type="button">Chapters</button>
+            <button id="focus-next-button" class="focus-footer-button next" type="button">
+                <small>Next Chapter</small>
+                <strong id="focus-next-label">End</strong>
+            </button>
+        </div>
+    </div>
+
+    <div id="beta-feature-backdrop"
+         class="beta-feature-backdrop"
+         role="dialog"
+         aria-modal="true"
+         aria-hidden="true"
+         aria-labelledby="beta-feature-title">
+        <section class="beta-feature-card">
+            <div class="beta-feature-card-header">
+                <h2 id="beta-feature-title">Feature in Beta</h2>
+                <button id="beta-feature-close" type="button" aria-label="Close">×</button>
+            </div>
+            <div class="beta-feature-card-body">
+                <p id="beta-feature-message"></p>
+                <p class="beta-feature-note">Public reading is available now. Social and community features remain in closed beta.</p>
+                <div class="beta-feature-actions">
+                    <button id="beta-feature-continue" class="button" type="button">Continue Reading</button>
+                    <a id="beta-feature-login" class="button" href="login.html">Beta Login</a>
+                </div>
+            </div>
+        </section>
+    </div>
+
     <script type="module">
-        import { requireBetaAccess } from "./betaGate.js";
         import { supabase } from "./supabaseClient.js";
         import { setupNotificationBadge } from "./notificationBadge.js";
         import { createNotification } from "./notifications.js";
@@ -1324,19 +2204,308 @@
         };
 
 
-        const currentUser = await requireBetaAccess();
-        setupNotificationBadge();
-        setupMessageBadge();
-
-        const { profile: currentProfile, permissions: currentPermissions } = await getCurrentUserWithPermissions(currentUser.id);
         const params = new URLSearchParams(window.location.search);
         const literatureId = params.get("id");
 
+        let currentUser = null;
+        let currentProfile = null;
+        let currentPermissions = [];
+        let isGuestReader = true;
         let currentLiterature = null;
         let allChapters = [];
+        let currentChapterIndex = 0;
         let contentExperience = "balanced";
         let blockedContentWarnings = [];
         let ageRole = "unknown";
+        let lastFocusedElement = null;
+        let readerStateRestored = false;
+
+        await initializeOptionalViewer();
+        renderLiteratureNavigation();
+        setupLiteratureNavigationControls();
+        restoreReaderPreferences();
+
+        async function initializeOptionalViewer() {
+            try {
+                const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+                const sessionUser = sessionData?.session?.user || null;
+
+                if (sessionError || !sessionUser) {
+                    return;
+                }
+
+                const normalizedEmail = String(sessionUser.email || "").trim().toLowerCase();
+                if (!normalizedEmail) {
+                    return;
+                }
+
+                const { data: betaAccess, error: betaError } = await supabase
+                    .from("beta_access")
+                    .select("role")
+                    .ilike("email", normalizedEmail)
+                    .maybeSingle();
+
+                if (betaError || !betaAccess) {
+                    return;
+                }
+
+                const viewer = await getCurrentUserWithPermissions(sessionUser.id);
+                const profile = viewer?.profile || null;
+                const status = String(profile?.account_status || "active").toLowerCase();
+
+                if (!profile || status === "banned" || status === "suspended") {
+                    return;
+                }
+
+                currentUser = sessionUser;
+                currentProfile = profile;
+                currentPermissions = Array.isArray(viewer?.permissions) ? viewer.permissions : [];
+                isGuestReader = false;
+
+                await Promise.allSettled([
+                    setupNotificationBadge(),
+                    setupMessageBadge()
+                ]);
+            } catch (error) {
+                console.warn("Optional Literature viewer session was skipped:", error);
+                currentUser = null;
+                currentProfile = null;
+                currentPermissions = [];
+                isGuestReader = true;
+            }
+        }
+
+        function getLiteratureReturnPath() {
+            const url = new URL(window.location.href);
+            const safe = new URLSearchParams();
+
+            if (literatureId) {
+                safe.set("id", literatureId);
+            }
+
+            const requestedChapter = Number(url.searchParams.get("chapter"));
+            const chapterToReturn =
+                Number.isInteger(requestedChapter) && requestedChapter > 0
+                    ? requestedChapter
+                    : (allChapters.length ? currentChapterIndex + 1 : 0);
+
+            if (chapterToReturn > 0) {
+                safe.set("chapter", String(chapterToReturn));
+            }
+
+            return `literature.html${safe.toString() ? `?${safe.toString()}` : ""}`;
+        }
+
+        function getBetaLoginUrl() {
+            return `login.html?return=${encodeURIComponent(getLiteratureReturnPath())}`;
+        }
+
+        function renderLiteratureNavigation() {
+            const nav = document.getElementById("literature-main-nav");
+            const logoLink = document.getElementById("literature-logo-link");
+            const menuButton = document.getElementById("literature-mobile-menu-button");
+
+            if (!nav || !logoLink || !menuButton) return;
+
+            if (currentUser) {
+                logoLink.href = "index.html";
+                logoLink.style.pointerEvents = "";
+                nav.classList.remove("guest-nav");
+                nav.innerHTML = `
+                        <a href="index.html">Home</a>
+                        <a href="notifications.html">Notifications</a>
+                        <a href="explore.html">Explore</a>
+                        <a href="profile.html">Profile</a>
+                        <a href="dashboard.html">Dashboard</a>
+                        <a href="messages.html">Messages</a>
+                        <button type="button" onclick="logOut()">Log Out</button>
+                    `;
+                menuButton.classList.remove("guest-hidden");
+            } else {
+                logoLink.href = "javascript:void(0)";
+                logoLink.style.pointerEvents = "none";
+                nav.classList.add("guest-nav");
+                nav.innerHTML = `<a class="literature-guest-login" href="${escapeHtml(getBetaLoginUrl())}">Beta Login</a>`;
+                menuButton.classList.add("guest-hidden");
+            }
+        }
+
+        function setupLiteratureNavigationControls() {
+            const nav = document.getElementById("literature-main-nav");
+            const button = document.getElementById("literature-mobile-menu-button");
+            const scrim = document.getElementById("literature-nav-scrim");
+
+            function close() {
+                nav?.classList.remove("open");
+                scrim?.classList.remove("open");
+                button?.setAttribute("aria-expanded", "false");
+            }
+
+            button?.addEventListener("click", () => {
+                if (!currentUser) return;
+                const opening = !nav?.classList.contains("open");
+                nav?.classList.toggle("open", opening);
+                scrim?.classList.toggle("open", opening);
+                button.setAttribute("aria-expanded", String(opening));
+            });
+
+            scrim?.addEventListener("click", close);
+            nav?.addEventListener("click", event => {
+                if (event.target.closest("a,button")) close();
+            });
+
+            window.addEventListener("resize", () => {
+                if (window.innerWidth > 760) close();
+            });
+        }
+
+        const BETA_FEATURE_COPY = {
+            like: {
+                title: "Likes are currently in closed beta",
+                message: "You can read every published chapter, but liking stories is currently available only to Nullverse beta testers."
+            },
+            comments: {
+                title: "Comments are still in beta",
+                message: "Community discussions are still being tested. Public reading is available now, but commenting requires beta access."
+            },
+            qa: {
+                title: "Creator Q&A is still in beta",
+                message: "Questions and creator responses are currently limited to Nullverse beta testers."
+            },
+            report: {
+                title: "Reporting is currently in beta",
+                message: "The full Nullverse reporting system is still being tested and requires a beta account."
+            }
+        };
+
+        function showBetaFeatureModal(feature = "like") {
+            if (currentUser) return;
+
+            const copy = BETA_FEATURE_COPY[feature] || BETA_FEATURE_COPY.like;
+            const backdrop = document.getElementById("beta-feature-backdrop");
+            const title = document.getElementById("beta-feature-title");
+            const message = document.getElementById("beta-feature-message");
+            const login = document.getElementById("beta-feature-login");
+
+            lastFocusedElement = document.activeElement;
+            if (title) title.textContent = copy.title;
+            if (message) message.textContent = copy.message;
+            if (login) login.href = getBetaLoginUrl();
+
+            backdrop?.classList.add("open");
+            backdrop?.setAttribute("aria-hidden", "false");
+            document.body.classList.add("beta-feature-modal-open");
+
+            setTimeout(() => document.getElementById("beta-feature-continue")?.focus(), 40);
+        }
+
+        function closeBetaFeatureModal() {
+            const backdrop = document.getElementById("beta-feature-backdrop");
+            backdrop?.classList.remove("open");
+            backdrop?.setAttribute("aria-hidden", "true");
+            document.body.classList.remove("beta-feature-modal-open");
+            lastFocusedElement?.focus?.();
+            lastFocusedElement = null;
+        }
+
+        function setupBetaFeatureModal() {
+            const backdrop = document.getElementById("beta-feature-backdrop");
+
+            document.getElementById("beta-feature-close")?.addEventListener("click", closeBetaFeatureModal);
+            document.getElementById("beta-feature-continue")?.addEventListener("click", closeBetaFeatureModal);
+            backdrop?.addEventListener("click", event => {
+                if (event.target === backdrop) closeBetaFeatureModal();
+            });
+        }
+
+        function getReaderPreferenceState() {
+            return {
+                largeText: document.body.classList.contains("reader-large-text"),
+                wide: document.body.classList.contains("reader-wide"),
+                centered: document.body.classList.contains("reader-center-headings"),
+                airy: document.body.classList.contains("reader-airy")
+            };
+        }
+
+        function saveReaderPreferences() {
+            try {
+                localStorage.setItem(
+                    "nullverse_literature_reader_preferences_v2",
+                    JSON.stringify(getReaderPreferenceState())
+                );
+            } catch (error) {
+                console.warn("Reader preference save skipped:", error);
+            }
+        }
+
+        function restoreReaderPreferences() {
+            try {
+                const saved = JSON.parse(localStorage.getItem("nullverse_literature_reader_preferences_v2") || "{}");
+                document.body.classList.toggle("reader-large-text", !!saved.largeText);
+                document.body.classList.toggle("reader-wide", !!saved.wide);
+                document.body.classList.toggle("reader-center-headings", !!saved.centered);
+                document.body.classList.toggle("reader-airy", !!saved.airy);
+            } catch (error) {
+                console.warn("Reader preference restore skipped:", error);
+            }
+
+            syncReaderPreferenceButtons();
+        }
+
+        function syncReaderPreferenceButtons() {
+            const mappings = [
+                ["reader-text-button", "reader-large-text"],
+                ["reader-wide-button", "reader-wide"],
+                ["reader-center-button", "reader-center-headings"],
+                ["reader-spacing-button", "reader-airy"]
+            ];
+
+            mappings.forEach(([id, className]) => {
+                document.getElementById(id)?.classList.toggle("active", document.body.classList.contains(className));
+            });
+        }
+
+        function getReadingProgressKey() {
+            return currentLiterature?.id
+                ? `nullverse_literature_progress_v2:${currentLiterature.id}`
+                : "";
+        }
+
+        function saveReadingProgress(extra = {}) {
+            const key = getReadingProgressKey();
+            if (!key || !allChapters.length) return;
+
+            const normalChapter = document.querySelector("#chapters-container .literature-chapter");
+            const focusScroll = document.getElementById("literature-focus-scroll");
+            const focusOpen = document.getElementById("literature-focus-overlay")?.classList.contains("open");
+            const scrollTop = focusOpen
+                ? Number(focusScroll?.scrollTop || 0)
+                : Number(window.scrollY || document.documentElement.scrollTop || 0);
+
+            try {
+                localStorage.setItem(key, JSON.stringify({
+                    chapterIndex: currentChapterIndex,
+                    scrollTop,
+                    focus: !!focusOpen,
+                    updatedAt: Date.now(),
+                    ...extra
+                }));
+            } catch (error) {
+                console.warn("Reading progress save skipped:", error);
+            }
+        }
+
+        function getSavedReadingProgress() {
+            const key = getReadingProgressKey();
+            if (!key) return null;
+
+            try {
+                const value = JSON.parse(localStorage.getItem(key) || "null");
+                return value && typeof value === "object" ? value : null;
+            } catch {
+                return null;
+            }
+        }
 
 
         function getDefaultImagePlacement() {
@@ -1382,9 +2551,9 @@
             const safe = normalizeImagePlacement(placement);
 
             return `
-                                                            object-fit:${safe.fit || "cover"};
-                                                            transform:${getImagePlacementTransform(safe)};
-                                                        `;
+                                                                object-fit:${safe.fit || "cover"};
+                                                                transform:${getImagePlacementTransform(safe)};
+                                                            `;
         }
 
         const NV_WORLD_RICH_TEXT_SNAPSHOT_PREFIX = "NV_LITERATURE_RICH_TEXT_V2:";
@@ -2376,6 +3545,9 @@
 
 
 
+        setupBetaFeatureModal();
+        setupChapterDrawerControls();
+        setupFocusReaderControls();
         setupReportSystem();
         await loadViewerContentPreferences();
 
@@ -2399,6 +3571,8 @@
         });
 
         async function areUsersBlocked(userA, userB) {
+            if (!userA || !userB) return false;
+
             const { data, error } = await supabase
                 .from("user_blocks")
                 .select("id, blocker_id, blocked_id")
@@ -2478,6 +3652,13 @@
         }
 
         async function loadViewerContentPreferences() {
+            if (!currentUser) {
+                ageRole = "unknown";
+                contentExperience = "balanced";
+                blockedContentWarnings = [];
+                return;
+            }
+
             const { data: profile, error } = await supabase
                 .from("profiles")
                 .select("content_experience, blocked_content_warnings, age_role")
@@ -2577,7 +3758,9 @@
                 return;
             }
 
-            const warningAccepted = params.get("contentOk") === literature.id;
+            const warningAccepted =
+                params.get("contentOk") === literature.id ||
+                sessionStorage.getItem(`nullverse_literature_warning_ok:${literature.id}`) === "1";
 
             if (!ownerAccess && shouldWarnContent(literature) && !warningAccepted) {
                 showContentWarning(literature);
@@ -2588,14 +3771,16 @@
         }
 
         async function renderLoadedLiterature(literature) {
-            const blocked = await areUsersBlocked(currentUser.id, literature.owner_id);
+            const blocked = currentUser
+                ? await areUsersBlocked(currentUser.id, literature.owner_id)
+                : false;
 
             if (blocked) {
                 showNotFound("This literature is unavailable.");
                 return;
             }
 
-            const ownerAccess = currentUser && currentUser.id === literature.owner_id;
+            const ownerAccess = !!currentUser && currentUser.id === literature.owner_id;
 
             if (
                 literature.moderation_status === "hidden" &&
@@ -2608,21 +3793,24 @@
 
             const { data: profile } = await supabase
                 .from("profiles")
-                .select("id, username, display_name, role, role_name")
+                .select("id, username, display_name, role, role_name, account_status")
                 .eq("id", literature.owner_id)
-                .single();
+                .maybeSingle();
 
-            currentLiterature.ownerProfile = profile;
+            const creatorStatus = String(profile?.account_status || "active").toLowerCase();
+            if (!ownerAccess && ["banned", "suspended"].includes(creatorStatus)) {
+                showNotFound("This literature is unavailable.");
+                return;
+            }
+
+            currentLiterature.ownerProfile = profile || null;
 
             applyLiteratureTheme(literature);
             renderBookHero(literature, profile);
             renderOwnerActions(literature);
             await loadLikes();
             await loadChapters(literature.id);
-
-            document.getElementById("comments-link").href = `literature-comments.html?id=${encodeURIComponent(literature.id)}`;
-            document.getElementById("qa-link").href = `literature-qa.html?id=${encodeURIComponent(literature.id)}`;
-
+            configureLiteratureCommunityActions(literature);
         }
 
         function renderBookHero(literature, profile) {
@@ -2630,9 +3818,13 @@
             document.getElementById("book-title").textContent = literature.title || "Untitled Literature";
             document.getElementById("book-summary").textContent = literature.summary || "No description provided.";
 
-            if (profile) {
+            if (profile && currentUser) {
                 document.getElementById("book-creator").innerHTML =
                     `by <a href="profile.html?user=${encodeURIComponent(profile.username)}">${escapeHtml(profile.display_name || profile.username)} (@${escapeHtml(profile.username)})</a>`;
+            } else if (profile) {
+                const creatorName = profile.display_name || profile.username || "Unknown Creator";
+                const username = profile.username ? ` (@${profile.username})` : "";
+                document.getElementById("book-creator").textContent = `by ${creatorName}${username}`;
             } else {
                 document.getElementById("book-creator").textContent = "by Unknown Creator";
             }
@@ -2657,9 +3849,9 @@
 
             if (literature.cover_image_url) {
                 coverWrap.innerHTML = `
-                                                                    <img src="${escapeHtml(literature.cover_image_url)}" alt="" style="${getImagePlacementStyle(coverPlacement)}">
-                                                                    ${coverCredit}
-                                                                `;
+                                                                        <img src="${escapeHtml(literature.cover_image_url)}" alt="" style="${getImagePlacementStyle(coverPlacement)}">
+                                                                        ${coverCredit}
+                                                                    `;
             } else {
                 coverWrap.innerHTML = `<div class="cover-placeholder">No cover image yet</div>`;
             }
@@ -2760,25 +3952,37 @@
             document.getElementById("reader-tools").style.display = allChapters.length ? "flex" : "none";
 
             if (!allChapters.length) {
+                document.getElementById("chapter-index").style.display = "none";
                 container.innerHTML = `<p class="empty">This literature project does not have any public chapters yet.</p>`;
                 return;
             }
 
             renderChapterIndex(allChapters);
-            container.innerHTML = allChapters.map((chapter, index) => buildChapterArticle(chapter, index)).join("");
 
-            container
-                .querySelectorAll(".chapter-main-text.rich-chapter-content")
-                .forEach(normalizeRenderedWorldRichText);
+            const requestedChapter = Number(params.get("chapter"));
+            const savedProgress = getSavedReadingProgress();
+            const requestedIndex = Number.isInteger(requestedChapter) && requestedChapter > 0
+                ? requestedChapter - 1
+                : Number(savedProgress?.chapterIndex);
 
-            setupReaderScrollTracking();
+            currentChapterIndex = Number.isInteger(requestedIndex)
+                ? Math.min(allChapters.length - 1, Math.max(0, requestedIndex))
+                : 0;
 
-            const requested = Number(params.get("chapter")) || Number((window.location.hash || "").replace("#chapter-", ""));
-            if (requested && requested > 0 && requested <= allChapters.length) {
-                setTimeout(() => {
-                    document.getElementById(`chapter-${requested}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-                }, 100);
+            const startButton = document.getElementById("start-reading-button");
+            if (startButton) {
+                startButton.textContent = savedProgress || requestedChapter
+                    ? `Continue Chapter ${currentChapterIndex + 1}`
+                    : "Start Reading";
             }
+
+            await setActiveChapter(currentChapterIndex, {
+                updateHistory: false,
+                scroll: false,
+                restoreScroll: true
+            });
+
+            readerStateRestored = true;
         }
 
         function renderChapterIndex(chapters) {
@@ -3461,12 +4665,26 @@
                     const snippet = getChapterSearchSnippet(chapter);
 
                     return `
-                                            <a class="chapter-nav-link" href="#chapter-${realIndex + 1}">
-                                                <span>Chapter ${realIndex + 1}: ${escapeHtml(title)}</span>
-                                                <small>${escapeHtml(snippet)}</small>
-                                            </a>
-                                        `;
+                                                <button type="button"
+                                                        class="chapter-nav-link${realIndex === currentChapterIndex ? " active" : ""}"
+                                                        data-chapter-index="${realIndex}">
+                                                    <span>Chapter ${realIndex + 1}: ${escapeHtml(title)}</span>
+                                                    <small>${escapeHtml(snippet)}</small>
+                                                </button>
+                                            `;
                 }).join("");
+
+                links.querySelectorAll(".chapter-nav-link").forEach(button => {
+                    button.addEventListener("click", async () => {
+                        const index = Number(button.dataset.chapterIndex);
+                        await setActiveChapter(index, {
+                            updateHistory: true,
+                            scroll: true,
+                            closeDrawer: true,
+                            preserveFocusMode: true
+                        });
+                    });
+                });
             }
 
             search.oninput = draw;
@@ -3476,6 +4694,360 @@
             search.addEventListener("compositionend", draw);
 
             draw();
+        }
+
+        function getSafeChapterIndex(value) {
+            const number = Number(value);
+            if (!Number.isFinite(number) || !allChapters.length) return 0;
+            return Math.min(allChapters.length - 1, Math.max(0, Math.trunc(number)));
+        }
+
+        function buildChapterSwitcher(position = "top") {
+            const previous = allChapters[currentChapterIndex - 1] || null;
+            const next = allChapters[currentChapterIndex + 1] || null;
+            const current = allChapters[currentChapterIndex] || null;
+
+            return `
+                    <nav class="chapter-switcher ${position}" aria-label="Chapter navigation">
+                        <button type="button"
+                                class="chapter-switch-button previous"
+                                data-chapter-direction="-1"
+                                ${previous ? "" : "disabled"}>
+                            <small>Previous Chapter</small>
+                            <strong>${previous ? escapeHtml(previous.title || `Chapter ${currentChapterIndex}`) : "Beginning"}</strong>
+                        </button>
+                        <button type="button" class="chapter-list-button" data-open-chapter-list>
+                            <small>Chapter List</small>
+                            <strong>${currentChapterIndex + 1} / ${allChapters.length}</strong>
+                        </button>
+                        <button type="button"
+                                class="chapter-switch-button next"
+                                data-chapter-direction="1"
+                                ${next ? "" : "disabled"}>
+                            <small>${next ? "Next Chapter" : "End of Story"}</small>
+                            <strong>${next ? escapeHtml(next.title || `Chapter ${currentChapterIndex + 2}`) : escapeHtml(current?.title || "Complete")}</strong>
+                        </button>
+                    </nav>
+                `;
+        }
+
+        function bindChapterSwitcher(container) {
+            container?.querySelectorAll("[data-chapter-direction]").forEach(button => {
+                button.addEventListener("click", async () => {
+                    const direction = Number(button.dataset.chapterDirection) || 0;
+                    await setActiveChapter(currentChapterIndex + direction, {
+                        updateHistory: true,
+                        scroll: true,
+                        preserveFocusMode: true
+                    });
+                });
+            });
+
+            container?.querySelectorAll("[data-open-chapter-list]").forEach(button => {
+                button.addEventListener("click", openChapterDrawer);
+            });
+        }
+
+        async function setActiveChapter(index, options = {}) {
+            if (!allChapters.length) return;
+
+            const {
+                updateHistory = true,
+                replaceHistory = false,
+                scroll = true,
+                closeDrawer = false,
+                restoreScroll = false,
+                preserveFocusMode = false
+            } = options;
+
+            currentChapterIndex = getSafeChapterIndex(index);
+            const chapter = allChapters[currentChapterIndex];
+            const container = document.getElementById("chapters-container");
+            const focusWasOpen = document.getElementById("literature-focus-overlay")?.classList.contains("open");
+
+            container.innerHTML = `
+                    <div class="active-chapter-shell">
+                        ${buildChapterSwitcher("top")}
+                        ${buildChapterArticle(chapter, currentChapterIndex)}
+                        ${buildChapterSwitcher("bottom")}
+                    </div>
+                `;
+
+            container
+                .querySelectorAll(".chapter-main-text.rich-chapter-content")
+                .forEach(normalizeRenderedWorldRichText);
+
+            bindChapterSwitcher(container);
+            updateChapterInterface();
+
+            if (updateHistory) {
+                const url = new URL(window.location.href);
+                url.searchParams.set("chapter", String(currentChapterIndex + 1));
+                url.hash = "";
+                const method = replaceHistory ? "replaceState" : "pushState";
+                window.history[method](
+                    { literatureId, chapterIndex: currentChapterIndex },
+                    "",
+                    `${url.pathname}${url.search}`
+                );
+            }
+
+            if (focusWasOpen || preserveFocusMode && document.body.classList.contains("literature-focus-open")) {
+                renderFocusChapter();
+            }
+
+            if (closeDrawer) {
+                closeChapterDrawer();
+            }
+
+            setupReaderScrollTracking();
+
+            if (!restoreScroll) {
+                saveReadingProgress({ chapterIndex: currentChapterIndex, scrollTop: 0 });
+            }
+
+            if (scroll) {
+                requestAnimationFrame(() => {
+                    document.getElementById(`chapter-${currentChapterIndex + 1}`)
+                        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                });
+            } else if (restoreScroll) {
+                const saved = getSavedReadingProgress();
+                if (saved && Number(saved.chapterIndex) === currentChapterIndex && Number(saved.scrollTop) > 0) {
+                    requestAnimationFrame(() => {
+                        window.scrollTo({ top: Number(saved.scrollTop), behavior: "auto" });
+                    });
+                }
+            }
+        }
+
+        function updateChapterInterface() {
+            const chapter = allChapters[currentChapterIndex];
+            if (!chapter) return;
+
+            document.querySelectorAll(".chapter-nav-link").forEach(button => {
+                button.classList.toggle(
+                    "active",
+                    Number(button.dataset.chapterIndex) === currentChapterIndex
+                );
+            });
+
+            const status = document.getElementById("current-chapter-status");
+            if (status) {
+                status.textContent = `Chapter ${currentChapterIndex + 1} of ${allChapters.length}`;
+            }
+
+            const search = document.getElementById("chapter-search");
+            if (search && search.value) {
+                search.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+
+            updateFocusReaderControls();
+        }
+
+        function setupChapterDrawerControls() {
+            document.getElementById("chapter-index-close")?.addEventListener("click", closeChapterDrawer);
+            document.getElementById("chapter-index-mobile-scrim")?.addEventListener("click", closeChapterDrawer);
+        }
+
+        function openChapterDrawer() {
+            const sidebar = document.querySelector(".left-sidebar");
+            const index = document.getElementById("chapter-index");
+            const scrim = document.getElementById("chapter-index-mobile-scrim");
+
+            const focusOpen = document.getElementById("literature-focus-overlay")?.classList.contains("open");
+
+            if (window.innerWidth > 1050 && !focusOpen) {
+                index?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                document.getElementById("chapter-search")?.focus();
+                return;
+            }
+
+            sidebar?.classList.add("mobile-open");
+            index?.classList.add("mobile-open");
+            scrim?.classList.add("open");
+            scrim?.setAttribute("aria-hidden", "false");
+            document.body.classList.add("literature-drawer-open");
+
+            setTimeout(() => document.getElementById("chapter-search")?.focus(), 80);
+        }
+
+        function closeChapterDrawer() {
+            document.querySelector(".left-sidebar")?.classList.remove("mobile-open");
+            document.getElementById("chapter-index")?.classList.remove("mobile-open");
+            document.getElementById("chapter-index-mobile-scrim")?.classList.remove("open");
+            document.getElementById("chapter-index-mobile-scrim")?.setAttribute("aria-hidden", "true");
+            document.body.classList.remove("literature-drawer-open");
+        }
+
+        function setupFocusReaderControls() {
+            document.getElementById("focus-reader-close")?.addEventListener("click", closeFocusReader);
+            document.getElementById("focus-prev-button")?.addEventListener("click", () => {
+                setActiveChapter(currentChapterIndex - 1, {
+                    updateHistory: true,
+                    scroll: false,
+                    preserveFocusMode: true
+                });
+            });
+            document.getElementById("focus-next-button")?.addEventListener("click", () => {
+                if (currentChapterIndex >= allChapters.length - 1) {
+                    closeFocusReader();
+                    document.querySelector(".book-hero")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    return;
+                }
+
+                setActiveChapter(currentChapterIndex + 1, {
+                    updateHistory: true,
+                    scroll: false,
+                    preserveFocusMode: true
+                });
+            });
+            document.getElementById("focus-chapter-menu-button")?.addEventListener("click", openChapterDrawer);
+
+            document.addEventListener("keydown", event => {
+                if (event.key === "Escape") {
+                    if (document.getElementById("beta-feature-backdrop")?.classList.contains("open")) {
+                        closeBetaFeatureModal();
+                        return;
+                    }
+
+                    if (document.querySelector(".left-sidebar")?.classList.contains("mobile-open")) {
+                        closeChapterDrawer();
+                        return;
+                    }
+
+                    if (document.getElementById("literature-focus-overlay")?.classList.contains("open")) {
+                        closeFocusReader();
+                    }
+                }
+
+                if (
+                    document.getElementById("literature-focus-overlay")?.classList.contains("open") &&
+                    !event.ctrlKey &&
+                    !event.metaKey &&
+                    !event.altKey
+                ) {
+                    if (event.key === "ArrowLeft" && currentChapterIndex > 0) {
+                        setActiveChapter(currentChapterIndex - 1, {
+                            updateHistory: true,
+                            scroll: false,
+                            preserveFocusMode: true
+                        });
+                    }
+
+                    if (event.key === "ArrowRight" && currentChapterIndex < allChapters.length - 1) {
+                        setActiveChapter(currentChapterIndex + 1, {
+                            updateHistory: true,
+                            scroll: false,
+                            preserveFocusMode: true
+                        });
+                    }
+                }
+            });
+
+            window.addEventListener("popstate", () => {
+                if (!allChapters.length) return;
+                const requested = Number(new URLSearchParams(window.location.search).get("chapter"));
+                const nextIndex = Number.isInteger(requested) && requested > 0 ? requested - 1 : 0;
+
+                if (getSafeChapterIndex(nextIndex) !== currentChapterIndex) {
+                    setActiveChapter(nextIndex, {
+                        updateHistory: false,
+                        scroll: true,
+                        preserveFocusMode: true
+                    });
+                }
+            });
+
+            window.addEventListener("beforeunload", () => saveReadingProgress());
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === "hidden") saveReadingProgress();
+            });
+        }
+
+        function openFocusReader() {
+            if (!allChapters.length) return;
+
+            lastFocusedElement = document.activeElement;
+            renderFocusChapter();
+
+            const overlay = document.getElementById("literature-focus-overlay");
+            overlay?.classList.add("open");
+            overlay?.setAttribute("aria-hidden", "false");
+            document.body.classList.add("literature-focus-open");
+
+            const focusScroll = document.getElementById("literature-focus-scroll");
+            if (focusScroll) focusScroll.scrollTop = 0;
+
+            updateFocusReaderControls();
+            setupReaderScrollTracking();
+            setTimeout(() => document.getElementById("focus-reader-close")?.focus(), 40);
+        }
+
+        function closeFocusReader() {
+            const overlay = document.getElementById("literature-focus-overlay");
+            const focusScroll = document.getElementById("literature-focus-scroll");
+            saveReadingProgress({
+                chapterIndex: currentChapterIndex,
+                scrollTop: Number(focusScroll?.scrollTop || 0),
+                focus: false
+            });
+
+            overlay?.classList.remove("open");
+            overlay?.setAttribute("aria-hidden", "true");
+            document.body.classList.remove("literature-focus-open");
+            closeChapterDrawer();
+            setupReaderScrollTracking();
+
+            lastFocusedElement?.focus?.();
+            lastFocusedElement = null;
+        }
+
+        function renderFocusChapter() {
+            const chapter = allChapters[currentChapterIndex];
+            const content = document.getElementById("literature-focus-content");
+            if (!chapter || !content) return;
+
+            content.innerHTML = buildChapterArticle(chapter, currentChapterIndex, "focus-chapter");
+            content
+                .querySelectorAll(".chapter-main-text.rich-chapter-content")
+                .forEach(normalizeRenderedWorldRichText);
+
+            const scroll = document.getElementById("literature-focus-scroll");
+            if (scroll) scroll.scrollTop = 0;
+
+            updateFocusReaderControls();
+            setupReaderScrollTracking();
+        }
+
+        function updateFocusReaderControls() {
+            const chapter = allChapters[currentChapterIndex];
+            const previous = allChapters[currentChapterIndex - 1] || null;
+            const next = allChapters[currentChapterIndex + 1] || null;
+
+            const bookTitle = document.getElementById("focus-reader-book-title");
+            const chapterLabel = document.getElementById("focus-reader-chapter-label");
+            const previousButton = document.getElementById("focus-prev-button");
+            const nextButton = document.getElementById("focus-next-button");
+            const previousLabel = document.getElementById("focus-prev-label");
+            const nextLabel = document.getElementById("focus-next-label");
+
+            if (bookTitle) bookTitle.textContent = currentLiterature?.title || "Literature";
+            if (chapterLabel) {
+                chapterLabel.textContent = chapter
+                    ? `Chapter ${currentChapterIndex + 1} of ${allChapters.length} · ${chapter.title || "Untitled"}`
+                    : "Chapter";
+            }
+
+            if (previousButton) previousButton.disabled = !previous;
+            if (previousLabel) previousLabel.textContent = previous?.title || "Beginning";
+
+            if (nextButton) nextButton.disabled = false;
+            if (nextLabel) nextLabel.textContent = next?.title || "Return to Book";
+            if (nextButton) {
+                const small = nextButton.querySelector("small");
+                if (small) small.textContent = next ? "Next Chapter" : "End of Story";
+            }
         }
 
         function getChapterWordCount(chapter) {
@@ -3496,112 +5068,133 @@
             const chapterLabel = chapters.length === 1 ? "chapter" : "chapters";
 
             meta.innerHTML = `
-                                                                <span>${chapters.length} ${chapterLabel}</span>
-                                                                <span>${totalWords.toLocaleString()} words</span>
-                                                                <span>${minutes} min read</span>
-                                                            `;
+                                                                    <span>${chapters.length} ${chapterLabel}</span>
+                                                                    <span>${totalWords.toLocaleString()} words</span>
+                                                                    <span>${minutes} min read</span>
+                                                                `;
         }
 
-        window.scrollToFirstChapter = function () {
-            document.getElementById("chapter-1")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        window.scrollToFirstChapter = async function () {
+            if (!allChapters.length) return;
+            await setActiveChapter(currentChapterIndex, {
+                updateHistory: true,
+                replaceHistory: true,
+                scroll: true
+            });
         };
 
-        function toggleActiveReaderButton(className) {
+        function toggleReaderPreference(className) {
             document.body.classList.toggle(className);
-            const target = window.event?.target;
-            if (target) target.classList.toggle("active");
+            syncReaderPreferenceButtons();
+            saveReaderPreferences();
         }
 
         window.toggleReaderFocus = function () {
-            const wasFocused = document.body.classList.contains("reader-focus");
-            toggleActiveReaderButton("reader-focus");
-            const button = window.event?.target;
-            if (button) button.textContent = wasFocused ? "Focus" : "Exit Focus";
-            if (!wasFocused) {
-                setTimeout(() => {
-                    document.getElementById("chapter-1")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                }, 60);
+            const overlay = document.getElementById("literature-focus-overlay");
+            if (overlay?.classList.contains("open")) {
+                closeFocusReader();
+            } else {
+                openFocusReader();
             }
         };
 
         window.toggleLargeText = function () {
-            toggleActiveReaderButton("reader-large-text");
+            toggleReaderPreference("reader-large-text");
         };
 
         window.toggleWideReader = function () {
-            toggleActiveReaderButton("reader-wide");
+            toggleReaderPreference("reader-wide");
         };
 
         window.toggleCenteredHeadings = function () {
-            toggleActiveReaderButton("reader-center-headings");
+            toggleReaderPreference("reader-center-headings");
+        };
+
+        window.toggleReaderSpacing = function () {
+            toggleReaderPreference("reader-airy");
+        };
+
+        window.resetReaderPreferences = function () {
+            [
+                "reader-large-text",
+                "reader-wide",
+                "reader-center-headings",
+                "reader-airy"
+            ].forEach(className => document.body.classList.remove(className));
+
+            syncReaderPreferenceButtons();
+            saveReaderPreferences();
         };
 
         window.toggleMobileIndex = function () {
-            document.getElementById("chapter-index")?.classList.toggle("mobile-open");
+            const sidebar = document.querySelector(".left-sidebar");
+            if (sidebar?.classList.contains("mobile-open")) {
+                closeChapterDrawer();
+            } else {
+                openChapterDrawer();
+            }
         };
 
         function setupReaderScrollTracking() {
             const progress = document.getElementById("reading-progress");
-            const chapters = [...document.querySelectorAll(".literature-chapter")];
-            const links = [...document.querySelectorAll(".chapter-nav-link")];
+            const focusOverlay = document.getElementById("literature-focus-overlay");
+            const focusScroll = document.getElementById("literature-focus-scroll");
+            const focusOpen = focusOverlay?.classList.contains("open");
 
-            function update() {
-                const focus = document.body.classList.contains("reader-focus");
-                const scroller = focus ? document.querySelector("main") : document.documentElement;
+            if (window.__nullverseLiteratureWindowScrollHandler) {
+                window.removeEventListener("scroll", window.__nullverseLiteratureWindowScrollHandler);
+            }
 
-                const scrollTop = focus
-                    ? scroller.scrollTop
-                    : (window.scrollY || document.documentElement.scrollTop);
+            if (window.__nullverseLiteratureFocusScrollHandler && focusScroll) {
+                focusScroll.removeEventListener("scroll", window.__nullverseLiteratureFocusScrollHandler);
+            }
 
-                const docHeight = focus
-                    ? (scroller.scrollHeight - scroller.clientHeight)
-                    : (document.documentElement.scrollHeight - window.innerHeight);
+            let saveTimer = null;
 
-                const percentage = docHeight > 0
-                    ? Math.min(100, Math.max(0, (scrollTop / docHeight) * 100))
-                    : 0;
+            function updateWindowProgress() {
+                if (focusOverlay?.classList.contains("open")) return;
+
+                const article = document.querySelector("#chapters-container .literature-chapter");
+                if (!article) {
+                    if (progress) progress.style.width = "0%";
+                    return;
+                }
+
+                const rect = article.getBoundingClientRect();
+                const articleTop = (window.scrollY || document.documentElement.scrollTop) + rect.top;
+                const readableHeight = Math.max(1, article.offsetHeight - window.innerHeight);
+                const scrolled = (window.scrollY || document.documentElement.scrollTop) - articleTop;
+                const percentage = Math.min(100, Math.max(0, (scrolled / readableHeight) * 100));
 
                 if (progress) progress.style.width = `${percentage}%`;
 
-                let activeId = "";
-
-                for (const chapter of chapters) {
-                    const rect = chapter.getBoundingClientRect();
-                    if (rect.top <= 180) activeId = chapter.id;
-                }
-
-                links.forEach(link => {
-                    link.classList.toggle(
-                        "active",
-                        link.getAttribute("href") === `#${activeId}`
-                    );
-                });
+                clearTimeout(saveTimer);
+                saveTimer = setTimeout(() => saveReadingProgress(), 180);
             }
 
-            if (window.__nullverseLiteratureScrollHandler) {
-                window.removeEventListener("scroll", window.__nullverseLiteratureScrollHandler);
+            function updateFocusProgress() {
+                if (!focusOverlay?.classList.contains("open") || !focusScroll) return;
 
-                const oldMain = document.querySelector("main");
-                if (oldMain) {
-                    oldMain.removeEventListener(
-                        "scroll",
-                        window.__nullverseLiteratureScrollHandler
-                    );
-                }
+                const distance = Math.max(1, focusScroll.scrollHeight - focusScroll.clientHeight);
+                const percentage = Math.min(100, Math.max(0, (focusScroll.scrollTop / distance) * 100));
+                if (progress) progress.style.width = `${percentage}%`;
+
+                clearTimeout(saveTimer);
+                saveTimer = setTimeout(() => saveReadingProgress(), 180);
             }
 
-            window.__nullverseLiteratureScrollHandler = update;
+            window.__nullverseLiteratureWindowScrollHandler = updateWindowProgress;
+            window.__nullverseLiteratureFocusScrollHandler = updateFocusProgress;
 
-            window.addEventListener("scroll", update, { passive: true });
+            window.addEventListener("scroll", updateWindowProgress, { passive: true });
+            focusScroll?.addEventListener("scroll", updateFocusProgress, { passive: true });
 
-            const main = document.querySelector("main");
-            if (main) {
-                main.addEventListener("scroll", update, { passive: true });
+            if (focusOpen) {
+                updateFocusProgress();
+            } else {
+                updateWindowProgress();
             }
-
-            update();
         }
-
 
         function buildChapterBodyHtml(value) {
             const rendered = formatWorldSectionContent(value);
@@ -3710,40 +5303,40 @@
             return getWorldSearchableSectionText(html || "");
         }
 
-        function buildChapterArticle(chapter, index) {
+        function buildChapterArticle(chapter, index, idPrefix = "chapter") {
             const chapterNumber = index + 1;
             const visualTop = buildChapterHeaderImage(chapter, "top");
             const visualLeftRight = ["left", "right"].includes(chapter.image_position) ? buildChapterHeaderImage(chapter, chapter.image_position) : "";
             const visualBottom = buildChapterHeaderImage(chapter, "bottom");
 
             return `
-                                                                <article id="chapter-${chapterNumber}"
-                                                                         class="literature-chapter"
-                                                                         style="${buildChapterCardStyle(chapter)} ${buildChapterWritingStyle(chapter)}">
-                                                                    <div class="chapter-title-row">
-                                                                        <div class="chapter-eyebrow">Chapter ${chapterNumber} · ${getChapterReadTime(chapter)} min read</div>
-                                                                        <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
-                                                                        ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
-                                                                    </div>
-
-                                                                    ${visualTop}
-
-                                                                    <div class="chapter-main-text rich-chapter-content">
-                                                                        ${visualLeftRight}
-                                                                        ${buildChapterBodyHtml(chapter.body || "No chapter text yet.")}
-                                                                    </div>
-
-                                                                    ${visualBottom}
-
-                                                                    ${chapter.author_note ? `
-                                                                        <div class="author-note">
-                                                                            <strong>Author Note</strong>
-                                                                            <br><br>
-                                                                            ${escapeHtml(chapter.author_note)}
+                                                                    <article id="${idPrefix}-${chapterNumber}"
+                                                                             class="literature-chapter"
+                                                                             style="${buildChapterCardStyle(chapter)} ${buildChapterWritingStyle(chapter)}">
+                                                                        <div class="chapter-title-row">
+                                                                            <div class="chapter-eyebrow">Chapter ${chapterNumber} · ${getChapterReadTime(chapter)} min read</div>
+                                                                            <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
+                                                                            ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
                                                                         </div>
-                                                                    ` : ""}
 
-                                                                    ${chapter.theme_card_style === "image" && chapter.theme_card_image_url ? buildCreditPill({
+                                                                        ${visualTop}
+
+                                                                        <div class="chapter-main-text rich-chapter-content">
+                                                                            ${visualLeftRight}
+                                                                            ${buildChapterBodyHtml(chapter.body || "No chapter text yet.")}
+                                                                        </div>
+
+                                                                        ${visualBottom}
+
+                                                                        ${chapter.author_note ? `
+                                                                            <div class="author-note">
+                                                                                <strong>Author Note</strong>
+                                                                                <br><br>
+                                                                                ${escapeHtml(chapter.author_note)}
+                                                                            </div>
+                                                                        ` : ""}
+
+                                                                        ${chapter.theme_card_style === "image" && chapter.theme_card_image_url ? buildCreditPill({
                 type: chapter.card_credit_type,
                 name: chapter.card_credit_name,
                 username: chapter.card_credit_nullverse_username,
@@ -3752,8 +5345,8 @@
                 ownerUsername: currentLiterature.ownerProfile?.username,
                 context: "Chapter Card Image"
             }) : ""}
-                                                                </article>
-                                                            `;
+                                                                    </article>
+                                                                `;
         }
 
         function buildChapterHeaderImage(chapter, requestedPosition) {
@@ -3784,11 +5377,11 @@
             ].filter(Boolean).join(" ");
 
             return `
-                                                                <div class="${classes}">
-                                                                    <img src="${escapeHtml(chapter.image_url)}" alt="" style="${getImagePlacementStyle(chapter.image_placement)}">
-                                                                    ${credit}
-                                                                </div>
-                                                            `;
+                                                                    <div class="${classes}">
+                                                                        <img src="${escapeHtml(chapter.image_url)}" alt="" style="${getImagePlacementStyle(chapter.image_placement)}">
+                                                                        ${credit}
+                                                                    </div>
+                                                                `;
         }
 
         function buildChapterCardStyle(chapter) {
@@ -3809,14 +5402,14 @@
             const placement = normalizeImagePlacement(chapter.theme_card_image_placement);
 
             return `
-                                                                --chapter-card-background:${background};
-                                                                --chapter-card-text:${chapter.theme_card_text_color || "#f5f5f5"};
-                                                                --chapter-card-image:${image};
-                                                                --chapter-card-image-size:${getImagePlacementFit(placement)};
-                                                                --chapter-card-image-transform:${getImagePlacementTransform(placement)};
-                                                                --chapter-card-image-opacity:${chapter.theme_card_opacity ?? .85};
-                                                                --chapter-card-overlay:${chapter.theme_card_overlay ?? .35};
-                                                            `;
+                                                                    --chapter-card-background:${background};
+                                                                    --chapter-card-text:${chapter.theme_card_text_color || "#f5f5f5"};
+                                                                    --chapter-card-image:${image};
+                                                                    --chapter-card-image-size:${getImagePlacementFit(placement)};
+                                                                    --chapter-card-image-transform:${getImagePlacementTransform(placement)};
+                                                                    --chapter-card-image-opacity:${chapter.theme_card_opacity ?? .85};
+                                                                    --chapter-card-overlay:${chapter.theme_card_overlay ?? .35};
+                                                                `;
         }
 
         function buildChapterWritingStyle(chapter) {
@@ -3830,11 +5423,11 @@
             const spacing = spacingMap[chapter.spacing_type || "comfortable"] || spacingMap.comfortable;
 
             return `
-                                                                --chapter-text-color:${chapter.text_color || "#f5f5f5"};
-                                                                --chapter-panel-background:${chapter.chapter_panel_color || "#141416"};
-                                                                --chapter-line-height:${spacing[0]};
-                                                                --chapter-letter-spacing:${spacing[1]};
-                                                            `;
+                                                                    --chapter-text-color:${chapter.text_color || "#f5f5f5"};
+                                                                    --chapter-panel-background:${chapter.chapter_panel_color || "#141416"};
+                                                                    --chapter-line-height:${spacing[0]};
+                                                                    --chapter-letter-spacing:${spacing[1]};
+                                                                `;
         }
 
         function renderTags(literature) {
@@ -3854,62 +5447,123 @@
 
             if (currentUser && currentUser.id === literature.owner_id) {
                 html += `
-                                                                    <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
-                                                                        Edit Literature
-                                                                    </a>
-                                                                `;
+                                                                        <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
+                                                                            Edit Literature
+                                                                        </a>
+                                                                    `;
             }
 
             if (canModerateWorlds(currentPermissions) && canModerateContentOwner(currentProfile, literature.ownerProfile)) {
                 html += `
-                                                                    <div style="margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
-                                                        <strong>Literature Moderation</strong>
+                                                                        <div style="margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
+                                                            <strong>Literature Moderation</strong>
 
-                                                        <p class="empty">
-                                                            Status: ${escapeHtml(literature.moderation_status || "visible")}
-                                                        </p>
+                                                            <p class="empty">
+                                                                Status: ${escapeHtml(literature.moderation_status || "visible")}
+                                                            </p>
 
-                                                        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                                                            <button class="button" onclick="setLiteratureModerationStatus('visible')">
-                                                                Restore Literature
-                                                            </button>
+                                                            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                                                                <button class="button" onclick="setLiteratureModerationStatus('visible')">
+                                                                    Restore Literature
+                                                                </button>
 
-                                                            <div style="width:100%;margin-top:10px;">
-                                                                <label class="empty">Reason for hiding</label>
+                                                                <div style="width:100%;margin-top:10px;">
+                                                                    <label class="empty">Reason for hiding</label>
 
-                                                                <input id="literature-hide-reason"
-                                                                       placeholder="Reason shown to creator..."
-                                                                       style="
-                                                                           width:100%;
-                                                                           box-sizing:border-box;
-                                                                           margin-top:8px;
-                                                                           padding:10px;
-                                                                           border-radius:10px;
-                                                                           border:1px solid var(--border-color);
-                                                                           background:rgba(0,0,0,.28);
-                                                                           color:var(--text-primary);
-                                                                       ">
+                                                                    <input id="literature-hide-reason"
+                                                                           placeholder="Reason shown to creator..."
+                                                                           style="
+                                                                               width:100%;
+                                                                               box-sizing:border-box;
+                                                                               margin-top:8px;
+                                                                               padding:10px;
+                                                                               border-radius:10px;
+                                                                               border:1px solid var(--border-color);
+                                                                               background:rgba(0,0,0,.28);
+                                                                               color:var(--text-primary);
+                                                                           ">
+                                                                </div>
+
+                                                                <button class="button" onclick="setLiteratureModerationStatus('hidden')">
+                                                                    Hide Literature
+                                                                </button>
                                                             </div>
 
-                                                            <button class="button" onclick="setLiteratureModerationStatus('hidden')">
-                                                                Hide Literature
-                                                            </button>
-                                                        </div>
-
-                                                        <p id="literature-moderation-message" class="empty"></p>
+                                                            <p id="literature-moderation-message" class="empty"></p>
 </div>
-                                                                `;
+                                                                    `;
             }
 
             container.innerHTML = html;
         }
 
+        function configureLiteratureCommunityActions(literature) {
+            const comments = document.getElementById("comments-link");
+            const qa = document.getElementById("qa-link");
+
+            if (currentUser) {
+                comments.href = `literature-comments.html?id=${encodeURIComponent(literature.id)}`;
+                qa.href = `literature-qa.html?id=${encodeURIComponent(literature.id)}`;
+                comments.onclick = null;
+                qa.onclick = null;
+                comments.removeAttribute("aria-disabled");
+                qa.removeAttribute("aria-disabled");
+            } else {
+                comments.removeAttribute("href");
+                qa.removeAttribute("href");
+                comments.setAttribute("aria-disabled", "true");
+                qa.setAttribute("aria-disabled", "true");
+                comments.tabIndex = 0;
+                qa.tabIndex = 0;
+                comments.onclick = event => {
+                    event.preventDefault();
+                    showBetaFeatureModal("comments");
+                };
+                qa.onclick = event => {
+                    event.preventDefault();
+                    showBetaFeatureModal("qa");
+                };
+                comments.onkeydown = event => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        showBetaFeatureModal("comments");
+                    }
+                };
+                qa.onkeydown = event => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        showBetaFeatureModal("qa");
+                    }
+                };
+            }
+        }
+
         async function loadLikes() {
             if (!currentLiterature) return;
 
+            const button = document.getElementById("like-button");
+
+            if (!currentUser) {
+                const { data, error } = await supabase.rpc("get_public_world_like_count", {
+                    target_world_id: currentLiterature.id
+                });
+
+                if (error) {
+                    console.warn("Public like count unavailable:", error.message);
+                    document.getElementById("like-count").textContent = "Likes unavailable";
+                } else {
+                    const likeCount = Number(data || 0);
+                    document.getElementById("like-count").textContent = `${likeCount} ${likeCount === 1 ? "Like" : "Likes"}`;
+                }
+
+                button?.classList.remove("liked");
+                if (button) button.textContent = "♡ Like";
+                return;
+            }
+
             const { data: likes, error } = await supabase
                 .from("world_likes")
-                .select("*")
+                .select("user_id")
                 .eq("world_id", currentLiterature.id);
 
             if (error) {
@@ -3921,7 +5575,6 @@
             document.getElementById("like-count").textContent = `${likeCount} ${likeCount === 1 ? "Like" : "Likes"}`;
 
             const userLiked = likes?.some(like => like.user_id === currentUser.id);
-            const button = document.getElementById("like-button");
 
             if (userLiked) {
                 button.classList.add("liked");
@@ -3933,7 +5586,12 @@
         }
 
         document.getElementById("like-button").addEventListener("click", async () => {
-            if (!currentLiterature || !currentUser) return;
+            if (!currentLiterature) return;
+
+            if (!currentUser) {
+                showBetaFeatureModal("like");
+                return;
+            }
 
             const button = document.getElementById("like-button");
             const alreadyLiked = button.classList.contains("liked");
@@ -4042,6 +5700,11 @@
             if (!reportBtn) return;
 
             reportBtn.addEventListener("click", () => {
+                if (!currentUser) {
+                    showBetaFeatureModal("report");
+                    return;
+                }
+
                 modal.style.display = "flex";
             });
 
@@ -4054,6 +5717,11 @@
 
         async function submitLiteratureReport() {
             if (!currentLiterature) return;
+
+            if (!currentUser) {
+                showBetaFeatureModal("report");
+                return;
+            }
 
             const reason = document.getElementById("report-reason").value;
             const details = document.getElementById("report-details").value.trim();
@@ -4081,27 +5749,27 @@
             const main = document.querySelector("main");
             main.classList.add("content-warning-layout");
             main.innerHTML = `
-                                                            <section class="content-warning-panel">
-                                                                <h1>Literature Hidden by Moderation</h1>
+                                                                <section class="content-warning-panel">
+                                                                    <h1>Literature Hidden by Moderation</h1>
 
-                                                                <p class="empty">
-                                                                    This literature is currently hidden from the public by Nullverse moderation.
-                                                                </p>
+                                                                    <p class="empty">
+                                                                        This literature is currently hidden from the public by Nullverse moderation.
+                                                                    </p>
 
-                                                                <p class="empty">
-                                                                    <strong>Reason:</strong>
-                                                                    ${escapeHtml(literature.moderation_reason || "No reason provided.")}
-                                                                </p>
+                                                                    <p class="empty">
+                                                                        <strong>Reason:</strong>
+                                                                        ${escapeHtml(literature.moderation_reason || "No reason provided.")}
+                                                                    </p>
 
-                                                                <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                                                                    <a class="button" href="dashboard.html">Back to Dashboard</a>
+                                                                    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                                                                        <a class="button" href="dashboard.html">Back to Dashboard</a>
 
-                                                                    <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
-                                                                        Edit Literature
-                                                                    </a>
-                                                                </div>
-                                                            </section>
-                                                        `;
+                                                                        <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
+                                                                            Edit Literature
+                                                                        </a>
+                                                                    </div>
+                                                                </section>
+                                                            `;
         }
 
         function showNotFound(message) {
@@ -4126,11 +5794,11 @@
             }
 
             return `
-                                                                ${ratingPills.join("")}
-                                                                ${warnings.map(warning => `
-                                                                    <span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>
-                                                                `).join("")}
-                                                            `;
+                                                                    ${ratingPills.join("")}
+                                                                    ${warnings.map(warning => `
+                                                                        <span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>
+                                                                    `).join("")}
+                                                                `;
         }
 
         function getContentBlockedMessage(literature) {
@@ -4151,41 +5819,64 @@
             return "This literature is hidden by your content safety settings.";
         }
 
+        function getContentGateBackControl(label = "Go Back") {
+            if (currentUser) {
+                return `<a class="button" href="explore.html">${escapeHtml(label)}</a>`;
+            }
+
+            return `<button id="guest-content-back-button" class="button" type="button">${escapeHtml(label)}</button>`;
+        }
+
+        function bindGuestContentBackControl() {
+            document.getElementById("guest-content-back-button")?.addEventListener("click", () => {
+                if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    window.location.href = getLiteratureReturnPath();
+                }
+            });
+        }
+
         function showContentBlocked(literature) {
             const main = document.querySelector("main");
             main.classList.add("content-warning-layout");
             main.innerHTML = `
-                                                                <section class="content-warning-panel">
-                                                                    <h1>Content Hidden</h1>
-                                                                    <p class="empty">${escapeHtml(getContentBlockedMessage(literature))}</p>
-                                                                    <div class="warning-list">
-                                                                        ${renderContentWarningPills(literature)}
-                                                                    </div>
-                                                                    <a class="button" href="explore.html">Back to Explore</a>
-                                                                </section>
-                                                            `;
+                                                                    <section class="content-warning-panel">
+                                                                        <h1>Content Hidden</h1>
+                                                                        <p class="empty">${escapeHtml(getContentBlockedMessage(literature))}</p>
+                                                                        <div class="warning-list">
+                                                                            ${renderContentWarningPills(literature)}
+                                                                        </div>
+                                                                        ${getContentGateBackControl(currentUser ? "Back to Explore" : "Go Back")}
+                                                                    </section>
+                                                                `;
+            bindGuestContentBackControl();
         }
 
         function showContentWarning(literature) {
             const main = document.querySelector("main");
             main.classList.add("content-warning-layout");
             main.innerHTML = `
-                                                                <section class="content-warning-panel">
-                                                                    <h1>Content Warning</h1>
-                                                                    <p class="empty">Balanced Mode lets you continue, but this literature has sensitive or mature content.</p>
-                                                                    <div class="warning-list">
-                                                                        ${renderContentWarningPills(literature)}
-                                                                    </div>
-                                                                    <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                                                                        <button id="continue-warning-button" class="button">Continue Anyway</button>
-                                                                        <a class="button" href="explore.html">Go Back</a>
-                                                                    </div>
-                                                                </section>
-                                                            `;
+                                                                    <section class="content-warning-panel">
+                                                                        <h1>Content Warning</h1>
+                                                                        <p class="empty">Balanced Mode lets you continue, but this literature has sensitive or mature content.</p>
+                                                                        <div class="warning-list">
+                                                                            ${renderContentWarningPills(literature)}
+                                                                        </div>
+                                                                        <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+                                                                            <button id="continue-warning-button" class="button" type="button">Continue Anyway</button>
+                                                                            ${getContentGateBackControl("Go Back")}
+                                                                        </div>
+                                                                    </section>
+                                                                `;
 
             document.getElementById("continue-warning-button").addEventListener("click", () => {
-                window.location.href = `literature.html?id=${encodeURIComponent(literature.id)}&contentOk=${encodeURIComponent(literature.id)}`;
+                sessionStorage.setItem(`nullverse_literature_warning_ok:${literature.id}`, "1");
+                const url = new URL(window.location.href);
+                url.searchParams.set("contentOk", literature.id);
+                window.location.href = `${url.pathname}${url.search}`;
             });
+            bindGuestContentBackControl();
         }
 
         function formatWarningLabel(value) {
@@ -4219,41 +5910,41 @@
 
             if (type === "own_work") {
                 label = `${context} Credit: @${ownerUsername || "creator"}`;
-                if (ownerUsername) href = `profile.html?user=${encodeURIComponent(ownerUsername)}`;
+                if (currentUser && ownerUsername) href = `profile.html?user=${encodeURIComponent(ownerUsername)}`;
             } else if (type === "nullverse_creator" && username) {
                 label = `${context} Credit: @${username}`;
-                href = `profile.html?user=${encodeURIComponent(username)}`;
+                if (currentUser) href = `profile.html?user=${encodeURIComponent(username)}`;
             } else {
                 label = `${context} Credit: ${name || formatCreditType(type)}`;
                 href = url || "";
             }
 
             const tooltipContent = `
-                                                                <strong>${escapeHtml(context)} Credit</strong>
-                                                                <br>
-                                                                Source: ${escapeHtml(name || username || ownerUsername || formatCreditType(type))}
-                                                                ${note ? `<br><br>${escapeHtml(note)}` : ""}
-                                                            `;
+                                                                    <strong>${escapeHtml(context)} Credit</strong>
+                                                                    <br>
+                                                                    Source: ${escapeHtml(name || username || ownerUsername || formatCreditType(type))}
+                                                                    ${note ? `<br><br>${escapeHtml(note)}` : ""}
+                                                                `;
 
             const tooltip = `<span class="credit-tooltip">${tooltipContent}</span>`;
 
             if (href) {
                 return `
-                                                                    <a class="credit-pill"
-                                                                       href="${escapeHtml(href)}"
-                                                                       ${href.startsWith("http") ? 'target="_blank"' : ""}>
-                                                                        ${escapeHtml(label)}
-                                                                        ${tooltip}
-                                                                    </a>
-                                                                `;
+                                                                        <a class="credit-pill"
+                                                                           href="${escapeHtml(href)}"
+                                                                           ${href.startsWith("http") ? 'target="_blank"' : ""}>
+                                                                            ${escapeHtml(label)}
+                                                                            ${tooltip}
+                                                                        </a>
+                                                                    `;
             }
 
             return `
-                                                                <span class="credit-pill">
-                                                                    ${escapeHtml(label)}
-                                                                    ${tooltip}
-                                                                </span>
-                                                            `;
+                                                                    <span class="credit-pill">
+                                                                        ${escapeHtml(label)}
+                                                                        ${tooltip}
+                                                                    </span>
+                                                                `;
         }
 
         window.logOut = async function () {
