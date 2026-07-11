@@ -3022,6 +3022,85 @@
                 contain: none !important;
             }
         }
+
+
+        /* ============================================================
+           MOBILE CONDENSED PC TYPOGRAPHY — AUTHORITATIVE PARITY FIX
+           The saved PC scene keeps its exact typography. Mobile is not
+           allowed to inflate, synthesize, clip, or independently restyle it.
+        ============================================================ */
+        html,
+        body,
+        #custom-profile-root,
+        .custom-profile-canvas,
+        .custom-profile-object {
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+        }
+
+        @media (max-width: 860px) {
+            body.public-profile-custom-mobile-desktop-fallback
+            #custom-profile-root.public-custom-profile-active,
+            body.public-profile-custom-mobile-desktop-fallback
+            #custom-profile-root.public-custom-profile-active .public-profile-desktop-scene,
+            body.public-profile-custom-mobile-desktop-fallback
+            #custom-profile-root.public-custom-profile-active .custom-profile-canvas,
+            body.public-profile-custom-mobile-desktop-fallback
+            #custom-profile-root.public-custom-profile-active .custom-profile-object,
+            body.public-profile-custom-mobile-desktop-fallback
+            #custom-profile-root.public-custom-profile-active .custom-object-inner,
+            body.public-profile-custom-mobile-desktop-fallback
+            #custom-profile-root.public-custom-profile-active .text-object,
+            body.public-profile-custom-mobile-desktop-fallback
+            #custom-profile-root.public-custom-profile-active .display-name-object,
+            body.public-profile-custom-mobile-desktop-fallback
+            #custom-profile-root.public-custom-profile-active .username-object,
+            body.public-profile-custom-mobile-desktop-fallback
+            #custom-profile-root.public-custom-profile-active .studio-text-editable,
+            body.public-profile-custom-mobile-desktop-fallback
+            #custom-profile-root.public-custom-profile-active .public-text-border-stack,
+            body.public-profile-custom-mobile-desktop-fallback
+            #custom-profile-root.public-custom-profile-active .public-text-border-fill,
+            body.public-profile-custom-mobile-desktop-fallback
+            #custom-profile-root.public-custom-profile-active .public-text-border-stroke {
+                -webkit-text-size-adjust: 100% !important;
+                text-size-adjust: 100% !important;
+                font-family: var(--custom-object-font-family, inherit) !important;
+                font-size: var(--custom-object-font-size, inherit) !important;
+                line-height: var(--custom-object-line-height, inherit) !important;
+                font-kerning: normal !important;
+                font-variant-ligatures: normal !important;
+                content-visibility: visible !important;
+                contain: none !important;
+                overflow: visible !important;
+                visibility: visible !important;
+            }
+
+                body.public-profile-custom-mobile-desktop-fallback
+                #custom-profile-root.public-custom-profile-active
+                .public-profile-desktop-scene[data-condensed-scale-mode="layout-zoom"] {
+                    transform: none !important;
+                    will-change: auto !important;
+                    backface-visibility: visible !important;
+                    -webkit-backface-visibility: visible !important;
+                }
+
+                body.public-profile-custom-mobile-desktop-fallback
+                #custom-profile-root.public-custom-profile-active
+                .public-profile-desktop-scene[data-condensed-scale-mode="per-object"] {
+                    transform: none !important;
+                    overflow: visible !important;
+                }
+
+                    body.public-profile-custom-mobile-desktop-fallback
+                    #custom-profile-root.public-custom-profile-active
+                    .public-profile-desktop-scene[data-condensed-scale-mode="per-object"]
+                    .custom-profile-object {
+                        backface-visibility: visible !important;
+                        -webkit-backface-visibility: visible !important;
+                        will-change: auto !important;
+                    }
+        }
     </style>
 </head>
 <body>
@@ -3247,6 +3326,14 @@
             "Verdana": "Verdana",
             "Trebuchet MS": "Trebuchet MS",
             "Courier New": "Courier New"
+        };
+
+        const publicStudioFontStacks = {
+            "Arial": 'Arial, "Helvetica Neue", Helvetica, Roboto, sans-serif',
+            "Georgia": 'Georgia, "Times New Roman", Times, serif',
+            "Verdana": 'Verdana, Geneva, "DejaVu Sans", sans-serif',
+            "Trebuchet MS": '"Trebuchet MS", "Lucida Sans Unicode", "Lucida Grande", "Segoe UI", Arial, sans-serif',
+            "Courier New": '"Courier New", Courier, "Liberation Mono", monospace'
         };
 
         setupMessageBadge();
@@ -4242,15 +4329,29 @@
             const fontSize = Number(styles.fontSize ?? object?.fontSize ?? 16);
             const lineHeight = Number(styles.lineHeight ?? object?.lineHeight ?? 1.16);
             const textAlign = styles.textAlign || object?.textAlign || object?.textAlignment || object?.align || "left";
+            const defaultWeight = object?.type === "display_name" ? 800 : 400;
+            const fontWeight = styles.fontWeight ?? object?.fontWeight ?? defaultWeight;
+            const fontStyle = styles.fontStyle ?? object?.fontStyle ?? "normal";
+            const letterSpacing = styles.letterSpacing ?? object?.letterSpacing ?? "normal";
+            const textDecoration = styles.textDecoration ?? object?.textDecoration ?? "none";
+            const textTransform = styles.textTransform ?? object?.textTransform ?? "none";
 
             return [
                 `font-family:${fontFamily}`,
                 `font-size:${Number.isFinite(fontSize) ? fontSize : 16}px`,
+                `font-weight:${fontWeight}`,
+                `font-style:${fontStyle}`,
+                `letter-spacing:${typeof letterSpacing === "number" ? `${letterSpacing}px` : letterSpacing}`,
+                `text-decoration:${textDecoration}`,
+                `text-transform:${textTransform}`,
                 `line-height:${Number.isFinite(lineHeight) ? lineHeight : 1.16}`,
                 `text-align:${textAlign}`,
                 "white-space:pre-wrap",
                 "word-break:normal",
                 "overflow-wrap:normal",
+                "tab-size:4",
+                "font-kerning:normal",
+                "font-variant-ligatures:normal",
                 "overflow:visible"
             ].join(";");
         }
@@ -4742,6 +4843,121 @@
         }
 
 
+        let publicCondensedZoomSupport = null;
+
+        function supportsPublicCondensedLayoutZoom() {
+            if (publicCondensedZoomSupport !== null) {
+                return publicCondensedZoomSupport;
+            }
+
+            try {
+                publicCondensedZoomSupport = !!(
+                    (window.CSS && typeof window.CSS.supports === "function" && CSS.supports("zoom", "0.5")) ||
+                    (document.documentElement && "zoom" in document.documentElement.style)
+                );
+            } catch {
+                publicCondensedZoomSupport = false;
+            }
+
+            return publicCondensedZoomSupport;
+        }
+
+        function restorePublicProfileObjectGeometry(canvas, layout) {
+            if (!canvas || !layout) {
+                return;
+            }
+
+            const navOffset = getPublishedProfileNavOffset(layout);
+
+            canvas.querySelectorAll(".custom-profile-object").forEach(element => {
+                const object = element.__nullverseProfileObject;
+
+                if (!object) {
+                    return;
+                }
+
+                element.style.left = Number(object.x || 0) + "px";
+                element.style.top = Math.max(0, Number(object.y || 0) - navOffset) + "px";
+                element.style.width = Number(object.w || 200) + "px";
+                element.style.height = Number(object.h || 120) + "px";
+                element.style.transformOrigin = "center center";
+                element.style.transform = `rotate(${Number(object.rotation || 0)}deg)`;
+                delete element.dataset.condensedObjectScale;
+            });
+        }
+
+        function applyPublicProfilePerObjectScale(canvas, layout, scale) {
+            if (!canvas || !layout) {
+                return;
+            }
+
+            const navOffset = getPublishedProfileNavOffset(layout);
+            const safeScale = Math.max(0.01, Number(scale) || 1);
+
+            canvas.querySelectorAll(".custom-profile-object").forEach(element => {
+                const object = element.__nullverseProfileObject;
+
+                if (!object) {
+                    return;
+                }
+
+                const x = Number(object.x || 0);
+                const y = Math.max(0, Number(object.y || 0) - navOffset);
+                const width = Math.max(1, Number(object.w || 200));
+                const height = Math.max(1, Number(object.h || 120));
+                const rotation = Number(object.rotation || 0);
+
+                /*
+                    The element keeps its original box and exact internal CSS.
+                    Only its visual footprint and center are scaled. This avoids
+                    putting every text layer inside one giant rasterized surface.
+                */
+                element.style.left = ((x + width / 2) * safeScale - width / 2) + "px";
+                element.style.top = ((y + height / 2) * safeScale - height / 2) + "px";
+                element.style.width = width + "px";
+                element.style.height = height + "px";
+                element.style.transformOrigin = "center center";
+                element.style.transform = `scale(${safeScale}) rotate(${rotation}deg)`;
+                element.dataset.condensedObjectScale = String(safeScale);
+            });
+        }
+
+        async function settlePublicProfileFonts(layout) {
+            if (!document.fonts || !layout) {
+                return;
+            }
+
+            const requests = [];
+            const seen = new Set();
+
+            (layout.objects || [])
+                .filter(object => object && object.visible !== false)
+                .forEach(object => {
+                    const family = getPublicStudioCssFontFamily(getPublicObjectFontFamily(object, layout));
+                    const size = Math.max(8, Number(object?.styles?.fontSize ?? 16) || 16);
+                    const weight = object?.styles?.fontWeight ?? object?.fontWeight ?? (object?.type === "display_name" ? 800 : 400);
+                    const key = `${weight}|${size}|${family}`;
+
+                    if (seen.has(key)) {
+                        return;
+                    }
+
+                    seen.add(key);
+
+                    try {
+                        requests.push(document.fonts.load(`${weight} ${size}px ${family}`, "Nullverse Profile Text 0123456789"));
+                    } catch { }
+                });
+
+            try {
+                await Promise.race([
+                    Promise.allSettled(requests),
+                    new Promise(resolve => window.setTimeout(resolve, 1800))
+                ]);
+                await document.fonts.ready;
+            } catch { }
+        }
+
         function renderCustomProfile(profile, suppliedLayout = null) {
             const root = document.getElementById("custom-profile-root");
             const layout = suppliedLayout || getResponsiveProfileLayout(getLiveProfileLayoutPayload(profile), profile);
@@ -4932,11 +5148,9 @@
                 requestAnimationFrame(refreshCompleteMobileSceneBounds);
             });
 
-            if (document.fonts?.ready) {
-                document.fonts.ready
-                    .then(() => requestAnimationFrame(refreshCompleteMobileSceneBounds))
-                    .catch(() => { });
-            }
+            settlePublicProfileFonts(layout)
+                .then(() => requestAnimationFrame(refreshCompleteMobileSceneBounds))
+                .catch(() => { });
 
             // Decorative image/banner layers use CSS click-through; no alpha-mask preload is needed here.
         }
@@ -5148,22 +5362,44 @@
 
             if (usesSharedDesktopScene) {
                 /*
-                    Keep the object canvas at true PC size and scale the complete
-                    scene containing both the background and all objects.
+                    Never put the complete 1600px profile into one GPU-rasterized
+                    transform on phones. Prefer layout zoom so text is shaped and
+                    painted after scaling. If a browser lacks zoom, scale each
+                    object independently so no distant text layer can disappear.
                 */
                 canvas.style.transform = "none";
-
-                desktopScene.style.width = layoutWidth + "px";
-                desktopScene.style.minWidth = layoutWidth + "px";
-                desktopScene.style.height = layoutHeight + "px";
-                desktopScene.style.minHeight = layoutHeight + "px";
+                desktopScene.style.transform = "none";
                 desktopScene.style.transformOrigin = "top left";
 
-                if (desktopScene.style.transform !== nextTransform) {
-                    desktopScene.style.transform = nextTransform;
+                if (supportsPublicCondensedLayoutZoom()) {
+                    restorePublicProfileObjectGeometry(canvas, layout);
+                    desktopScene.dataset.condensedScaleMode = "layout-zoom";
+                    desktopScene.style.width = layoutWidth + "px";
+                    desktopScene.style.minWidth = layoutWidth + "px";
+                    desktopScene.style.height = layoutHeight + "px";
+                    desktopScene.style.minHeight = layoutHeight + "px";
+                    desktopScene.style.zoom = String(scale);
+                    canvas.style.width = declaredLayoutWidth + "px";
+                    canvas.style.height = layoutHeight + "px";
+                    canvas.style.minHeight = layoutHeight + "px";
+                } else {
+                    desktopScene.dataset.condensedScaleMode = "per-object";
+                    desktopScene.style.zoom = "";
+                    desktopScene.style.width = scaledWidth + "px";
+                    desktopScene.style.minWidth = scaledWidth + "px";
+                    desktopScene.style.height = scaledHeight + "px";
+                    desktopScene.style.minHeight = scaledHeight + "px";
+                    canvas.style.width = scaledWidth + "px";
+                    canvas.style.height = scaledHeight + "px";
+                    canvas.style.minHeight = scaledHeight + "px";
+                    applyPublicProfilePerObjectScale(canvas, layout, scale);
                 }
-            } else if (canvas.style.transform !== nextTransform) {
-                canvas.style.transform = nextTransform;
+            } else {
+                restorePublicProfileObjectGeometry(canvas, layout);
+
+                if (canvas.style.transform !== nextTransform) {
+                    canvas.style.transform = nextTransform;
+                }
             }
 
             if (footprint) {
@@ -7050,9 +7286,7 @@
 
         function getPublicStudioCssFontFamily(value) {
             const family = normalizePublicStudioFontFamily(value);
-            const quoted = family.includes(" ") ? `"${family}"` : family;
-
-            return `${quoted}, Arial, sans-serif`;
+            return publicStudioFontStacks[family] || publicStudioFontStacks.Arial;
         }
 
         function getPublicObjectFontFamily(object, layout = null) {
@@ -7157,25 +7391,25 @@
                 const identityAvatar = getPublicObjectImageUrl(object, avatar);
 
                 return `
-                                                                                                                                                                                                                        <div class="identity-object">
-                                                                                                                                                                                                                            ${identityAvatar ? `<img src="${escapeHtml(identityAvatar)}" alt="${escapeHtml(`${profile.display_name || "Profile"} avatar`)}" loading="eager" decoding="async" fetchpriority="high" onerror="this.dataset.loadError='true';this.style.display='none';">` : ""}
-                                                                                                                                                                                                                            <div>
-                                                                                                                                                                                                                                <h2>${displayName}</h2>
-                                                                                                                                                                                                                                <p>@${username}</p>
-                                                                                                                                                                                                                                <p>${status}</p>
+                                                                                                                                                                                                                            <div class="identity-object">
+                                                                                                                                                                                                                                ${identityAvatar ? `<img src="${escapeHtml(identityAvatar)}" alt="${escapeHtml(`${profile.display_name || "Profile"} avatar`)}" loading="eager" decoding="async" fetchpriority="high" onerror="this.dataset.loadError='true';this.style.display='none';">` : ""}
+                                                                                                                                                                                                                                <div>
+                                                                                                                                                                                                                                    <h2>${displayName}</h2>
+                                                                                                                                                                                                                                    <p>@${username}</p>
+                                                                                                                                                                                                                                    <p>${status}</p>
+                                                                                                                                                                                                                                </div>
                                                                                                                                                                                                                             </div>
-                                                                                                                                                                                                                        </div>
-                                                                                                                                                                                                                    `;
+                                                                                                                                                                                                                        `;
             }
 
             if (object.type === "profile_avatar") {
                 const avatarImage = getPublicObjectImageUrl(object, avatar);
 
                 return `
-                                                                                                                                                                                                                        <div class="avatar-circle-object">
-                                                                                                                                                                                                                            ${buildPublicProfileMediaImage(avatarImage, `${profile.display_name || "Profile"} avatar`, getPublicObjectFit(object), "", { eager: true })}
-                                                                                                                                                                                                                        </div>
-                                                                                                                                                                                                                    `;
+                                                                                                                                                                                                                            <div class="avatar-circle-object">
+                                                                                                                                                                                                                                ${buildPublicProfileMediaImage(avatarImage, `${profile.display_name || "Profile"} avatar`, getPublicObjectFit(object), "", { eager: true })}
+                                                                                                                                                                                                                            </div>
+                                                                                                                                                                                                                        `;
             }
 
             if (object.type === "display_name") {
@@ -7196,21 +7430,21 @@
 
             if (["followers_box", "following_box", "works_count_box"].includes(object.type)) {
                 return `
-                                                                                                                                                                                                                        <div class="system-stat-object" data-system-stat="${escapeHtml(object.type)}">
-                                                                                                                                                                                                                            <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
-                                                                                                                                                                                                                            <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
-                                                                                                                                                                                                                        </div>
-                                                                                                                                                                                                                    `;
+                                                                                                                                                                                                                            <div class="system-stat-object" data-system-stat="${escapeHtml(object.type)}">
+                                                                                                                                                                                                                                <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
+                                                                                                                                                                                                                                <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
+                                                                                                                                                                                                                            </div>
+                                                                                                                                                                                                                        `;
             }
 
             if (object.type === "stats") {
                 return `
-                                                                                                                                                                                                                        <div class="stats-object">
-                                                                                                                                                                                                                            <div class="stat-mini"><strong>${followCounts.followers || 0}</strong><span>Followers</span></div>
-                                                                                                                                                                                                                            <div class="stat-mini"><strong>${followCounts.following || 0}</strong><span>Following</span></div>
-                                                                                                                                                                                                                            <div class="stat-mini"><strong>${profileWorlds.length || 0}</strong><span>Works</span></div>
-                                                                                                                                                                                                                        </div>
-                                                                                                                                                                                                                    `;
+                                                                                                                                                                                                                            <div class="stats-object">
+                                                                                                                                                                                                                                <div class="stat-mini"><strong>${followCounts.followers || 0}</strong><span>Followers</span></div>
+                                                                                                                                                                                                                                <div class="stat-mini"><strong>${followCounts.following || 0}</strong><span>Following</span></div>
+                                                                                                                                                                                                                                <div class="stat-mini"><strong>${profileWorlds.length || 0}</strong><span>Works</span></div>
+                                                                                                                                                                                                                            </div>
+                                                                                                                                                                                                                        `;
             }
 
             if (object.type === "creator_gallery") {
@@ -7224,12 +7458,12 @@
                 const title = item?.title || item?.name || "Gallery image";
 
                 return `
-                                                                                                                                                                                                                        <a class="custom-gallery-item-card" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
-                                                                                                                                                                                                                            ${buildPublicProfileMediaImage(image, title, getPublicObjectFit(object))}
-                                                                                                                                                                                                                            ${buildGalleryDescriptionPill(item)}
-                                                                                                                                                                                                                            ${buildGalleryCreditPill(item)}
-                                                                                                                                                                                                                        </a>
-                                                                                                                                                                                                                    `;
+                                                                                                                                                                                                                            <a class="custom-gallery-item-card" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
+                                                                                                                                                                                                                                ${buildPublicProfileMediaImage(image, title, getPublicObjectFit(object))}
+                                                                                                                                                                                                                                ${buildGalleryDescriptionPill(item)}
+                                                                                                                                                                                                                                ${buildGalleryCreditPill(item)}
+                                                                                                                                                                                                                            </a>
+                                                                                                                                                                                                                        `;
             }
 
             if (object.type === "creator_works") {
@@ -7238,11 +7472,11 @@
 
             if (object.type === "bio") {
                 return `
-                                                                                                                                                                                                                        <div class="bio-object">
-                                                                                                                                                                                                                            <h3>${escapeHtml(object.title || "About")}</h3>
-                                                                                                                                                                                                                            <p>${bio}</p>
-                                                                                                                                                                                                                        </div>
-                                                                                                                                                                                                                    `;
+                                                                                                                                                                                                                            <div class="bio-object">
+                                                                                                                                                                                                                                <h3>${escapeHtml(object.title || "About")}</h3>
+                                                                                                                                                                                                                                <p>${bio}</p>
+                                                                                                                                                                                                                            </div>
+                                                                                                                                                                                                                        `;
             }
 
             if (object.type === "text") {
@@ -7252,11 +7486,11 @@
 
             if (object.type === "section" || object.type === "featured") {
                 return `
-                                                                                                                                                                                                                        <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
-                                                                                                                                                                                                                            <h3>${escapeHtml(object.title || "Section")}</h3>
-                                                                                                                                                                                                                            <p>${escapeHtml(object.text || "")}</p>
-                                                                                                                                                                                                                        </div>
-                                                                                                                                                                                                                    `;
+                                                                                                                                                                                                                            <div class="${object.type === "featured" ? "featured-object" : "section-object"}">
+                                                                                                                                                                                                                                <h3>${escapeHtml(object.title || "Section")}</h3>
+                                                                                                                                                                                                                                <p>${escapeHtml(object.text || "")}</p>
+                                                                                                                                                                                                                            </div>
+                                                                                                                                                                                                                        `;
             }
 
             if (object.type === "image" || object.type === "banner") {
@@ -7266,10 +7500,10 @@
                 const imageFit = getPublicObjectFit(object);
 
                 return `
-                                                                                                                                                                                                                        <div class="image-object" data-image-fit="${escapeHtml(imageFit)}" data-public-image-url="${escapeHtml(image || "")}" style="${escapeHtml(getPublicImageBackgroundInlineStyle(image, imageFit))}">
-                                                                                                                                                                                                                            ${buildPublicProfileMediaImage(image, "Profile image", imageFit)}
-                                                                                                                                                                                                                        </div>
-                                                                                                                                                                                                                    `;
+                                                                                                                                                                                                                            <div class="image-object" data-image-fit="${escapeHtml(imageFit)}" data-public-image-url="${escapeHtml(image || "")}" style="${escapeHtml(getPublicImageBackgroundInlineStyle(image, imageFit))}">
+                                                                                                                                                                                                                                ${buildPublicProfileMediaImage(image, "Profile image", imageFit)}
+                                                                                                                                                                                                                            </div>
+                                                                                                                                                                                                                        `;
             }
 
             if (object.type === "image_text") {
@@ -7277,16 +7511,16 @@
                 const imageFit = getPublicObjectFit(object);
 
                 return `
-                                                                                                                                                                                                                        <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
-                                                                                                                                                                                                                            <div class="image-object" data-image-fit="${escapeHtml(imageFit)}" data-public-image-url="${escapeHtml(image || "")}" style="${escapeHtml(getPublicImageBackgroundInlineStyle(image, imageFit))}">
-                                                                                                                                                                                                                                ${buildPublicProfileMediaImage(image, "Profile image", imageFit)}
+                                                                                                                                                                                                                            <div style="display:grid;grid-template-columns:42% 1fr;width:100%;height:100%;">
+                                                                                                                                                                                                                                <div class="image-object" data-image-fit="${escapeHtml(imageFit)}" data-public-image-url="${escapeHtml(image || "")}" style="${escapeHtml(getPublicImageBackgroundInlineStyle(image, imageFit))}">
+                                                                                                                                                                                                                                    ${buildPublicProfileMediaImage(image, "Profile image", imageFit)}
+                                                                                                                                                                                                                                </div>
+                                                                                                                                                                                                                                <div class="section-object">
+                                                                                                                                                                                                                                    <h3>${escapeHtml(object.title || "Image + Text")}</h3>
+                                                                                                                                                                                                                                    <p>${escapeHtml(object.text || "")}</p>
+                                                                                                                                                                                                                                </div>
                                                                                                                                                                                                                             </div>
-                                                                                                                                                                                                                            <div class="section-object">
-                                                                                                                                                                                                                                <h3>${escapeHtml(object.title || "Image + Text")}</h3>
-                                                                                                                                                                                                                                <p>${escapeHtml(object.text || "")}</p>
-                                                                                                                                                                                                                            </div>
-                                                                                                                                                                                                                        </div>
-                                                                                                                                                                                                                    `;
+                                                                                                                                                                                                                        `;
             }
 
             if (["shape", "circle", "star"].includes(object.type)) {
@@ -7309,17 +7543,17 @@
                 const summary = selectedWorld?.summary || "This creator can feature one of their published works here.";
 
                 return `
-                                                                                                                                                                                                                        <a class="custom-world-card" href="${selectedWorld ? getWorldLink(selectedWorld) : '#'}">
-                                                                                                                                                                                                                            <div class="custom-world-cover">
-                                                                                                                                                                                                                                ${buildPublicProfileMediaImage(cover, title, getPublicObjectFit(object))}
-                                                                                                                                                                                                                                ${buildWorldCreditPill(selectedWorld)}
-                                                                                                                                                                                                                            </div>
-                                                                                                                                                                                                                            <div class="custom-world-body">
-                                                                                                                                                                                                                                <h3>${escapeHtml(title)}</h3>
-                                                                                                                                                                                                                                <p>${escapeHtml(summary)}</p>
-                                                                                                                                                                                                                            </div>
-                                                                                                                                                                                                                        </a>
-                                                                                                                                                                                                                    `;
+                                                                                                                                                                                                                            <a class="custom-world-card" href="${selectedWorld ? getWorldLink(selectedWorld) : '#'}">
+                                                                                                                                                                                                                                <div class="custom-world-cover">
+                                                                                                                                                                                                                                    ${buildPublicProfileMediaImage(cover, title, getPublicObjectFit(object))}
+                                                                                                                                                                                                                                    ${buildWorldCreditPill(selectedWorld)}
+                                                                                                                                                                                                                                </div>
+                                                                                                                                                                                                                                <div class="custom-world-body">
+                                                                                                                                                                                                                                    <h3>${escapeHtml(title)}</h3>
+                                                                                                                                                                                                                                    <p>${escapeHtml(summary)}</p>
+                                                                                                                                                                                                                                </div>
+                                                                                                                                                                                                                            </a>
+                                                                                                                                                                                                                        `;
             }
 
             if (object.type === "profile_badge") {
@@ -7342,10 +7576,10 @@
 
             if (currentUser.id === profile.id) {
                 return `
-                                                                                                                                                                                                                        <div class="actions-object" style="gap:${gap}px;">
-                                                                                                                                                                                                                            <a class="${buttonClass}" style="${inlineStyle}" href="account-settings.html"><span class="public-button-label" style="${textPaintStyle}">Edit Profile</span></a>
-                                                                                                                                                                                                                        </div>
-                                                                                                                                                                                                                    `;
+                                                                                                                                                                                                                            <div class="actions-object" style="gap:${gap}px;">
+                                                                                                                                                                                                                                <a class="${buttonClass}" style="${inlineStyle}" href="account-settings.html"><span class="public-button-label" style="${textPaintStyle}">Edit Profile</span></a>
+                                                                                                                                                                                                                            </div>
+                                                                                                                                                                                                                        `;
             }
 
             const followLabel = isFollowingProfile ? "Following" : "Follow";
@@ -7353,13 +7587,13 @@
             const messageTitle = canMessageProfile ? "Message this creator" : "Messaging requires both creators to follow each other.";
 
             return `
-                                                                                                                                                                                                                    <div class="actions-object" style="gap:${gap}px;">
-                                                                                                                                                                                                                        <button class="${buttonClass} ${isFollowingProfile ? "following" : ""}" style="${inlineStyle}" data-custom-action="follow" aria-pressed="${isFollowingProfile ? "true" : "false"}"><span class="public-button-label" style="${textPaintStyle}">${followLabel}</span></button>
-                                                                                                                                                                                                                        <button class="${buttonClass}" style="${inlineStyle}" data-custom-action="message" title="${escapeHtml(messageTitle)}" ${messageDisabled}><span class="public-button-label" style="${textPaintStyle}">Message</span></button>
-                                                                                                                                                                                                                        <button class="${buttonClass}" style="${inlineStyle}" data-custom-action="block"><span class="public-button-label" style="${textPaintStyle}">Block</span></button>
-                                                                                                                                                                                                                        <button class="${buttonClass}" style="${inlineStyle}" data-custom-action="report"><span class="public-button-label" style="${textPaintStyle}">Report</span></button>
-                                                                                                                                                                                                                    </div>
-                                                                                                                                                                                                                `;
+                                                                                                                                                                                                                        <div class="actions-object" style="gap:${gap}px;">
+                                                                                                                                                                                                                            <button class="${buttonClass} ${isFollowingProfile ? "following" : ""}" style="${inlineStyle}" data-custom-action="follow" aria-pressed="${isFollowingProfile ? "true" : "false"}"><span class="public-button-label" style="${textPaintStyle}">${followLabel}</span></button>
+                                                                                                                                                                                                                            <button class="${buttonClass}" style="${inlineStyle}" data-custom-action="message" title="${escapeHtml(messageTitle)}" ${messageDisabled}><span class="public-button-label" style="${textPaintStyle}">Message</span></button>
+                                                                                                                                                                                                                            <button class="${buttonClass}" style="${inlineStyle}" data-custom-action="block"><span class="public-button-label" style="${textPaintStyle}">Block</span></button>
+                                                                                                                                                                                                                            <button class="${buttonClass}" style="${inlineStyle}" data-custom-action="report"><span class="public-button-label" style="${textPaintStyle}">Report</span></button>
+                                                                                                                                                                                                                        </div>
+                                                                                                                                                                                                                    `;
         }
 
         function buildSingleCustomAction(profile, object) {
@@ -7517,12 +7751,12 @@
             }
 
             return items.map(item => `
-                                                                                                                                                                                                                                                                                <a class="gallery-mini-card profile-gallery-tile" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
-                                                                                                                                                                                                                                                                                    ${buildPublicProfileMediaImage(item.image_url, item.title || "Gallery item", "cover")}
-                                                                                                                                                                                                                                                                                    ${buildGalleryDescriptionPill(item)}
-                                                                                                                                                                                                                                                                                    ${buildGalleryCreditPill(item)}
-                                                                                                                                                                                                                                                                                </a>
-                                                                                                                                                                                                                                                                            `).join("");
+                                                                                                                                                                                                                                                                                    <a class="gallery-mini-card profile-gallery-tile" href="creator-gallery.html?user=${encodeURIComponent(profile.username || "")}">
+                                                                                                                                                                                                                                                                                        ${buildPublicProfileMediaImage(item.image_url, item.title || "Gallery item", "cover")}
+                                                                                                                                                                                                                                                                                        ${buildGalleryDescriptionPill(item)}
+                                                                                                                                                                                                                                                                                        ${buildGalleryCreditPill(item)}
+                                                                                                                                                                                                                                                                                    </a>
+                                                                                                                                                                                                                                                                                `).join("");
         }
 
         function renderWorksMini(worlds, object = null) {
@@ -7543,17 +7777,17 @@
             return items.map(world => {
                 const cover = world.cover_image_url || world.cover_url || "";
                 return `
-                                                                                                                                                                                                                                                                                <a class="work-mini-card custom-world-card" href="${getWorldLink(world)}">
-                                                                                                                                                                                                                                                                                    <div class="custom-world-cover">
-                                                                                                                                                                                                                                                                                        ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">` : ""}
-                                                                                                                                                                                                                                                                                        ${buildWorldCreditPill(world)}
-                                                                                                                                                                                                                                                                                    </div>
-                                                                                                                                                                                                                                                                                    <div class="custom-world-body">
-                                                                                                                                                                                                                                                                                        <h3>${escapeHtml(world.title || "Untitled")}</h3>
-                                                                                                                                                                                                                                                                                        <p>${escapeHtml(world.summary || world.content_type || world.type || "World")}</p>
-                                                                                                                                                                                                                                                                                    </div>
-                                                                                                                                                                                                                                                                                </a>
-                                                                                                                                                                                                                                                                            `;
+                                                                                                                                                                                                                                                                                    <a class="work-mini-card custom-world-card" href="${getWorldLink(world)}">
+                                                                                                                                                                                                                                                                                        <div class="custom-world-cover">
+                                                                                                                                                                                                                                                                                            ${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">` : ""}
+                                                                                                                                                                                                                                                                                            ${buildWorldCreditPill(world)}
+                                                                                                                                                                                                                                                                                        </div>
+                                                                                                                                                                                                                                                                                        <div class="custom-world-body">
+                                                                                                                                                                                                                                                                                            <h3>${escapeHtml(world.title || "Untitled")}</h3>
+                                                                                                                                                                                                                                                                                            <p>${escapeHtml(world.summary || world.content_type || world.type || "World")}</p>
+                                                                                                                                                                                                                                                                                        </div>
+                                                                                                                                                                                                                                                                                    </a>
+                                                                                                                                                                                                                                                                                `;
             }).join("");
         }
 
@@ -7565,18 +7799,18 @@
             return worlds.map(world => {
                 const cover = world.cover_image_url || world.cover_url || "";
                 return `
-                                                                                                                                                                                                                                                                                <div class="card">
-                                                                                                                                                                                                                                                                                    ${cover ? `
-                                                                                                                                                                                                                                                                                        <div class="custom-world-cover" style="height:150px;border-radius:14px;margin-bottom:14px;">
-                                                                                                                                                                                                                                                                                            <img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">
-                                                                                                                                                                                                                                                                                            ${buildWorldCreditPill(world)}
-                                                                                                                                                                                                                                                                                        </div>
-                                                                                                                                                                                                                                                                                    ` : ""}
-                                                                                                                                                                                                                                                                                    <p class="empty">${escapeHtml(world.content_type || world.type || "World")}</p>
-                                                                                                                                                                                                                                                                                    <h3><a href="${getWorldLink(world)}">${escapeHtml(world.title || "Untitled")}</a></h3>
-                                                                                                                                                                                                                                                                                    <p>${escapeHtml(world.summary || "No summary yet.")}</p>
-                                                                                                                                                                                                                                                                                </div>
-                                                                                                                                                                                                                                                                            `;
+                                                                                                                                                                                                                                                                                    <div class="card">
+                                                                                                                                                                                                                                                                                        ${cover ? `
+                                                                                                                                                                                                                                                                                            <div class="custom-world-cover" style="height:150px;border-radius:14px;margin-bottom:14px;">
+                                                                                                                                                                                                                                                                                                <img src="${escapeHtml(cover)}" alt="${escapeHtml(world.title || "Untitled")}">
+                                                                                                                                                                                                                                                                                                ${buildWorldCreditPill(world)}
+                                                                                                                                                                                                                                                                                            </div>
+                                                                                                                                                                                                                                                                                        ` : ""}
+                                                                                                                                                                                                                                                                                        <p class="empty">${escapeHtml(world.content_type || world.type || "World")}</p>
+                                                                                                                                                                                                                                                                                        <h3><a href="${getWorldLink(world)}">${escapeHtml(world.title || "Untitled")}</a></h3>
+                                                                                                                                                                                                                                                                                        <p>${escapeHtml(world.summary || "No summary yet.")}</p>
+                                                                                                                                                                                                                                                                                    </div>
+                                                                                                                                                                                                                                                                                `;
             }).join("");
         }
 
@@ -7598,11 +7832,11 @@
             let query = supabase
                 .from("creator_proof_gallery")
                 .select(`
-                                                                                                                                                                                                                                                                                    *,
-                                                                                                                                                                                                                                                                                    creator_gallery_likes (
-                                                                                                                                                                                                                                                                                        user_id
-                                                                                                                                                                                                                                                                                    )
-                                                                                                                                                                                                                                                                                `)
+                                                                                                                                                                                                                                                                                        *,
+                                                                                                                                                                                                                                                                                        creator_gallery_likes (
+                                                                                                                                                                                                                                                                                            user_id
+                                                                                                                                                                                                                                                                                        )
+                                                                                                                                                                                                                                                                                    `)
                 .eq("owner_id", profileId)
                 .eq("visibility", "public");
 
@@ -7717,13 +7951,13 @@
             }
 
             container.innerHTML = `
-                                                                                                                                                                                                                                                                                <button
-                                                                                                                                                                                                                                                                                    id="follow-button"
-                                                                                                                                                                                                                                                                                    class="button follow-button ${isFollowing ? "following" : ""}"
-                                                                                                                                                                                                                                                                                    aria-pressed="${isFollowing ? "true" : "false"}">
-                                                                                                                                                                                                                                                                                    ${isFollowing ? "Following" : "Follow"}
-                                                                                                                                                                                                                                                                                </button>
-                                                                                                                                                                                                                                                                            `;
+                                                                                                                                                                                                                                                                                    <button
+                                                                                                                                                                                                                                                                                        id="follow-button"
+                                                                                                                                                                                                                                                                                        class="button follow-button ${isFollowing ? "following" : ""}"
+                                                                                                                                                                                                                                                                                        aria-pressed="${isFollowing ? "true" : "false"}">
+                                                                                                                                                                                                                                                                                        ${isFollowing ? "Following" : "Follow"}
+                                                                                                                                                                                                                                                                                    </button>
+                                                                                                                                                                                                                                                                                `;
 
             document.getElementById("follow-button")?.addEventListener("click", () => {
                 toggleFollowProfile(profileId);
@@ -7827,8 +8061,8 @@
             }
 
             document.getElementById("block-button-container").innerHTML = `
-                                                                                                                                                                                                                                                                                <button id="block-user-btn" class="button secondary">Block</button>
-                                                                                                                                                                                                                                                                            `;
+                                                                                                                                                                                                                                                                                    <button id="block-user-btn" class="button secondary">Block</button>
+                                                                                                                                                                                                                                                                                `;
 
             document.getElementById("block-user-btn").addEventListener("click", () => {
                 document.getElementById("block-modal").style.display = "flex";
@@ -7844,10 +8078,10 @@
             const title = disabled ? "Messaging requires both creators to follow each other." : "Message this creator";
 
             document.getElementById("message-button-container").innerHTML = `
-                                                                                                                                                                                                                                                                                <button id="message-user-btn" class="button" title="${escapeHtml(title)}" ${disabled ? "disabled" : ""}>
-                                                                                                                                                                                                                                                                                    Message
-                                                                                                                                                                                                                                                                                </button>
-                                                                                                                                                                                                                                                                            `;
+                                                                                                                                                                                                                                                                                    <button id="message-user-btn" class="button" title="${escapeHtml(title)}" ${disabled ? "disabled" : ""}>
+                                                                                                                                                                                                                                                                                        Message
+                                                                                                                                                                                                                                                                                    </button>
+                                                                                                                                                                                                                                                                                `;
 
             document.getElementById("message-user-btn").addEventListener("click", () => {
                 if (!canMessageProfile) {
@@ -7917,8 +8151,8 @@
             }
 
             document.getElementById("report-button-container").innerHTML = `
-                                                                                                                                                                                                                                                                                <button id="report-user-btn" class="button secondary">Report</button>
-                                                                                                                                                                                                                                                                            `;
+                                                                                                                                                                                                                                                                                    <button id="report-user-btn" class="button secondary">Report</button>
+                                                                                                                                                                                                                                                                                `;
 
             document.getElementById("report-user-btn").addEventListener("click", () => {
                 document.getElementById("report-modal").style.display = "flex";
@@ -8009,10 +8243,10 @@
                     : "Permanent";
 
             document.getElementById("moderation-status-display").innerHTML = `
-                                                                                                                                                                                                                                                                                <strong>Current Status:</strong> ${escapeHtml(profile.account_status || "active")}<br>
-                                                                                                                                                                                                                                                                                <strong>Expires:</strong> ${escapeHtml(expires)}<br>
-                                                                                                                                                                                                                                                                                <strong>Reason:</strong> ${escapeHtml(profile.moderation_reason || "None")}
-                                                                                                                                                                                                                                                                            `;
+                                                                                                                                                                                                                                                                                    <strong>Current Status:</strong> ${escapeHtml(profile.account_status || "active")}<br>
+                                                                                                                                                                                                                                                                                    <strong>Expires:</strong> ${escapeHtml(expires)}<br>
+                                                                                                                                                                                                                                                                                    <strong>Reason:</strong> ${escapeHtml(profile.moderation_reason || "None")}
+                                                                                                                                                                                                                                                                                `;
         }
 
         async function loadModerationHistory() {
@@ -8021,12 +8255,12 @@
             const { data, error } = await supabase
                 .from("moderation_logs")
                 .select(`
-                                                                                                                                                                                                                                                                                    *,
-                                                                                                                                                                                                                                                                                    moderator:profiles!moderation_logs_moderator_id_fkey(
-                                                                                                                                                                                                                                                                                        username,
-                                                                                                                                                                                                                                                                                        display_name
-                                                                                                                                                                                                                                                                                    )
-                                                                                                                                                                                                                                                                                `)
+                                                                                                                                                                                                                                                                                        *,
+                                                                                                                                                                                                                                                                                        moderator:profiles!moderation_logs_moderator_id_fkey(
+                                                                                                                                                                                                                                                                                            username,
+                                                                                                                                                                                                                                                                                            display_name
+                                                                                                                                                                                                                                                                                        )
+                                                                                                                                                                                                                                                                                    `)
                 .eq("target_user_id", profile.id)
                 .order("created_at", { ascending: false })
                 .limit(20);
@@ -8042,13 +8276,13 @@
             }
 
             container.innerHTML = data.map(log => `
-                                                                                                                                                                                                                                                                                <div style="border-bottom:1px solid var(--border-color);padding-bottom:10px;margin-bottom:10px;">
-                                                                                                                                                                                                                                                                                    <strong>${escapeHtml(log.action)}</strong><br>
-                                                                                                                                                                                                                                                                                    By: ${escapeHtml(log.moderator?.display_name || log.moderator?.username || "Unknown")}<br>
-                                                                                                                                                                                                                                                                                    Reason: ${escapeHtml(log.reason || "None")}<br>
-                                                                                                                                                                                                                                                                                    ${new Date(log.created_at).toLocaleString()}
-                                                                                                                                                                                                                                                                                </div>
-                                                                                                                                                                                                                                                                            `).join("");
+                                                                                                                                                                                                                                                                                    <div style="border-bottom:1px solid var(--border-color);padding-bottom:10px;margin-bottom:10px;">
+                                                                                                                                                                                                                                                                                        <strong>${escapeHtml(log.action)}</strong><br>
+                                                                                                                                                                                                                                                                                        By: ${escapeHtml(log.moderator?.display_name || log.moderator?.username || "Unknown")}<br>
+                                                                                                                                                                                                                                                                                        Reason: ${escapeHtml(log.reason || "None")}<br>
+                                                                                                                                                                                                                                                                                        ${new Date(log.created_at).toLocaleString()}
+                                                                                                                                                                                                                                                                                    </div>
+                                                                                                                                                                                                                                                                                `).join("");
         }
 
         window.toggleModerationDrawer = function () {
