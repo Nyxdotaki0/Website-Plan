@@ -305,6 +305,24 @@
                 padding-bottom: 54px;
             }
 
+            .cover-wrap.cover-image-zoomable {
+                cursor: zoom-in;
+            }
+
+                .cover-wrap.cover-image-zoomable img {
+                    cursor: zoom-in;
+                    transition: filter .18s ease;
+                }
+
+                .cover-wrap.cover-image-zoomable:hover img {
+                    filter: brightness(1.08);
+                }
+
+                .cover-wrap.cover-image-zoomable:focus-visible {
+                    outline: 2px solid rgba(255,255,255,.82);
+                    outline-offset: 4px;
+                }
+
         .cover-placeholder {
             min-height: 320px;
             display: flex;
@@ -1001,6 +1019,126 @@
         .credit-pill.show-tooltip .credit-tooltip {
             opacity: 1;
             visibility: visible;
+        }
+
+        body.cover-image-lightbox-open {
+            overflow: hidden;
+        }
+
+        .cover-image-lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 2147482600;
+            justify-content: center;
+            align-items: center;
+            padding: 76px 24px 34px;
+            box-sizing: border-box;
+            background: rgba(0,0,0,.86);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+
+            .cover-image-lightbox.open {
+                display: flex;
+            }
+
+        .cover-image-lightbox-side {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: min(22vw, 220px);
+            z-index: 1;
+            cursor: zoom-out;
+        }
+
+            .cover-image-lightbox-side.left {
+                left: 0;
+            }
+
+            .cover-image-lightbox-side.right {
+                right: 0;
+            }
+
+        .cover-image-lightbox-close {
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            z-index: 4;
+            width: 46px;
+            height: 46px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.16);
+            background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.04)), rgba(8,8,10,.78);
+            color: white;
+            cursor: pointer;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 0 18px rgba(255,255,255,.08), inset 0 1px 0 rgba(255,255,255,.14);
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .cover-image-lightbox-hint {
+            position: absolute;
+            top: 18px;
+            left: 18px;
+            z-index: 4;
+            border: 1px solid rgba(255,255,255,.16);
+            border-radius: 999px;
+            background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.04)), rgba(8,8,10,.78);
+            color: white;
+            padding: 8px 12px;
+            font-size: .78rem;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+
+        .cover-image-lightbox-shell {
+            position: relative;
+            z-index: 3;
+            width: min(1120px, 96vw);
+            max-height: 88vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+        }
+
+        .cover-image-lightbox-image {
+            display: block;
+            max-width: 100%;
+            max-height: 88vh;
+            object-fit: contain;
+            border-radius: 18px;
+            box-shadow: 0 28px 90px rgba(0,0,0,.62), 0 0 36px rgba(255,255,255,.08);
+            background: rgba(0,0,0,.30);
+        }
+
+        @media (max-width: 800px) {
+            .cover-image-lightbox {
+                padding: 92px 14px 28px;
+                align-items: flex-start;
+            }
+
+            .cover-image-lightbox-shell {
+                width: 100%;
+                max-height: calc(100vh - 124px);
+            }
+
+            .cover-image-lightbox-image {
+                max-height: calc(100vh - 124px);
+                border-radius: 14px;
+            }
+
+            .cover-image-lightbox-hint {
+                max-width: calc(100vw - 92px);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
         }
 
         #report-modal {
@@ -2126,6 +2264,39 @@
         </div>
     </main>
     <div id="chapter-index-mobile-scrim" class="chapter-index-mobile-scrim" aria-hidden="true"></div>
+    <div id="cover-image-lightbox"
+         class="cover-image-lightbox"
+         aria-hidden="true"
+         onclick="closeCoverImageLightbox(event)">
+        <div class="cover-image-lightbox-side left"
+             onclick="closeCoverImageLightbox(event)"
+             title="Close image"></div>
+
+        <div class="cover-image-lightbox-side right"
+             onclick="closeCoverImageLightbox(event)"
+             title="Close image"></div>
+
+        <div class="cover-image-lightbox-hint">
+            Click the sides or press Esc to close
+        </div>
+
+        <button class="cover-image-lightbox-close"
+                type="button"
+                onclick="closeCoverImageLightbox(event)"
+                title="Close image"
+                aria-label="Close enlarged cover image">
+            ×
+        </button>
+
+        <div class="cover-image-lightbox-shell"
+             onclick="event.stopPropagation()">
+            <img id="cover-image-lightbox-image"
+                 class="cover-image-lightbox-image"
+                 src=""
+                 alt="">
+        </div>
+    </div>
+
     <div id="report-modal">
         <div class="report-box">
             <h2>Report Literature</h2>
@@ -2369,14 +2540,14 @@
                 logoLink.style.pointerEvents = "";
                 nav.classList.remove("guest-nav");
                 nav.innerHTML = `
-                            <a href="index.html">Home</a>
-                            <a href="notifications.html">Notifications</a>
-                            <a href="explore.html">Explore</a>
-                            <a href="profile.html">Profile</a>
-                            <a href="dashboard.html">Dashboard</a>
-                            <a href="messages.html">Messages</a>
-                            <button type="button" onclick="logOut()">Log Out</button>
-                        `;
+                                <a href="index.html">Home</a>
+                                <a href="notifications.html">Notifications</a>
+                                <a href="explore.html">Explore</a>
+                                <a href="profile.html">Profile</a>
+                                <a href="dashboard.html">Dashboard</a>
+                                <a href="messages.html">Messages</a>
+                                <button type="button" onclick="logOut()">Log Out</button>
+                            `;
                 menuButton.classList.remove("guest-hidden");
             } else {
                 logoLink.href = "javascript:void(0)";
@@ -2608,9 +2779,9 @@
             const safe = normalizeImagePlacement(placement);
 
             return `
-                                                                    object-fit:${safe.fit || "cover"};
-                                                                    transform:${getImagePlacementTransform(safe)};
-                                                                `;
+                                                                        object-fit:${safe.fit || "cover"};
+                                                                        transform:${getImagePlacementTransform(safe)};
+                                                                    `;
         }
 
         const NV_WORLD_RICH_TEXT_SNAPSHOT_PREFIX = "NV_LITERATURE_RICH_TEXT_V2:";
@@ -3627,6 +3798,82 @@
             }
         });
 
+        function setupLiteratureCoverImageLightbox() {
+            const coverWrap = document.getElementById("book-cover-wrap");
+
+            if (!coverWrap || coverWrap.dataset.coverImageLightboxReady === "true") {
+                return;
+            }
+
+            coverWrap.dataset.coverImageLightboxReady = "true";
+
+            coverWrap.addEventListener("click", event => {
+                if (event.target.closest(".credit-pill")) {
+                    return;
+                }
+
+                openCoverImageLightbox(
+                    coverWrap.dataset.coverImageSrc || "",
+                    coverWrap.dataset.coverImageAlt || "Literature cover"
+                );
+            });
+
+            coverWrap.addEventListener("keydown", event => {
+                if (event.target.closest(".credit-pill")) {
+                    return;
+                }
+
+                if (event.key !== "Enter" && event.key !== " ") {
+                    return;
+                }
+
+                event.preventDefault();
+
+                openCoverImageLightbox(
+                    coverWrap.dataset.coverImageSrc || "",
+                    coverWrap.dataset.coverImageAlt || "Literature cover"
+                );
+            });
+        }
+
+        window.openCoverImageLightbox = function (imageUrl, altText = "Literature cover") {
+            if (!imageUrl) {
+                return;
+            }
+
+            const lightbox = document.getElementById("cover-image-lightbox");
+            const image = document.getElementById("cover-image-lightbox-image");
+
+            if (!lightbox || !image) {
+                return;
+            }
+
+            image.src = imageUrl;
+            image.alt = altText || "Literature cover";
+
+            lightbox.classList.add("open");
+            lightbox.setAttribute("aria-hidden", "false");
+            document.body.classList.add("cover-image-lightbox-open");
+        };
+
+        window.closeCoverImageLightbox = function () {
+            const lightbox = document.getElementById("cover-image-lightbox");
+            const image = document.getElementById("cover-image-lightbox-image");
+
+            if (!lightbox) {
+                return;
+            }
+
+            lightbox.classList.remove("open");
+            lightbox.setAttribute("aria-hidden", "true");
+            document.body.classList.remove("cover-image-lightbox-open");
+
+            if (image) {
+                image.src = "";
+                image.alt = "";
+            }
+        };
+
         async function areUsersBlocked(userA, userB) {
             if (!userA || !userB) return false;
 
@@ -3901,17 +4148,34 @@
 
             const coverPlacement = normalizeImagePlacement(literature.cover_image_placement);
 
+            const coverAlt = `${literature.title || "Literature"} cover`;
+            const hasCoverImage = !!literature.cover_image_url;
+
             coverWrap.classList.toggle("has-credit", !!coverCredit);
             coverWrap.classList.toggle("placed-cover", !!literature.cover_image_placement);
+            coverWrap.classList.toggle("cover-image-zoomable", hasCoverImage);
 
-            if (literature.cover_image_url) {
+            if (hasCoverImage) {
+                coverWrap.setAttribute("role", "button");
+                coverWrap.setAttribute("tabindex", "0");
+                coverWrap.setAttribute("aria-label", `Open ${coverAlt}`);
+                coverWrap.dataset.coverImageSrc = literature.cover_image_url;
+                coverWrap.dataset.coverImageAlt = coverAlt;
+
                 coverWrap.innerHTML = `
-                                                                            <img src="${escapeHtml(literature.cover_image_url)}" alt="" style="${getImagePlacementStyle(coverPlacement)}">
-                                                                            ${coverCredit}
-                                                                        `;
+                                                                                <img src="${escapeHtml(literature.cover_image_url)}" alt="${escapeHtml(coverAlt)}" style="${getImagePlacementStyle(coverPlacement)}">
+                                                                                ${coverCredit}
+                                                                            `;
             } else {
+                coverWrap.removeAttribute("role");
+                coverWrap.removeAttribute("tabindex");
+                coverWrap.removeAttribute("aria-label");
+                delete coverWrap.dataset.coverImageSrc;
+                delete coverWrap.dataset.coverImageAlt;
                 coverWrap.innerHTML = `<div class="cover-placeholder">No cover image yet</div>`;
             }
+
+            setupLiteratureCoverImageLightbox();
 
             const backgroundCredit = buildCreditPill({
                 type: literature.background_credit_type,
@@ -4722,13 +4986,13 @@
                     const snippet = getChapterSearchSnippet(chapter);
 
                     return `
-                                                    <button type="button"
-                                                            class="chapter-nav-link${realIndex === currentChapterIndex ? " active" : ""}"
-                                                            data-chapter-index="${realIndex}">
-                                                        <span>Chapter ${realIndex + 1}: ${escapeHtml(title)}</span>
-                                                        <small>${escapeHtml(snippet)}</small>
-                                                    </button>
-                                                `;
+                                                        <button type="button"
+                                                                class="chapter-nav-link${realIndex === currentChapterIndex ? " active" : ""}"
+                                                                data-chapter-index="${realIndex}">
+                                                            <span>Chapter ${realIndex + 1}: ${escapeHtml(title)}</span>
+                                                            <small>${escapeHtml(snippet)}</small>
+                                                        </button>
+                                                    `;
                 }).join("");
 
                 links.querySelectorAll(".chapter-nav-link").forEach(button => {
@@ -4765,27 +5029,27 @@
             const current = allChapters[currentChapterIndex] || null;
 
             return `
-                        <nav class="chapter-switcher ${position}" aria-label="Chapter navigation">
-                            <button type="button"
-                                    class="chapter-switch-button previous"
-                                    data-chapter-direction="-1"
-                                    ${previous ? "" : "disabled"}>
-                                <small>Previous Chapter</small>
-                                <strong>${previous ? escapeHtml(previous.title || `Chapter ${currentChapterIndex}`) : "Beginning"}</strong>
-                            </button>
-                            <button type="button" class="chapter-list-button" data-open-chapter-list>
-                                <small>Chapter List</small>
-                                <strong>${currentChapterIndex + 1} / ${allChapters.length}</strong>
-                            </button>
-                            <button type="button"
-                                    class="chapter-switch-button next"
-                                    data-chapter-direction="1"
-                                    ${next ? "" : "disabled"}>
-                                <small>${next ? "Next Chapter" : "End of Story"}</small>
-                                <strong>${next ? escapeHtml(next.title || `Chapter ${currentChapterIndex + 2}`) : escapeHtml(current?.title || "Complete")}</strong>
-                            </button>
-                        </nav>
-                    `;
+                            <nav class="chapter-switcher ${position}" aria-label="Chapter navigation">
+                                <button type="button"
+                                        class="chapter-switch-button previous"
+                                        data-chapter-direction="-1"
+                                        ${previous ? "" : "disabled"}>
+                                    <small>Previous Chapter</small>
+                                    <strong>${previous ? escapeHtml(previous.title || `Chapter ${currentChapterIndex}`) : "Beginning"}</strong>
+                                </button>
+                                <button type="button" class="chapter-list-button" data-open-chapter-list>
+                                    <small>Chapter List</small>
+                                    <strong>${currentChapterIndex + 1} / ${allChapters.length}</strong>
+                                </button>
+                                <button type="button"
+                                        class="chapter-switch-button next"
+                                        data-chapter-direction="1"
+                                        ${next ? "" : "disabled"}>
+                                    <small>${next ? "Next Chapter" : "End of Story"}</small>
+                                    <strong>${next ? escapeHtml(next.title || `Chapter ${currentChapterIndex + 2}`) : escapeHtml(current?.title || "Complete")}</strong>
+                                </button>
+                            </nav>
+                        `;
         }
 
         function bindChapterSwitcher(container) {
@@ -4823,12 +5087,12 @@
             const focusWasOpen = document.getElementById("literature-focus-overlay")?.classList.contains("open");
 
             container.innerHTML = `
-                        <div class="active-chapter-shell">
-                            ${buildChapterSwitcher("top")}
-                            ${buildChapterArticle(chapter, currentChapterIndex)}
-                            ${buildChapterSwitcher("bottom")}
-                        </div>
-                    `;
+                            <div class="active-chapter-shell">
+                                ${buildChapterSwitcher("top")}
+                                ${buildChapterArticle(chapter, currentChapterIndex)}
+                                ${buildChapterSwitcher("bottom")}
+                            </div>
+                        `;
 
             container
                 .querySelectorAll(".chapter-main-text.rich-chapter-content")
@@ -5013,6 +5277,11 @@
 
             document.addEventListener("keydown", event => {
                 if (event.key === "Escape") {
+                    if (document.getElementById("cover-image-lightbox")?.classList.contains("open")) {
+                        closeCoverImageLightbox();
+                        return;
+                    }
+
                     if (document.getElementById("beta-feature-backdrop")?.classList.contains("open")) {
                         closeBetaFeatureModal();
                         return;
@@ -5175,10 +5444,10 @@
             const chapterLabel = chapters.length === 1 ? "chapter" : "chapters";
 
             meta.innerHTML = `
-                                                                        <span>${chapters.length} ${chapterLabel}</span>
-                                                                        <span>${totalWords.toLocaleString()} words</span>
-                                                                        <span>${minutes} min read</span>
-                                                                    `;
+                                                                            <span>${chapters.length} ${chapterLabel}</span>
+                                                                            <span>${totalWords.toLocaleString()} words</span>
+                                                                            <span>${minutes} min read</span>
+                                                                        `;
         }
 
         window.scrollToFirstChapter = async function () {
@@ -5417,33 +5686,33 @@
             const visualBottom = buildChapterHeaderImage(chapter, "bottom");
 
             return `
-                                                                        <article id="${idPrefix}-${chapterNumber}"
-                                                                                 class="literature-chapter"
-                                                                                 style="${buildChapterCardStyle(chapter)} ${buildChapterWritingStyle(chapter)}">
-                                                                            <div class="chapter-title-row">
-                                                                                <div class="chapter-eyebrow">Chapter ${chapterNumber} · ${getChapterReadTime(chapter)} min read</div>
-                                                                                <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
-                                                                                ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
-                                                                            </div>
-
-                                                                            ${visualTop}
-
-                                                                            <div class="chapter-main-text rich-chapter-content">
-                                                                                ${visualLeftRight}
-                                                                                ${buildChapterBodyHtml(chapter.body || "No chapter text yet.")}
-                                                                            </div>
-
-                                                                            ${visualBottom}
-
-                                                                            ${chapter.author_note ? `
-                                                                                <div class="author-note">
-                                                                                    <strong>Author Note</strong>
-                                                                                    <br><br>
-                                                                                    ${escapeHtml(chapter.author_note)}
+                                                                            <article id="${idPrefix}-${chapterNumber}"
+                                                                                     class="literature-chapter"
+                                                                                     style="${buildChapterCardStyle(chapter)} ${buildChapterWritingStyle(chapter)}">
+                                                                                <div class="chapter-title-row">
+                                                                                    <div class="chapter-eyebrow">Chapter ${chapterNumber} · ${getChapterReadTime(chapter)} min read</div>
+                                                                                    <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
+                                                                                    ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
                                                                                 </div>
-                                                                            ` : ""}
 
-                                                                            ${chapter.theme_card_style === "image" && chapter.theme_card_image_url ? buildCreditPill({
+                                                                                ${visualTop}
+
+                                                                                <div class="chapter-main-text rich-chapter-content">
+                                                                                    ${visualLeftRight}
+                                                                                    ${buildChapterBodyHtml(chapter.body || "No chapter text yet.")}
+                                                                                </div>
+
+                                                                                ${visualBottom}
+
+                                                                                ${chapter.author_note ? `
+                                                                                    <div class="author-note">
+                                                                                        <strong>Author Note</strong>
+                                                                                        <br><br>
+                                                                                        ${escapeHtml(chapter.author_note)}
+                                                                                    </div>
+                                                                                ` : ""}
+
+                                                                                ${chapter.theme_card_style === "image" && chapter.theme_card_image_url ? buildCreditPill({
                 type: chapter.card_credit_type,
                 name: chapter.card_credit_name,
                 username: chapter.card_credit_nullverse_username,
@@ -5452,8 +5721,8 @@
                 ownerUsername: currentLiterature.ownerProfile?.username,
                 context: "Chapter Card Image"
             }) : ""}
-                                                                        </article>
-                                                                    `;
+                                                                            </article>
+                                                                        `;
         }
 
         function buildChapterHeaderImage(chapter, requestedPosition) {
@@ -5484,11 +5753,11 @@
             ].filter(Boolean).join(" ");
 
             return `
-                                                                        <div class="${classes}">
-                                                                            <img src="${escapeHtml(chapter.image_url)}" alt="" style="${getImagePlacementStyle(chapter.image_placement)}">
-                                                                            ${credit}
-                                                                        </div>
-                                                                    `;
+                                                                            <div class="${classes}">
+                                                                                <img src="${escapeHtml(chapter.image_url)}" alt="" style="${getImagePlacementStyle(chapter.image_placement)}">
+                                                                                ${credit}
+                                                                            </div>
+                                                                        `;
         }
 
         function buildChapterCardStyle(chapter) {
@@ -5509,14 +5778,14 @@
             const placement = normalizeImagePlacement(chapter.theme_card_image_placement);
 
             return `
-                                                                        --chapter-card-background:${background};
-                                                                        --chapter-card-text:${chapter.theme_card_text_color || "#f5f5f5"};
-                                                                        --chapter-card-image:${image};
-                                                                        --chapter-card-image-size:${getImagePlacementFit(placement)};
-                                                                        --chapter-card-image-transform:${getImagePlacementTransform(placement)};
-                                                                        --chapter-card-image-opacity:${chapter.theme_card_opacity ?? .85};
-                                                                        --chapter-card-overlay:${chapter.theme_card_overlay ?? .35};
-                                                                    `;
+                                                                            --chapter-card-background:${background};
+                                                                            --chapter-card-text:${chapter.theme_card_text_color || "#f5f5f5"};
+                                                                            --chapter-card-image:${image};
+                                                                            --chapter-card-image-size:${getImagePlacementFit(placement)};
+                                                                            --chapter-card-image-transform:${getImagePlacementTransform(placement)};
+                                                                            --chapter-card-image-opacity:${chapter.theme_card_opacity ?? .85};
+                                                                            --chapter-card-overlay:${chapter.theme_card_overlay ?? .35};
+                                                                        `;
         }
 
         function buildChapterWritingStyle(chapter) {
@@ -5530,11 +5799,11 @@
             const spacing = spacingMap[chapter.spacing_type || "comfortable"] || spacingMap.comfortable;
 
             return `
-                                                                        --chapter-text-color:${chapter.text_color || "#f5f5f5"};
-                                                                        --chapter-panel-background:${chapter.chapter_panel_color || "#141416"};
-                                                                        --chapter-line-height:${spacing[0]};
-                                                                        --chapter-letter-spacing:${spacing[1]};
-                                                                    `;
+                                                                            --chapter-text-color:${chapter.text_color || "#f5f5f5"};
+                                                                            --chapter-panel-background:${chapter.chapter_panel_color || "#141416"};
+                                                                            --chapter-line-height:${spacing[0]};
+                                                                            --chapter-letter-spacing:${spacing[1]};
+                                                                        `;
         }
 
         function renderTags(literature) {
@@ -5554,51 +5823,51 @@
 
             if (currentUser && currentUser.id === literature.owner_id) {
                 html += `
-                                                                            <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
-                                                                                Edit Literature
-                                                                            </a>
-                                                                        `;
+                                                                                <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
+                                                                                    Edit Literature
+                                                                                </a>
+                                                                            `;
             }
 
             if (canModerateWorlds(currentPermissions) && canModerateContentOwner(currentProfile, literature.ownerProfile)) {
                 html += `
-                                                                            <div style="margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
-                                                                <strong>Literature Moderation</strong>
+                                                                                <div style="margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
+                                                                    <strong>Literature Moderation</strong>
 
-                                                                <p class="empty">
-                                                                    Status: ${escapeHtml(literature.moderation_status || "visible")}
-                                                                </p>
+                                                                    <p class="empty">
+                                                                        Status: ${escapeHtml(literature.moderation_status || "visible")}
+                                                                    </p>
 
-                                                                <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                                                                    <button class="button" onclick="setLiteratureModerationStatus('visible')">
-                                                                        Restore Literature
-                                                                    </button>
+                                                                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                                                                        <button class="button" onclick="setLiteratureModerationStatus('visible')">
+                                                                            Restore Literature
+                                                                        </button>
 
-                                                                    <div style="width:100%;margin-top:10px;">
-                                                                        <label class="empty">Reason for hiding</label>
+                                                                        <div style="width:100%;margin-top:10px;">
+                                                                            <label class="empty">Reason for hiding</label>
 
-                                                                        <input id="literature-hide-reason"
-                                                                               placeholder="Reason shown to creator..."
-                                                                               style="
-                                                                                   width:100%;
-                                                                                   box-sizing:border-box;
-                                                                                   margin-top:8px;
-                                                                                   padding:10px;
-                                                                                   border-radius:10px;
-                                                                                   border:1px solid var(--border-color);
-                                                                                   background:rgba(0,0,0,.28);
-                                                                                   color:var(--text-primary);
-                                                                               ">
+                                                                            <input id="literature-hide-reason"
+                                                                                   placeholder="Reason shown to creator..."
+                                                                                   style="
+                                                                                       width:100%;
+                                                                                       box-sizing:border-box;
+                                                                                       margin-top:8px;
+                                                                                       padding:10px;
+                                                                                       border-radius:10px;
+                                                                                       border:1px solid var(--border-color);
+                                                                                       background:rgba(0,0,0,.28);
+                                                                                       color:var(--text-primary);
+                                                                                   ">
+                                                                        </div>
+
+                                                                        <button class="button" onclick="setLiteratureModerationStatus('hidden')">
+                                                                            Hide Literature
+                                                                        </button>
                                                                     </div>
 
-                                                                    <button class="button" onclick="setLiteratureModerationStatus('hidden')">
-                                                                        Hide Literature
-                                                                    </button>
-                                                                </div>
-
-                                                                <p id="literature-moderation-message" class="empty"></p>
+                                                                    <p id="literature-moderation-message" class="empty"></p>
 </div>
-                                                                        `;
+                                                                            `;
             }
 
             container.innerHTML = html;
@@ -5856,27 +6125,27 @@
             const main = document.querySelector("main");
             main.classList.add("content-warning-layout");
             main.innerHTML = `
-                                                                    <section class="content-warning-panel">
-                                                                        <h1>Literature Hidden by Moderation</h1>
+                                                                        <section class="content-warning-panel">
+                                                                            <h1>Literature Hidden by Moderation</h1>
 
-                                                                        <p class="empty">
-                                                                            This literature is currently hidden from the public by Nullverse moderation.
-                                                                        </p>
+                                                                            <p class="empty">
+                                                                                This literature is currently hidden from the public by Nullverse moderation.
+                                                                            </p>
 
-                                                                        <p class="empty">
-                                                                            <strong>Reason:</strong>
-                                                                            ${escapeHtml(literature.moderation_reason || "No reason provided.")}
-                                                                        </p>
+                                                                            <p class="empty">
+                                                                                <strong>Reason:</strong>
+                                                                                ${escapeHtml(literature.moderation_reason || "No reason provided.")}
+                                                                            </p>
 
-                                                                        <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                                                                            <a class="button" href="dashboard.html">Back to Dashboard</a>
+                                                                            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                                                                                <a class="button" href="dashboard.html">Back to Dashboard</a>
 
-                                                                            <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
-                                                                                Edit Literature
-                                                                            </a>
-                                                                        </div>
-                                                                    </section>
-                                                                `;
+                                                                                <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
+                                                                                    Edit Literature
+                                                                                </a>
+                                                                            </div>
+                                                                        </section>
+                                                                    `;
         }
 
         function showNotFound(message) {
@@ -5901,11 +6170,11 @@
             }
 
             return `
-                                                                        ${ratingPills.join("")}
-                                                                        ${warnings.map(warning => `
-                                                                            <span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>
-                                                                        `).join("")}
-                                                                    `;
+                                                                            ${ratingPills.join("")}
+                                                                            ${warnings.map(warning => `
+                                                                                <span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>
+                                                                            `).join("")}
+                                                                        `;
         }
 
         function getContentBlockedMessage(literature) {
@@ -5948,15 +6217,15 @@
             const main = document.querySelector("main");
             main.classList.add("content-warning-layout");
             main.innerHTML = `
-                                                                        <section class="content-warning-panel">
-                                                                            <h1>Content Hidden</h1>
-                                                                            <p class="empty">${escapeHtml(getContentBlockedMessage(literature))}</p>
-                                                                            <div class="warning-list">
-                                                                                ${renderContentWarningPills(literature)}
-                                                                            </div>
-                                                                            ${getContentGateBackControl(currentUser ? "Back to Explore" : "Go Back")}
-                                                                        </section>
-                                                                    `;
+                                                                            <section class="content-warning-panel">
+                                                                                <h1>Content Hidden</h1>
+                                                                                <p class="empty">${escapeHtml(getContentBlockedMessage(literature))}</p>
+                                                                                <div class="warning-list">
+                                                                                    ${renderContentWarningPills(literature)}
+                                                                                </div>
+                                                                                ${getContentGateBackControl(currentUser ? "Back to Explore" : "Go Back")}
+                                                                            </section>
+                                                                        `;
             bindGuestContentBackControl();
         }
 
@@ -5964,18 +6233,18 @@
             const main = document.querySelector("main");
             main.classList.add("content-warning-layout");
             main.innerHTML = `
-                                                                        <section class="content-warning-panel">
-                                                                            <h1>Content Warning</h1>
-                                                                            <p class="empty">Balanced Mode lets you continue, but this literature has sensitive or mature content.</p>
-                                                                            <div class="warning-list">
-                                                                                ${renderContentWarningPills(literature)}
-                                                                            </div>
-                                                                            <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
-                                                                                <button id="continue-warning-button" class="button" type="button">Continue Anyway</button>
-                                                                                ${getContentGateBackControl("Go Back")}
-                                                                            </div>
-                                                                        </section>
-                                                                    `;
+                                                                            <section class="content-warning-panel">
+                                                                                <h1>Content Warning</h1>
+                                                                                <p class="empty">Balanced Mode lets you continue, but this literature has sensitive or mature content.</p>
+                                                                                <div class="warning-list">
+                                                                                    ${renderContentWarningPills(literature)}
+                                                                                </div>
+                                                                                <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+                                                                                    <button id="continue-warning-button" class="button" type="button">Continue Anyway</button>
+                                                                                    ${getContentGateBackControl("Go Back")}
+                                                                                </div>
+                                                                            </section>
+                                                                        `;
 
             document.getElementById("continue-warning-button").addEventListener("click", () => {
                 sessionStorage.setItem(`nullverse_literature_warning_ok:${literature.id}`, "1");
@@ -6027,31 +6296,31 @@
             }
 
             const tooltipContent = `
-                                                                        <strong>${escapeHtml(context)} Credit</strong>
-                                                                        <br>
-                                                                        Source: ${escapeHtml(name || username || ownerUsername || formatCreditType(type))}
-                                                                        ${note ? `<br><br>${escapeHtml(note)}` : ""}
-                                                                    `;
+                                                                            <strong>${escapeHtml(context)} Credit</strong>
+                                                                            <br>
+                                                                            Source: ${escapeHtml(name || username || ownerUsername || formatCreditType(type))}
+                                                                            ${note ? `<br><br>${escapeHtml(note)}` : ""}
+                                                                        `;
 
             const tooltip = `<span class="credit-tooltip">${tooltipContent}</span>`;
 
             if (href) {
                 return `
-                                                                            <a class="credit-pill"
-                                                                               href="${escapeHtml(href)}"
-                                                                               ${href.startsWith("http") ? 'target="_blank"' : ""}>
-                                                                                ${escapeHtml(label)}
-                                                                                ${tooltip}
-                                                                            </a>
-                                                                        `;
+                                                                                <a class="credit-pill"
+                                                                                   href="${escapeHtml(href)}"
+                                                                                   ${href.startsWith("http") ? 'target="_blank"' : ""}>
+                                                                                    ${escapeHtml(label)}
+                                                                                    ${tooltip}
+                                                                                </a>
+                                                                            `;
             }
 
             return `
-                                                                        <span class="credit-pill">
-                                                                            ${escapeHtml(label)}
-                                                                            ${tooltip}
-                                                                        </span>
-                                                                    `;
+                                                                            <span class="credit-pill">
+                                                                                ${escapeHtml(label)}
+                                                                                ${tooltip}
+                                                                            </span>
+                                                                        `;
         }
 
         window.logOut = async function () {
