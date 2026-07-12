@@ -2238,8 +2238,9 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="nullverse-shell.css?v=2">
 </head>
-<body>
+<body data-page="literature" data-nv-beta-only-user="true" data-nv-active-only="true" data-nv-guest-mode="restricted" data-nv-guest-brand-href="self" data-nv-guest-login-return="true">
     <div id="reading-progress" class="reading-progress"></div>
     <div class="nullverse-stars"></div>
     <div id="literature-background-layer" class="literature-background-layer">
@@ -2247,23 +2248,9 @@
         <div id="literature-background-image" class="literature-background-image"></div>
         <div id="literature-background-overlay" class="literature-background-overlay"></div>
     </div>
-    <header class="literature-site-header">
-        <div class="logo">
-            <a id="literature-logo-link" href="javascript:void(0)" aria-label="Nullverse">
-                <img src="Nullverse-3.png" alt="Nullverse" class="site-logo">
-            </a>
-        </div>
-        <div class="literature-header-actions">
-            <nav id="literature-main-nav" aria-label="Main navigation"></nav>
-            <button id="literature-mobile-menu-button"
-                    class="literature-mobile-menu-button"
-                    type="button"
-                    aria-label="Open navigation"
-                    aria-expanded="false">
-                ☰
-            </button>
-        </div>
-    </header>
+
+    <div id="nv-site-header"></div>
+    <div id="nv-mobile-nav"></div>
     <div id="literature-nav-scrim" class="literature-nav-scrim" aria-hidden="true"></div>
     <main>
         <aside class="left-sidebar">
@@ -2529,6 +2516,7 @@
                     .maybeSingle();
 
                 if (betaError || !betaAccess) {
+                    await supabase.auth.signOut();
                     return;
                 }
 
@@ -2536,7 +2524,22 @@
                 const profile = viewer?.profile || null;
                 const status = String(profile?.account_status || "active").toLowerCase();
 
-                if (!profile || status === "banned" || status === "suspended") {
+                if (!profile) {
+                    return;
+                }
+
+                if (status === "banned") {
+                    window.location.replace("banned.html");
+                    return;
+                }
+
+                if (status === "suspended") {
+                    window.location.replace("suspended.html");
+                    return;
+                }
+
+                if (status === "restricted") {
+                    window.location.replace("restricted.html");
                     return;
                 }
 
@@ -2595,14 +2598,14 @@
                 logoLink.style.pointerEvents = "";
                 nav.classList.remove("guest-nav");
                 nav.innerHTML = `
-                                                                <a href="index.html">Home</a>
-                                                                <a href="notifications.html">Notifications</a>
-                                                                <a href="explore.html">Explore</a>
-                                                                <a href="profile.html">Profile</a>
-                                                                <a href="dashboard.html">Dashboard</a>
-                                                                <a href="messages.html">Messages</a>
-                                                                <button type="button" onclick="logOut()">Log Out</button>
-                                                            `;
+                                                                        <a href="index.html">Home</a>
+                                                                        <a href="notifications.html">Notifications</a>
+                                                                        <a href="explore.html">Explore</a>
+                                                                        <a href="profile.html">Profile</a>
+                                                                        <a href="dashboard.html">Dashboard</a>
+                                                                        <a href="messages.html">Messages</a>
+                                                                        <button type="button" onclick="logOut()">Log Out</button>
+                                                                    `;
                 menuButton.classList.remove("guest-hidden");
             } else {
                 logoLink.href = "javascript:void(0)";
@@ -2841,9 +2844,9 @@
             const safe = normalizeImagePlacement(placement);
 
             return `
-                                                                                                        object-fit:${safe.fit || "cover"};
-                                                                                                        transform:${getImagePlacementTransform(safe)};
-                                                                                                    `;
+                                                                                                                object-fit:${safe.fit || "cover"};
+                                                                                                                transform:${getImagePlacementTransform(safe)};
+                                                                                                            `;
         }
 
         const NV_WORLD_RICH_TEXT_SNAPSHOT_PREFIX = "NV_LITERATURE_RICH_TEXT_V2:";
@@ -4225,9 +4228,9 @@
                 coverWrap.dataset.coverImageAlt = coverAlt;
 
                 coverWrap.innerHTML = `
-                                                                                                                <img src="${escapeHtml(literature.cover_image_url)}" alt="${escapeHtml(coverAlt)}" style="${getImagePlacementStyle(coverPlacement)}">
-                                                                                                                ${coverCredit}
-                                                                                                            `;
+                                                                                                                        <img src="${escapeHtml(literature.cover_image_url)}" alt="${escapeHtml(coverAlt)}" style="${getImagePlacementStyle(coverPlacement)}">
+                                                                                                                        ${coverCredit}
+                                                                                                                    `;
             } else {
                 coverWrap.removeAttribute("role");
                 coverWrap.removeAttribute("tabindex");
@@ -5041,13 +5044,13 @@
                     const snippet = getChapterSearchSnippet(chapter);
 
                     return `
-                                                                                        <button type="button"
-                                                                                                class="chapter-nav-link${realIndex === currentChapterIndex ? " active" : ""}"
-                                                                                                data-chapter-index="${realIndex}">
-                                                                                            <span>Chapter ${realIndex + 1}: ${escapeHtml(title)}</span>
-                                                                                            <small>${escapeHtml(snippet)}</small>
-                                                                                        </button>
-                                                                                    `;
+                                                                                                <button type="button"
+                                                                                                        class="chapter-nav-link${realIndex === currentChapterIndex ? " active" : ""}"
+                                                                                                        data-chapter-index="${realIndex}">
+                                                                                                    <span>Chapter ${realIndex + 1}: ${escapeHtml(title)}</span>
+                                                                                                    <small>${escapeHtml(snippet)}</small>
+                                                                                                </button>
+                                                                                            `;
                 }).join("");
 
                 links.querySelectorAll(".chapter-nav-link").forEach(button => {
@@ -5084,27 +5087,27 @@
             const current = allChapters[currentChapterIndex] || null;
 
             return `
-                                                            <nav class="chapter-switcher ${position}" aria-label="Chapter navigation">
-                                                                <button type="button"
-                                                                        class="chapter-switch-button previous"
-                                                                        data-chapter-direction="-1"
-                                                                        ${previous ? "" : "disabled"}>
-                                                                    <small>Previous Chapter</small>
-                                                                    <strong>${previous ? escapeHtml(previous.title || `Chapter ${currentChapterIndex}`) : "Beginning"}</strong>
-                                                                </button>
-                                                                <button type="button" class="chapter-list-button" data-open-chapter-list>
-                                                                    <small>Chapter List</small>
-                                                                    <strong>${currentChapterIndex + 1} / ${allChapters.length}</strong>
-                                                                </button>
-                                                                <button type="button"
-                                                                        class="chapter-switch-button next"
-                                                                        data-chapter-direction="1"
-                                                                        ${next ? "" : "disabled"}>
-                                                                    <small>${next ? "Next Chapter" : "End of Story"}</small>
-                                                                    <strong>${next ? escapeHtml(next.title || `Chapter ${currentChapterIndex + 2}`) : escapeHtml(current?.title || "Complete")}</strong>
-                                                                </button>
-                                                            </nav>
-                                                        `;
+                                                                    <nav class="chapter-switcher ${position}" aria-label="Chapter navigation">
+                                                                        <button type="button"
+                                                                                class="chapter-switch-button previous"
+                                                                                data-chapter-direction="-1"
+                                                                                ${previous ? "" : "disabled"}>
+                                                                            <small>Previous Chapter</small>
+                                                                            <strong>${previous ? escapeHtml(previous.title || `Chapter ${currentChapterIndex}`) : "Beginning"}</strong>
+                                                                        </button>
+                                                                        <button type="button" class="chapter-list-button" data-open-chapter-list>
+                                                                            <small>Chapter List</small>
+                                                                            <strong>${currentChapterIndex + 1} / ${allChapters.length}</strong>
+                                                                        </button>
+                                                                        <button type="button"
+                                                                                class="chapter-switch-button next"
+                                                                                data-chapter-direction="1"
+                                                                                ${next ? "" : "disabled"}>
+                                                                            <small>${next ? "Next Chapter" : "End of Story"}</small>
+                                                                            <strong>${next ? escapeHtml(next.title || `Chapter ${currentChapterIndex + 2}`) : escapeHtml(current?.title || "Complete")}</strong>
+                                                                        </button>
+                                                                    </nav>
+                                                                `;
         }
 
         function bindChapterSwitcher(container) {
@@ -5142,12 +5145,12 @@
             const focusWasOpen = document.getElementById("literature-focus-overlay")?.classList.contains("open");
 
             container.innerHTML = `
-                                                            <div class="active-chapter-shell">
-                                                                ${buildChapterSwitcher("top")}
-                                                                ${buildChapterArticle(chapter, currentChapterIndex)}
-                                                                ${buildChapterSwitcher("bottom")}
-                                                            </div>
-                                                        `;
+                                                                    <div class="active-chapter-shell">
+                                                                        ${buildChapterSwitcher("top")}
+                                                                        ${buildChapterArticle(chapter, currentChapterIndex)}
+                                                                        ${buildChapterSwitcher("bottom")}
+                                                                    </div>
+                                                                `;
 
             container
                 .querySelectorAll(".chapter-main-text.rich-chapter-content")
@@ -5499,10 +5502,10 @@
             const chapterLabel = chapters.length === 1 ? "chapter" : "chapters";
 
             meta.innerHTML = `
-                                                                                                            <span>${chapters.length} ${chapterLabel}</span>
-                                                                                                            <span>${totalWords.toLocaleString()} words</span>
-                                                                                                            <span>${minutes} min read</span>
-                                                                                                        `;
+                                                                                                                    <span>${chapters.length} ${chapterLabel}</span>
+                                                                                                                    <span>${totalWords.toLocaleString()} words</span>
+                                                                                                                    <span>${minutes} min read</span>
+                                                                                                                `;
         }
 
         window.scrollToFirstChapter = async function () {
@@ -5741,33 +5744,33 @@
             const visualBottom = buildChapterHeaderImage(chapter, "bottom");
 
             return `
-                                                                                                            <article id="${idPrefix}-${chapterNumber}"
-                                                                                                                     class="literature-chapter"
-                                                                                                                     style="${buildChapterCardStyle(chapter)} ${buildChapterWritingStyle(chapter)}">
-                                                                                                                <div class="chapter-title-row">
-                                                                                                                    <div class="chapter-eyebrow">Chapter ${chapterNumber} · ${getChapterReadTime(chapter)} min read</div>
-                                                                                                                    <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
-                                                                                                                    ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
-                                                                                                                </div>
+                                                                                                                    <article id="${idPrefix}-${chapterNumber}"
+                                                                                                                             class="literature-chapter"
+                                                                                                                             style="${buildChapterCardStyle(chapter)} ${buildChapterWritingStyle(chapter)}">
+                                                                                                                        <div class="chapter-title-row">
+                                                                                                                            <div class="chapter-eyebrow">Chapter ${chapterNumber} · ${getChapterReadTime(chapter)} min read</div>
+                                                                                                                            <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
+                                                                                                                            ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
+                                                                                                                        </div>
 
-                                                                                                                ${visualTop}
+                                                                                                                        ${visualTop}
 
-                                                                                                                <div class="chapter-main-text rich-chapter-content">
-                                                                                                                    ${visualLeftRight}
-                                                                                                                    ${buildChapterBodyHtml(chapter.body || "No chapter text yet.")}
-                                                                                                                </div>
+                                                                                                                        <div class="chapter-main-text rich-chapter-content">
+                                                                                                                            ${visualLeftRight}
+                                                                                                                            ${buildChapterBodyHtml(chapter.body || "No chapter text yet.")}
+                                                                                                                        </div>
 
-                                                                                                                ${visualBottom}
+                                                                                                                        ${visualBottom}
 
-                                                                                                                ${chapter.author_note ? `
-                                                                                                                    <div class="author-note">
-                                                                                                                        <strong>Author Note</strong>
-                                                                                                                        <br><br>
-                                                                                                                        ${escapeHtml(chapter.author_note)}
-                                                                                                                    </div>
-                                                                                                                ` : ""}
+                                                                                                                        ${chapter.author_note ? `
+                                                                                                                            <div class="author-note">
+                                                                                                                                <strong>Author Note</strong>
+                                                                                                                                <br><br>
+                                                                                                                                ${escapeHtml(chapter.author_note)}
+                                                                                                                            </div>
+                                                                                                                        ` : ""}
 
-                                                                                                                ${chapter.theme_card_style === "image" && chapter.theme_card_image_url ? buildCreditPill({
+                                                                                                                        ${chapter.theme_card_style === "image" && chapter.theme_card_image_url ? buildCreditPill({
                 type: chapter.card_credit_type,
                 name: chapter.card_credit_name,
                 username: chapter.card_credit_nullverse_username,
@@ -5776,8 +5779,8 @@
                 ownerUsername: currentLiterature.ownerProfile?.username,
                 context: "Chapter Card Image"
             }) : ""}
-                                                                                                            </article>
-                                                                                                        `;
+                                                                                                                    </article>
+                                                                                                                `;
         }
 
         function buildChapterHeaderImage(chapter, requestedPosition) {
@@ -5808,11 +5811,11 @@
             ].filter(Boolean).join(" ");
 
             return `
-                                                                                                            <div class="${classes}">
-                                                                                                                <img src="${escapeHtml(chapter.image_url)}" alt="" style="${getImagePlacementStyle(chapter.image_placement)}">
-                                                                                                                ${credit}
-                                                                                                            </div>
-                                                                                                        `;
+                                                                                                                    <div class="${classes}">
+                                                                                                                        <img src="${escapeHtml(chapter.image_url)}" alt="" style="${getImagePlacementStyle(chapter.image_placement)}">
+                                                                                                                        ${credit}
+                                                                                                                    </div>
+                                                                                                                `;
         }
 
         function buildChapterCardStyle(chapter) {
@@ -5833,14 +5836,14 @@
             const placement = normalizeImagePlacement(chapter.theme_card_image_placement);
 
             return `
-                                                                                                            --chapter-card-background:${background};
-                                                                                                            --chapter-card-text:${chapter.theme_card_text_color || "#f5f5f5"};
-                                                                                                            --chapter-card-image:${image};
-                                                                                                            --chapter-card-image-size:${getImagePlacementFit(placement)};
-                                                                                                            --chapter-card-image-transform:${getImagePlacementTransform(placement)};
-                                                                                                            --chapter-card-image-opacity:${chapter.theme_card_opacity ?? .85};
-                                                                                                            --chapter-card-overlay:${chapter.theme_card_overlay ?? .35};
-                                                                                                        `;
+                                                                                                                    --chapter-card-background:${background};
+                                                                                                                    --chapter-card-text:${chapter.theme_card_text_color || "#f5f5f5"};
+                                                                                                                    --chapter-card-image:${image};
+                                                                                                                    --chapter-card-image-size:${getImagePlacementFit(placement)};
+                                                                                                                    --chapter-card-image-transform:${getImagePlacementTransform(placement)};
+                                                                                                                    --chapter-card-image-opacity:${chapter.theme_card_opacity ?? .85};
+                                                                                                                    --chapter-card-overlay:${chapter.theme_card_overlay ?? .35};
+                                                                                                                `;
         }
 
         function buildChapterWritingStyle(chapter) {
@@ -5854,11 +5857,11 @@
             const spacing = spacingMap[chapter.spacing_type || "comfortable"] || spacingMap.comfortable;
 
             return `
-                                                                                                            --chapter-text-color:${chapter.text_color || "#f5f5f5"};
-                                                                                                            --chapter-panel-background:${chapter.chapter_panel_color || "#141416"};
-                                                                                                            --chapter-line-height:${spacing[0]};
-                                                                                                            --chapter-letter-spacing:${spacing[1]};
-                                                                                                        `;
+                                                                                                                    --chapter-text-color:${chapter.text_color || "#f5f5f5"};
+                                                                                                                    --chapter-panel-background:${chapter.chapter_panel_color || "#141416"};
+                                                                                                                    --chapter-line-height:${spacing[0]};
+                                                                                                                    --chapter-letter-spacing:${spacing[1]};
+                                                                                                                `;
         }
 
         function renderTags(literature) {
@@ -5878,51 +5881,51 @@
 
             if (currentUser && currentUser.id === literature.owner_id) {
                 html += `
-                                                                                                                <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
-                                                                                                                    Edit Literature
-                                                                                                                </a>
-                                                                                                            `;
+                                                                                                                        <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
+                                                                                                                            Edit Literature
+                                                                                                                        </a>
+                                                                                                                    `;
             }
 
             if (canModerateWorlds(currentPermissions) && canModerateContentOwner(currentProfile, literature.ownerProfile)) {
                 html += `
-                                                                                                                <div style="margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
-                                                                                                    <strong>Literature Moderation</strong>
+                                                                                                                        <div style="margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,0.04);">
+                                                                                                            <strong>Literature Moderation</strong>
 
-                                                                                                    <p class="empty">
-                                                                                                        Status: ${escapeHtml(literature.moderation_status || "visible")}
-                                                                                                    </p>
+                                                                                                            <p class="empty">
+                                                                                                                Status: ${escapeHtml(literature.moderation_status || "visible")}
+                                                                                                            </p>
 
-                                                                                                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                                                                                                        <button class="button" onclick="setLiteratureModerationStatus('visible')">
-                                                                                                            Restore Literature
-                                                                                                        </button>
+                                                                                                            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                                                                                                                <button class="button" onclick="setLiteratureModerationStatus('visible')">
+                                                                                                                    Restore Literature
+                                                                                                                </button>
 
-                                                                                                        <div style="width:100%;margin-top:10px;">
-                                                                                                            <label class="empty">Reason for hiding</label>
+                                                                                                                <div style="width:100%;margin-top:10px;">
+                                                                                                                    <label class="empty">Reason for hiding</label>
 
-                                                                                                            <input id="literature-hide-reason"
-                                                                                                                   placeholder="Reason shown to creator..."
-                                                                                                                   style="
-                                                                                                                       width:100%;
-                                                                                                                       box-sizing:border-box;
-                                                                                                                       margin-top:8px;
-                                                                                                                       padding:10px;
-                                                                                                                       border-radius:10px;
-                                                                                                                       border:1px solid var(--border-color);
-                                                                                                                       background:rgba(0,0,0,.28);
-                                                                                                                       color:var(--text-primary);
-                                                                                                                   ">
-                                                                                                        </div>
+                                                                                                                    <input id="literature-hide-reason"
+                                                                                                                           placeholder="Reason shown to creator..."
+                                                                                                                           style="
+                                                                                                                               width:100%;
+                                                                                                                               box-sizing:border-box;
+                                                                                                                               margin-top:8px;
+                                                                                                                               padding:10px;
+                                                                                                                               border-radius:10px;
+                                                                                                                               border:1px solid var(--border-color);
+                                                                                                                               background:rgba(0,0,0,.28);
+                                                                                                                               color:var(--text-primary);
+                                                                                                                           ">
+                                                                                                                </div>
 
-                                                                                                        <button class="button" onclick="setLiteratureModerationStatus('hidden')">
-                                                                                                            Hide Literature
-                                                                                                        </button>
-                                                                                                    </div>
+                                                                                                                <button class="button" onclick="setLiteratureModerationStatus('hidden')">
+                                                                                                                    Hide Literature
+                                                                                                                </button>
+                                                                                                            </div>
 
-                                                                                                    <p id="literature-moderation-message" class="empty"></p>
+                                                                                                            <p id="literature-moderation-message" class="empty"></p>
 </div>
-                                                                                                            `;
+                                                                                                                    `;
             }
 
             container.innerHTML = html;
@@ -6180,27 +6183,27 @@
             const main = document.querySelector("main");
             main.classList.add("content-warning-layout");
             main.innerHTML = `
-                                                                                                        <section class="content-warning-panel">
-                                                                                                            <h1>Literature Hidden by Moderation</h1>
+                                                                                                                <section class="content-warning-panel">
+                                                                                                                    <h1>Literature Hidden by Moderation</h1>
 
-                                                                                                            <p class="empty">
-                                                                                                                This literature is currently hidden from the public by Nullverse moderation.
-                                                                                                            </p>
+                                                                                                                    <p class="empty">
+                                                                                                                        This literature is currently hidden from the public by Nullverse moderation.
+                                                                                                                    </p>
 
-                                                                                                            <p class="empty">
-                                                                                                                <strong>Reason:</strong>
-                                                                                                                ${escapeHtml(literature.moderation_reason || "No reason provided.")}
-                                                                                                            </p>
+                                                                                                                    <p class="empty">
+                                                                                                                        <strong>Reason:</strong>
+                                                                                                                        ${escapeHtml(literature.moderation_reason || "No reason provided.")}
+                                                                                                                    </p>
 
-                                                                                                            <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                                                                                                                <a class="button" href="dashboard.html">Back to Dashboard</a>
+                                                                                                                    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                                                                                                                        <a class="button" href="dashboard.html">Back to Dashboard</a>
 
-                                                                                                                <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
-                                                                                                                    Edit Literature
-                                                                                                                </a>
-                                                                                                            </div>
-                                                                                                        </section>
-                                                                                                    `;
+                                                                                                                        <a class="button" href="edit-literature.html?id=${encodeURIComponent(literature.id)}">
+                                                                                                                            Edit Literature
+                                                                                                                        </a>
+                                                                                                                    </div>
+                                                                                                                </section>
+                                                                                                            `;
         }
 
         function showNotFound(message) {
@@ -6225,11 +6228,11 @@
             }
 
             return `
-                                                                                                            ${ratingPills.join("")}
-                                                                                                            ${warnings.map(warning => `
-                                                                                                                <span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>
-                                                                                                            `).join("")}
-                                                                                                        `;
+                                                                                                                    ${ratingPills.join("")}
+                                                                                                                    ${warnings.map(warning => `
+                                                                                                                        <span class="warning-pill">${escapeHtml(formatWarningLabel(warning))}</span>
+                                                                                                                    `).join("")}
+                                                                                                                `;
         }
 
         function getContentBlockedMessage(literature) {
@@ -6272,15 +6275,15 @@
             const main = document.querySelector("main");
             main.classList.add("content-warning-layout");
             main.innerHTML = `
-                                                                                                            <section class="content-warning-panel">
-                                                                                                                <h1>Content Hidden</h1>
-                                                                                                                <p class="empty">${escapeHtml(getContentBlockedMessage(literature))}</p>
-                                                                                                                <div class="warning-list">
-                                                                                                                    ${renderContentWarningPills(literature)}
-                                                                                                                </div>
-                                                                                                                ${getContentGateBackControl(currentUser ? "Back to Explore" : "Go Back")}
-                                                                                                            </section>
-                                                                                                        `;
+                                                                                                                    <section class="content-warning-panel">
+                                                                                                                        <h1>Content Hidden</h1>
+                                                                                                                        <p class="empty">${escapeHtml(getContentBlockedMessage(literature))}</p>
+                                                                                                                        <div class="warning-list">
+                                                                                                                            ${renderContentWarningPills(literature)}
+                                                                                                                        </div>
+                                                                                                                        ${getContentGateBackControl(currentUser ? "Back to Explore" : "Go Back")}
+                                                                                                                    </section>
+                                                                                                                `;
             bindGuestContentBackControl();
         }
 
@@ -6288,18 +6291,18 @@
             const main = document.querySelector("main");
             main.classList.add("content-warning-layout");
             main.innerHTML = `
-                                                                                                            <section class="content-warning-panel">
-                                                                                                                <h1>Content Warning</h1>
-                                                                                                                <p class="empty">Balanced Mode lets you continue, but this literature has sensitive or mature content.</p>
-                                                                                                                <div class="warning-list">
-                                                                                                                    ${renderContentWarningPills(literature)}
-                                                                                                                </div>
-                                                                                                                <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
-                                                                                                                    <button id="continue-warning-button" class="button" type="button">Continue Anyway</button>
-                                                                                                                    ${getContentGateBackControl("Go Back")}
-                                                                                                                </div>
-                                                                                                            </section>
-                                                                                                        `;
+                                                                                                                    <section class="content-warning-panel">
+                                                                                                                        <h1>Content Warning</h1>
+                                                                                                                        <p class="empty">Balanced Mode lets you continue, but this literature has sensitive or mature content.</p>
+                                                                                                                        <div class="warning-list">
+                                                                                                                            ${renderContentWarningPills(literature)}
+                                                                                                                        </div>
+                                                                                                                        <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+                                                                                                                            <button id="continue-warning-button" class="button" type="button">Continue Anyway</button>
+                                                                                                                            ${getContentGateBackControl("Go Back")}
+                                                                                                                        </div>
+                                                                                                                    </section>
+                                                                                                                `;
 
             document.getElementById("continue-warning-button").addEventListener("click", () => {
                 sessionStorage.setItem(`nullverse_literature_warning_ok:${literature.id}`, "1");
@@ -6351,31 +6354,31 @@
             }
 
             const tooltipContent = `
-                                                                                                            <strong>${escapeHtml(context)} Credit</strong>
-                                                                                                            <br>
-                                                                                                            Source: ${escapeHtml(name || username || ownerUsername || formatCreditType(type))}
-                                                                                                            ${note ? `<br><br>${escapeHtml(note)}` : ""}
-                                                                                                        `;
+                                                                                                                    <strong>${escapeHtml(context)} Credit</strong>
+                                                                                                                    <br>
+                                                                                                                    Source: ${escapeHtml(name || username || ownerUsername || formatCreditType(type))}
+                                                                                                                    ${note ? `<br><br>${escapeHtml(note)}` : ""}
+                                                                                                                `;
 
             const tooltip = `<span class="credit-tooltip">${tooltipContent}</span>`;
 
             if (href) {
                 return `
-                                                                                                                <a class="credit-pill"
-                                                                                                                   href="${escapeHtml(href)}"
-                                                                                                                   ${href.startsWith("http") ? 'target="_blank"' : ""}>
-                                                                                                                    ${escapeHtml(label)}
-                                                                                                                    ${tooltip}
-                                                                                                                </a>
-                                                                                                            `;
+                                                                                                                        <a class="credit-pill"
+                                                                                                                           href="${escapeHtml(href)}"
+                                                                                                                           ${href.startsWith("http") ? 'target="_blank"' : ""}>
+                                                                                                                            ${escapeHtml(label)}
+                                                                                                                            ${tooltip}
+                                                                                                                        </a>
+                                                                                                                    `;
             }
 
             return `
-                                                                                                            <span class="credit-pill">
-                                                                                                                ${escapeHtml(label)}
-                                                                                                                ${tooltip}
-                                                                                                            </span>
-                                                                                                        `;
+                                                                                                                    <span class="credit-pill">
+                                                                                                                        ${escapeHtml(label)}
+                                                                                                                        ${tooltip}
+                                                                                                                    </span>
+                                                                                                                `;
         }
 
         window.logOut = async function () {
@@ -6383,5 +6386,12 @@
             window.location.href = "login.html";
         };
     </script>
+
+    <script type="module">
+        import { setupAutomaticProgressTracking } from "./nullverse-progress.js";
+        setupAutomaticProgressTracking("literature");
+    </script>
+
+    <script type="module" src="nullverse-shell-bootstrap.js?v=2"></script>
 </body>
 </html>

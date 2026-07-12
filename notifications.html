@@ -272,49 +272,39 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="nullverse-shell.css?v=2">
+    <link rel="stylesheet" href="notifications.css?v=2">
 </head>
 
-<body>
+<body data-page="notifications" data-nv-beta-only-user="true" data-nv-active-only="true">
     <div class="nullverse-stars"></div>
-    <header>
-        <div class="logo">
-            <a href="index.html">
-                <img src="Nullverse-3.png"
-                     alt="Nullverse"
-                     class="site-logo">
-            </a>
-        </div>
-        <nav>
-            <a href="index.html">Home</a>
-            <a href="notifications.html" class="active">Notifications</a>
-            <a href="explore.html">Explore</a>
-            <a href="profile.html">Profile</a>
-            <a href="dashboard.html">Dashboard</a>
-            <a href="messages.html">Messages</a>
-            <button onclick="logOut()">Log Out</button>
-        </nav>
-    </header>
+    <div id="nv-site-header"></div>
+    <div id="nv-mobile-nav"></div>
 
-    <main>
-
-        <section class="hero">
-            <h1>Notifications</h1>
-            <p>Updates from creators you follow, activity on your worlds, comments, likes, questions, and community additions.</p>
-        </section>
-
-        <div class="top-actions">
-            <span id="notification-count" class="badge">Loading...</span>
-
-            <div>
-                <button class="button" onclick="markAllRead()">Mark All Read</button>
-                <button class="button" onclick="clearRead()">Clear Read</button>
+    <main class="nv-page-shell notifications-main">
+        <section class="notifications-hero">
+            <div><p class="notifications-kicker">Your activity center</p><h1>Notifications</h1><p>Follow replies, likes, moderation updates, questions, additions, and creator activity without losing the important things in one long stream.</p></div>
+            <div class="notifications-summary">
+                <div class="notification-summary-card"><strong id="notification-unread-total">0</strong><span>Unread</span></div>
+                <div class="notification-summary-card"><strong id="notification-total">0</strong><span>Total</span></div>
             </div>
-        </div>
-
-        <section id="notifications-container">
-            <p class="empty">Loading notifications...</p>
         </section>
 
+        <section class="notifications-toolbar" aria-label="Notification controls">
+            <input id="notification-search" class="notifications-search" type="search" placeholder="Search notifications..." autocomplete="off">
+            <div class="notifications-filter-row">
+                <button class="notification-filter active" type="button" data-notification-filter="all">All</button>
+                <button class="notification-filter" type="button" data-notification-filter="unread">Unread</button>
+                <button class="notification-filter" type="button" data-notification-filter="read">Read</button>
+            </div>
+            <div class="notifications-action-row">
+                <span id="notification-count" class="badge">Loading...</span>
+                <button class="button" type="button" onclick="markAllRead()">Mark All Read</button>
+                <button class="button" type="button" onclick="clearRead()">Clear Read</button>
+            </div>
+        </section>
+
+        <section id="notifications-container" class="notifications-list"><p class="notifications-empty">Loading notifications...</p></section>
     </main>
 
     <script type="module">
@@ -327,6 +317,24 @@
         const currentUser = await requireBetaAccess();
         setupNotificationBadge();
         console.log("Viewing notifications as:", currentUser.id, currentUser.email);
+
+        let allNotifications = [];
+        let activeNotificationFilter = "all";
+        let notificationSearchQuery = "";
+
+        document.querySelectorAll("[data-notification-filter]").forEach(button => {
+            button.addEventListener("click", () => {
+                activeNotificationFilter = button.dataset.notificationFilter || "all";
+                document.querySelectorAll("[data-notification-filter]").forEach(item => item.classList.toggle("active", item === button));
+                renderNotifications();
+            });
+        });
+
+        document.getElementById("notification-search")?.addEventListener("input", event => {
+            notificationSearchQuery = String(event.target.value || "").trim().toLowerCase();
+            renderNotifications();
+        });
+
         await loadNotifications();
 
         async function loadNotifications() {
@@ -343,45 +351,43 @@
                 return;
             }
 
-            const unreadCount = notifications?.filter(n => !n.is_read).length || 0;
+            allNotifications = Array.isArray(notifications) ? notifications : [];
+            const unreadCount = allNotifications.filter(notification => !notification.is_read).length;
 
-            document.getElementById("notification-count").textContent =
-                `${unreadCount} unread`;
+            document.getElementById("notification-count").textContent = `${unreadCount} unread`;
+            document.getElementById("notification-unread-total").textContent = String(unreadCount);
+            document.getElementById("notification-total").textContent = String(allNotifications.length);
+            renderNotifications();
+        }
 
-            if (!notifications || notifications.length === 0) {
-                container.innerHTML = `<p class="empty">No notifications yet.</p>`;
+        function renderNotifications() {
+            const container = document.getElementById("notifications-container");
+            const filtered = allNotifications.filter(notification => {
+                if (activeNotificationFilter === "unread" && notification.is_read) return false;
+                if (activeNotificationFilter === "read" && !notification.is_read) return false;
+                if (notificationSearchQuery && !String(notification.message || "").toLowerCase().includes(notificationSearchQuery)) return false;
+                return true;
+            });
+
+            if (!filtered.length) {
+                const message = allNotifications.length ? "No notifications match this view." : "No notifications yet.";
+                container.innerHTML = `<div class="notifications-empty">${escapeHtml(message)}</div>`;
                 return;
             }
 
-            container.innerHTML = notifications.map(notification => `
-            <article class="notification-card ${notification.is_read ? "" : "unread"}">
-                <div class="notification-message">
-                    ${escapeHtml(notification.message)}
-                </div>
-
-                <div class="notification-meta">
-                    ${formatDate(notification.created_at)}
-                </div>
-
-                <div class="actions">
-                    ${notification.link ? `
-                        <a class="button" href="${escapeHtml(notification.link)}" onclick="markReadInline('${notification.id}')">
-                            Open
-                        </a>
-                    ` : ""}
-
-                    ${!notification.is_read ? `
-                        <button class="button" onclick="markRead('${notification.id}')">
-                            Mark Read
-                        </button>
-                    ` : ""}
-
-                    <button class="button" onclick="deleteNotification('${notification.id}')">
-                        Delete
-                    </button>
-                </div>
-            </article>
-        `).join("");
+            container.innerHTML = filtered.map(notification => `
+                    <article class="notification-card ${notification.is_read ? "" : "unread"}">
+                        <div class="notification-content">
+                            <div class="notification-message">${escapeHtml(notification.message)}</div>
+                            <div class="notification-meta">${formatDate(notification.created_at)}</div>
+                        </div>
+                        <div class="actions">
+                            ${notification.link ? `<a class="button" href="${escapeHtml(notification.link)}" onclick="markReadInline('${notification.id}')">Open</a>` : ""}
+                            ${!notification.is_read ? `<button class="button" onclick="markRead('${notification.id}')">Mark Read</button>` : ""}
+                            <button class="button danger-action" onclick="deleteNotification('${notification.id}')">Delete</button>
+                        </div>
+                    </article>
+                `).join("");
         }
 
         window.markRead = async function (notificationId) {
@@ -445,11 +451,20 @@
                 .replaceAll("'", "&#039;");
         }
 
+
+        const notificationChannel = supabase
+            .channel(`notification-center-${currentUser.id}`)
+            .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${currentUser.id}` }, loadNotifications)
+            .subscribe();
+
+        window.addEventListener("beforeunload", () => supabase.removeChannel(notificationChannel));
+
         window.logOut = async function () {
             await supabase.auth.signOut();
             window.location.href = "login.html";
         };
     </script>
 
+    <script type="module" src="nullverse-shell-bootstrap.js?v=2"></script>
 </body>
 </html>

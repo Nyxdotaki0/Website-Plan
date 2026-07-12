@@ -235,42 +235,33 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="nullverse-shell.css?v=2">
+    <link rel="stylesheet" href="messages.css?v=2">
 </head>
 
-<body>
+<body data-page="messages" data-nv-beta-only-user="true" data-nv-active-only="true">
     <div class="nullverse-stars"></div>
+    <div id="nv-site-header"></div>
+    <div id="nv-mobile-nav"></div>
 
-    <header>
-        <div class="logo">
-            <a href="index.html">
-                <img src="Nullverse-3.png" alt="Nullverse" class="site-logo">
-            </a>
-        </div>
-
-        <nav>
-            <a href="index.html">Home</a>
-            <a href="notifications.html">Notifications</a>
-            <a href="explore.html">Explore</a>
-            <a href="messages.html" class="active">Messages</a>
-            <a href="profile.html">Profile</a>
-            <a href="dashboard.html">Dashboard</a>
-            <button onclick="logOut()">Log Out</button>
-        </nav>
-    </header>
-
-    <main>
-        <section class="hero">
-            <h1>Messages</h1>
-            <p>
-                Private conversations with mutual followers. You can only message someone when you follow each other and neither of you has blocked the other.
-            </p>
-        </section>
-
-        <section class="panel">
-            <div id="conversations-container">
-                <p class="empty">Loading conversations...</p>
+    <main class="nv-page-shell messages-main">
+        <section class="messages-hero">
+            <div><p class="messages-kicker">Private conversations</p><h1>Messages</h1><p>Keep up with mutual followers and open the conversations that need your attention. Blocking and mutual-follow requirements remain enforced by the existing messaging system.</p></div>
+            <div class="messages-summary">
+                <div class="messages-summary-card"><strong id="conversation-count">0</strong><span>Conversations</span></div>
+                <div class="messages-summary-card"><strong id="unread-conversation-count">0</strong><span>Unread chats</span></div>
             </div>
         </section>
+
+        <section class="messages-toolbar" aria-label="Message filters">
+            <input id="messages-search" class="messages-search" type="search" placeholder="Search people or recent messages..." autocomplete="off">
+            <div class="messages-filter-row">
+                <button class="message-filter active" type="button" data-message-filter="all">All</button>
+                <button class="message-filter" type="button" data-message-filter="unread">Unread</button>
+            </div>
+        </section>
+
+        <section class="panel messages-panel"><div id="conversations-container" class="conversations-list"><div class="messages-empty">Loading conversations...</div></div></section>
     </main>
 
     <script type="module">
@@ -283,6 +274,23 @@
 
         setupNotificationBadge();
         setupMessageBadge();
+
+        let allConversationCards = [];
+        let activeMessageFilter = "all";
+        let messageSearchQuery = "";
+
+        document.querySelectorAll("[data-message-filter]").forEach(button => {
+            button.addEventListener("click", () => {
+                activeMessageFilter = button.dataset.messageFilter || "all";
+                document.querySelectorAll("[data-message-filter]").forEach(item => item.classList.toggle("active", item === button));
+                renderConversationList();
+            });
+        });
+
+        document.getElementById("messages-search")?.addEventListener("input", event => {
+            messageSearchQuery = String(event.target.value || "").trim().toLowerCase();
+            renderConversationList();
+        });
 
         await loadConversations();
 
@@ -407,18 +415,31 @@
                             latest?.created_at || ""
                     };
                 })
-                .sort((a, b) =>
-                    new Date(b.sortDate || 0) - new Date(a.sortDate || 0)
-                );
+                    .sort((a, b) =>
+                        new Date(b.sortDate || 0) - new Date(a.sortDate || 0)
+                    );
 
-            if (!cards.length) {
-                container.innerHTML =
-                    `<p class="empty">No conversations found.</p>`;
+            allConversationCards = cards;
+            document.getElementById("conversation-count").textContent = String(cards.length);
+            document.getElementById("unread-conversation-count").textContent = String(cards.filter(card => card.unreadCount > 0).length);
+            renderConversationList();
+        }
+
+        function renderConversationList() {
+            const container = document.getElementById("conversations-container");
+            const filtered = allConversationCards.filter(item => {
+                if (activeMessageFilter === "unread" && item.unreadCount <= 0) return false;
+                const haystack = [item.profile?.display_name, item.profile?.username, item.latest?.body].filter(Boolean).join(" ").toLowerCase();
+                return !messageSearchQuery || haystack.includes(messageSearchQuery);
+            });
+
+            if (!filtered.length) {
+                const message = allConversationCards.length ? "No conversations match this view." : "No messages yet. Mutual followers will show up here once a conversation starts.";
+                container.innerHTML = `<div class="messages-empty">${escapeHtml(message)}</div>`;
                 return;
             }
 
-            container.innerHTML =
-                cards.map(renderConversationCard).join("");
+            container.innerHTML = filtered.map(renderConversationCard).join("");
         }
 
         function renderConversationCard(item) {
@@ -447,32 +468,21 @@
                     : "";
 
             return `
-                <a class="conversation-card"
-                   href="chat.html?id=${encodeURIComponent(item.conversationId)}">
-
-                    <img class="avatar"
-                         src="${escapeAttribute(avatar)}"
-                         alt="${escapeAttribute(name)}">
-
-                    <div class="conversation-main">
-                        <div class="conversation-top">
-                            <strong>${escapeHtml(name)}</strong>
-
-                            ${item.unreadCount > 0 ? `
-                                <span class="unread-pill">
-                                    ${item.unreadCount > 99 ? "99+" : item.unreadCount}
-                                </span>
-                            ` : ""}
+                    <a class="conversation-card ${item.unreadCount > 0 ? "has-unread" : ""}"
+                       href="chat.html?id=${encodeURIComponent(item.conversationId)}">
+                        <img class="avatar" src="${escapeAttribute(avatar)}" alt="${escapeAttribute(name)}">
+                        <div class="conversation-main">
+                            <div class="conversation-top">
+                                <strong>${escapeHtml(name)}</strong>
+                                <span class="conversation-handle">@${escapeHtml(username)}</span>
+                                ${item.unreadCount > 0 ? `<span class="unread-pill">${item.unreadCount > 99 ? "99+" : item.unreadCount}</span>` : ""}
+                            </div>
+                            <p class="conversation-preview">${escapeHtml(latestText)}</p>
                         </div>
-
-                        <p>@${escapeHtml(username)} · ${escapeHtml(latestText)}</p>
-                    </div>
-
-                    <div class="conversation-time">
-                        ${escapeHtml(time)}
-                    </div>
-                </a>
-            `;
+                        <div class="conversation-time">${escapeHtml(time)}</div>
+                        <div class="conversation-arrow" aria-hidden="true">→</div>
+                    </a>
+                `;
         }
 
         const messageChannel = supabase
@@ -524,5 +534,6 @@
             window.location.href = "login.html";
         };
     </script>
+    <script type="module" src="nullverse-shell-bootstrap.js?v=2"></script>
 </body>
 </html>
