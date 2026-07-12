@@ -83,39 +83,57 @@ async function loadMore(replace = false) {
     button.textContent = "Loading...";
 
     try {
-        let items = await fetchGalleryFeed(state.sort, state.pageSize, state.offset, {
-            search: state.search,
-            ageRating: state.ageRating
-        });
+        let rawItems = [];
+        let visibleCards = [];
+        let attempts = 0;
+        let reachedEnd = false;
 
-        items = items.filter(item => !viewer.blockedUserIds.includes(item.owner_id));
-        if (state.proofType) items = items.filter(item => item.proof_type === state.proofType);
+        // Safe Mode can remove an entire result batch. Keep advancing until we
+        // find allowed cards or reach the end so safe content later in the feed
+        // is not incorrectly replaced by an empty state.
+        while (!visibleCards.length && !reachedEnd && attempts < 6) {
+            rawItems = await fetchGalleryFeed(state.sort, state.pageSize, state.offset, {
+                search: state.search,
+                ageRating: state.ageRating
+            });
 
-        const html = items
-            .map(item => renderGalleryCard(item, {
-                safety: getGallerySafetyDecision(item),
-                galleryDestination: "creator",
-                showGalleryActions: true,
-                requireWarningConfirmation: true,
-                warningRevealed: revealedWarningItemIds.has(String(item.id || "")),
-                viewerRole: viewer.profile?.role_name || viewer.profile?.role || "creator",
-                viewerStatus: viewer.profile?.account_status || "active"
-            }))
-            .filter(Boolean)
-            .join("");
+            state.offset += rawItems.length;
+            reachedEnd = rawItems.length < state.pageSize;
 
+            let items = rawItems.filter(item => !viewer.blockedUserIds.includes(item.owner_id));
+            if (state.proofType) items = items.filter(item => item.proof_type === state.proofType);
+
+            visibleCards = items
+                .map(item => renderGalleryCard(item, {
+                    safety: getGallerySafetyDecision(item),
+                    galleryDestination: "creator",
+                    showGalleryActions: true,
+                    requireWarningConfirmation: true,
+                    warningRevealed: revealedWarningItemIds.has(String(item.id || "")),
+                    viewerRole: viewer.profile?.role_name || viewer.profile?.role || "creator",
+                    viewerStatus: viewer.profile?.account_status || "active"
+                }))
+                .filter(Boolean);
+
+            attempts += 1;
+            if (!rawItems.length) reachedEnd = true;
+        }
+
+        const html = visibleCards.join("");
         const container = document.getElementById("gallery-results");
         if (replace) container.innerHTML = "";
 
-        if (!html && state.offset === 0) {
-            container.innerHTML = renderEmptyCard("No matching gallery items", "Try another search or remove a filter.");
-            state.finished = true;
-        } else {
+        if (!html && state.loaded === 0) {
+            container.innerHTML = renderEmptyCard("No matching gallery items", "No artwork matches your search, filters, and Content Experience settings.");
+        } else if (html) {
+            if (state.loaded === 0 && container.querySelector(".nv-empty-card")) {
+                container.innerHTML = "";
+            }
             container.insertAdjacentHTML("beforeend", html);
-            state.offset += items.length;
-            state.loaded += items.length;
-            state.finished = items.length < state.pageSize;
+            state.loaded += visibleCards.length;
         }
+
+        state.finished = reachedEnd;
 
         bindCardInteractions(container);
         bindGalleryWarningGates(container);
@@ -145,29 +163,44 @@ async function loadCreators() {
     }
 }
 
+function normalizeViewerExperience(value) {
+    const normalized = String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_");
+
+    if (["safe", "strict"].includes(normalized)) return "safe";
+    if (["open", "adult", "all", "unfiltered", "full"].includes(normalized)) return "open";
+    return "balanced";
+}
+
 function getGallerySafetyDecision(item = {}) {
     const warnings = normalizeWarningList(item.content_warnings);
     const blockedWarnings = new Set(normalizeWarningList(viewer.safety?.blockedContentWarnings));
     const rating = String(item.content_rating || item.age_rating || "general").trim().toLowerCase();
     const censorMode = String(item.censor_mode || "none").trim().toLowerCase();
     const ageRole = String(viewer.safety?.ageRole || "unknown").trim().toLowerCase();
-    const experience = String(viewer.safety?.contentExperience || "balanced").trim().toLowerCase();
+    const experience = normalizeViewerExperience(viewer.safety?.contentExperience);
     const isMature = ["mature", "adult", "18+", "18_plus"].includes(rating);
     const explicitlyBlocked = warnings.some(warning => blockedWarnings.has(warning));
+    const isSensitive = warnings.length > 0 || censorMode === "blur" || censorMode === "hide" || isMature;
 
-    // Explicitly blocked tags and age restrictions stay hard-blocked; confirmation
-    // never overrides the viewer's safety settings.
+    // Manual warning blocks and age restrictions remain absolute in every mode.
     if (explicitlyBlocked) return { action: "hide", warnings, rating, reason: "blocked_preference" };
-    if (["minor", "blocked"].includes(ageRole) && isMature) return { action: "hide", warnings, rating, reason: "age_block" };
-    if (isMature && (ageRole !== "adult" || experience !== "adult")) return { action: "hide", warnings, rating, reason: "adult_mode_required" };
+    if (isMature && ageRole !== "adult") return { action: "hide", warnings, rating, reason: "age_block" };
 
-    // Every warning-bearing Gallery object is gated, including for Adult mode.
-    // Creator-defined blur/hide preview modes use the same confirmation flow.
-    if (warnings.length || censorMode === "blur" || censorMode === "hide") {
+    // Safe removes sensitive gallery content entirely.
+    if (experience === "safe" && isSensitive) {
+        return { action: "hide", warnings, rating, reason: "safe_mode" };
+    }
+
+    // Balanced keeps the existing blur + warning confirmation system.
+    if (experience === "balanced" && isSensitive) {
         return { action: "warn", warnings, rating, reason: "confirmation_required" };
     }
 
-    return { action: "show", warnings, rating, reason: "clear" };
+    // Open displays all otherwise allowed content with no blur or warning labels.
+    return { action: "show", warnings: [], rating, reason: "open_or_clear" };
 }
 
 function setupWarningConfirmation() {

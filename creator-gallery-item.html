@@ -6924,6 +6924,7 @@
         const itemId = params.get("id") || params.get("item") || "";
         let currentUser = null;
         let viewerProfile = null;
+        let galleryItemSafetyConfirmed = false;
         let item = null;
         let profile = null;
         let layoutBundle = null;
@@ -9665,14 +9666,34 @@
             await loadItem();
             if (!item) { showError("This gallery item is not public, approved, or available."); return; }
             if (isGalleryItemUnavailableToViewer()) { showError("This gallery item is private, hidden by moderation, or unavailable."); return; }
-            if (isGalleryItemSafetyBlockedToViewer()) { showError(galleryItemSafetyBlockMessage()); return; }
+
+            const safety = getGalleryItemSafetyDecision();
+
+            if (safety.action === "hide") {
+                showError(galleryItemSafetyBlockMessage(safety));
+                return;
+            }
+
             await loadProfile();
+
+            if (safety.action === "warn") {
+                renderGalleryItemSafetyGatePage(safety);
+                renderOwnerActions();
+                return;
+            }
+
+            await continueGalleryItemRender();
+        }
+
+        async function continueGalleryItemRender() {
             renderOwnerHiddenModerationBanner();
+
             if (isGalleryShowcaseLockedToViewer()) {
                 renderLockedShowcasePage();
                 renderOwnerActions();
                 return;
             }
+
             await loadLayout();
             renderPage();
             renderOwnerActions();
@@ -10294,31 +10315,109 @@
             return [];
         }
 
+        function normalizeGalleryItemWarningKey(value) {
+            return String(value || "")
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, "_")
+                .replace(/-+/g, "_")
+                .replace(/[^a-z0-9_]/g, "")
+                .replace(/_+/g, "_")
+                .replace(/^_+|_+$/g, "");
+        }
+
+        function galleryItemBlockedWarnings() {
+            return new Set(
+                normalizeGalleryItemWarnings(viewerProfile?.blocked_content_warnings)
+                    .map(normalizeGalleryItemWarningKey)
+                    .filter(Boolean)
+            );
+        }
+
         function isGalleryItemViewerAdult() {
             const role = String(viewerProfile?.age_role || "").trim().toLowerCase();
             return role === "adult";
         }
 
         function galleryItemViewerExperience() {
-            const exp = String(viewerProfile?.content_experience || "safe").trim().toLowerCase();
-            return ["safe", "balanced", "adult"].includes(exp) ? exp : "safe";
+            const exp = String(viewerProfile?.content_experience || "safe")
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, "_");
+
+            if (["safe", "strict"].includes(exp)) return "safe";
+            if (["open", "adult", "all", "unfiltered", "full"].includes(exp)) return "open";
+            return currentUser ? "balanced" : "safe";
         }
 
-        function isGalleryItemSafetyBlockedToViewer() {
-            if (!item) return true;
-            if (viewerCanBypassGalleryItemModeration() || viewerIsGalleryStaff()) return false;
+        function getGalleryItemSafetyDecision() {
+            if (!item) return { action: "hide", reason: "missing", warnings: [] };
+            if (viewerCanBypassGalleryItemModeration() || viewerIsGalleryStaff()) {
+                return { action: "show", reason: "staff_or_owner", warnings: [] };
+            }
+
+            const warnings = normalizeGalleryItemWarnings(item.content_warnings);
+            const blockedWarnings = galleryItemBlockedWarnings();
             const ageRating = normalizeGalleryItemAgeRating(item.age_rating);
-            if (ageRating !== "mature") return false;
-            return !isGalleryItemViewerAdult() || galleryItemViewerExperience() !== "adult";
+            const censorMode = normalizeGalleryItemCensorMode(item.censor_mode);
+            const experience = galleryItemViewerExperience();
+            const explicitlyBlocked = warnings.some(warning => blockedWarnings.has(normalizeGalleryItemWarningKey(warning)));
+            const sensitive = warnings.length > 0 || censorMode !== "none" || ageRating === "mature";
+
+            if (explicitlyBlocked) return { action: "hide", reason: "blocked_preference", warnings };
+            if (ageRating === "mature" && !isGalleryItemViewerAdult()) return { action: "hide", reason: "age_block", warnings };
+            if (experience === "safe" && sensitive) return { action: "hide", reason: "safe_mode", warnings };
+            if (experience === "balanced" && sensitive && !galleryItemSafetyConfirmed) {
+                return { action: "warn", reason: "confirmation_required", warnings };
+            }
+
+            return { action: "show", reason: "open_or_clear", warnings: [] };
         }
 
-        function galleryItemSafetyBlockMessage() {
+        function galleryItemSafetyBlockMessage(safety = getGalleryItemSafetyDecision()) {
             const warnings = normalizeGalleryItemWarnings(item?.content_warnings);
             const warningText = warnings.length ? ` Warnings: ${warnings.join(", ")}.` : "";
-            if (!currentUser) return `This gallery showcase is marked Mature / 18+ and cannot be opened by public guests.${warningText}`;
+
+            if (safety.reason === "blocked_preference") {
+                return `This gallery showcase matches one of your manually blocked warning categories and is hidden by your content preferences.${warningText}`;
+            }
+
+            if (safety.reason === "safe_mode") {
+                return `Safe Mode hides gallery showcases with content warnings or sensitive preview settings. Change your Content Experience in Account Settings to Balanced or Open to access it.`;
+            }
+
+            if (!currentUser) return `This gallery showcase contains sensitive or Mature / 18+ content and cannot be opened by public guests.${warningText}`;
             if (!isGalleryItemViewerAdult()) return `This gallery showcase is marked Mature / 18+ and cannot be opened by minors.${warningText}`;
-            return `This gallery showcase is marked Mature / 18+. Switch your content experience to adult before opening it.${warningText}`;
+            return `This gallery showcase is unavailable under your current content and age settings.${warningText}`;
         }
+
+        function renderGalleryItemSafetyGatePage(safety = getGalleryItemSafetyDecision()) {
+            const warnings = normalizeGalleryItemWarnings(item?.content_warnings);
+            const labels = warnings.length ? warnings : ["Sensitive content"];
+            const warningTags = labels
+                .map(label => `<span>${escapeHtml(label)}</span>`)
+                .join("");
+
+            document.title = `${item?.title || "Gallery Showcase"} Content Warning - Nullverse`;
+            document.getElementById("page-root").innerHTML = `
+                    <section class="locked-showcase-shell">
+                        <div class="locked-showcase-card">
+                            <span class="locked-showcase-kicker">Content Warning</span>
+                            <h1>${escapeHtml(item?.title || "Gallery Showcase")}</h1>
+                            <p>Balanced Mode is protecting this preview. Confirm that you want to reveal this showcase for the current page visit.</p>
+                            <div class="locked-showcase-meta">${warningTags}</div>
+                            <div class="locked-showcase-actions">
+                                <button class="button primary" type="button" onclick="revealGalleryItemSafety()">Show Showcase</button>
+                                <a class="button soft" href="${profile?.username ? `creator-gallery.html?user=${encodeURIComponent(profile.username)}` : "creator-gallery.html"}">Back to Creator Gallery</a>
+                            </div>
+                        </div>
+                    </section>`;
+        }
+
+        window.revealGalleryItemSafety = async function () {
+            galleryItemSafetyConfirmed = true;
+            await continueGalleryItemRender();
+        };
 
         function isGalleryShowcaseLockedToViewer() {
             if (!item) return false;

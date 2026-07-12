@@ -219,27 +219,38 @@ async function loadMoreFeed(replace = false) {
     button.textContent = "Loading...";
 
     try {
-        const items = await fetchHomeFeed(state.feedMode, state.pageSize, state.feedOffset);
-        const html = items
-            .map(item => renderContentCard(item, { safety: getSafetyDecision(item, viewer.safety) }))
-            .filter(Boolean)
-            .join("");
+        let items = [];
+        let visibleCards = [];
+        let attempts = 0;
+        let reachedEnd = false;
 
+        while (!visibleCards.length && !reachedEnd && attempts < 6) {
+            items = await fetchHomeFeed(state.feedMode, state.pageSize, state.feedOffset);
+            state.feedOffset += items.length;
+            reachedEnd = items.length < state.pageSize;
+            visibleCards = items
+                .map(item => renderContentCard(item, { safety: getSafetyDecision(item, viewer.safety) }))
+                .filter(Boolean);
+            attempts += 1;
+            if (!items.length) reachedEnd = true;
+        }
+
+        const html = visibleCards.join("");
         const container = document.getElementById("home-feed");
         if (replace) container.innerHTML = "";
 
-        if (!html && state.feedOffset === 0) {
+        if (!html && container.children.length === 0) {
             container.innerHTML = renderEmptyCard(
                 state.feedMode === "following" ? "Your following feed is empty" : "No creations found",
-                state.feedMode === "following" ? "Follow creators from Explore to see their new work here." : "The void is quiet right now.",
+                state.feedMode === "following" ? "Follow creators from Explore to see their new work here." : "No creations match your Content Experience settings yet.",
                 { href: "explore.html", label: "Explore Creators" }
             );
-            state.feedFinished = true;
-        } else {
+        } else if (html) {
+            if (container.querySelector(".nv-empty-card")) container.innerHTML = "";
             container.insertAdjacentHTML("beforeend", html);
-            state.feedOffset += items.length;
-            state.feedFinished = items.length < state.pageSize;
         }
+
+        state.feedFinished = reachedEnd;
 
         bindCardInteractions(container);
     } catch (error) {
@@ -254,7 +265,7 @@ async function loadMoreFeed(replace = false) {
 async function loadGalleryShelf() {
     const container = document.getElementById("home-gallery-shelf");
     try {
-        const items = (await fetchGalleryFeed("trending", 8, 0))
+        const items = (await fetchGalleryFeed("trending", 24, 0))
             .filter(item => !viewer.blockedUserIds.includes(item.owner_id));
 
         const html = items
@@ -268,14 +279,26 @@ async function loadGalleryShelf() {
                 viewerStatus: viewer.profile?.account_status || "active"
             }))
             .filter(Boolean)
+            .slice(0, 8)
             .join("");
 
-        container.innerHTML = html || renderEmptyCard("No public gallery items yet", "Artwork will appear here as creators publish it.");
+        container.innerHTML = html || renderEmptyCard("No Gallery items match your settings", "Safe Mode and personal warning blocks may remove sensitive artwork from Home.");
         bindCardInteractions(container);
         bindGalleryWarningGates(container);
     } catch (error) {
         container.innerHTML = renderEmptyCard("Gallery unavailable", error.message || "Refresh and try again.");
     }
+}
+
+function normalizeViewerExperience(value) {
+    const normalized = String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_");
+
+    if (["safe", "strict"].includes(normalized)) return "safe";
+    if (["open", "adult", "all", "unfiltered", "full"].includes(normalized)) return "open";
+    return "balanced";
 }
 
 function getGallerySafetyDecision(item = {}) {
@@ -284,23 +307,27 @@ function getGallerySafetyDecision(item = {}) {
     const rating = String(item.content_rating || item.age_rating || "general").trim().toLowerCase();
     const censorMode = String(item.censor_mode || "none").trim().toLowerCase();
     const ageRole = String(viewer.safety?.ageRole || "unknown").trim().toLowerCase();
-    const experience = String(viewer.safety?.contentExperience || "balanced").trim().toLowerCase();
+    const experience = normalizeViewerExperience(viewer.safety?.contentExperience);
     const isMature = ["mature", "adult", "18+", "18_plus"].includes(rating);
     const explicitlyBlocked = warnings.some(warning => blockedWarnings.has(warning));
+    const isSensitive = warnings.length > 0 || censorMode === "blur" || censorMode === "hide" || isMature;
 
-    // Match the Global Gallery exactly: blocked tags and age restrictions remain
-    // hard blocks, while every warning-bearing artwork requires confirmation.
+    // Manual warning blocks and age restrictions remain absolute in every mode.
     if (explicitlyBlocked) return { action: "hide", warnings, rating, reason: "blocked_preference" };
-    if (["minor", "blocked"].includes(ageRole) && isMature) return { action: "hide", warnings, rating, reason: "age_block" };
-    if (isMature && (ageRole !== "adult" || experience !== "adult")) {
-        return { action: "hide", warnings, rating, reason: "adult_mode_required" };
+    if (isMature && ageRole !== "adult") return { action: "hide", warnings, rating, reason: "age_block" };
+
+    // Safe removes sensitive gallery content entirely.
+    if (experience === "safe" && isSensitive) {
+        return { action: "hide", warnings, rating, reason: "safe_mode" };
     }
 
-    if (warnings.length || censorMode === "blur" || censorMode === "hide") {
+    // Balanced keeps the existing blur + warning confirmation system.
+    if (experience === "balanced" && isSensitive) {
         return { action: "warn", warnings, rating, reason: "confirmation_required" };
     }
 
-    return { action: "show", warnings, rating, reason: "clear" };
+    // Open displays all otherwise allowed content with no blur or warning labels.
+    return { action: "show", warnings: [], rating, reason: "open_or_clear" };
 }
 
 function setupGalleryWarningConfirmation() {
@@ -408,14 +435,15 @@ async function loadTypeShelf(type, containerId) {
             .eq("moderation_status", "visible")
             .eq("content_type", type)
             .order("updated_at", { ascending: false })
-            .limit(8);
+            .limit(24);
         if (error) throw error;
         const items = await attachProfiles(data || [], "owner_id");
         const html = items
             .map(item => renderContentCard(item, { safety: getSafetyDecision(item, viewer.safety) }))
             .filter(Boolean)
+            .slice(0, 8)
             .join("");
-        container.innerHTML = html || renderEmptyCard(`No ${type} projects yet`, "Published creations will appear here.");
+        container.innerHTML = html || renderEmptyCard(`No ${type} projects match your settings`, "Safe Mode and personal warning blocks may remove sensitive projects from this shelf.");
         bindCardInteractions(container);
     } catch (error) {
         container.innerHTML = renderEmptyCard("Could not load this shelf", error.message || "Refresh and try again.");

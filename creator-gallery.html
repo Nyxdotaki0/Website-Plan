@@ -5893,10 +5893,7 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
 
         function folderNeedsOpenChoice(folder, safety = {}) {
             if (!folder || isOwner) return false;
-            const warnings = normalizeWarnings(folder.content_warnings);
-            const age = normalizeAgeRating(folder.age_rating);
-            const censor = normalizeCensorMode(folder.censor_mode);
-            return !!safety.needsGate || warnings.length > 0 || censor !== "none" || age === "teen" || age === "mature";
+            return !!safety.needsGate;
         }
 
         function showFolderSafetyGate(folder) {
@@ -6058,24 +6055,73 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
             $("item-preview-modal").classList.remove("open");
         }
 
+        function normalizeViewerWarningKey(value) {
+            return String(value || "")
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, "_")
+                .replace(/-+/g, "_")
+                .replace(/[^a-z0-9_]/g, "")
+                .replace(/_+/g, "_")
+                .replace(/^_+|_+$/g, "");
+        }
+
+        function viewerBlockedWarnings() {
+            return new Set(
+                normalizeWarnings(viewerProfile?.blocked_content_warnings)
+                    .map(normalizeViewerWarningKey)
+                    .filter(Boolean)
+            );
+        }
+
         function canShowRecord(record) {
             if (isOwner) return { showCard: true, preview: "none", needsGate: false, reason: "owner", message: "" };
             if (viewerCanSeeModeratedGalleryItem(record)) return { showCard: true, preview: "none", needsGate: false, reason: "staff", message: "" };
+
             const visibility = String(record.visibility || "public").toLowerCase();
             const status = String(record.moderation_status || "approved").toLowerCase();
-            if (visibility !== "public" || ["hidden", "removed", "rejected", "suspended", "banned"].includes(status)) return { showCard: false, preview: "none", needsGate: false, reason: "hidden", message: "Unavailable" };
+            if (visibility !== "public" || ["hidden", "removed", "rejected", "suspended", "banned"].includes(status)) {
+                return { showCard: false, preview: "none", needsGate: false, reason: "hidden", message: "Unavailable" };
+            }
+
             const age = normalizeAgeRating(record.age_rating);
             const warnings = normalizeWarnings(record.content_warnings);
             const censor = normalizeCensorMode(record.censor_mode);
-            const adult = viewerIsAdult();
             const experience = viewerExperience();
-            if (age === "mature" && !adult) return { showCard: true, preview: "hide", needsGate: false, reason: "blocked", message: "18+ content is blocked for guests and minors." };
-            if (age === "mature" && experience !== "adult") return { showCard: true, preview: "hide", needsGate: false, reason: "blocked", message: "Switch to adult experience to view mature gallery work." };
-            if (isGalleryItemRecord(record) && isItemSafetyUnlockedForSession(record.id)) return { showCard: true, preview: "none", needsGate: false, reason: "ok", message: "" };
-            if (censor === "hide") return { showCard: true, preview: "hide", needsGate: true, reason: "gate", message: safetySummary(record) };
-            if (censor === "blur") return { showCard: true, preview: "blur", needsGate: true, reason: "gate", message: safetySummary(record) };
-            if (warnings.length && experience !== "adult") return { showCard: true, preview: "blur", needsGate: true, reason: "gate", message: safetySummary(record) };
-            return { showCard: true, preview: "none", needsGate: false, reason: "ok", message: "" };
+            const blockedWarnings = viewerBlockedWarnings();
+            const explicitlyBlocked = warnings.some(warning => blockedWarnings.has(normalizeViewerWarningKey(warning)));
+            const sensitive = warnings.length > 0 || censor !== "none" || age === "mature";
+
+            // Personal warning blocks and age restrictions always win.
+            if (explicitlyBlocked) {
+                return { showCard: false, preview: "none", needsGate: false, reason: "blocked_preference", message: "Hidden by your content preferences." };
+            }
+            if (age === "mature" && !viewerIsAdult()) {
+                return { showCard: false, preview: "none", needsGate: false, reason: "age_block", message: "18+ content is unavailable for this viewer." };
+            }
+
+            // Safe removes warned/sensitive folders and items from the gallery entirely.
+            if (experience === "safe" && sensitive) {
+                return { showCard: false, preview: "none", needsGate: false, reason: "safe_mode", message: "Hidden by Safe Mode." };
+            }
+
+            if (isGalleryItemRecord(record) && isItemSafetyUnlockedForSession(record.id)) {
+                return { showCard: true, preview: "none", needsGate: false, reason: "revealed", message: "" };
+            }
+
+            // Balanced preserves the existing blur + confirmation flow.
+            if (experience === "balanced" && sensitive) {
+                return {
+                    showCard: true,
+                    preview: censor === "hide" ? "hide" : "blur",
+                    needsGate: true,
+                    reason: "gate",
+                    message: safetySummary(record)
+                };
+            }
+
+            // Open shows all otherwise allowed records normally with no warning overlay.
+            return { showCard: true, preview: "none", needsGate: false, reason: "open_or_clear", message: "" };
         }
 
         function viewerIsAdult() {
@@ -6086,8 +6132,14 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
         }
 
         function viewerExperience() {
-            const exp = String(viewerProfile?.content_experience || "safe").toLowerCase();
-            return ["safe", "balanced", "adult"].includes(exp) ? exp : "safe";
+            const exp = String(viewerProfile?.content_experience || "safe")
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, "_");
+
+            if (["safe", "strict"].includes(exp)) return "safe";
+            if (["open", "adult", "all", "unfiltered", "full"].includes(exp)) return "open";
+            return currentUser ? "balanced" : "safe";
         }
 
         function viewerIsGalleryStaff() {
@@ -8141,8 +8193,21 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
         function safetySummary(record) { const warnings = normalizeWarnings(record.content_warnings); return [AGE_RATINGS.find(([v]) => v === normalizeAgeRating(record.age_rating))?.[1] || "All Ages", warnings.length ? warnings.join(", ") : "No extra warnings"].join(" · "); }
         function agePill(age) { const rating = normalizeAgeRating(age); const label = AGE_RATINGS.find(([v]) => v === rating)?.[1] || "All Ages"; const cls = rating === "mature" ? "mature" : rating === "all_ages" ? "safe" : ""; return `<span class="status-pill ${cls}">${escapeHtml(label)}</span>`; }
         function visibilityPill(record) { if (!isOwner) return ""; const v = String(record.visibility || "public"); if (v === "public") return ""; return `<span class="status-pill ${escapeAttr(v)}">${escapeHtml(formatType(v))}</span>`; }
-        function warningCountPill(record) { const n = normalizeWarnings(record.content_warnings).length; return n ? `<span class="status-pill mature">${n} warning${n === 1 ? "" : "s"}</span>` : ""; }
-        function warningsHtml(record) { const warnings = normalizeWarnings(record.content_warnings); return warnings.length ? `<div>${warnings.map(w => `<span class="warning-pill">${escapeHtml(w)}</span>`).join(" ")}</div>` : ""; }
+        function shouldDisplayWarningMetadata() {
+            return isOwner || viewerIsGalleryStaff() || viewerExperience() !== "open";
+        }
+
+        function warningCountPill(record) {
+            if (!shouldDisplayWarningMetadata()) return "";
+            const n = normalizeWarnings(record.content_warnings).length;
+            return n ? `<span class="status-pill mature">${n} warning${n === 1 ? "" : "s"}</span>` : "";
+        }
+
+        function warningsHtml(record) {
+            if (!shouldDisplayWarningMetadata()) return "";
+            const warnings = normalizeWarnings(record.content_warnings);
+            return warnings.length ? `<div>${warnings.map(w => `<span class="warning-pill">${escapeHtml(w)}</span>`).join(" ")}</div>` : "";
+        }
         function formatType(value) { return String(value || "other").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()); }
         function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
         function escapeHtml(value) { return String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char])); }
