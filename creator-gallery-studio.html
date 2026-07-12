@@ -9,385 +9,7 @@
         const savedNullverseTheme = localStorage.getItem("nullverse-theme") || "void";
         document.documentElement.setAttribute("data-theme", savedNullverseTheme);
 
-        /* ============================================================
-           GALLERY STUDIO PERSISTENT LAYER GROUPS
-           Parent-layer grouping ported from Profile Studio.
-        ============================================================ */
-        (() => {
-            const rawNormalizeLayoutForGroups = normalizeLayout;
-            const rawExportLayoutForGroups = exportLayout;
-            const rawRenderLayersForGroups = renderLayers;
-            const rawRenderInspectorForGroups = renderInspector;
-            const rawSelectObjectForGroups = selectObject;
-            const rawDuplicateSelectedForGroups = duplicateSelected;
-            const rawDeleteSelectedForGroups = deleteSelected;
 
-            function normalizeGalleryLayerGroups(rawGroups = [], objects = []) {
-                const validObjects = Array.isArray(objects) ? objects : [];
-                const objectMap = new Map(validObjects.map(o => [String(o.id || ''), o]).filter(([id]) => id));
-                const groups = [];
-                const usedObjects = new Set();
-                const usedGroups = new Set();
-
-                const uniqueId = preferred => {
-                    let value = String(preferred || '').trim() || id();
-                    while (usedGroups.has(value)) value = id();
-                    usedGroups.add(value);
-                    return value;
-                };
-
-                const claim = (raw = {}, index = 0) => {
-                    const objectIds = [];
-                    const sourceIds = Array.isArray(raw.objectIds) ? raw.objectIds : Array.isArray(raw.children) ? raw.children : [];
-                    sourceIds.forEach(objectId => {
-                        const key = String(objectId || '').trim();
-                        if (!key || !objectMap.has(key) || usedObjects.has(key)) return;
-                        usedObjects.add(key);
-                        objectIds.push(key);
-                    });
-                    if (objectIds.length < 2) return null;
-                    const group = {
-                        id: uniqueId(raw.id),
-                        name: String(raw.name || raw.title || `Group ${index + 1}`).trim() || `Group ${index + 1}`,
-                        objectIds,
-                        expanded: raw.expanded !== false,
-                        locked: raw.locked === true,
-                        visible: raw.visible !== false
-                    };
-                    groups.push(group);
-                    return group;
-                };
-
-                (Array.isArray(rawGroups) ? rawGroups : []).forEach((group, index) => claim(group, index));
-
-                const loose = new Map();
-                validObjects.forEach(object => {
-                    const groupId = String(object.groupId || object.layerGroupId || '').trim();
-                    if (!groupId || usedObjects.has(String(object.id || ''))) return;
-                    if (!loose.has(groupId)) loose.set(groupId, []);
-                    loose.get(groupId).push(object.id);
-                });
-                loose.forEach((objectIds, groupId) => claim({ id: groupId, objectIds }, groups.length));
-
-                validObjects.forEach(object => {
-                    object.groupId = '';
-                    object.layerGroupId = '';
-                });
-                groups.forEach(group => {
-                    group.objectIds = group.objectIds.filter(objectId => {
-                        const object = objectMap.get(String(objectId));
-                        if (!object) return false;
-                        object.groupId = group.id;
-                        object.layerGroupId = group.id;
-                        return true;
-                    });
-                });
-                return groups.filter(group => group.objectIds.length >= 2);
-            }
-
-            function galleryGroups(layout = getLayout()) {
-                if (!layout) return [];
-                layout.groups = normalizeGalleryLayerGroups(layout.groups || [], layout.objects || []);
-                return layout.groups;
-            }
-            function galleryGroup(groupId, layout = getLayout()) {
-                return galleryGroups(layout).find(group => String(group.id) === String(groupId || '')) || null;
-            }
-            function galleryGroupForObject(objectOrId, layout = getLayout()) {
-                const objectId = typeof objectOrId === 'object' ? String(objectOrId?.id || '') : String(objectOrId || '');
-                if (!objectId) return null;
-                const object = typeof objectOrId === 'object' ? objectOrId : layout?.objects?.find(item => String(item.id) === objectId);
-                const directId = String(object?.groupId || object?.layerGroupId || '').trim();
-                const direct = directId ? galleryGroup(directId, layout) : null;
-                if (direct && direct.objectIds.map(String).includes(objectId)) return direct;
-                return galleryGroups(layout).find(group => group.objectIds.map(String).includes(objectId)) || null;
-            }
-            function galleryGroupObjects(group, layout = getLayout()) {
-                const ids = new Set((group?.objectIds || []).map(String));
-                return (layout?.objects || []).filter(object => ids.has(String(object.id || '')));
-            }
-            function selectedMatchesGroup(group) {
-                const selected = (state.selected || []).map(String);
-                const ids = new Set((group?.objectIds || []).map(String));
-                return selected.length === ids.size && selected.every(value => ids.has(value));
-            }
-            function commonSelectedGroup() {
-                const selected = selectedAll();
-                if (!selected.length) return null;
-                const groupId = String(selected[0].groupId || selected[0].layerGroupId || '');
-                if (!groupId || !selected.every(object => String(object.groupId || object.layerGroupId || '') === groupId)) return null;
-                const group = galleryGroup(groupId);
-                return group && selectedMatchesGroup(group) ? group : null;
-            }
-            function cleanupGroups(layout = getLayout()) {
-                if (!layout) return;
-                layout.groups = normalizeGalleryLayerGroups(layout.groups || [], layout.objects || []);
-            }
-
-            normalizeLayout = function galleryGroupNormalizeLayout(src = null, mode = 'desktop') {
-                let parsed = src;
-                if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch { parsed = null; } }
-                const layout = rawNormalizeLayoutForGroups(src, mode);
-                layout.groups = normalizeGalleryLayerGroups(parsed?.groups || [], layout.objects || []);
-                return layout;
-            };
-
-            exportLayout = function galleryGroupExportLayout(layout) {
-                cleanupGroups(layout);
-                const output = rawExportLayoutForGroups(layout);
-                output.groups = clone(layout?.groups || []);
-                return output;
-            };
-
-            function createGalleryLayerGroup() {
-                const layout = getLayout();
-                const selected = selectedAll().filter(Boolean);
-                if (selected.length < 2) return toast('Select at least two layers before creating a group.', 'warn');
-                pushHistory();
-                const selectedIds = new Set(selected.map(object => String(object.id)));
-                galleryGroups(layout).forEach(group => {
-                    group.objectIds = group.objectIds.filter(objectId => !selectedIds.has(String(objectId)));
-                });
-                layout.groups = galleryGroups(layout).filter(group => group.objectIds.length >= 2);
-                const group = {
-                    id: id(),
-                    name: `Group ${layout.groups.length + 1}`,
-                    objectIds: selected.map(object => object.id),
-                    expanded: true,
-                    locked: selected.every(object => object.locked),
-                    visible: selected.some(object => !object.hidden)
-                };
-                layout.groups.push(group);
-                selected.forEach(object => {
-                    object.groupId = group.id;
-                    object.layerGroupId = group.id;
-                });
-                state.selected = [...group.objectIds];
-                renderAll();
-                toast(`${group.name} created. The selected layers now live under one parent layer.`, 'good');
-            }
-
-            function ungroupGalleryLayerGroup(groupId = '') {
-                const layout = getLayout();
-                const group = galleryGroup(groupId) || commonSelectedGroup();
-                if (!group) return toast('Select a saved parent group first.', 'warn');
-                pushHistory();
-                const childIds = new Set(group.objectIds.map(String));
-                (layout.objects || []).forEach(object => {
-                    if (childIds.has(String(object.id)) || String(object.groupId || object.layerGroupId || '') === String(group.id)) {
-                        object.groupId = '';
-                        object.layerGroupId = '';
-                    }
-                });
-                layout.groups = galleryGroups(layout).filter(item => String(item.id) !== String(group.id));
-                state.selected = [...group.objectIds].filter(objectId => find(objectId));
-                renderAll();
-                toast(`${group.name} ungrouped. The child layers are back in the normal layer shelf.`, 'good');
-            }
-
-            function renameGalleryLayerGroup(groupId, value = '') {
-                const group = galleryGroup(groupId);
-                if (!group) return;
-                const name = String(value || '').trim();
-                if (!name || name === group.name) return;
-                pushHistory();
-                group.name = name.slice(0, 80);
-                renderAll();
-            }
-            function promptRenameGalleryLayerGroup(groupId) {
-                const group = galleryGroup(groupId);
-                if (!group) return;
-                const value = prompt('Group name:', group.name || 'Group');
-                if (value == null) return;
-                renameGalleryLayerGroup(groupId, value);
-            }
-            function selectGalleryLayerGroup(groupId, additive = false) {
-                const group = galleryGroup(groupId);
-                if (!group) return;
-                const ids = group.objectIds.filter(objectId => find(objectId));
-                if (additive) state.selected = [...new Set([...(state.selected || []), ...ids])];
-                else state.selected = ids;
-                renderAll();
-            }
-            function selectGalleryLayerGroupChild(groupId, objectId, event = null) {
-                event?.preventDefault?.();
-                event?.stopPropagation?.();
-                const group = galleryGroup(groupId);
-                if (!group || !group.objectIds.map(String).includes(String(objectId))) return;
-                state.selected = [objectId];
-                renderAll();
-                toast('Editing one child layer inside the group.', 'good', 1400);
-            }
-            function toggleGalleryLayerGroupExpanded(groupId) {
-                const group = galleryGroup(groupId);
-                if (!group) return;
-                group.expanded = group.expanded === false;
-                renderLayers();
-            }
-            function setGalleryLayerGroupLocked(groupId, locked) {
-                const group = galleryGroup(groupId);
-                if (!group) return;
-                pushHistory();
-                group.locked = !!locked;
-                galleryGroupObjects(group).forEach(object => object.locked = !!locked);
-                renderAll();
-                toast(locked ? `${group.name} locked.` : `${group.name} unlocked.`, locked ? 'warn' : 'good');
-            }
-            function setGalleryLayerGroupVisible(groupId, visible) {
-                const group = galleryGroup(groupId);
-                if (!group) return;
-                pushHistory();
-                group.visible = !!visible;
-                galleryGroupObjects(group).forEach(object => { if (!object.required) object.hidden = !visible; });
-                renderAll();
-                toast(visible ? `${group.name} shown.` : `${group.name} hidden.`, visible ? 'good' : 'warn');
-            }
-            function moveGalleryLayerGroup(groupId, direction) {
-                const layout = getLayout();
-                const group = galleryGroup(groupId);
-                if (!group || !direction) return;
-                const groupedIds = new Set(galleryGroups(layout).flatMap(item => item.objectIds.map(String)));
-                const units = [
-                    ...galleryGroups(layout).map(item => ({ type:'group', id:item.id, objects:galleryGroupObjects(item) })),
-                    ...(layout.objects || []).filter(object => !groupedIds.has(String(object.id))).map(object => ({ type:'object', id:object.id, objects:[object] }))
-                ].filter(unit => unit.objects.length).sort((a,b) => Math.max(...b.objects.map(o=>Number(o.z)||0)) - Math.max(...a.objects.map(o=>Number(o.z)||0)));
-                const index = units.findIndex(unit => unit.type === 'group' && String(unit.id) === String(groupId));
-                const target = direction > 0 ? index - 1 : index + 1;
-                if (index < 0 || target < 0 || target >= units.length) return;
-                pushHistory();
-                [units[index], units[target]] = [units[target], units[index]];
-                let z = units.reduce((sum, unit) => sum + unit.objects.length, 0) + 20;
-                units.forEach(unit => {
-                    [...unit.objects].sort((a,b)=>(Number(b.z)||0)-(Number(a.z)||0)).forEach(object => object.z = z--);
-                });
-                protectRequired(layout, false);
-                renderAll();
-            }
-
-            function renderGroupParentRow(group) {
-                const objects = galleryGroupObjects(group);
-                const selected = selectedMatchesGroup(group);
-                const allLocked = objects.length && objects.every(object => object.locked);
-                const anyVisible = objects.some(object => !object.hidden);
-                return `<div class="layer layer-group-parent ${selected ? 'active' : ''} ${allLocked ? 'locked' : ''}" data-layer-group-id="${escA(group.id)}">
-                    <button class="layer-group-caret" type="button" onclick="toggleGalleryLayerGroupExpanded('${escA(group.id)}')">${group.expanded === false ? '▶' : '▼'}</button>
-                    <button class="layer-select" type="button" onclick="selectGalleryLayerGroup('${escA(group.id)}',event.shiftKey||event.ctrlKey||event.metaKey)"><span>📁 ${esc(group.name || 'Group')}</span></button>
-                    <div class="layer-meta"><span class="layer-group-count">${objects.length}</span><button class="tiny" title="Move group up" onclick="moveGalleryLayerGroup('${escA(group.id)}',1)">↑</button><button class="tiny" title="Move group down" onclick="moveGalleryLayerGroup('${escA(group.id)}',-1)">↓</button><button class="tiny ${anyVisible ? 'on' : 'warn'}" title="${anyVisible ? 'Visible' : 'Hidden'}" onclick="setGalleryLayerGroupVisible('${escA(group.id)}',${anyVisible ? 'false' : 'true'})">${anyVisible ? '👁️' : '🙈'}</button><button class="tiny ${allLocked ? 'locked' : 'unlocked'}" title="${allLocked ? 'Locked' : 'Unlocked'}" onclick="setGalleryLayerGroupLocked('${escA(group.id)}',${allLocked ? 'false' : 'true'})">${allLocked ? '🔒' : '🔓'}</button></div>
-                </div>`;
-            }
-            function renderGroupChildRow(object, group) {
-                const index = [...getLayout().objects].sort((a,b)=>(b.z||0)-(a.z||0)).findIndex(item => item.id === object.id);
-                return `<div class="layer layer-group-child ${state.selected.includes(object.id) ? 'active' : ''} ${object.locked ? 'locked' : ''} ${object.hidden ? 'hidden-layer' : ''}" data-layer="${escA(object.id)}" data-layer-group-id="${escA(group.id)}">
-                    <div class="drag-handle">↳</div><button class="layer-select" type="button" onclick="selectGalleryLayerGroupChild('${escA(group.id)}','${escA(object.id)}',event)"><span>${esc(object.required ? 'Required · ' : '')}${esc(object.name || LABELS[object.type] || object.type)}</span></button>
-                    <div class="layer-meta"><button class="tiny" title="Move up" onclick="moveLayer('${escA(object.id)}',1)" ${index===0?'disabled':''}>↑</button><button class="tiny" title="Move down" onclick="moveLayer('${escA(object.id)}',-1)">↓</button><button class="tiny ${object.hidden?'warn':'on'}" onclick="toggleObjectVisibility('${escA(object.id)}')">${object.hidden?'🙈':'👁️'}</button><button class="tiny ${object.locked?'locked':'unlocked'}" onclick="toggleObjectLock('${escA(object.id)}')">${object.locked?'🔒':'🔓'}</button></div>
-                </div>`;
-            }
-
-            renderLayers = function galleryGroupRenderLayers() {
-                cleanupGroups();
-                const layout = getLayout();
-                const groups = galleryGroups(layout);
-                if (!groups.length) return rawRenderLayersForGroups();
-                const groupedIds = new Set(groups.flatMap(group => group.objectIds.map(String)));
-                const units = [
-                    ...groups.map(group => ({ type:'group', group, z:Math.max(...galleryGroupObjects(group).map(o=>Number(o.z)||0),0) })),
-                    ...(layout.objects || []).filter(object => !groupedIds.has(String(object.id))).map(object => ({ type:'object', object, z:Number(object.z)||0 }))
-                ].sort((a,b)=>b.z-a.z);
-                const html=[];
-                units.forEach(unit => {
-                    if (unit.type === 'object') {
-                        const object=unit.object;
-                        html.push(`<div class="layer ${state.selected.includes(object.id)?'active':''} ${object.locked?'locked':''} ${object.hidden?'hidden-layer':''}" data-layer="${escA(object.id)}" draggable="true"><div class="drag-handle">⋮⋮</div><button class="layer-select" onclick="selectObject('${escA(object.id)}',event)"><span>${esc(object.required?'Required · ':'')}${esc(object.name||LABELS[object.type]||object.type)}</span></button><div class="layer-meta"><button class="tiny" onclick="moveLayer('${escA(object.id)}',1)">↑</button><button class="tiny" onclick="moveLayer('${escA(object.id)}',-1)">↓</button><button class="tiny ${object.hidden?'warn':'on'}" onclick="toggleObjectVisibility('${escA(object.id)}')">${object.hidden?'🙈':'👁️'}</button><button class="tiny ${object.locked?'locked':'unlocked'}" onclick="toggleObjectLock('${escA(object.id)}')">${object.locked?'🔒':'🔓'}</button></div></div>`);
-                    } else {
-                        const group=unit.group;
-                        html.push(renderGroupParentRow(group));
-                        if (group.expanded !== false) galleryGroupObjects(group).sort((a,b)=>(b.z||0)-(a.z||0)).forEach(object => html.push(renderGroupChildRow(object,group)));
-                    }
-                });
-                dom.layers.innerHTML = html.join('') || `<p class="status">No layers yet.</p>`;
-                try { setupLayerDnd(); } catch {}
-            };
-
-            function groupInspectorMarkup() {
-                const selected = selectedAll();
-                const common = commonSelectedGroup();
-                if (common) {
-                    const children = galleryGroupObjects(common);
-                    const allLocked = children.every(object => object.locked);
-                    const anyVisible = children.some(object => !object.hidden);
-                    return `<div class="group"><h4>Parent Layer Group</h4><p class="gallery-layer-group-note">These ${children.length} layers are permanently organized under one parent layer. Moving the blue selection box still moves them together.</p><label>Group Name</label><input value="${escA(common.name||'Group')}" onchange="renameGalleryLayerGroup('${escA(common.id)}',this.value)"><div class="gallery-layer-group-actions"><button onclick="setGalleryLayerGroupLocked('${escA(common.id)}',${allLocked?'false':'true'})">${allLocked?'🔓 Unlock Group':'🔒 Lock Group'}</button><button onclick="setGalleryLayerGroupVisible('${escA(common.id)}',${anyVisible?'false':'true'})">${anyVisible?'🙈 Hide Group':'👁️ Show Group'}</button><button onclick="moveGalleryLayerGroup('${escA(common.id)}',1)">Move Forward</button><button onclick="moveGalleryLayerGroup('${escA(common.id)}',-1)">Move Backward</button><button class="full" onclick="promptRenameGalleryLayerGroup('${escA(common.id)}')">Rename Parent Layer</button><button class="full danger-button" onclick="ungroupGalleryLayerGroup('${escA(common.id)}')">Ungroup Layers</button></div><div class="gallery-layer-group-child-list">${children.map(object=>`<button class="gallery-layer-group-child-button" onclick="selectGalleryLayerGroupChild('${escA(common.id)}','${escA(object.id)}',event)">↳ ${esc(object.name||LABELS[object.type]||object.type)}</button>`).join('')}</div></div>`;
-                }
-                if (selected.length > 1) {
-                    return `<div class="group"><h4>Persistent Group</h4><p class="gallery-layer-group-note">Create a parent layer from this multi-selection. The layers stay grouped after saving, reloading, switching layouts, and publishing.</p><button style="width:100%" onclick="createGalleryLayerGroup()">Create Parent Group</button></div>`;
-                }
-                if (selected.length === 1) {
-                    const group = galleryGroupForObject(selected[0]);
-                    if (group) return `<div class="group"><h4>Grouped Layer</h4><p class="gallery-layer-group-note">This layer belongs to <strong>${esc(group.name||'Group')}</strong>.</p><div class="gallery-layer-group-actions"><button class="full" onclick="selectGalleryLayerGroup('${escA(group.id)}')">Select Parent Group</button><button class="full danger-button" onclick="ungroupGalleryLayerGroup('${escA(group.id)}')">Ungroup All Children</button></div></div>`;
-                }
-                return '';
-            }
-
-            renderInspector = function galleryGroupRenderInspector() {
-                rawRenderInspectorForGroups();
-                const extra = groupInspectorMarkup();
-                if (extra && dom.insp) dom.insp.insertAdjacentHTML('beforeend', extra);
-            };
-
-            selectObject = function galleryGroupSelectObject(objectId, event = null) {
-                const object = find(objectId);
-                const group = galleryGroupForObject(object);
-                if (group && !(event?.shiftKey || event?.ctrlKey || event?.metaKey)) {
-                    event?.stopPropagation?.();
-                    state.selected = group.objectIds.filter(idValue => find(idValue));
-                    renderAll();
-                    return;
-                }
-                return rawSelectObjectForGroups(objectId, event);
-            };
-
-            duplicateSelected = function galleryGroupDuplicateSelected() {
-                const sourceGroup = commonSelectedGroup();
-                const beforeIds = new Set((getLayout().objects || []).map(object => object.id));
-                rawDuplicateSelectedForGroups();
-                if (!sourceGroup) return;
-                const copies = (getLayout().objects || []).filter(object => !beforeIds.has(object.id) && state.selected.includes(object.id));
-                if (copies.length < 2) return;
-                const group = { id:id(), name:`${sourceGroup.name || 'Group'} Copy`, objectIds:copies.map(object=>object.id), expanded:true, locked:false, visible:true };
-                getLayout().groups = galleryGroups(getLayout());
-                getLayout().groups.push(group);
-                copies.forEach(object => { object.groupId=group.id; object.layerGroupId=group.id; });
-                renderAll();
-            };
-
-            deleteSelected = function galleryGroupDeleteSelected() {
-                rawDeleteSelectedForGroups();
-                cleanupGroups();
-                renderAll();
-            };
-
-            Object.assign(window, {
-                createGalleryLayerGroup,
-                ungroupGalleryLayerGroup,
-                renameGalleryLayerGroup,
-                promptRenameGalleryLayerGroup,
-                selectGalleryLayerGroup,
-                selectGalleryLayerGroupChild,
-                toggleGalleryLayerGroupExpanded,
-                setGalleryLayerGroupLocked,
-                setGalleryLayerGroupVisible,
-                moveGalleryLayerGroup
-            });
-
-            try {
-                ['desktop','mobile'].forEach(mode => {
-                    const layout = state.layouts?.[mode];
-                    if (layout) layout.groups = normalizeGalleryLayerGroups(layout.groups || [], layout.objects || []);
-                });
-                renderAll();
-            } catch (error) {
-                console.warn('Gallery Studio parent grouping initialization skipped:', error);
-            }
-        })();
 
 
     </script>
@@ -4003,7 +3625,7 @@
                 opacity: .35;
                 cursor: not-allowed !important;
             }
-    
+
 
         /* ============================================================
            GALLERY STUDIO PERSISTENT LAYER GROUPS
@@ -4014,86 +3636,217 @@
             background: linear-gradient(180deg,rgba(120,190,255,.13),rgba(120,190,255,.045)) !important;
             color: #eaf3ff !important;
         }
-        .layer.layer-group-parent.active {
-            border-color: rgba(150,215,255,.62) !important;
-            background: linear-gradient(180deg,rgba(120,190,255,.20),rgba(120,190,255,.07)) !important;
-            box-shadow: 0 0 18px rgba(120,190,255,.12) !important;
-        }
-        .layer.layer-group-parent.locked {
-            border-color: rgba(255,214,102,.52) !important;
-            background: linear-gradient(180deg,rgba(255,214,102,.15),rgba(255,214,102,.055)) !important;
-            color: #ffe7aa !important;
-        }
+
+            .layer.layer-group-parent.active {
+                border-color: rgba(150,215,255,.62) !important;
+                background: linear-gradient(180deg,rgba(120,190,255,.20),rgba(120,190,255,.07)) !important;
+                box-shadow: 0 0 18px rgba(120,190,255,.12) !important;
+            }
+
+            .layer.layer-group-parent.locked {
+                border-color: rgba(255,214,102,.52) !important;
+                background: linear-gradient(180deg,rgba(255,214,102,.15),rgba(255,214,102,.055)) !important;
+                color: #ffe7aa !important;
+            }
+
         .layer.layer-group-child {
             width: calc(100% - 22px) !important;
             margin-left: 22px !important;
             border-left-color: rgba(120,190,255,.32) !important;
             background: rgba(255,255,255,.025) !important;
         }
-        .layer.layer-group-child::before {
-            content:"";
-            width:10px;
-            height:1px;
-            background:rgba(120,190,255,.34);
-            position:absolute;
-            left:-14px;
-            top:50%;
-            pointer-events:none;
-        }
+
+            .layer.layer-group-child::before {
+                content: "";
+                width: 10px;
+                height: 1px;
+                background: rgba(120,190,255,.34);
+                position: absolute;
+                left: -14px;
+                top: 50%;
+                pointer-events: none;
+            }
+
         .layer-group-caret {
-            min-height:26px !important;
-            width:28px !important;
-            padding:0 !important;
-            margin:0 !important;
-            border-radius:9px !important;
-            border:1px solid rgba(120,190,255,.18) !important;
-            background:rgba(120,190,255,.075) !important;
-            color:#dcecff !important;
-            box-shadow:none !important;
-            font-size:.74rem !important;
-            font-weight:900 !important;
-            line-height:1 !important;
-            transform:none !important;
-        }
-        .layer-group-count {
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            min-width:22px;
-            height:22px;
-            padding:0 7px;
-            border-radius:999px;
-            border:1px solid rgba(120,190,255,.18);
-            background:rgba(120,190,255,.075);
-            color:#dcecff;
-            font-size:.72rem;
-            font-weight:850;
-        }
-        .gallery-layer-group-actions {
-            display:grid;
-            grid-template-columns:repeat(2,minmax(0,1fr));
-            gap:8px;
-        }
-        .gallery-layer-group-actions .full { grid-column:1/-1; }
-        .gallery-layer-group-note {
-            margin:0 0 10px;
-            color:var(--text-muted,rgba(255,255,255,.54));
-            line-height:1.45;
-            font-size:.86rem;
-        }
-        .gallery-layer-group-child-list { display:grid; gap:7px; margin-top:10px; }
-        .gallery-layer-group-child-button {
-            width:100%;
-            justify-content:flex-start;
-            min-height:36px;
-            background:rgba(255,255,255,.035);
-            box-shadow:none;
-        }
-        @media(max-width:620px) and (any-pointer:coarse) {
-            .gallery-layer-group-actions { grid-template-columns:1fr; }
-            .gallery-layer-group-actions .full { grid-column:auto; }
+            min-height: 26px !important;
+            width: 28px !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border-radius: 9px !important;
+            border: 1px solid rgba(120,190,255,.18) !important;
+            background: rgba(120,190,255,.075) !important;
+            color: #dcecff !important;
+            box-shadow: none !important;
+            font-size: .74rem !important;
+            font-weight: 900 !important;
+            line-height: 1 !important;
+            transform: none !important;
         }
 
+        .layer-group-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 22px;
+            height: 22px;
+            padding: 0 7px;
+            border-radius: 999px;
+            border: 1px solid rgba(120,190,255,.18);
+            background: rgba(120,190,255,.075);
+            color: #dcecff;
+            font-size: .72rem;
+            font-weight: 850;
+        }
+
+        .gallery-layer-group-actions {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 8px;
+        }
+
+            .gallery-layer-group-actions .full {
+                grid-column: 1/-1;
+            }
+
+        .gallery-layer-group-note {
+            margin: 0 0 10px;
+            color: var(--text-muted,rgba(255,255,255,.54));
+            line-height: 1.45;
+            font-size: .86rem;
+        }
+
+        .gallery-layer-group-child-list {
+            display: grid;
+            gap: 7px;
+            margin-top: 10px;
+        }
+
+        .gallery-layer-group-child-button {
+            width: 100%;
+            justify-content: flex-start;
+            min-height: 36px;
+            background: rgba(255,255,255,.035);
+            box-shadow: none;
+        }
+
+        @media(max-width:620px) and (any-pointer:coarse) {
+            .gallery-layer-group-actions {
+                grid-template-columns: 1fr;
+            }
+
+                .gallery-layer-group-actions .full {
+                    grid-column: auto;
+                }
+        }
+
+
+        /* ============================================================
+           GALLERY STUDIO PERSISTENT PARENT LAYER GROUPS
+           Ported from Profile Studio without changing canvas transforms.
+        ============================================================ */
+        .layer-group-parent {
+            border-color: rgba(120,190,255,.34) !important;
+            background: rgba(120,190,255,.075) !important;
+        }
+
+            .layer-group-parent.active {
+                border-color: rgba(140,205,255,.76) !important;
+                background: rgba(120,190,255,.16) !important;
+                box-shadow: inset 0 0 0 1px rgba(180,225,255,.08);
+            }
+
+            .layer-group-parent .layer-select {
+                font-weight: 850;
+                color: #eaf3ff;
+            }
+
+        .layer-group-caret {
+            width: 28px !important;
+            min-width: 28px !important;
+            height: 28px !important;
+            min-height: 28px !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border-radius: 9px !important;
+            background: rgba(255,255,255,.05) !important;
+            box-shadow: none !important;
+            font-size: .72rem !important;
+        }
+
+        .layer-group-count {
+            min-width: 24px;
+            height: 24px;
+            padding: 0 7px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            border: 1px solid rgba(140,205,255,.24);
+            background: rgba(120,190,255,.08);
+            color: #dcecff;
+            font-size: .72rem;
+            font-weight: 850;
+        }
+
+        .layer-group-child {
+            margin-left: 22px;
+            width: calc(100% - 22px);
+            border-left: 2px solid rgba(120,190,255,.28) !important;
+            background: rgba(255,255,255,.025) !important;
+        }
+
+            .layer-group-child .drag-handle {
+                color: rgba(170,215,255,.76);
+            }
+
+        .gallery-layer-group-note {
+            margin: 0 0 12px;
+            color: var(--text-muted,rgba(255,255,255,.54));
+            font-size: .86rem;
+            line-height: 1.5;
+        }
+
+        .gallery-layer-group-actions {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 8px;
+        }
+
+            .gallery-layer-group-actions .full {
+                grid-column: 1 / -1;
+            }
+
+        .gallery-layer-group-child-list {
+            display: grid;
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        .gallery-layer-group-child-button {
+            width: 100%;
+            justify-content: flex-start;
+            min-height: 36px;
+            padding: 8px 10px;
+            background: rgba(255,255,255,.035);
+            box-shadow: none;
+            text-align: left;
+            font-size: .82rem;
+        }
+
+        @media(max-width:620px) and (any-pointer:coarse) {
+            .layer-group-child {
+                margin-left: 14px;
+                width: calc(100% - 14px);
+            }
+
+            .gallery-layer-group-actions {
+                grid-template-columns: 1fr;
+            }
+
+                .gallery-layer-group-actions .full {
+                    grid-column: auto;
+                }
+        }
     </style>
 </head>
 <body>
@@ -4999,56 +4752,56 @@
                 : `<p class="credit-security-note">Search a Nullverse username, then press Add Creator. This is the only credit type that becomes a clickable profile link.</p>`;
 
             return `<div class="group credit-system-overhaul" data-credit-inspector="${idv}">
-                                                                                                <h4>Credit Pill System</h4>
-                                                                                                <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
-                                                                                                <div class="credit-live-preview">
-                                                                                                    <span class="credit-live-label">Live credit pill</span>
-                                                                                                    <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
-                                                                                                    <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
-                                                                                                </div>
-                                                                                                <label>Credit Type</label>
-                                                                                                <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
-
-                                                                                                <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
-                                                                                                    <label>Custom Credit Text</label>
-                                                                                                    <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
-                                                                                                </div>
-
-                                                                                                <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
-                                                                                                    <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
-                                                                                                </div>
-
-                                                                                                <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
-                                                                                                    <label>Nullverse Username</label>
-                                                                                                    <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
-                                                                                                    <div style="margin-top:-6px;margin-bottom:12px;">
-                                                                                                        <label>Search Nullverse Creator</label>
-                                                                                                        <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+                                                                                                    <h4>Credit Pill System</h4>
+                                                                                                    <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
+                                                                                                    <div class="credit-live-preview">
+                                                                                                        <span class="credit-live-label">Live credit pill</span>
+                                                                                                        <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
+                                                                                                        <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
                                                                                                     </div>
-                                                                                                    ${selectedCreator}
-                                                                                                    <div id="credit-results-${idv}" class="credit-search-results"></div>
-                                                                                                </div>
+                                                                                                    <label>Credit Type</label>
+                                                                                                    <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
 
-                                                                                                <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
-                                                                                                    <label>Artist / Creator / Source Name</label>
-                                                                                                    <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
-                                                                                                </div>
+                                                                                                    <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
+                                                                                                        <label>Custom Credit Text</label>
+                                                                                                        <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
+                                                                                                    </div>
 
-                                                                                                <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
-                                                                                                    <label>Credit Link / Source Text</label>
-                                                                                                    <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
-                                                                                                    <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
-                                                                                                </div>
+                                                                                                    <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
+                                                                                                        <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
+                                                                                                    </div>
 
-                                                                                                <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
-                                                                                                    <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
-                                                                                                    <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
-                                                                                                </div>
+                                                                                                    <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
+                                                                                                        <label>Nullverse Username</label>
+                                                                                                        <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
+                                                                                                        <div style="margin-top:-6px;margin-bottom:12px;">
+                                                                                                            <label>Search Nullverse Creator</label>
+                                                                                                            <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+                                                                                                        </div>
+                                                                                                        ${selectedCreator}
+                                                                                                        <div id="credit-results-${idv}" class="credit-search-results"></div>
+                                                                                                    </div>
 
-                                                                                                <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
-                                                                                                    <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
-                                                                                                </div>
-                                                                                            </div>`;
+                                                                                                    <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
+                                                                                                        <label>Artist / Creator / Source Name</label>
+                                                                                                        <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
+                                                                                                    </div>
+
+                                                                                                    <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
+                                                                                                        <label>Credit Link / Source Text</label>
+                                                                                                        <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
+                                                                                                        <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
+                                                                                                    </div>
+
+                                                                                                    <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
+                                                                                                        <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
+                                                                                                        <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
+                                                                                                    </div>
+
+                                                                                                    <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
+                                                                                                        <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
+                                                                                                    </div>
+                                                                                                </div>`;
         }
 
         function creditTypeOptions(active) {
@@ -7506,15 +7259,15 @@
                                 : "Hold anywhere on this row, then drag to reorder.";
 
                     return `<div class="layer ${state.selected.includes(layer.id) ? "active" : ""} ${layer.locked ? "locked layer-locked-reorder" : ""} ${layer.hidden ? "hidden-layer" : ""} ${isPinned ? "layer-pinned" : ""}" data-layer="${idv}" data-layer-reorder-row="true" title="${escA(dragTitle)}">
-                                        <div class="drag-handle" aria-hidden="true">⋮⋮</div>
-                                        <button class="layer-select" type="button" onclick="selectObject('${idv}',event)"><span>${esc(layer.required ? "Required · " : "")}${esc(galleryStudioLayerDisplayName(layer))}</span></button>
-                                        <div class="layer-meta">
-                                            <button class="tiny" type="button" title="Move forward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',1)" ${canUp ? "" : "disabled"}>↑</button>
-                                            <button class="tiny" type="button" title="Move backward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',-1)" ${canDown ? "" : "disabled"}>↓</button>
-                                            <button class="tiny ${layer.hidden ? "warn" : "on"}" type="button" title="${layer.hidden ? "Hidden" : "Visible"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectVisibility('${idv}')">${layer.hidden ? "🙈" : "👁️"}</button>
-                                            <button class="tiny ${layer.locked ? "locked" : "unlocked"}" type="button" title="${layer.locked ? "Locked" : "Unlocked"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectLock('${idv}')">${layer.locked ? "🔒" : "🔓"}</button>
-                                        </div>
-                                    </div>`;
+                                            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
+                                            <button class="layer-select" type="button" onclick="selectObject('${idv}',event)"><span>${esc(layer.required ? "Required · " : "")}${esc(galleryStudioLayerDisplayName(layer))}</span></button>
+                                            <div class="layer-meta">
+                                                <button class="tiny" type="button" title="Move forward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',1)" ${canUp ? "" : "disabled"}>↑</button>
+                                                <button class="tiny" type="button" title="Move backward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',-1)" ${canDown ? "" : "disabled"}>↓</button>
+                                                <button class="tiny ${layer.hidden ? "warn" : "on"}" type="button" title="${layer.hidden ? "Hidden" : "Visible"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectVisibility('${idv}')">${layer.hidden ? "🙈" : "👁️"}</button>
+                                                <button class="tiny ${layer.locked ? "locked" : "unlocked"}" type="button" title="${layer.locked ? "Locked" : "Unlocked"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectLock('${idv}')">${layer.locked ? "🔒" : "🔓"}</button>
+                                            </div>
+                                        </div>`;
                 }).join("") || `<p class="status">No layers yet.</p>`;
 
                 if (stack.length) {
@@ -7983,15 +7736,15 @@
                     : "Hold anywhere on this row, then drag it between two layers.";
 
                 return `<div class="layer ${state.selected.includes(layer.id) ? "active" : ""} ${layer.locked ? "locked" : ""} ${layer.hidden ? "hidden-layer" : ""} ${isPinned ? "layer-pinned" : ""}" data-layer="${idv}" data-layer-reorder-row="true" draggable="false" title="${escA(title)}">
-                                <div class="drag-handle" aria-hidden="true">⋮⋮</div>
-                                <button class="layer-select" type="button" onclick="event.preventDefault();event.stopPropagation();selectObject('${idv}',event)"><span>${esc(layer.required ? "Required · " : "")}${esc(galleryStudioLayerDisplayName(layer))}</span></button>
-                                <div class="layer-meta">
-                                    <button class="tiny" type="button" title="Move forward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',1)" ${canUp ? "" : "disabled"}>↑</button>
-                                    <button class="tiny" type="button" title="Move backward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',-1)" ${canDown ? "" : "disabled"}>↓</button>
-                                    <button class="tiny ${layer.hidden ? "warn" : "on"}" type="button" title="${layer.hidden ? "Hidden" : "Visible"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectVisibility('${idv}')">${layer.hidden ? "🙈" : "👁️"}</button>
-                                    <button class="tiny ${layer.locked ? "locked" : "unlocked"}" type="button" title="${layer.locked ? "Locked" : "Unlocked"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectLock('${idv}')">${layer.locked ? "🔒" : "🔓"}</button>
-                                </div>
-                            </div>`;
+                                    <div class="drag-handle" aria-hidden="true">⋮⋮</div>
+                                    <button class="layer-select" type="button" onclick="event.preventDefault();event.stopPropagation();selectObject('${idv}',event)"><span>${esc(layer.required ? "Required · " : "")}${esc(galleryStudioLayerDisplayName(layer))}</span></button>
+                                    <div class="layer-meta">
+                                        <button class="tiny" type="button" title="Move forward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',1)" ${canUp ? "" : "disabled"}>↑</button>
+                                        <button class="tiny" type="button" title="Move backward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',-1)" ${canDown ? "" : "disabled"}>↓</button>
+                                        <button class="tiny ${layer.hidden ? "warn" : "on"}" type="button" title="${layer.hidden ? "Hidden" : "Visible"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectVisibility('${idv}')">${layer.hidden ? "🙈" : "👁️"}</button>
+                                        <button class="tiny ${layer.locked ? "locked" : "unlocked"}" type="button" title="${layer.locked ? "Locked" : "Unlocked"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectLock('${idv}')">${layer.locked ? "🔒" : "🔓"}</button>
+                                    </div>
+                                </div>`;
             }
 
             renderLayers = function galleryStudioRenderLayersAuthoritative() {
@@ -8233,6 +7986,591 @@
             Object.assign(window, {
                 flushGalleryStudioAutosave: flushCloudAutosave,
                 checkGalleryStudioAutosaveRestore: checkForLocalAutosaveRestore
+            });
+        })();
+
+
+        /* ============================================================
+           GALLERY STUDIO PERSISTENT PARENT LAYER GROUPS
+           This augments the existing multi-select group box only.
+        ============================================================ */
+        (() => {
+            const rawNormalizeLayout = normalizeLayout;
+            const rawExportLayout = exportLayout;
+            const rawRenderLayers = renderLayers;
+            const rawRenderInspector = renderInspector;
+            const rawSelectObject = selectObject;
+            const rawDuplicateSelected = duplicateSelected;
+            const rawDeleteSelected = deleteSelected;
+
+            function normalizeLayerGroups(rawGroups = [], objects = []) {
+                const validObjects = Array.isArray(objects) ? objects : [];
+                const objectMap = new Map(validObjects.map(object => [String(object.id || ""), object]).filter(([key]) => key));
+                const groups = [];
+                const usedObjectIds = new Set();
+                const usedGroupIds = new Set();
+
+                function uniqueGroupId(preferred = "") {
+                    let value = String(preferred || "").trim() || id();
+                    while (usedGroupIds.has(value)) value = id();
+                    usedGroupIds.add(value);
+                    return value;
+                }
+
+                function claimGroup(raw = {}, index = 0) {
+                    const sourceIds = Array.isArray(raw.objectIds)
+                        ? raw.objectIds
+                        : Array.isArray(raw.children)
+                            ? raw.children
+                            : [];
+
+                    const objectIds = [];
+
+                    sourceIds.forEach(value => {
+                        const objectId = String(value || "").trim();
+                        if (!objectId || !objectMap.has(objectId) || usedObjectIds.has(objectId)) return;
+                        usedObjectIds.add(objectId);
+                        objectIds.push(objectId);
+                    });
+
+                    if (objectIds.length < 2) return null;
+
+                    const group = {
+                        id: uniqueGroupId(raw.id),
+                        name: String(raw.name || raw.title || `Group ${index + 1}`).trim() || `Group ${index + 1}`,
+                        objectIds,
+                        expanded: raw.expanded !== false,
+                        locked: raw.locked === true,
+                        visible: raw.visible !== false
+                    };
+
+                    groups.push(group);
+                    return group;
+                }
+
+                (Array.isArray(rawGroups) ? rawGroups : []).forEach((group, index) => claimGroup(group, index));
+
+                const looseGroups = new Map();
+                validObjects.forEach(object => {
+                    const groupId = String(object.groupId || object.layerGroupId || "").trim();
+                    const objectId = String(object.id || "");
+                    if (!groupId || !objectId || usedObjectIds.has(objectId)) return;
+                    if (!looseGroups.has(groupId)) looseGroups.set(groupId, []);
+                    looseGroups.get(groupId).push(objectId);
+                });
+
+                looseGroups.forEach((objectIds, groupId) => {
+                    claimGroup({ id: groupId, objectIds }, groups.length);
+                });
+
+                validObjects.forEach(object => {
+                    object.groupId = "";
+                    object.layerGroupId = "";
+                });
+
+                groups.forEach(group => {
+                    group.objectIds = group.objectIds.filter(objectId => {
+                        const object = objectMap.get(String(objectId));
+                        if (!object) return false;
+                        object.groupId = group.id;
+                        object.layerGroupId = group.id;
+                        return true;
+                    });
+                });
+
+                return groups.filter(group => group.objectIds.length >= 2);
+            }
+
+            function layerGroups(layout = getLayout()) {
+                if (!layout) return [];
+                layout.groups = normalizeLayerGroups(layout.groups || [], layout.objects || []);
+                return layout.groups;
+            }
+
+            function layerGroup(groupId, layout = getLayout()) {
+                return layerGroups(layout).find(group => String(group.id) === String(groupId || "")) || null;
+            }
+
+            function groupForObject(objectOrId, layout = getLayout()) {
+                const objectId = typeof objectOrId === "object"
+                    ? String(objectOrId?.id || "")
+                    : String(objectOrId || "");
+
+                if (!objectId) return null;
+
+                const object = typeof objectOrId === "object"
+                    ? objectOrId
+                    : (layout?.objects || []).find(item => String(item.id || "") === objectId);
+
+                const directId = String(object?.groupId || object?.layerGroupId || "").trim();
+                const direct = directId ? layerGroup(directId, layout) : null;
+
+                if (direct && direct.objectIds.map(String).includes(objectId)) return direct;
+
+                return layerGroups(layout).find(group => group.objectIds.map(String).includes(objectId)) || null;
+            }
+
+            function groupObjects(group, layout = getLayout()) {
+                const ids = new Set((group?.objectIds || []).map(String));
+                return (layout?.objects || []).filter(object => ids.has(String(object.id || "")));
+            }
+
+            function selectedMatchesGroup(group) {
+                const selected = (state.selected || []).map(String);
+                const ids = new Set((group?.objectIds || []).map(String));
+                return selected.length === ids.size && selected.every(value => ids.has(value));
+            }
+
+            function commonSelectedGroup() {
+                const selected = selectedAll().filter(Boolean);
+                if (!selected.length) return null;
+                const groupId = String(selected[0].groupId || selected[0].layerGroupId || "");
+                if (!groupId) return null;
+                if (!selected.every(object => String(object.groupId || object.layerGroupId || "") === groupId)) return null;
+                const group = layerGroup(groupId);
+                return group && selectedMatchesGroup(group) ? group : null;
+            }
+
+            function cleanGroups(layout = getLayout()) {
+                if (!layout) return;
+                layout.groups = normalizeLayerGroups(layout.groups || [], layout.objects || []);
+            }
+
+            normalizeLayout = function groupedNormalizeLayout(src = null, mode = "desktop") {
+                let parsed = src;
+                if (typeof parsed === "string") {
+                    try { parsed = JSON.parse(parsed); } catch { parsed = null; }
+                }
+
+                const layout = rawNormalizeLayout(src, mode);
+                layout.groups = normalizeLayerGroups(parsed?.groups || [], layout.objects || []);
+                return layout;
+            };
+
+            exportLayout = function groupedExportLayout(layout) {
+                cleanGroups(layout);
+                const output = rawExportLayout(layout);
+                output.groups = clone(layout?.groups || []);
+                return output;
+            };
+
+            function nextGroupName(layout = getLayout()) {
+                const groups = layerGroups(layout);
+                let number = groups.length + 1;
+                const names = new Set(groups.map(group => String(group.name || "").toLowerCase()));
+                while (names.has(`group ${number}`)) number += 1;
+                return `Group ${number}`;
+            }
+
+            function createGalleryLayerGroup() {
+                const layout = getLayout();
+                const selected = selectedAll().filter(Boolean);
+
+                if (selected.length < 2) {
+                    toast("Select at least two layers before creating a parent group.", "warn");
+                    return;
+                }
+
+                pushHistory();
+
+                const selectedIds = new Set(selected.map(object => String(object.id)));
+                layout.groups = layerGroups(layout)
+                    .map(group => ({
+                        ...group,
+                        objectIds: group.objectIds.filter(objectId => !selectedIds.has(String(objectId)))
+                    }))
+                    .filter(group => group.objectIds.length >= 2);
+
+                const orderedIds = (layout.objects || [])
+                    .filter(object => selectedIds.has(String(object.id)))
+                    .map(object => object.id);
+
+                const group = {
+                    id: id(),
+                    name: nextGroupName(layout),
+                    objectIds: orderedIds,
+                    expanded: true,
+                    locked: selected.every(object => object.locked),
+                    visible: selected.some(object => !object.hidden)
+                };
+
+                layout.groups.push(group);
+
+                selected.forEach(object => {
+                    object.groupId = group.id;
+                    object.layerGroupId = group.id;
+                });
+
+                state.selected = [...orderedIds];
+                renderAll();
+                toast(`${group.name} created.`, "good");
+            }
+
+            function ungroupGalleryLayerGroup(groupId = "") {
+                const layout = getLayout();
+                const group = layerGroup(groupId) || commonSelectedGroup();
+
+                if (!group) {
+                    toast("Select a parent group first.", "warn");
+                    return;
+                }
+
+                pushHistory();
+
+                const childIds = new Set(group.objectIds.map(String));
+
+                (layout.objects || []).forEach(object => {
+                    if (
+                        childIds.has(String(object.id || "")) ||
+                        String(object.groupId || object.layerGroupId || "") === String(group.id)
+                    ) {
+                        object.groupId = "";
+                        object.layerGroupId = "";
+                    }
+                });
+
+                layout.groups = layerGroups(layout).filter(item => String(item.id) !== String(group.id));
+                state.selected = group.objectIds.filter(objectId => find(objectId));
+
+                renderAll();
+                toast(`${group.name} ungrouped.`, "good");
+            }
+
+            function renameGalleryLayerGroup(groupId, value = "") {
+                const group = layerGroup(groupId);
+                if (!group) return;
+
+                const nextName = String(value || "").trim();
+                if (!nextName || nextName === group.name) return;
+
+                pushHistory();
+                group.name = nextName.slice(0, 80);
+                renderAll();
+            }
+
+            function selectGalleryLayerGroup(groupId, additive = false) {
+                const group = layerGroup(groupId);
+                if (!group) return;
+
+                const ids = group.objectIds.filter(objectId => find(objectId));
+
+                if (additive) {
+                    const selected = new Set(state.selected || []);
+                    const allSelected = ids.every(objectId => selected.has(objectId));
+
+                    ids.forEach(objectId => {
+                        if (allSelected) selected.delete(objectId);
+                        else selected.add(objectId);
+                    });
+
+                    state.selected = [...selected];
+                } else {
+                    state.selected = [...ids];
+                }
+
+                renderAll();
+            }
+
+            function selectGalleryLayerGroupChild(groupId, objectId, event = null) {
+                event?.preventDefault?.();
+                event?.stopPropagation?.();
+
+                const group = layerGroup(groupId);
+                if (!group || !group.objectIds.map(String).includes(String(objectId))) return;
+
+                state.selected = [objectId];
+                renderAll();
+                toast("Editing one child layer inside the group.", "good", 1400);
+            }
+
+            function toggleGalleryLayerGroupExpanded(groupId) {
+                const group = layerGroup(groupId);
+                if (!group) return;
+                group.expanded = group.expanded === false;
+                renderLayers();
+            }
+
+            function setGalleryLayerGroupLocked(groupId, locked) {
+                const group = layerGroup(groupId);
+                if (!group) return;
+
+                pushHistory();
+                group.locked = !!locked;
+                groupObjects(group).forEach(object => {
+                    object.locked = !!locked;
+                });
+
+                renderAll();
+                toast(locked ? `${group.name} locked.` : `${group.name} unlocked.`, locked ? "warn" : "good");
+            }
+
+            function setGalleryLayerGroupVisible(groupId, visible) {
+                const group = layerGroup(groupId);
+                if (!group) return;
+
+                pushHistory();
+                group.visible = !!visible;
+
+                groupObjects(group).forEach(object => {
+                    if (!object.required) object.hidden = !visible;
+                });
+
+                protectRequired(getLayout(), false);
+                renderAll();
+                toast(visible ? `${group.name} shown.` : `${group.name} hidden.`, visible ? "good" : "warn");
+            }
+
+            function moveGalleryLayerGroup(groupId, direction) {
+                const layout = getLayout();
+                const group = layerGroup(groupId);
+                if (!group || !direction) return;
+
+                const groupedIds = new Set(layerGroups(layout).flatMap(item => item.objectIds.map(String)));
+                const units = [
+                    ...layerGroups(layout).map(item => ({
+                        type: "group",
+                        id: item.id,
+                        objects: groupObjects(item, layout)
+                    })),
+                    ...(layout.objects || [])
+                        .filter(object => !groupedIds.has(String(object.id)))
+                        .map(object => ({ type: "object", id: object.id, objects: [object] }))
+                ]
+                    .filter(unit => unit.objects.length)
+                    .sort((a, b) =>
+                        Math.max(...b.objects.map(object => Number(object.z) || 0)) -
+                        Math.max(...a.objects.map(object => Number(object.z) || 0))
+                    );
+
+                const index = units.findIndex(unit => unit.type === "group" && String(unit.id) === String(groupId));
+                const target = direction > 0 ? index - 1 : index + 1;
+
+                if (index < 0 || target < 0 || target >= units.length) return;
+
+                pushHistory();
+                [units[index], units[target]] = [units[target], units[index]];
+
+                let z = units.reduce((total, unit) => total + unit.objects.length, 0) + 20;
+
+                units.forEach(unit => {
+                    [...unit.objects]
+                        .sort((a, b) => (Number(b.z) || 0) - (Number(a.z) || 0))
+                        .forEach(object => {
+                            object.z = z--;
+                        });
+                });
+
+                protectRequired(layout, false);
+                renderAll();
+            }
+
+            function parentRow(group) {
+                const objects = groupObjects(group);
+                const selected = selectedMatchesGroup(group);
+                const allLocked = objects.length > 0 && objects.every(object => object.locked);
+                const anyVisible = objects.some(object => !object.hidden);
+
+                return `<div class="layer layer-group-parent ${selected ? "active" : ""} ${allLocked ? "locked" : ""}" data-layer-group-id="${escA(group.id)}">
+                        <button class="layer-group-caret" type="button" onclick="toggleGalleryLayerGroupExpanded('${escA(group.id)}')">${group.expanded === false ? "▶" : "▼"}</button>
+                        <button class="layer-select" type="button" onclick="selectGalleryLayerGroup('${escA(group.id)}',event.shiftKey||event.ctrlKey||event.metaKey)"><span>📁 ${esc(group.name || "Group")}</span></button>
+                        <div class="layer-meta">
+                            <span class="layer-group-count">${objects.length}</span>
+                            <button class="tiny" title="Move group forward" onclick="moveGalleryLayerGroup('${escA(group.id)}',1)">↑</button>
+                            <button class="tiny" title="Move group backward" onclick="moveGalleryLayerGroup('${escA(group.id)}',-1)">↓</button>
+                            <button class="tiny ${anyVisible ? "on" : "warn"}" title="${anyVisible ? "Visible" : "Hidden"}" onclick="setGalleryLayerGroupVisible('${escA(group.id)}',${anyVisible ? "false" : "true"})">${anyVisible ? "👁️" : "🙈"}</button>
+                            <button class="tiny ${allLocked ? "locked" : "unlocked"}" title="${allLocked ? "Locked" : "Unlocked"}" onclick="setGalleryLayerGroupLocked('${escA(group.id)}',${allLocked ? "false" : "true"})">${allLocked ? "🔒" : "🔓"}</button>
+                        </div>
+                    </div>`;
+            }
+
+            function childRow(object, group) {
+                return `<div class="layer layer-group-child ${state.selected.includes(object.id) ? "active" : ""} ${object.locked ? "locked" : ""} ${object.hidden ? "hidden-layer" : ""}" data-layer="${escA(object.id)}" data-layer-group-id="${escA(group.id)}">
+                        <div class="drag-handle">↳</div>
+                        <button class="layer-select" type="button" onclick="selectGalleryLayerGroupChild('${escA(group.id)}','${escA(object.id)}',event)"><span>${esc(object.required ? "Required · " : "")}${esc(object.name || LABELS[object.type] || object.type)}</span></button>
+                        <div class="layer-meta">
+                            <button class="tiny" title="Move up" onclick="moveLayer('${escA(object.id)}',1)">↑</button>
+                            <button class="tiny" title="Move down" onclick="moveLayer('${escA(object.id)}',-1)">↓</button>
+                            <button class="tiny ${object.hidden ? "warn" : "on"}" onclick="toggleObjectVisibility('${escA(object.id)}')">${object.hidden ? "🙈" : "👁️"}</button>
+                            <button class="tiny ${object.locked ? "locked" : "unlocked"}" onclick="toggleObjectLock('${escA(object.id)}')">${object.locked ? "🔒" : "🔓"}</button>
+                        </div>
+                    </div>`;
+            }
+
+            renderLayers = function groupedRenderLayers() {
+                cleanGroups();
+
+                const layout = getLayout();
+                const groups = layerGroups(layout);
+
+                if (!groups.length) {
+                    rawRenderLayers();
+                    return;
+                }
+
+                const groupedIds = new Set(groups.flatMap(group => group.objectIds.map(String)));
+                const units = [
+                    ...groups.map(group => ({
+                        type: "group",
+                        group,
+                        z: Math.max(0, ...groupObjects(group).map(object => Number(object.z) || 0))
+                    })),
+                    ...(layout.objects || [])
+                        .filter(object => !groupedIds.has(String(object.id)))
+                        .map(object => ({ type: "object", object, z: Number(object.z) || 0 }))
+                ].sort((a, b) => b.z - a.z);
+
+                const html = [];
+
+                units.forEach(unit => {
+                    if (unit.type === "object") {
+                        const object = unit.object;
+                        html.push(`<div class="layer ${state.selected.includes(object.id) ? "active" : ""} ${object.locked ? "locked" : ""} ${object.hidden ? "hidden-layer" : ""}" data-layer="${escA(object.id)}" draggable="true"><div class="drag-handle">⋮⋮</div><button class="layer-select" onclick="selectObject('${escA(object.id)}',event)"><span>${esc(object.required ? "Required · " : "")}${esc(object.name || LABELS[object.type] || object.type)}</span></button><div class="layer-meta"><button class="tiny" onclick="moveLayer('${escA(object.id)}',1)">↑</button><button class="tiny" onclick="moveLayer('${escA(object.id)}',-1)">↓</button><button class="tiny ${object.hidden ? "warn" : "on"}" onclick="toggleObjectVisibility('${escA(object.id)}')">${object.hidden ? "🙈" : "👁️"}</button><button class="tiny ${object.locked ? "locked" : "unlocked"}" onclick="toggleObjectLock('${escA(object.id)}')">${object.locked ? "🔒" : "🔓"}</button></div></div>`);
+                        return;
+                    }
+
+                    const group = unit.group;
+                    html.push(parentRow(group));
+
+                    if (group.expanded !== false) {
+                        groupObjects(group)
+                            .sort((a, b) => (Number(b.z) || 0) - (Number(a.z) || 0))
+                            .forEach(object => html.push(childRow(object, group)));
+                    }
+                });
+
+                dom.layers.innerHTML = html.join("") || `<p class="status">No layers yet.</p>`;
+
+                try { setupLayerDnd(); } catch { }
+            };
+
+            function groupInspectorMarkup() {
+                const selected = selectedAll().filter(Boolean);
+                const common = commonSelectedGroup();
+
+                if (common) {
+                    const children = groupObjects(common);
+                    const allLocked = children.length > 0 && children.every(object => object.locked);
+                    const anyVisible = children.some(object => !object.hidden);
+
+                    return `<div class="group">
+                            <h4>Parent Layer Group</h4>
+                            <p class="gallery-layer-group-note">These ${children.length} layers are stored under one parent layer. The existing blue group box still controls movement, resizing, and rotation.</p>
+                            <label>Group Name</label>
+                            <input value="${escA(common.name || "Group")}" onchange="renameGalleryLayerGroup('${escA(common.id)}',this.value)">
+                            <div class="gallery-layer-group-actions">
+                                <button onclick="setGalleryLayerGroupLocked('${escA(common.id)}',${allLocked ? "false" : "true"})">${allLocked ? "🔓 Unlock Group" : "🔒 Lock Group"}</button>
+                                <button onclick="setGalleryLayerGroupVisible('${escA(common.id)}',${anyVisible ? "false" : "true"})">${anyVisible ? "🙈 Hide Group" : "👁️ Show Group"}</button>
+                                <button onclick="moveGalleryLayerGroup('${escA(common.id)}',1)">Move Forward</button>
+                                <button onclick="moveGalleryLayerGroup('${escA(common.id)}',-1)">Move Backward</button>
+                                <button class="full danger-button" onclick="ungroupGalleryLayerGroup('${escA(common.id)}')">Ungroup Layers</button>
+                            </div>
+                            <div class="gallery-layer-group-child-list">
+                                ${children.map(object => `<button class="gallery-layer-group-child-button" onclick="selectGalleryLayerGroupChild('${escA(common.id)}','${escA(object.id)}',event)">↳ ${esc(object.name || LABELS[object.type] || object.type)}</button>`).join("")}
+                            </div>
+                        </div>`;
+                }
+
+                if (selected.length > 1) {
+                    return `<div class="group">
+                            <h4>Persistent Layer Group</h4>
+                            <p class="gallery-layer-group-note">Turn this multi-selection into a parent layer group. It will stay grouped after saving and reopening the Studio.</p>
+                            <button style="width:100%" onclick="createGalleryLayerGroup()">Create Parent Group</button>
+                        </div>`;
+                }
+
+                if (selected.length === 1) {
+                    const group = groupForObject(selected[0]);
+
+                    if (group) {
+                        return `<div class="group">
+                                <h4>Grouped Layer</h4>
+                                <p class="gallery-layer-group-note">This layer belongs to <strong>${esc(group.name || "Group")}</strong>.</p>
+                                <div class="gallery-layer-group-actions">
+                                    <button class="full" onclick="selectGalleryLayerGroup('${escA(group.id)}')">Select Parent Group</button>
+                                    <button class="full danger-button" onclick="ungroupGalleryLayerGroup('${escA(group.id)}')">Ungroup All Children</button>
+                                </div>
+                            </div>`;
+                    }
+                }
+
+                return "";
+            }
+
+            renderInspector = function groupedRenderInspector() {
+                rawRenderInspector();
+                const markup = groupInspectorMarkup();
+                if (markup && dom.insp) dom.insp.insertAdjacentHTML("beforeend", markup);
+            };
+
+            selectObject = function groupedSelectObject(objectId, event = null) {
+                const object = find(objectId);
+                const group = groupForObject(object);
+
+                if (group && !(event?.shiftKey || event?.ctrlKey || event?.metaKey)) {
+                    event?.stopPropagation?.();
+                    state.selected = group.objectIds.filter(idValue => find(idValue));
+                    renderAll();
+                    return;
+                }
+
+                rawSelectObject(objectId, event);
+            };
+
+            duplicateSelected = function groupedDuplicateSelected() {
+                const sourceGroup = commonSelectedGroup();
+                const beforeIds = new Set((getLayout().objects || []).map(object => object.id));
+
+                rawDuplicateSelected();
+
+                if (!sourceGroup) return;
+
+                const copies = (getLayout().objects || []).filter(object =>
+                    !beforeIds.has(object.id) && state.selected.includes(object.id)
+                );
+
+                if (copies.length < 2) return;
+
+                const group = {
+                    id: id(),
+                    name: `${sourceGroup.name || "Group"} Copy`,
+                    objectIds: copies.map(object => object.id),
+                    expanded: true,
+                    locked: false,
+                    visible: true
+                };
+
+                getLayout().groups = layerGroups(getLayout());
+                getLayout().groups.push(group);
+
+                copies.forEach(object => {
+                    object.groupId = group.id;
+                    object.layerGroupId = group.id;
+                });
+
+                renderAll();
+            };
+
+            deleteSelected = function groupedDeleteSelected() {
+                rawDeleteSelected();
+                cleanGroups();
+                renderAll();
+            };
+
+            Object.assign(window, {
+                createGalleryLayerGroup,
+                ungroupGalleryLayerGroup,
+                renameGalleryLayerGroup,
+                selectGalleryLayerGroup,
+                selectGalleryLayerGroupChild,
+                toggleGalleryLayerGroupExpanded,
+                setGalleryLayerGroupLocked,
+                setGalleryLayerGroupVisible,
+                moveGalleryLayerGroup
+            });
+
+            ["desktop", "mobile"].forEach(mode => {
+                const layout = state.layouts?.[mode];
+                if (layout) layout.groups = normalizeLayerGroups(layout.groups || [], layout.objects || []);
             });
         })();
 
