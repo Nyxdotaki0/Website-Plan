@@ -7,7 +7,7 @@ import {
     renderEmptyCard,
     renderGalleryCard,
     renderSkeletonCards
-} from "./nullverse-content-cards.js";
+} from "./nullverse-content-cards.js?v=2";
 import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nullverse-data.js";
 
 const currentUser = await requireBetaAccess();
@@ -88,7 +88,13 @@ async function loadMore(replace = false) {
         if (state.proofType) items = items.filter(item => item.proof_type === state.proofType);
 
         const html = items
-            .map(item => renderGalleryCard(item, { safety: getSafetyDecision(item, viewer.safety) }))
+            .map(item => renderGalleryCard(item, {
+                safety: getSafetyDecision(item, viewer.safety),
+                galleryDestination: "creator",
+                showGalleryActions: true,
+                viewerRole: viewer.profile?.role_name || viewer.profile?.role || "creator",
+                viewerStatus: viewer.profile?.account_status || "active"
+            }))
             .filter(Boolean)
             .join("");
 
@@ -131,4 +137,3 @@ async function loadCreators() {
         container.innerHTML = renderEmptyCard("Could not load creators", error.message || "Refresh and try again.");
     }
 }
-// JavaScript source code

@@ -118,18 +118,30 @@ export function renderGalleryCard(item = {}, options = {}) {
     const safety = options.safety || { action: "show", warnings: [] };
     if (safety.action === "hide") return "";
 
-    const url = `creator-gallery-item.html?id=${encodeURIComponent(item.id || "")}`;
+    const itemUrl = `creator-gallery-item.html?id=${encodeURIComponent(item.id || "")}`;
+    const creatorUsername = item.username || item.owner_username || item.creator_username || "";
+    const creatorGalleryUrl = creatorUsername
+        ? `creator-gallery.html?user=${encodeURIComponent(creatorUsername)}`
+        : "creator-gallery.html";
+    const routeToCreatorGallery = options.galleryDestination === "creator";
+    const primaryUrl = routeToCreatorGallery ? creatorGalleryUrl : itemUrl;
     const title = item.title || "Untitled Gallery Item";
     const image = item.image_url || DEFAULT_GALLERY;
-    const displayName = item.display_name || item.username || "Creator";
+    const displayName = item.display_name || creatorUsername || "Creator";
     const avatar = item.avatar_url || DEFAULT_AVATAR;
     const likeCount = Number(item.like_count || 0);
     const warningClass = safety.action === "warn" ? " warning-hidden" : "";
-    const lockedClass = item.showcase_locked ? " locked" : "";
+    const showcaseLocked = normalizeBooleanFlag(item.showcase_locked);
+    const lockedClass = showcaseLocked ? " locked" : "";
+    const viewerRole = String(options.viewerRole || "creator").trim().toLowerCase();
+    const viewerStatus = String(options.viewerStatus || "active").trim().toLowerCase();
+    const viewerIsStaff = viewerStatus === "active" && ["moderator", "void_architect"].includes(viewerRole);
+    const canOpenGalleryItem = !showcaseLocked || viewerIsStaff;
+    const showGalleryActions = options.showGalleryActions === true;
 
     return `
         <article class="nv-gallery-card${warningClass}${lockedClass}" data-nv-warning-card>
-            <a class="nv-card-media" href="${escapeHtml(url)}">
+            <a class="nv-card-media" href="${escapeHtml(primaryUrl)}">
                 <img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" loading="lazy" onerror="this.src='${DEFAULT_GALLERY}'">
                 <span class="nv-card-type nv-type-gallery">Gallery</span>
                 ${likeCount ? `<span class="nv-card-count">${formatCompactNumber(likeCount)} likes</span>` : ""}
@@ -140,12 +152,20 @@ export function renderGalleryCard(item = {}, options = {}) {
                     <img src="${escapeHtml(avatar)}" alt="" loading="lazy">
                     <a href="${escapeHtml(getProfileUrl(item))}">${escapeHtml(displayName)}</a>
                 </div>
-                <h3><a href="${escapeHtml(url)}">${escapeHtml(title)}</a></h3>
+                <h3><a href="${escapeHtml(primaryUrl)}">${escapeHtml(title)}</a></h3>
                 ${item.description ? `<p class="nv-card-summary">${escapeHtml(item.description)}</p>` : ""}
                 <div class="nv-card-meta">
                     <span>${escapeHtml(formatLabel(item.proof_type || "artwork"))}</span>
                     <span>${item.updated_at ? escapeHtml(timeAgo(item.updated_at)) : "Recently added"}</span>
                 </div>
+                ${showGalleryActions ? `
+                    <div class="nv-card-actions nv-gallery-card-actions">
+                        <a class="nv-card-button primary" href="${escapeHtml(creatorGalleryUrl)}">Open Creator Gallery</a>
+                        ${canOpenGalleryItem
+                ? `<a class="nv-card-button" href="${escapeHtml(itemUrl)}">Open Gallery Item</a>`
+                : `<span class="nv-card-button disabled" aria-disabled="true" title="This creator has locked the detailed showcase.">Showcase Locked</span>`}
+                    </div>
+                ` : ""}
             </div>
         </article>
     `;
@@ -303,6 +323,14 @@ function buildOverviewCredit(item) {
         : `<span class="nv-credit-pill">${inner}</span>`;
 }
 
+
+function normalizeBooleanFlag(value) {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value === 1;
+    const clean = String(value ?? "").trim().toLowerCase();
+    return ["true", "1", "yes", "locked", "private", "closed"].includes(clean);
+}
+
 function splitTags(...values) {
     return [...new Set(values
         .flatMap(value => String(value || "").split(","))
@@ -376,4 +404,3 @@ export function escapeHtml(value) {
 function escapeCssUrl(value) {
     return String(value || "").replace(/["'\\()]/g, "\\$&");
 }
-// JavaScript source code
