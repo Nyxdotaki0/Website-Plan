@@ -125,12 +125,12 @@ export function renderGalleryCard(item = {}, options = {}) {
         : "creator-gallery.html";
     const routeToCreatorGallery = options.galleryDestination === "creator";
     const primaryUrl = routeToCreatorGallery ? creatorGalleryUrl : itemUrl;
+    const profileUrl = getProfileUrl(item);
     const title = item.title || "Untitled Gallery Item";
     const image = item.image_url || DEFAULT_GALLERY;
     const displayName = item.display_name || creatorUsername || "Creator";
     const avatar = item.avatar_url || DEFAULT_AVATAR;
     const likeCount = Number(item.like_count || 0);
-    const warningClass = safety.action === "warn" ? " warning-hidden" : "";
     const showcaseLocked = normalizeBooleanFlag(item.showcase_locked);
     const lockedClass = showcaseLocked ? " locked" : "";
     const viewerRole = String(options.viewerRole || "creator").trim().toLowerCase();
@@ -138,21 +138,32 @@ export function renderGalleryCard(item = {}, options = {}) {
     const viewerIsStaff = viewerStatus === "active" && ["moderator", "void_architect"].includes(viewerRole);
     const canOpenGalleryItem = !showcaseLocked || viewerIsStaff;
     const showGalleryActions = options.showGalleryActions === true;
+    const requireWarningConfirmation = options.requireWarningConfirmation === true;
+    const warningRevealed = options.warningRevealed === true;
+    const shouldConfirmWarning = requireWarningConfirmation && !warningRevealed && safety.action === "warn";
+    const useGenericWarning = !requireWarningConfirmation && !warningRevealed && safety.action === "warn";
+    const warningClass = shouldConfirmWarning ? " warning-gated" : (useGenericWarning ? " warning-hidden" : "");
+    const revealedClass = warningRevealed ? " warning-revealed" : "";
+
+    const linkAttributes = url => shouldConfirmWarning
+        ? `href="#" data-nv-protected-href="${escapeHtml(url)}" aria-disabled="true" tabindex="-1"`
+        : `href="${escapeHtml(url)}"`;
 
     return `
-        <article class="nv-gallery-card${warningClass}${lockedClass}" data-nv-warning-card>
-            <a class="nv-card-media" href="${escapeHtml(primaryUrl)}">
+        <article class="nv-gallery-card${warningClass}${revealedClass}${lockedClass}" data-nv-warning-card data-gallery-item-id="${escapeHtml(item.id || "")}">
+            <a class="nv-card-media" ${linkAttributes(primaryUrl)}>
                 <img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" loading="lazy" onerror="this.src='${DEFAULT_GALLERY}'">
                 <span class="nv-card-type nv-type-gallery">Gallery</span>
                 ${likeCount ? `<span class="nv-card-count">${formatCompactNumber(likeCount)} likes</span>` : ""}
-                ${safety.action === "warn" ? renderSafetyOverlay(safety) : ""}
+                ${useGenericWarning ? renderSafetyOverlay(safety) : ""}
             </a>
+            ${shouldConfirmWarning ? renderGalleryWarningGate(item, safety) : ""}
             <div class="nv-card-body">
                 <div class="nv-card-creator">
                     <img src="${escapeHtml(avatar)}" alt="" loading="lazy">
-                    <a href="${escapeHtml(getProfileUrl(item))}">${escapeHtml(displayName)}</a>
+                    <a ${linkAttributes(profileUrl)}>${escapeHtml(displayName)}</a>
                 </div>
-                <h3><a href="${escapeHtml(primaryUrl)}">${escapeHtml(title)}</a></h3>
+                <h3><a ${linkAttributes(primaryUrl)}>${escapeHtml(title)}</a></h3>
                 ${item.description ? `<p class="nv-card-summary">${escapeHtml(item.description)}</p>` : ""}
                 <div class="nv-card-meta">
                     <span>${escapeHtml(formatLabel(item.proof_type || "artwork"))}</span>
@@ -160,14 +171,49 @@ export function renderGalleryCard(item = {}, options = {}) {
                 </div>
                 ${showGalleryActions ? `
                     <div class="nv-card-actions nv-gallery-card-actions">
-                        <a class="nv-card-button primary" href="${escapeHtml(creatorGalleryUrl)}">Open Creator Gallery</a>
+                        <a class="nv-card-button primary" ${linkAttributes(creatorGalleryUrl)}>Open Creator Gallery</a>
                         ${canOpenGalleryItem
-                ? `<a class="nv-card-button" href="${escapeHtml(itemUrl)}">Open Gallery Item</a>`
+                ? `<a class="nv-card-button" ${linkAttributes(itemUrl)}>Open Gallery Item</a>`
                 : `<span class="nv-card-button disabled" aria-disabled="true" title="This creator has locked the detailed showcase.">Showcase Locked</span>`}
                     </div>
                 ` : ""}
             </div>
         </article>
+    `;
+}
+
+function renderGalleryWarningGate(item = {}, safety = {}) {
+    const warnings = normalizeWarningList(safety.warnings || item.content_warnings);
+    const rating = String(safety.rating || item.content_rating || item.age_rating || "general").trim().toLowerCase();
+    const labels = [...warnings.map(formatLabel)];
+    if (["mature", "adult", "18+", "18_plus"].includes(rating) && !labels.some(label => ["Mature", "Adult", "18+", "18 Plus"].includes(label))) {
+        labels.unshift(formatLabel(rating));
+    }
+    if (!labels.length) labels.push("Sensitive Content");
+
+    const warningCount = warnings.length || 1;
+    const warningText = `${warningCount} warning${warningCount === 1 ? "" : "s"}`;
+    const warningList = labels
+        .slice(0, 6)
+        .map(label => `<span>${escapeHtml(label)}</span>`)
+        .join(`<span class="nv-gallery-warning-dot" aria-hidden="true">•</span>`);
+    const summary = labels.join(" · ");
+
+    return `
+        <button
+            class="nv-gallery-warning-gate"
+            type="button"
+            data-nv-gallery-warning-gate
+            data-gallery-item-id="${escapeHtml(item.id || "")}"
+            data-gallery-item-title="${escapeHtml(item.title || "Gallery item")}"
+            data-gallery-warning-summary="${escapeHtml(summary)}"
+            data-gallery-warning-tags="${escapeHtml(labels.join("|"))}"
+            aria-label="Review content warning for ${escapeHtml(item.title || "this gallery item")}">
+            <span class="nv-gallery-warning-count">${escapeHtml(warningText)}</span>
+            <strong class="nv-gallery-warning-title">Content Warning</strong>
+            <span class="nv-gallery-warning-list">${warningList}</span>
+            <span class="nv-gallery-warning-hint">Tap to review</span>
+        </button>
     `;
 }
 
