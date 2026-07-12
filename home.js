@@ -117,33 +117,47 @@ async function loadContinueSection() {
         .sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0))
         .slice(0, 2);
 
-    const creationHtml = creationItems.length
-        ? creationItems.map(renderProjectCard).join("")
-        : renderEmptyCard("Start your first project", "Create a World, Literature project, Comic, or Gallery item.", { href: "create-world.html", label: "Create Something" });
+    const journeyCards = [];
 
-    let recentHtml = "";
-    if (recent.length) {
-        recentHtml = recent.slice(0, 2).map(item => {
-            const normalized = {
-                ...item,
-                id: item.content_id,
-                title: item.title || "Continue Reading",
-                summary: item.progress_label || "Return to where you left off.",
-                cover_image_url: item.image_url,
-                content_type: item.content_type,
-                updated_at: item.last_opened_at,
-                display_name: "Your reading progress",
-                username: profile?.username,
-                avatar_url: profile?.avatar_url,
-                like_count: 0
-            };
-            return renderContentCard(normalized, { safety: { action: "show", warnings: [] } });
-        }).join("");
-    } else {
-        recentHtml = renderEmptyCard("Nothing waiting yet", "Open Literature, Comics, or Worlds and your recent journey will appear here.", { href: "explore.html", label: "Find Something" });
-    }
+    creationItems.forEach(item => {
+        journeyCards.push(
+            renderProjectCard(item).replace(
+                'class="nv-project-card"',
+                'class="nv-project-card home-journey-card home-journey-creation"'
+            )
+        );
+    });
 
-    container.innerHTML = `<div>${creationHtml}</div><div>${recentHtml}</div>`;
+    recent.slice(0, 2).forEach(item => {
+        const normalized = {
+            ...item,
+            id: item.content_id,
+            title: item.title || "Continue Reading",
+            summary: item.progress_label || "Return to where you left off.",
+            cover_image_url: item.image_url,
+            content_type: item.content_type,
+            updated_at: item.last_opened_at,
+            display_name: "Your reading progress",
+            username: profile?.username,
+            avatar_url: profile?.avatar_url,
+            like_count: 0
+        };
+
+        journeyCards.push(
+            renderContentCard(normalized, { safety: { action: "show", warnings: [] } }).replace(
+                'class="nv-content-card"',
+                'class="nv-content-card home-journey-card home-journey-reading"'
+            )
+        );
+    });
+
+    container.innerHTML = journeyCards.length
+        ? journeyCards.join("")
+        : renderEmptyCard(
+            "Nothing waiting yet",
+            "Create something new or open a World, Literature project, or Comic to start your journey.",
+            { href: "explore.html", label: "Explore Nullverse" }
+        );
     bindCardInteractions(container);
 }
 

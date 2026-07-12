@@ -1,12 +1,12 @@
-import { requireBetaAccess } from "./betaGate.js";
+﻿import { requireBetaAccess } from "./betaGate.js";
 import { supabase } from "./supabaseClient.js";
 import { initNullverseShell } from "./nullverse-shell.js?v=5";
 import {
     formatCompactNumber,
     renderEmptyCard,
-    renderProjectCard,
     renderSkeletonCards,
-    escapeHtml
+    escapeHtml,
+    timeAgo
 } from "./nullverse-content-cards.js?v=2";
 import { fetchDashboardMetrics, loadViewerContext } from "./nullverse-data.js";
 
@@ -138,14 +138,84 @@ function renderProjects() {
 }
 
 function renderProjectWithManagement(item) {
-    const base = renderProjectCard(item);
+    const isGallery = item.__kind === "gallery";
+    const type = dashboardContentType(item);
+    const label = dashboardTypeLabel(type);
+    const image = isGallery
+        ? (item.image_url || "https://placehold.co/900x700/16161d/ffffff?text=Gallery")
+        : (item.cover_image_url || "https://placehold.co/900x700/16161d/ffffff?text=Nullverse");
+    const title = item.title || "Untitled Project";
+    const editorUrl = isGallery
+        ? `gallery-item-studio.html?item=${encodeURIComponent(item.id || "")}`
+        : dashboardEditorUrl(item);
+    const publicUrl = isGallery
+        ? `creator-gallery-item.html?id=${encodeURIComponent(item.id || "")}`
+        : dashboardPublicUrl(item);
+    const published = isGallery ? item.visibility === "public" : item.visibility === "published";
     const hidden = isHidden(item);
-    const controls = `
-        <div class="nv-card-actions" style="padding:0 16px 16px;margin-top:-2px;">
-            ${hidden && item.__kind === "gallery" ? `<button class="nv-card-button" type="button" data-appeal-item="${item.id}">Appeal</button>` : ""}
-            <button class="nv-card-button danger" type="button" data-delete-kind="${item.__kind === "gallery" ? "gallery" : "project"}" data-delete-id="${item.id}">Delete</button>
-        </div>`;
-    return base.replace("</article>", `${controls}</article>`);
+    const kind = isGallery ? "gallery" : "project";
+
+    return `
+        <article class="dashboard-creation-card" data-dashboard-card="${escapeHtml(item.id || "")}">
+            <a class="dashboard-creation-media" href="${escapeHtml(editorUrl)}">
+                <img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" loading="lazy">
+                <span class="nv-card-type nv-type-${escapeHtml(type)}">${escapeHtml(label)}</span>
+                <span class="dashboard-creation-status ${published ? "published" : "draft"}">${published ? "Published" : "Draft"}</span>
+            </a>
+
+            <button class="dashboard-card-menu-button" type="button" data-dashboard-menu-toggle="${escapeHtml(item.id || "")}" aria-label="Open project actions">⋮</button>
+            <div class="dashboard-card-menu" data-dashboard-menu="${escapeHtml(item.id || "")}">
+                ${hidden && isGallery ? `<button type="button" data-appeal-item="${escapeHtml(item.id)}">Appeal moderation</button>` : ""}
+                <a href="${escapeHtml(editorUrl)}">Continue editing</a>
+                ${published ? `<a href="${escapeHtml(publicUrl)}">Open public page</a>` : ""}
+                <button class="danger" type="button" data-delete-kind="${kind}" data-delete-id="${escapeHtml(item.id)}">Delete</button>
+            </div>
+
+            <div class="dashboard-creation-body">
+                <div class="dashboard-creation-heading">
+                    <div>
+                        <h3><a href="${escapeHtml(editorUrl)}">${escapeHtml(title)}</a></h3>
+                        <p>${item.updated_at ? `Updated ${escapeHtml(timeAgo(item.updated_at))}` : "Recently edited"}</p>
+                    </div>
+                </div>
+
+                ${hidden ? `<div class="dashboard-hidden-note">Hidden by moderation</div>` : ""}
+
+                <div class="dashboard-creation-actions">
+                    <a class="dashboard-button primary" href="${escapeHtml(editorUrl)}">Continue Editing</a>
+                    ${published ? `<a class="dashboard-button" href="${escapeHtml(publicUrl)}">View</a>` : ""}
+                </div>
+            </div>
+        </article>`;
+}
+
+function dashboardContentType(item) {
+    if (item.__kind === "gallery") return "gallery";
+    const type = String(item.content_type || "world").trim().toLowerCase();
+    if (type === "literature") return "literature";
+    if (["comic", "manga"].includes(type)) return "comic";
+    return "world";
+}
+
+function dashboardTypeLabel(type) {
+    if (type === "gallery") return "Gallery";
+    if (type === "literature") return "Literature";
+    if (type === "comic") return "Comic";
+    return "World";
+}
+
+function dashboardEditorUrl(item) {
+    const type = dashboardContentType(item);
+    if (type === "literature") return `edit-literature.html?id=${encodeURIComponent(item.id || "")}`;
+    if (type === "comic") return `edit-comic.html?id=${encodeURIComponent(item.id || "")}`;
+    return `edit-world.html?id=${encodeURIComponent(item.id || "")}`;
+}
+
+function dashboardPublicUrl(item) {
+    const type = dashboardContentType(item);
+    if (type === "literature") return `literature.html?id=${encodeURIComponent(item.id || "")}`;
+    if (type === "comic") return `comic.html?id=${encodeURIComponent(item.id || "")}`;
+    return `world.html?id=${encodeURIComponent(item.id || "")}`;
 }
 
 function matchesDashboardFilter(item) {
@@ -165,7 +235,22 @@ function bindManagementButtons(root) {
     root.querySelectorAll("[data-appeal-item]").forEach(button => {
         button.addEventListener("click", () => submitAppeal(button.dataset.appealItem));
     });
+
+    root.querySelectorAll("[data-dashboard-menu-toggle]").forEach(button => {
+        button.addEventListener("click", event => {
+            event.stopPropagation();
+            const id = button.dataset.dashboardMenuToggle;
+            root.querySelectorAll("[data-dashboard-menu]").forEach(menu => {
+                menu.classList.toggle("open", menu.dataset.dashboardMenu === id && !menu.classList.contains("open"));
+            });
+        });
+    });
 }
+
+document.addEventListener("click", event => {
+    if (event.target.closest(".dashboard-card-menu") || event.target.closest(".dashboard-card-menu-button")) return;
+    document.querySelectorAll(".dashboard-card-menu.open").forEach(menu => menu.classList.remove("open"));
+});
 
 async function deleteItem(kind, id) {
     const item = kind === "gallery"
@@ -174,7 +259,7 @@ async function deleteItem(kind, id) {
     if (!item) return;
 
     const label = item.title || "this item";
-    if (!confirm(`Delete �${label}�? This cannot be undone.`)) return;
+    if (!confirm(`Delete “${label}”? This cannot be undone.`)) return;
 
     const table = kind === "gallery" ? "creator_proof_gallery" : "worlds";
     const { error } = await supabase.from(table).delete().eq("id", id).eq("owner_id", currentUser.id);
