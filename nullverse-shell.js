@@ -23,6 +23,9 @@ const DEFAULT_AVATAR = "https://placehold.co/160x160/1b1b28/ffffff?text=NV";
 
 export async function initNullverseShell(options = {}) {
     const page = String(options.page || document.body?.dataset?.page || "").toLowerCase();
+    const guestMode = String(options.guestMode || "default").toLowerCase();
+    const guestBrandHref = options.guestBrandHref || "index.html";
+    const guestLoginHref = options.guestLoginHref || "login.html";
     let user = options.user || null;
     let profile = options.profile || null;
 
@@ -31,26 +34,43 @@ export async function initNullverseShell(options = {}) {
         user = data?.user || null;
     }
 
+    if (user && options.betaOnlyUser) {
+        const normalizedEmail = String(user.email || "").trim().toLowerCase();
+        const { data: betaAccess } = normalizedEmail
+            ? await supabase.from("beta_access").select("role").ilike("email", normalizedEmail).maybeSingle()
+            : { data: null };
+        if (!betaAccess) user = null;
+    }
+
     if (user && !profile) {
         const { data } = await supabase
             .from("profiles")
-            .select("id, username, display_name, avatar_url, role, account_status")
+            .select("id, username, display_name, avatar_url, role, role_name, account_status")
             .eq("id", user.id)
             .maybeSingle();
         profile = data || null;
+    }
+
+    if (user && options.activeOnly !== false) {
+        const status = String(profile?.account_status || "active").trim().toLowerCase();
+        if (["restricted", "suspended", "banned"].includes(status)) {
+            user = null;
+            profile = null;
+        }
     }
 
     const headerMount = document.getElementById("nv-site-header");
     const mobileMount = document.getElementById("nv-mobile-nav");
 
     if (headerMount) {
-        headerMount.innerHTML = buildHeader({ page, user, profile });
+        headerMount.innerHTML = buildHeader({ page, user, profile, guestMode, guestBrandHref, guestLoginHref });
     }
 
     if (mobileMount) {
         mobileMount.innerHTML = buildMobileNavigation({ page, user, profile });
     }
 
+    document.body.classList.toggle("nv-shell-no-mobile-nav", !user);
     setupShellInteractions({ user, profile });
 
     if (user) {
@@ -61,10 +81,26 @@ export async function initNullverseShell(options = {}) {
     return { user, profile };
 }
 
-function buildHeader({ page, user, profile }) {
+function buildHeader({ page, user, profile, guestMode, guestBrandHref, guestLoginHref }) {
     const avatar = profile?.avatar_url || DEFAULT_AVATAR;
     const displayName = profile?.display_name || profile?.username || "Creator";
     const username = profile?.username || "creator";
+
+    if (!user && guestMode === "restricted") {
+        return `
+            <header class="nv-site-header nv-restricted-guest-header">
+                <div class="nv-header-inner">
+                    <a class="nv-brand" href="${escapeHtml(guestBrandHref)}" aria-label="Nullverse">
+                        <img src="Nullverse-3.png" alt="Nullverse">
+                    </a>
+                    <div class="nv-guest-header-space" aria-hidden="true"></div>
+                    <div class="nv-header-actions">
+                        <a class="nv-header-button" href="${escapeHtml(guestLoginHref)}">Beta Login</a>
+                    </div>
+                </div>
+            </header>
+        `;
+    }
 
     return `
         <header class="nv-site-header">
@@ -101,11 +137,11 @@ function buildHeader({ page, user, profile }) {
                     </button>
 
                     ${user ? `
-                        <a class="nv-icon-button nv-message-link" href="messages.html" aria-label="Messages">
-                            ${ICONS.message}
+                        <a class="nv-icon-button nv-message-link message-link${page === "messages" ? " active" : ""}" href="messages.html" aria-label="Messages">
+                            ${ICONS.message}<span class="message-badge" aria-hidden="true"></span>
                         </a>
-                        <a class="nv-icon-button" href="notifications.html" aria-label="Notifications">
-                            ${ICONS.bell}
+                        <a class="nv-icon-button notification-link${page === "notifications" ? " active" : ""}" href="notifications.html" aria-label="Notifications">
+                            ${ICONS.bell}<span class="notification-badge" aria-hidden="true"></span>
                         </a>
                         <div class="nv-menu-wrap">
                             <button class="nv-account-button" type="button" data-nv-menu-button="account" aria-expanded="false">
@@ -124,6 +160,7 @@ function buildHeader({ page, user, profile }) {
                                 ${menuItem("My Gallery", creatorGalleryUrl(profile), ICONS.gallery)}
                                 ${menuItem("Creator Dashboard", "dashboard.html", ICONS.dashboard)}
                                 ${menuItem("Account Settings", "account-settings.html", ICONS.settings)}
+                                ${isStaffProfile(profile) ? menuItem("Admin Console", "admin.html", ICONS.dashboard) : ""}
                                 <div class="nv-menu-divider"></div>
                                 <button class="nv-menu-item danger" type="button" data-nv-logout>${ICONS.logout}<span>Log Out</span></button>
                             </div>
@@ -171,6 +208,11 @@ function mobileLink(label, href, key, page, icon) {
 
 function menuItem(label, href, icon) {
     return `<a class="nv-menu-item" href="${escapeHtml(href)}">${icon}<span>${escapeHtml(label)}</span></a>`;
+}
+
+function isStaffProfile(profile) {
+    const role = String(profile?.role_name || profile?.role || "").trim().toLowerCase();
+    return role === "void_architect" || role === "moderator";
 }
 
 function profileUrl(profile) {
@@ -274,4 +316,3 @@ function escapeHtml(value) {
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
 }
-// JavaScript source code
