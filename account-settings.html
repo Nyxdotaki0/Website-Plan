@@ -8102,7 +8102,7 @@
                 font-family: inherit !important;
             }
     </style>
-    <link rel="stylesheet" href="nullverse-shell.css?v=5">
+    <link rel="stylesheet" href="nullverse-shell.css?v=2">
 </head>
 <body data-page="settings" data-nv-beta-only-user="true" data-nv-active-only="true">
     <div class="nullverse-stars"></div>
@@ -9979,17 +9979,40 @@
 
         function getStudioObjectContrastPaints(object) {
             const styles = object?.styles || {};
+            const type = String(object?.type || "");
 
-            if (object?.type === "profile_actions") {
+            if (type === "profile_actions") {
                 return {
-                    background: styles.actionButtonBg || styles.background,
-                    textColor: styles.actionButtonText || styles.textColor
+                    background: getResolvedPaintValue(
+                        styles,
+                        "actionButtonBg",
+                        getResolvedPaintValue(styles, "background", "transparent")
+                    ),
+                    textColor: getResolvedPaintValue(
+                        styles,
+                        "actionButtonText",
+                        getResolvedPaintValue(styles, "textColor", "#ffffff")
+                    )
                 };
             }
 
+            /*
+                Contrast validation must use the same effective defaults that the
+                Studio renderer uses. Newly created system text objects can render
+                white even before every paint field has been explicitly persisted.
+                Reading only styles.textColor caused valid Username / Display Name
+                objects to be treated as transparent text.
+            */
+            const defaultTextColor = type === "username_text"
+                ? "rgba(255,255,255,.72)"
+                : "#ffffff";
+
             return {
-                background: styles.background,
-                textColor: styles.textColor
+                background: getResolvedPaintValue(styles, "background", "transparent"),
+                textColor: getResolvedPaintValue(styles, "textColor", defaultTextColor),
+                textBorderColor: getResolvedPaintValue(styles, "textBorderColor", "#000000"),
+                textBorderWidth: Math.max(0, Number(styles.textBorderWidth || 0)),
+                textShadow: String(styles.textShadow || "").trim()
             };
         }
 
@@ -10016,10 +10039,30 @@
             const background = parseColorForContrast(objectBackground);
 
             if (background && background.a >= 0.35) {
-                return objectBackground;
+                return {
+                    paint: objectBackground,
+                    source: "object",
+                    certain: true
+                };
             }
 
-            return getStudioCanvasContrastPaint(layout);
+            const canvas = layout?.canvas || studioLayout?.canvas || {};
+            const canvasPaint = getStudioCanvasContrastPaint(layout);
+            const canvasColor = parseColorForContrast(canvasPaint);
+
+            /*
+                A solid canvas color can be tested reliably. Image and gradient
+                canvases vary underneath the object, so blocking publication based
+                on one guessed fallback color creates false positives. Those cases
+                remain allowed unless the text itself is transparent/nearly hidden.
+            */
+            const canvasIsSolid = canvas.backgroundMode === "color" && !!canvasColor;
+
+            return {
+                paint: canvasPaint,
+                source: "canvas",
+                certain: canvasIsSolid
+            };
         }
 
         function paintHasVisibleCoverage(value, minAlpha = 0.18) {
@@ -17246,18 +17289,49 @@
             const rawTextPaint = String(paints.textColor || "").trim().toLowerCase();
             const text = parseColorForContrast(paints.textColor);
 
+            /* Truly invisible or nearly invisible text should always be blocked. */
             if (rawTextPaint === "transparent" || !text || text.a < 0.35) {
                 return true;
             }
 
-            const bgPaint = getEffectiveStudioContrastBackground(object, layout, paints.background);
-            const bg = parseColorForContrast(bgPaint);
+            const backgroundInfo = getEffectiveStudioContrastBackground(
+                object,
+                layout,
+                paints.background
+            );
+
+            if (!backgroundInfo?.certain) {
+                return false;
+            }
+
+            const bg = parseColorForContrast(backgroundInfo.paint);
 
             if (!bg) {
                 return false;
             }
 
-            return contrastRatio(bg, text) < 2.2;
+            const ratio = contrastRatio(bg, text);
+
+            /*
+                A visible text outline is an intentional readability aid. Do not
+                reject the object when its outline strongly separates it from the
+                tested background.
+            */
+            if (paints.textBorderWidth >= 0.75) {
+                const border = parseColorForContrast(paints.textBorderColor);
+
+                if (border && border.a >= 0.45 && contrastRatio(bg, border) >= 1.65) {
+                    return false;
+                }
+            }
+
+            /*
+                This is a safety guard, not a strict WCAG audit. It should stop only
+                combinations that are extremely difficult to distinguish, while
+                allowing deliberate low-contrast styling and the default white text
+                used by newly created Username / Display Name objects.
+            */
+            return ratio < 1.65;
         }
 
         function getStudioAlphaCacheKey(url) {
@@ -27320,6 +27394,6 @@
         window.bindStudioLayerGroupControls = bindStudioLayerGroupControls;
         window.moveStudioLayerGroup = moveStudioLayerGroup;
     </script>
-    <script type="module" src="nullverse-shell-bootstrap.js?v=5"></script>
+    <script type="module" src="nullverse-shell-bootstrap.js?v=2"></script>
 </body>
 </html>
