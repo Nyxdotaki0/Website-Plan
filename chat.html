@@ -12,7 +12,7 @@
     </script>
 
     <link rel="stylesheet" href="theme.css?v=25">
-    <link rel="stylesheet" href="nullverse-shell.css?v=3">
+    <link rel="stylesheet" href="nullverse-shell.css?v=5">
     <link rel="stylesheet" href="chat.css?v=3">
 </head>
 
@@ -30,10 +30,10 @@
                 </a>
 
                 <div class="chat-person">
-                    <div class="chat-avatar-wrap">
+                    <a id="avatar-profile-link" class="chat-avatar-wrap" href="profile.html" aria-label="Open conversation member profile">
                         <img id="other-avatar" class="chat-avatar" src="https://placehold.co/200x200/1b1b28/ffffff?text=NV" alt="Conversation member avatar">
                         <span class="chat-avatar-status" aria-hidden="true"></span>
-                    </div>
+                    </a>
 
                     <div class="chat-person-copy">
                         <h1 id="chat-title">Loading chat...</h1>
@@ -61,42 +61,41 @@
                 </section>
             </div>
 
+            <section id="composer" class="chat-composer" aria-label="Message composer">
+                <div class="chat-composer-inner">
+                    <div id="image-preview-row" class="chat-image-preview">
+                        <img id="image-preview-thumb" src="" alt="Selected image preview">
+                        <div class="chat-image-preview-copy">
+                            <strong id="image-preview-name">Image selected</strong>
+                            <span id="image-preview-meta">Ready to send</span>
+                        </div>
+                        <button id="clear-image-button" class="chat-icon-button" type="button" aria-label="Remove selected image">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+                        </button>
+                    </div>
+
+                    <div class="chat-composer-bar">
+                        <label class="chat-icon-button" for="image-input" title="Attach image" aria-label="Attach image">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                        </label>
+
+                        <input id="image-input" class="hidden-file-input" type="file" accept="image/*">
+
+                        <div class="chat-input-wrap">
+                            <textarea id="message-input" rows="1" placeholder="Message..." aria-label="Message"></textarea>
+                        </div>
+
+                        <button id="send-button" class="chat-send-button" type="button">
+                            <span>Send</span>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
+                        </button>
+                    </div>
+
+                    <p id="composer-message" class="chat-composer-status" aria-live="polite"></p>
+                </div>
+            </section>
         </section>
     </main>
-
-    <section id="composer" class="chat-composer" aria-label="Message composer">
-        <div class="chat-composer-inner">
-            <div id="image-preview-row" class="chat-image-preview">
-                <img id="image-preview-thumb" src="" alt="Selected image preview">
-                <div class="chat-image-preview-copy">
-                    <strong id="image-preview-name">Image selected</strong>
-                    <span id="image-preview-meta">Ready to send</span>
-                </div>
-                <button id="clear-image-button" class="chat-icon-button" type="button" aria-label="Remove selected image">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
-                </button>
-            </div>
-
-            <div class="chat-composer-bar">
-                <label class="chat-icon-button" for="image-input" title="Attach image" aria-label="Attach image">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-                </label>
-
-                <input id="image-input" class="hidden-file-input" type="file" accept="image/*">
-
-                <div class="chat-input-wrap">
-                    <textarea id="message-input" rows="1" placeholder="Message..." aria-label="Message"></textarea>
-                </div>
-
-                <button id="send-button" class="chat-send-button" type="button">
-                    <span>Send</span>
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
-                </button>
-            </div>
-
-            <p id="composer-message" class="chat-composer-status" aria-live="polite"></p>
-        </div>
-    </section>
 
     <div id="report-modal" class="chat-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="report-title">
         <section class="chat-modal">
@@ -167,17 +166,10 @@
         const reportModal = document.getElementById("report-modal");
         const imageLightbox = document.getElementById("image-lightbox");
 
-        const composerResizeObserver = "ResizeObserver" in window
-            ? new ResizeObserver(syncComposerSpace)
-            : null;
-
-        composerResizeObserver?.observe(composer);
-
         syncChatViewportHeight();
-        syncComposerSpace();
-        window.addEventListener("resize", handleChatViewportChange, { passive: true });
-        window.visualViewport?.addEventListener("resize", handleChatViewportChange, { passive: true });
-        window.visualViewport?.addEventListener("scroll", handleChatViewportChange, { passive: true });
+        window.addEventListener("resize", syncChatViewportHeight, { passive: true });
+        window.visualViewport?.addEventListener("resize", syncChatViewportHeight, { passive: true });
+        window.visualViewport?.addEventListener("scroll", syncChatViewportHeight, { passive: true });
 
         let otherUser = null;
         let canSendMessages = false;
@@ -218,15 +210,9 @@
             .subscribe();
 
         window.addEventListener("beforeunload", () => {
-            composerResizeObserver?.disconnect();
             supabase.removeChannel(chatChannel);
             revokeSelectedImagePreview();
         });
-
-        function handleChatViewportChange() {
-            syncChatViewportHeight();
-            syncComposerSpace();
-        }
 
         function syncChatViewportHeight() {
             const viewportHeight = Math.round(
@@ -241,17 +227,6 @@
                     `${viewportHeight}px`
                 );
             }
-        }
-
-        function syncComposerSpace() {
-            const composerHeight = composer.hidden
-                ? 0
-                : Math.ceil(composer.getBoundingClientRect().height || 0);
-
-            document.documentElement.style.setProperty(
-                "--chat-composer-height",
-                `${composerHeight}px`
-            );
         }
 
         function bindInterfaceEvents() {
@@ -360,10 +335,12 @@
             document.getElementById("chat-subtitle").textContent = `@${username}`;
             document.title = `${displayName} - Messages - Nullverse`;
 
-            const profileLink = document.getElementById("profile-link");
-            profileLink.href = profile?.username
+            const publicProfileUrl = profile?.username
                 ? `profile.html?user=${encodeURIComponent(profile.username)}`
                 : "profile.html";
+
+            document.getElementById("profile-link").href = publicProfileUrl;
+            document.getElementById("avatar-profile-link").href = publicProfileUrl;
 
             if (profile?.avatar_url) {
                 document.getElementById("other-avatar").src = profile.avatar_url;
@@ -372,7 +349,6 @@
             canSendMessages = await canMessageUser(otherMember.user_id);
             composer.hidden = !canSendMessages;
             permissionBanner.classList.toggle("show", !canSendMessages);
-            requestAnimationFrame(syncComposerSpace);
 
             if (!canSendMessages) {
                 document.getElementById("chat-subtitle").textContent = "Messaging unavailable";
@@ -563,7 +539,6 @@
                 alert("Messaging is no longer available.");
                 composer.hidden = true;
                 permissionBanner.classList.add("show");
-                requestAnimationFrame(syncComposerSpace);
                 return;
             }
 
@@ -872,6 +847,6 @@
         }
     </script>
 
-    <script type="module" src="nullverse-shell-bootstrap.js?v=3"></script>
+    <script type="module" src="nullverse-shell-bootstrap.js?v=5"></script>
 </body>
 </html>

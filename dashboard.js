@@ -1,6 +1,6 @@
 import { requireBetaAccess } from "./betaGate.js";
 import { supabase } from "./supabaseClient.js";
-import { initNullverseShell } from "./nullverse-shell.js";
+import { initNullverseShell } from "./nullverse-shell.js?v=5";
 import {
     formatCompactNumber,
     renderEmptyCard,

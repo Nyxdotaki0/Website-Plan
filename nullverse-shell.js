@@ -118,7 +118,7 @@ function buildHeader({ page, user, profile, guestMode, guestBrandHref, guestLogi
 
                 <div class="nv-header-actions">
                     <div class="nv-menu-wrap nv-create-wrap">
-                        <button class="nv-header-button primary" type="button" data-nv-menu-button="create" aria-expanded="false">
+                        <button class="nv-header-button primary" type="button" data-nv-menu-button="create" aria-expanded="false" aria-label="Create">
                             ${ICONS.plus}<span>Create</span>
                         </button>
                         <div id="nv-create-menu" class="nv-dropdown" data-nv-menu="create">
@@ -144,7 +144,7 @@ function buildHeader({ page, user, profile, guestMode, guestBrandHref, guestLogi
                             ${ICONS.bell}<span class="notification-badge" aria-hidden="true"></span>
                         </a>
                         <div class="nv-menu-wrap">
-                            <button class="nv-account-button" type="button" data-nv-menu-button="account" aria-expanded="false">
+                            <button class="nv-account-button" type="button" data-nv-menu-button="account" aria-expanded="false" aria-label="Open account menu">
                                 <img src="${escapeHtml(avatar)}" alt="">
                                 <span class="nv-account-label">${escapeHtml(displayName)}</span>
                             </button>
@@ -235,35 +235,115 @@ function galleryCreateUrl(profile) {
 function setupShellInteractions({ user }) {
     const searchOverlay = document.getElementById("nv-global-search");
     const searchInput = document.getElementById("nv-global-search-input");
+    const menuButtons = [...document.querySelectorAll("[data-nv-menu-button]")];
+    const mobileCreateButton = document.querySelector("[data-nv-mobile-create]");
+
+    /*
+       Menus are moved out of the blurred header before interaction. Mobile
+       browsers treat fixed descendants of backdrop-filter elements as if they
+       belong to the header's containing block, which made the account avatar
+       appear unresponsive in portrait mode. Portaling keeps every menu in the
+       real viewport and also protects it from custom-profile z-index layers.
+    */
+    document.querySelectorAll("[data-nv-menu]").forEach(menu => {
+        menu.classList.add("nv-portaled-menu");
+        document.body.appendChild(menu);
+    });
+
+    const getMenu = key => document.querySelector(`[data-nv-menu="${key}"]`);
+
+    const clearMenuPosition = menu => {
+        if (!menu) return;
+        for (const property of ["top", "right", "bottom", "left", "width", "maxHeight", "overflowY"]) {
+            menu.style.removeProperty(property);
+        }
+    };
+
+    const positionMenu = (button, menu) => {
+        if (!button || !menu) return;
+        clearMenuPosition(menu);
+
+        const mobile = window.matchMedia("(max-width: 820px)").matches;
+        if (mobile) {
+            menu.style.setProperty("left", "12px", "important");
+            menu.style.setProperty("right", "12px", "important");
+            menu.style.setProperty("top", "auto", "important");
+            menu.style.setProperty(
+                "bottom",
+                "calc(var(--nv-mobile-nav-height) + 16px + env(safe-area-inset-bottom))",
+                "important"
+            );
+            menu.style.setProperty("width", "auto", "important");
+            menu.style.setProperty("max-height", "min(68dvh, 560px)", "important");
+            menu.style.setProperty("overflow-y", "auto", "important");
+            return;
+        }
+
+        const rect = button.getBoundingClientRect();
+        const viewportPadding = 14;
+        const preferredWidth = Math.min(320, window.innerWidth - viewportPadding * 2);
+        const right = Math.max(viewportPadding, window.innerWidth - rect.right);
+        const top = rect.bottom + 12;
+
+        menu.style.setProperty("top", `${Math.max(viewportPadding, top)}px`, "important");
+        menu.style.setProperty("right", `${right}px`, "important");
+        menu.style.setProperty("bottom", "auto", "important");
+        menu.style.setProperty("left", "auto", "important");
+        menu.style.setProperty("width", `${preferredWidth}px`, "important");
+        menu.style.setProperty("max-height", `calc(100dvh - ${Math.max(viewportPadding, top) + viewportPadding}px)`, "important");
+        menu.style.setProperty("overflow-y", "auto", "important");
+    };
 
     const closeMenus = except => {
         document.querySelectorAll("[data-nv-menu]").forEach(menu => {
             if (menu.dataset.nvMenu !== except) menu.classList.remove("open");
         });
-        document.querySelectorAll("[data-nv-menu-button]").forEach(button => {
-            if (button.dataset.nvMenuButton !== except) button.setAttribute("aria-expanded", "false");
+
+        menuButtons.forEach(button => {
+            if (button.dataset.nvMenuButton !== except) {
+                button.setAttribute("aria-expanded", "false");
+            }
         });
+
+        if (except !== "create") {
+            mobileCreateButton?.setAttribute("aria-expanded", "false");
+        }
+
+        document.body.classList.toggle("nv-shell-menu-open", Boolean(except));
     };
 
-    document.querySelectorAll("[data-nv-menu-button]").forEach(button => {
+    const toggleMenu = (key, button) => {
+        const menu = getMenu(key);
+        if (!menu) return;
+
+        const opening = !menu.classList.contains("open");
+        closeMenus(opening ? key : "");
+
+        if (opening) {
+            positionMenu(button, menu);
+            menu.classList.add("open");
+        } else {
+            menu.classList.remove("open");
+        }
+
+        button?.setAttribute("aria-expanded", String(opening));
+        if (key === "create") mobileCreateButton?.setAttribute("aria-expanded", String(opening));
+    };
+
+    menuButtons.forEach(button => {
         button.addEventListener("click", event => {
+            event.preventDefault();
             event.stopPropagation();
-            const key = button.dataset.nvMenuButton;
-            const menu = document.querySelector(`[data-nv-menu="${key}"]`);
-            const opening = !menu?.classList.contains("open");
-            closeMenus(opening ? key : "");
-            menu?.classList.toggle("open", opening);
-            button.setAttribute("aria-expanded", String(opening));
+            toggleMenu(button.dataset.nvMenuButton, button);
         });
     });
 
-    document.querySelector("[data-nv-mobile-create]")?.addEventListener("click", event => {
+    mobileCreateButton?.setAttribute("aria-expanded", "false");
+    mobileCreateButton?.addEventListener("click", event => {
+        event.preventDefault();
         event.stopPropagation();
-        const menu = document.querySelector('[data-nv-menu="create"]');
-        if (!menu) return;
-        const opening = !menu.classList.contains("open");
-        closeMenus(opening ? "create" : "");
-        menu.classList.toggle("open", opening);
+        const desktopCreateButton = document.querySelector('[data-nv-menu-button="create"]');
+        toggleMenu("create", desktopCreateButton || mobileCreateButton);
     });
 
     document.querySelectorAll("[data-nv-search-open]").forEach(button => {
@@ -281,7 +361,24 @@ function setupShellInteractions({ user }) {
         closeSearch();
     });
 
-    document.addEventListener("click", () => closeMenus(""));
+    document.addEventListener("click", event => {
+        if (event.target.closest("[data-nv-menu]")) return;
+        closeMenus("");
+    });
+
+    const repositionOpenMenu = () => {
+        const openMenu = document.querySelector("[data-nv-menu].open");
+        if (!openMenu) return;
+        const key = openMenu.dataset.nvMenu;
+        const button = key === "create"
+            ? document.querySelector('[data-nv-menu-button="create"]') || mobileCreateButton
+            : document.querySelector(`[data-nv-menu-button="${key}"]`);
+        positionMenu(button, openMenu);
+    };
+
+    window.addEventListener("resize", repositionOpenMenu, { passive: true });
+    window.addEventListener("orientationchange", () => setTimeout(repositionOpenMenu, 120), { passive: true });
+    window.visualViewport?.addEventListener("resize", repositionOpenMenu, { passive: true });
 
     document.addEventListener("keydown", event => {
         if (event.key === "Escape") {

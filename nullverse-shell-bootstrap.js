@@ -1,4 +1,4 @@
-import { initNullverseShell } from "./nullverse-shell.js";
+import { initNullverseShell } from "./nullverse-shell.js?v=5";
 
 const body = document.body;
 const guestMode = body.dataset.nvGuestMode || "default";
@@ -26,4 +26,3 @@ if (body.dataset.page === "gallery" && document.title.toLowerCase().includes("sh
 }
 
 document.dispatchEvent(new CustomEvent("nullverse:shell-ready", { detail }));
-// JavaScript source code
