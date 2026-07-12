@@ -164,6 +164,45 @@
                 bottom: 12px;
             }
         }
+
+        /* New Literature reader parity inside Preview Mode */
+        body.preview-literature .preview-mode-banner {
+            position: relative;
+            z-index: 1190;
+        }
+
+        body.preview-literature .literature-site-header {
+            z-index: 1200;
+        }
+
+        body.preview-literature .chapter-switch-button,
+        body.preview-literature .chapter-list-button,
+        body.preview-literature .focus-footer-button,
+        body.preview-literature .focus-reader-chapter-menu,
+        body.preview-literature .focus-reader-actions button,
+        body.preview-literature .focus-reader-close {
+            font-family: inherit;
+        }
+
+        body.preview-literature .chapter-index-mobile-scrim {
+            cursor: pointer;
+        }
+
+        body.preview-literature .cover-image-lightbox {
+            z-index: 2147482800;
+        }
+
+        body.preview-literature.literature-nav-open {
+            overflow: hidden !important;
+            overscroll-behavior: none;
+        }
+
+        @media (max-width: 760px) {
+            body.preview-literature .preview-mode-banner {
+                margin-top: 8px;
+                max-width: calc(100vw - 20px);
+            }
+        }
     </style>
 </head>
 <body>
@@ -242,6 +281,9 @@
         let readerPageIndex = 0;
         let fullscreenMode = "paged";
         let toastTimer = null;
+        let literaturePreviewChapterIndex = 0;
+        let literaturePreviewSidebarHome = null;
+        let literaturePreviewLastFocus = null;
 
         initPreviewPage();
 
@@ -362,28 +404,63 @@
 
         function commonHeader() {
             return `
-                    <div class="nullverse-stars"></div>
-                    <header>
-                        <div class="logo">
-                            <a href="#" data-preview-action="Home">
-                                <img src="Nullverse-3.png" alt="Nullverse" class="site-logo">
-                            </a>
+                        <div class="nullverse-stars"></div>
+                        <header>
+                            <div class="logo">
+                                <a href="#" data-preview-action="Home">
+                                    <img src="Nullverse-3.png" alt="Nullverse" class="site-logo">
+                                </a>
+                            </div>
+                            <nav>
+                                <a href="#" data-preview-action="Home">Home</a>
+                                <a href="#" data-preview-action="Notifications">Notifications</a>
+                                <a href="#" data-preview-action="Explore">Explore</a>
+                                <a href="#" data-preview-action="Profile">Profile</a>
+                                <a href="#" data-preview-action="Dashboard">Dashboard</a>
+                                <a href="#" data-preview-action="Messages">Messages</a>
+                                <button type="button" data-preview-action="Log Out">Log Out</button>
+                            </nav>
+                        </header>
+                        <div class="preview-mode-banner">
+                            <strong>Preview Mode</strong> — this version is not public yet. Public actions are disabled.
                         </div>
-                        <nav>
-                            <a href="#" data-preview-action="Home">Home</a>
-                            <a href="#" data-preview-action="Notifications">Notifications</a>
-                            <a href="#" data-preview-action="Explore">Explore</a>
-                            <a href="#" data-preview-action="Profile">Profile</a>
-                            <a href="#" data-preview-action="Dashboard">Dashboard</a>
-                            <a href="#" data-preview-action="Messages">Messages</a>
-                            <button type="button" data-preview-action="Log Out">Log Out</button>
-                        </nav>
-                    </header>
-                    <div class="preview-mode-banner">
-                        <strong>Preview Mode</strong> — this version is not public yet. Public actions are disabled.
-                    </div>
-                `;
+                    `;
         }
+
+
+        function literaturePreviewHeader() {
+            return `
+                        <div class="nullverse-stars"></div>
+                        <header class="literature-site-header">
+                            <div class="logo">
+                                <a href="#" data-preview-action="Home" aria-label="Nullverse">
+                                    <img src="Nullverse-3.png" alt="Nullverse" class="site-logo">
+                                </a>
+                            </div>
+                            <div class="literature-header-actions">
+                                <nav id="literature-main-nav" aria-label="Main navigation">
+                                    <a href="#" data-preview-action="Home">Home</a>
+                                    <a href="#" data-preview-action="Notifications">Notifications</a>
+                                    <a href="#" data-preview-action="Explore">Explore</a>
+                                    <a href="#" data-preview-action="Profile">Profile</a>
+                                    <a href="#" data-preview-action="Dashboard">Dashboard</a>
+                                    <a href="#" data-preview-action="Messages">Messages</a>
+                                    <button type="button" data-preview-action="Log Out">Log Out</button>
+                                </nav>
+                                <button id="literature-mobile-menu-button"
+                                        class="literature-mobile-menu-button"
+                                        type="button"
+                                        aria-label="Open navigation"
+                                        aria-expanded="false">☰</button>
+                            </div>
+                        </header>
+                        <div id="literature-nav-scrim" class="literature-nav-scrim" aria-hidden="true"></div>
+                        <div class="preview-mode-banner">
+                            <strong>Preview Mode</strong> — this version is not public yet. Public actions are disabled.
+                        </div>
+                    `;
+        }
+
 
         function renderWorldPreview(payload) {
             activeProject = normalizeProject(payload, "world");
@@ -400,54 +477,54 @@
             document.title = `${activeProject.title || "World"} Preview - Nullverse`;
             document.getElementById("preview-root").className = "";
             document.getElementById("preview-root").innerHTML = `
-                    ${commonHeader()}
-                    <div id="world-background-layer" class="world-background-layer">
-                        <div id="world-background-image" class="world-background-image"></div>
-                        <div id="world-gradient-layer" class="world-gradient-layer"></div>
-                        <div id="world-background-overlay" class="world-background-overlay"></div>
-                    </div>
-                    <main>
-                        <aside class="left-sidebar">
-                            <section id="section-nav" class="section-nav" style="display:none;">
-                                <div class="index-header">
-                                    <h2>Search This World</h2>
-                                    <p>Jump between sections instantly</p>
-                                </div>
-                                <input id="section-search" class="section-search" type="text" placeholder="Search sections...">
-                                <div id="section-type-filter" class="section-filters"></div>
-                                <div id="section-count" class="section-count"></div>
-                                <div id="section-nav-links"></div>
-                            </section>
-                        </aside>
-                        <div class="content-column">
-                            <section class="hero">
-                                <div id="world-tags" class="tag-row"></div>
-                                <h1 id="world-title"></h1>
-                                <p id="world-creator" class="creator"></p>
-                                <div id="world-summary" class="summary"></div>
-                                <div class="like-row">
-                                    <button id="like-button" class="like-button preview-disabled" data-preview-action="Like">♡ Like</button>
-                                    <span id="like-count" class="like-count">0 Likes</span>
-                                    <a class="button preview-disabled" href="#" data-preview-action="Comments">Comments</a>
-                                    <a class="button preview-disabled" href="#" data-preview-action="Q&A">Q&A</a>
-                                    <a class="button preview-disabled" href="#" data-preview-action="Community">Community</a>
-                                    <button class="button preview-disabled" type="button" data-preview-action="Report">Report</button>
-                                </div>
-                                <div id="owner-actions" class="owner-actions"></div>
-                            </section>
-                            <section id="sections-container"></section>
+                        ${commonHeader()}
+                        <div id="world-background-layer" class="world-background-layer">
+                            <div id="world-background-image" class="world-background-image"></div>
+                            <div id="world-gradient-layer" class="world-gradient-layer"></div>
+                            <div id="world-background-overlay" class="world-background-overlay"></div>
                         </div>
-                    </main>
-                    <div id="section-image-lightbox" class="section-image-lightbox" aria-hidden="true">
-                        <div class="section-image-lightbox-side left" data-local-control="close-section-lightbox" title="Close image"></div>
-                        <div class="section-image-lightbox-side right" data-local-control="close-section-lightbox" title="Close image"></div>
-                        <div class="section-image-lightbox-hint">Click the sides or press Esc to close</div>
-                        <button class="section-image-lightbox-close" type="button" data-local-control="close-section-lightbox" title="Close image">×</button>
-                        <div class="section-image-lightbox-shell">
-                            <img id="section-image-lightbox-image" class="section-image-lightbox-image" src="" alt="">
+                        <main>
+                            <aside class="left-sidebar">
+                                <section id="section-nav" class="section-nav" style="display:none;">
+                                    <div class="index-header">
+                                        <h2>Search This World</h2>
+                                        <p>Jump between sections instantly</p>
+                                    </div>
+                                    <input id="section-search" class="section-search" type="text" placeholder="Search sections...">
+                                    <div id="section-type-filter" class="section-filters"></div>
+                                    <div id="section-count" class="section-count"></div>
+                                    <div id="section-nav-links"></div>
+                                </section>
+                            </aside>
+                            <div class="content-column">
+                                <section class="hero">
+                                    <div id="world-tags" class="tag-row"></div>
+                                    <h1 id="world-title"></h1>
+                                    <p id="world-creator" class="creator"></p>
+                                    <div id="world-summary" class="summary"></div>
+                                    <div class="like-row">
+                                        <button id="like-button" class="like-button preview-disabled" data-preview-action="Like">♡ Like</button>
+                                        <span id="like-count" class="like-count">0 Likes</span>
+                                        <a class="button preview-disabled" href="#" data-preview-action="Comments">Comments</a>
+                                        <a class="button preview-disabled" href="#" data-preview-action="Q&A">Q&A</a>
+                                        <a class="button preview-disabled" href="#" data-preview-action="Community">Community</a>
+                                        <button class="button preview-disabled" type="button" data-preview-action="Report">Report</button>
+                                    </div>
+                                    <div id="owner-actions" class="owner-actions"></div>
+                                </section>
+                                <section id="sections-container"></section>
+                            </div>
+                        </main>
+                        <div id="section-image-lightbox" class="section-image-lightbox" aria-hidden="true">
+                            <div class="section-image-lightbox-side left" data-local-control="close-section-lightbox" title="Close image"></div>
+                            <div class="section-image-lightbox-side right" data-local-control="close-section-lightbox" title="Close image"></div>
+                            <div class="section-image-lightbox-hint">Click the sides or press Esc to close</div>
+                            <button class="section-image-lightbox-close" type="button" data-local-control="close-section-lightbox" title="Close image">×</button>
+                            <div class="section-image-lightbox-shell">
+                                <img id="section-image-lightbox-image" class="section-image-lightbox-image" src="" alt="">
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
 
             applyWorldTheme(activeProject);
             document.getElementById("world-title").textContent = activeProject.title || "Untitled World";
@@ -500,73 +577,570 @@
                 []
             );
 
+            literaturePreviewChapterIndex = 0;
             document.title = `${activeProject.title || "Literature"} Preview - Nullverse`;
             document.getElementById("preview-root").className = "";
             document.getElementById("preview-root").innerHTML = `
-                    <div id="reading-progress" class="reading-progress"></div>
-                    ${commonHeader()}
-                    <div id="literature-background-layer" class="literature-background-layer">
-                        <div id="literature-background-base" class="literature-background-base"></div>
-                        <div id="literature-background-image" class="literature-background-image"></div>
-                        <div id="literature-background-overlay" class="literature-background-overlay"></div>
-                    </div>
-                    <main>
-                        <aside class="left-sidebar">
-                            <section id="chapter-index" class="chapter-index" style="display:none;">
-                                <div class="index-header">
-                                    <h2>Chapter Index</h2>
-                                    <p>Search and jump between chapters instantly.</p>
-                                </div>
-                                <input id="chapter-search" class="chapter-search" type="text" placeholder="Search chapters...">
-                                <div id="chapter-count" class="chapter-count"></div>
-                                <div id="chapter-nav-links"></div>
-                            </section>
-                        </aside>
-                        <div class="content-column">
-                            <section class="book-hero">
-                                <div class="book-layout">
-                                    <div id="book-cover-wrap" class="cover-wrap"></div>
-                                    <div>
-                                        <div id="book-tags" class="tag-row"></div>
-                                        <h1 id="book-title"></h1>
-                                        <p id="book-creator" class="creator"></p>
-                                        <div id="reading-meta" class="reading-meta"></div>
-                                        <div id="book-summary" class="summary"></div>
-                                        <div class="action-row">
-                                            <button id="like-button" class="like-button preview-disabled" type="button" data-preview-action="Like">♡ Like</button>
-                                            <span id="like-count" class="like-count">0 Likes</span>
-                                            <a class="button preview-disabled" href="#" data-preview-action="Comments">Comments</a>
-                                            <a class="button preview-disabled" href="#" data-preview-action="Q&A">Q&A</a>
-                                            <button class="button preview-disabled" type="button" data-preview-action="Report">Report</button>
-                                        </div>
-                                        <div id="owner-actions" class="owner-actions"></div>
-                                    </div>
-                                </div>
-                            </section>
-                            <section class="reader-tools" id="reader-tools" style="display:none;">
-                                <div class="reader-tools-left">
-                                    <button class="reader-tool-button mobile-index-toggle" type="button" data-local-control="toggle-mobile-index">Chapters</button>
-                                    <button class="reader-tool-button" type="button" data-local-control="start-reading">Start Reading</button>
-                                    <button class="reader-tool-button" type="button" data-local-control="toggle-focus">Focus</button>
-                                </div>
-                                <div class="reader-tools-right">
-                                    <button class="reader-tool-button" type="button" data-local-control="large-text">Text +</button>
-                                    <button class="reader-tool-button" type="button" data-local-control="wide-reader">Wide</button>
-                                    <button class="reader-tool-button" type="button" data-local-control="center-headings">Center Titles</button>
-                                </div>
-                            </section>
-                            <section id="chapters-container"></section>
+                        <div id="reading-progress" class="reading-progress"></div>
+                        ${literaturePreviewHeader()}
+                        <div id="literature-background-layer" class="literature-background-layer">
+                            <div id="literature-background-base" class="literature-background-base"></div>
+                            <div id="literature-background-image" class="literature-background-image"></div>
+                            <div id="literature-background-overlay" class="literature-background-overlay"></div>
                         </div>
-                    </main>
-                `;
+                        <main>
+                            <aside class="left-sidebar">
+                                <section id="chapter-index" class="chapter-index" style="display:none;">
+                                    <button id="chapter-index-close"
+                                            class="chapter-index-close"
+                                            type="button"
+                                            aria-label="Close chapter list">×</button>
+                                    <div class="index-header">
+                                        <h2>Chapter Index</h2>
+                                        <p>Search and jump between chapters instantly.</p>
+                                    </div>
+                                    <input id="chapter-search" class="chapter-search" type="text" placeholder="Search chapters...">
+                                    <div id="chapter-count" class="chapter-count"></div>
+                                    <div id="chapter-nav-links"></div>
+                                </section>
+                            </aside>
+                            <div class="content-column">
+                                <section class="book-hero">
+                                    <div class="book-layout">
+                                        <div id="book-cover-wrap" class="cover-wrap"></div>
+                                        <div>
+                                            <div id="book-tags" class="tag-row"></div>
+                                            <h1 id="book-title"></h1>
+                                            <p id="book-creator" class="creator"></p>
+                                            <div id="reading-meta" class="reading-meta"></div>
+                                            <div id="book-summary" class="summary"></div>
+                                            <div class="action-row">
+                                                <button id="like-button" class="like-button preview-disabled" type="button" data-preview-action="Like">♡ Like</button>
+                                                <span id="like-count" class="like-count">0 Likes</span>
+                                                <a class="button preview-disabled" href="#" data-preview-action="Comments">Comments</a>
+                                                <a class="button preview-disabled" href="#" data-preview-action="Q&A">Q&amp;A</a>
+                                                <button class="button preview-disabled" type="button" data-preview-action="Report">Report</button>
+                                            </div>
+                                            <div id="owner-actions" class="owner-actions"></div>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section class="reader-tools" id="reader-tools" style="display:none;">
+                                    <div class="reader-tools-left">
+                                        <button class="reader-tool-button mobile-index-toggle chapters-reader-action"
+                                                type="button"
+                                                data-lit-control="open-chapters">Browse Chapters</button>
+                                        <button class="reader-tool-button primary-reader-action"
+                                                type="button"
+                                                data-lit-control="open-focus">Open Focus Reader</button>
+                                    </div>
+                                    <div class="reader-tools-right">
+                                        <span id="current-chapter-status" class="current-chapter-status"></span>
+                                        <button id="reader-text-button" class="reader-tool-button" type="button" data-lit-control="large-text">Text +</button>
+                                        <button id="reader-wide-button" class="reader-tool-button" type="button" data-lit-control="wide-reader">Wide</button>
+                                        <button id="reader-center-button" class="reader-tool-button" type="button" data-lit-control="center-headings">Center Titles</button>
+                                        <button id="reader-spacing-button" class="reader-tool-button" type="button" data-lit-control="line-spacing">Line +</button>
+                                        <button class="reader-tool-button" type="button" data-lit-control="reset-reader">Reset</button>
+                                    </div>
+                                </section>
+
+                                <section id="chapters-container"></section>
+                            </div>
+                        </main>
+
+                        <div id="chapter-index-mobile-scrim"
+                             class="chapter-index-mobile-scrim"
+                             aria-hidden="true"></div>
+
+                        <div id="cover-image-lightbox"
+                             class="cover-image-lightbox"
+                             aria-hidden="true">
+                            <div class="cover-image-lightbox-side left" data-lit-control="close-cover"></div>
+                            <div class="cover-image-lightbox-side right" data-lit-control="close-cover"></div>
+                            <div class="cover-image-lightbox-hint">Click the sides or press Esc to close</div>
+                            <button class="cover-image-lightbox-close"
+                                    type="button"
+                                    data-lit-control="close-cover"
+                                    aria-label="Close enlarged cover image">×</button>
+                            <div class="cover-image-lightbox-shell">
+                                <img id="cover-image-lightbox-image"
+                                     class="cover-image-lightbox-image"
+                                     src=""
+                                     alt="">
+                            </div>
+                        </div>
+
+                        <div id="literature-focus-overlay"
+                             class="literature-focus-overlay"
+                             role="dialog"
+                             aria-modal="true"
+                             aria-hidden="true"
+                             aria-label="Focus reader">
+                            <div class="literature-focus-topbar">
+                                <div class="focus-reader-heading">
+                                    <strong id="focus-reader-book-title">Literature</strong>
+                                    <span id="focus-reader-chapter-label">Chapter</span>
+                                </div>
+                                <div class="focus-reader-actions">
+                                    <button type="button" data-lit-control="large-text">Text +</button>
+                                    <button type="button" data-lit-control="wide-reader">Wide</button>
+                                    <button type="button" data-lit-control="center-headings">Center Titles</button>
+                                    <button type="button" data-lit-control="line-spacing">Line +</button>
+                                    <button type="button" data-lit-control="reset-reader">Reset</button>
+                                    <button id="focus-reader-close"
+                                            class="focus-reader-close"
+                                            type="button"
+                                            data-lit-control="close-focus"
+                                            aria-label="Close focus reader">×</button>
+                                </div>
+                            </div>
+                            <div id="literature-focus-scroll" class="literature-focus-scroll">
+                                <div id="literature-focus-content" class="literature-focus-content"></div>
+                            </div>
+                            <div class="literature-focus-footer">
+                                <button id="focus-prev-button" class="focus-footer-button" type="button" data-lit-control="focus-prev">
+                                    <small>Previous Chapter</small>
+                                    <strong id="focus-prev-label">Beginning</strong>
+                                </button>
+                                <button id="focus-chapter-menu-button"
+                                        class="focus-reader-chapter-menu"
+                                        type="button"
+                                        data-lit-control="open-chapters">Chapters</button>
+                                <button id="focus-next-button"
+                                        class="focus-footer-button next"
+                                        type="button"
+                                        data-lit-control="focus-next">
+                                    <small>Next Chapter</small>
+                                    <strong id="focus-next-label">End</strong>
+                                </button>
+                            </div>
+                        </div>
+                    `;
 
             applyLiteratureTheme(activeProject);
             renderLiteratureHero(activeProject, activeOwnerProfile);
             renderLiteratureChapters(activeChapters);
-            renderGenericChapterIndex(activeChapters, "literature");
+            renderLiteraturePreviewChapterIndex(activeChapters);
             setupLiteratureReaderTools();
+            setupLiteraturePreviewNavigation();
+            setupLiteraturePreviewCoverLightbox();
             setupReaderScrollTracking();
         }
+
+
+        function buildLiteraturePreviewSwitcher(position = "top") {
+            const previous = activeChapters[literaturePreviewChapterIndex - 1] || null;
+            const next = activeChapters[literaturePreviewChapterIndex + 1] || null;
+            const current = activeChapters[literaturePreviewChapterIndex] || null;
+
+            return `
+                        <nav class="chapter-switcher ${position}" aria-label="Chapter navigation">
+                            <button type="button"
+                                    class="chapter-switch-button previous"
+                                    data-lit-chapter-direction="-1"
+                                    ${previous ? "" : "disabled"}>
+                                <small>Previous Chapter</small>
+                                <strong>${previous ? escapeHtml(previous.title || `Chapter ${literaturePreviewChapterIndex}`) : "Beginning"}</strong>
+                            </button>
+                            <button type="button"
+                                    class="chapter-list-button"
+                                    data-lit-open-chapters>
+                                <small>Chapter List</small>
+                                <strong>${literaturePreviewChapterIndex + 1} / ${activeChapters.length}</strong>
+                            </button>
+                            <button type="button"
+                                    class="chapter-switch-button next"
+                                    data-lit-chapter-direction="1"
+                                    ${next ? "" : "disabled"}>
+                                <small>${next ? "Next Chapter" : "End of Story"}</small>
+                                <strong>${next ? escapeHtml(next.title || `Chapter ${literaturePreviewChapterIndex + 2}`) : escapeHtml(current?.title || "Complete")}</strong>
+                            </button>
+                        </nav>
+                    `;
+        }
+
+        function bindLiteraturePreviewSwitcher(container) {
+            container?.querySelectorAll("[data-lit-chapter-direction]").forEach(button => {
+                button.addEventListener("click", () => {
+                    const direction = Number(button.dataset.litChapterDirection) || 0;
+                    setLiteraturePreviewChapter(literaturePreviewChapterIndex + direction, { scroll: true });
+                });
+            });
+
+            container?.querySelectorAll("[data-lit-open-chapters]").forEach(button => {
+                button.addEventListener("click", openLiteraturePreviewChapterDrawer);
+            });
+        }
+
+        function setLiteraturePreviewChapter(index, options = {}) {
+            if (!activeChapters.length) return;
+
+            const safeIndex = Math.min(
+                activeChapters.length - 1,
+                Math.max(0, Math.trunc(Number(index) || 0))
+            );
+
+            literaturePreviewChapterIndex = safeIndex;
+            const chapter = activeChapters[safeIndex];
+            const container = document.getElementById("chapters-container");
+            const focusOpen = document.getElementById("literature-focus-overlay")?.classList.contains("open");
+
+            if (container) {
+                container.innerHTML = `
+                            <div class="active-chapter-shell">
+                                ${buildLiteraturePreviewSwitcher("top")}
+                                ${buildLiteratureChapterArticle(chapter, safeIndex)}
+                                ${buildLiteraturePreviewSwitcher("bottom")}
+                            </div>
+                        `;
+                container.querySelectorAll(".chapter-main-text.rich-chapter-content").forEach(normalizeRenderedRichText);
+                bindLiteraturePreviewSwitcher(container);
+            }
+
+            updateLiteraturePreviewInterface();
+
+            if (focusOpen || options.focus) {
+                renderLiteraturePreviewFocusChapter();
+            }
+
+            closeLiteraturePreviewChapterDrawer();
+            setupReaderScrollTracking();
+
+            if (options.scroll) {
+                requestAnimationFrame(() => {
+                    document.getElementById(`chapter-${safeIndex + 1}`)
+                        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                });
+            }
+        }
+
+        function updateLiteraturePreviewInterface() {
+            document.querySelectorAll(".chapter-nav-link").forEach(button => {
+                button.classList.toggle(
+                    "active",
+                    Number(button.dataset.chapterIndex) === literaturePreviewChapterIndex
+                );
+            });
+
+            const status = document.getElementById("current-chapter-status");
+            if (status) {
+                status.textContent = activeChapters.length
+                    ? `Chapter ${literaturePreviewChapterIndex + 1} of ${activeChapters.length}`
+                    : "";
+            }
+
+            updateLiteraturePreviewFocusControls();
+        }
+
+        function renderLiteraturePreviewChapterIndex(chapters) {
+            const nav = document.getElementById("chapter-index");
+            const links = document.getElementById("chapter-nav-links");
+            const search = document.getElementById("chapter-search");
+            const count = document.getElementById("chapter-count");
+            if (!nav || !links || !search || !count) return;
+
+            if (!chapters.length) {
+                nav.style.display = "none";
+                return;
+            }
+
+            nav.style.display = "block";
+
+            const indexCredit = buildCreditPill({
+                type: activeProject.index_credit_type,
+                name: activeProject.index_credit_name,
+                username: activeProject.index_credit_nullverse_username,
+                url: activeProject.index_credit_url,
+                note: activeProject.index_credit_note,
+                ownerUsername: activeOwnerProfile?.username,
+                context: "Index Image"
+            });
+
+            if (indexCredit) nav.insertAdjacentHTML("beforeend", indexCredit);
+
+            function paint() {
+                const query = normalizeSearch(search.value || "");
+                const filtered = chapters
+                    .map((chapter, index) => ({ chapter, index }))
+                    .filter(({ chapter }) => {
+                        const text = normalizeSearch(
+                            `${chapter.title || ""} ${chapter.subtitle || ""} ${chapter.author_note || ""} ${plainTextFromRich(chapter.body || chapter.content || "")}`
+                        );
+                        return !query || text.includes(query);
+                    });
+
+                count.textContent = `${filtered.length} ${filtered.length === 1 ? "Chapter" : "Chapters"}`;
+
+                links.innerHTML = filtered.map(({ chapter, index }) => `
+                            <button type="button"
+                                    class="chapter-nav-link${index === literaturePreviewChapterIndex ? " active" : ""}"
+                                    data-chapter-index="${index}">
+                                <span>Chapter ${index + 1}: ${escapeHtml(chapter.title || "Untitled")}</span>
+                                <small>${escapeHtml(chapter.subtitle || `${getChapterReadTime(chapter)} min read`)}</small>
+                            </button>
+                        `).join("") || `<p class="empty">No chapters match this search.</p>`;
+
+                links.querySelectorAll(".chapter-nav-link").forEach(button => {
+                    button.addEventListener("click", () => {
+                        setLiteraturePreviewChapter(Number(button.dataset.chapterIndex), { scroll: true });
+                    });
+                });
+            }
+
+            search.addEventListener("input", paint);
+            paint();
+        }
+
+        function rememberLiteraturePreviewSidebarHome() {
+            const sidebar = document.querySelector(".left-sidebar");
+            if (!sidebar || literaturePreviewSidebarHome) return;
+            literaturePreviewSidebarHome = {
+                parent: sidebar.parentNode,
+                nextSibling: sidebar.nextSibling
+            };
+        }
+
+        function mountLiteraturePreviewSidebar() {
+            const sidebar = document.querySelector(".left-sidebar");
+            if (!sidebar) return;
+            rememberLiteraturePreviewSidebarHome();
+            if (sidebar.parentNode !== document.body) document.body.appendChild(sidebar);
+        }
+
+        function restoreLiteraturePreviewSidebar() {
+            const sidebar = document.querySelector(".left-sidebar");
+            const home = literaturePreviewSidebarHome;
+            if (!sidebar || !home?.parent || sidebar.parentNode === home.parent) return;
+
+            if (home.nextSibling && home.nextSibling.parentNode === home.parent) {
+                home.parent.insertBefore(sidebar, home.nextSibling);
+            } else {
+                home.parent.appendChild(sidebar);
+            }
+        }
+
+        function openLiteraturePreviewChapterDrawer() {
+            const sidebar = document.querySelector(".left-sidebar");
+            const index = document.getElementById("chapter-index");
+            const scrim = document.getElementById("chapter-index-mobile-scrim");
+            const focusOpen = document.getElementById("literature-focus-overlay")?.classList.contains("open");
+
+            if (window.innerWidth > 1050 && !focusOpen) {
+                index?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                document.getElementById("chapter-search")?.focus();
+                return;
+            }
+
+            mountLiteraturePreviewSidebar();
+            sidebar?.classList.add("mobile-open");
+            index?.classList.add("mobile-open");
+            scrim?.classList.add("open");
+            scrim?.setAttribute("aria-hidden", "false");
+            document.body.classList.add("literature-drawer-open");
+        }
+
+        function closeLiteraturePreviewChapterDrawer() {
+            document.querySelector(".left-sidebar")?.classList.remove("mobile-open");
+            document.getElementById("chapter-index")?.classList.remove("mobile-open");
+            document.getElementById("chapter-index-mobile-scrim")?.classList.remove("open");
+            document.getElementById("chapter-index-mobile-scrim")?.setAttribute("aria-hidden", "true");
+            document.body.classList.remove("literature-drawer-open");
+            restoreLiteraturePreviewSidebar();
+        }
+
+        function openLiteraturePreviewFocus() {
+            if (!activeChapters.length) return;
+            literaturePreviewLastFocus = document.activeElement;
+            renderLiteraturePreviewFocusChapter();
+
+            const overlay = document.getElementById("literature-focus-overlay");
+            overlay?.classList.add("open");
+            overlay?.setAttribute("aria-hidden", "false");
+            document.body.classList.add("literature-focus-open");
+
+            const scroll = document.getElementById("literature-focus-scroll");
+            if (scroll) scroll.scrollTop = 0;
+
+            setupReaderScrollTracking();
+            setTimeout(() => document.getElementById("focus-reader-close")?.focus(), 30);
+        }
+
+        function closeLiteraturePreviewFocus() {
+            const overlay = document.getElementById("literature-focus-overlay");
+            overlay?.classList.remove("open");
+            overlay?.setAttribute("aria-hidden", "true");
+            document.body.classList.remove("literature-focus-open");
+            closeLiteraturePreviewChapterDrawer();
+            setupReaderScrollTracking();
+            literaturePreviewLastFocus?.focus?.();
+            literaturePreviewLastFocus = null;
+        }
+
+        function renderLiteraturePreviewFocusChapter() {
+            const chapter = activeChapters[literaturePreviewChapterIndex];
+            const content = document.getElementById("literature-focus-content");
+            if (!chapter || !content) return;
+
+            content.innerHTML = buildLiteratureChapterArticle(
+                chapter,
+                literaturePreviewChapterIndex,
+                "focus-chapter"
+            );
+            content.querySelectorAll(".chapter-main-text.rich-chapter-content").forEach(normalizeRenderedRichText);
+
+            const scroll = document.getElementById("literature-focus-scroll");
+            if (scroll) scroll.scrollTop = 0;
+
+            updateLiteraturePreviewFocusControls();
+        }
+
+        function updateLiteraturePreviewFocusControls() {
+            const chapter = activeChapters[literaturePreviewChapterIndex];
+            const previous = activeChapters[literaturePreviewChapterIndex - 1] || null;
+            const next = activeChapters[literaturePreviewChapterIndex + 1] || null;
+
+            const bookTitle = document.getElementById("focus-reader-book-title");
+            const label = document.getElementById("focus-reader-chapter-label");
+            const previousButton = document.getElementById("focus-prev-button");
+            const nextButton = document.getElementById("focus-next-button");
+
+            if (bookTitle) bookTitle.textContent = activeProject?.title || "Literature";
+            if (label) {
+                label.textContent = chapter
+                    ? `Chapter ${literaturePreviewChapterIndex + 1} of ${activeChapters.length} · ${chapter.title || "Untitled"}`
+                    : "Chapter";
+            }
+
+            if (previousButton) previousButton.disabled = !previous;
+            const previousLabel = document.getElementById("focus-prev-label");
+            if (previousLabel) previousLabel.textContent = previous?.title || "Beginning";
+
+            if (nextButton) nextButton.disabled = false;
+            const nextLabel = document.getElementById("focus-next-label");
+            if (nextLabel) nextLabel.textContent = next?.title || "Return to Book";
+            const nextSmall = nextButton?.querySelector("small");
+            if (nextSmall) nextSmall.textContent = next ? "Next Chapter" : "End of Story";
+        }
+
+        function toggleLiteraturePreviewPreference(className) {
+            document.body.classList.toggle(className);
+            syncLiteraturePreviewPreferenceButtons();
+        }
+
+        function resetLiteraturePreviewPreferences() {
+            [
+                "reader-large-text",
+                "reader-wide",
+                "reader-center-headings",
+                "reader-airy"
+            ].forEach(className => document.body.classList.remove(className));
+            syncLiteraturePreviewPreferenceButtons();
+        }
+
+        function syncLiteraturePreviewPreferenceButtons() {
+            const mappings = [
+                ["reader-text-button", "reader-large-text"],
+                ["reader-wide-button", "reader-wide"],
+                ["reader-center-button", "reader-center-headings"],
+                ["reader-spacing-button", "reader-airy"]
+            ];
+
+            mappings.forEach(([id, className]) => {
+                document.getElementById(id)?.classList.toggle(
+                    "active",
+                    document.body.classList.contains(className)
+                );
+            });
+        }
+
+        function setupLiteraturePreviewNavigation() {
+            const nav = document.getElementById("literature-main-nav");
+            const button = document.getElementById("literature-mobile-menu-button");
+            const scrim = document.getElementById("literature-nav-scrim");
+
+            function close() {
+                nav?.classList.remove("open");
+                scrim?.classList.remove("open");
+                scrim?.setAttribute("aria-hidden", "true");
+                document.body.classList.remove("literature-nav-open");
+                button?.setAttribute("aria-expanded", "false");
+            }
+
+            button?.addEventListener("click", event => {
+                event.preventDefault();
+                const opening = !nav?.classList.contains("open");
+                nav?.classList.toggle("open", opening);
+                scrim?.classList.toggle("open", opening);
+                scrim?.setAttribute("aria-hidden", String(!opening));
+                document.body.classList.toggle("literature-nav-open", opening);
+                button?.setAttribute("aria-expanded", String(opening));
+            });
+
+            scrim?.addEventListener("click", close);
+            scrim?.addEventListener("touchmove", event => event.preventDefault(), { passive: false });
+            scrim?.addEventListener("wheel", event => event.preventDefault(), { passive: false });
+
+            nav?.addEventListener("click", event => {
+                if (event.target.closest("a,button")) close();
+            });
+
+            window.addEventListener("resize", () => {
+                if (window.innerWidth > 760) close();
+            });
+
+            window.__closePreviewLiteratureNav = close;
+        }
+
+        function setupLiteraturePreviewCoverLightbox() {
+            const wrap = document.getElementById("book-cover-wrap");
+            if (!wrap || !wrap.dataset.coverImageSrc) return;
+
+            wrap.classList.add("cover-image-zoomable");
+            wrap.setAttribute("role", "button");
+            wrap.setAttribute("tabindex", "0");
+
+            const open = () => openLiteraturePreviewCover(
+                wrap.dataset.coverImageSrc || "",
+                wrap.dataset.coverImageAlt || "Literature cover"
+            );
+
+            wrap.addEventListener("click", event => {
+                if (!event.target.closest(".credit-pill")) open();
+            });
+
+            wrap.addEventListener("keydown", event => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                open();
+            });
+        }
+
+        function openLiteraturePreviewCover(url, alt = "Literature cover") {
+            if (!url) return;
+            const lightbox = document.getElementById("cover-image-lightbox");
+            const image = document.getElementById("cover-image-lightbox-image");
+            if (!lightbox || !image) return;
+
+            image.src = url;
+            image.alt = alt;
+            lightbox.classList.add("open");
+            lightbox.setAttribute("aria-hidden", "false");
+            document.body.classList.add("cover-image-lightbox-open");
+        }
+
+        function closeLiteraturePreviewCover() {
+            const lightbox = document.getElementById("cover-image-lightbox");
+            const image = document.getElementById("cover-image-lightbox-image");
+            lightbox?.classList.remove("open");
+            lightbox?.setAttribute("aria-hidden", "true");
+            document.body.classList.remove("cover-image-lightbox-open");
+            if (image) {
+                image.src = "";
+                image.alt = "";
+            }
+        }
+
 
         function renderComicPreview(payload) {
             activeProject = normalizeProject(payload, "comic");
@@ -579,78 +1153,78 @@
             document.title = `${activeProject.title || "Comic"} Preview - Nullverse`;
             document.getElementById("preview-root").className = "";
             document.getElementById("preview-root").innerHTML = `
-                    ${commonHeader()}
-                    <div id="comic-background-layer" class="comic-background-layer">
-                        <div id="comic-background-base" class="comic-background-base"></div>
-                        <div id="comic-background-image" class="comic-background-image"></div>
-                        <div id="comic-background-overlay" class="comic-background-overlay"></div>
-                    </div>
-                    <main>
-                        <aside class="left-sidebar">
-                            <section id="chapter-index" class="chapter-index" style="display:none;">
-                                <div class="index-header">
-                                    <h2>Chapter Index</h2>
-                                    <p>Search and jump between chapters instantly.</p>
-                                </div>
-                                <input id="chapter-search" class="chapter-search" type="text" placeholder="Search chapters...">
-                                <div id="chapter-count" class="chapter-count"></div>
-                                <div id="chapter-nav-links"></div>
-                            </section>
-                        </aside>
-                        <div class="content-column">
-                            <section class="comic-hero">
-                                <div class="comic-layout">
-                                    <div id="comic-cover-wrap" class="cover-wrap"></div>
-                                    <div>
-                                        <div id="comic-tags" class="tag-row"></div>
-                                        <h1 id="comic-title"></h1>
-                                        <p id="comic-creator" class="creator"></p>
-                                        <div id="comic-summary" class="summary"></div>
-                                        <div class="action-row">
-                                            <button id="like-button" class="like-button preview-disabled" type="button" data-preview-action="Like">♡ Like</button>
-                                            <span id="like-count" class="like-count">0 Likes</span>
-                                            <a class="button preview-disabled" href="#" data-preview-action="Comments">Comments</a>
-                                            <a class="button preview-disabled" href="#" data-preview-action="Q&A">Q&A</a>
-                                            <a class="button preview-disabled" href="#" data-preview-action="Community">Community</a>
-                                            <button class="button preview-disabled" type="button" data-preview-action="Report">Report</button>
+                        ${commonHeader()}
+                        <div id="comic-background-layer" class="comic-background-layer">
+                            <div id="comic-background-base" class="comic-background-base"></div>
+                            <div id="comic-background-image" class="comic-background-image"></div>
+                            <div id="comic-background-overlay" class="comic-background-overlay"></div>
+                        </div>
+                        <main>
+                            <aside class="left-sidebar">
+                                <section id="chapter-index" class="chapter-index" style="display:none;">
+                                    <div class="index-header">
+                                        <h2>Chapter Index</h2>
+                                        <p>Search and jump between chapters instantly.</p>
+                                    </div>
+                                    <input id="chapter-search" class="chapter-search" type="text" placeholder="Search chapters...">
+                                    <div id="chapter-count" class="chapter-count"></div>
+                                    <div id="chapter-nav-links"></div>
+                                </section>
+                            </aside>
+                            <div class="content-column">
+                                <section class="comic-hero">
+                                    <div class="comic-layout">
+                                        <div id="comic-cover-wrap" class="cover-wrap"></div>
+                                        <div>
+                                            <div id="comic-tags" class="tag-row"></div>
+                                            <h1 id="comic-title"></h1>
+                                            <p id="comic-creator" class="creator"></p>
+                                            <div id="comic-summary" class="summary"></div>
+                                            <div class="action-row">
+                                                <button id="like-button" class="like-button preview-disabled" type="button" data-preview-action="Like">♡ Like</button>
+                                                <span id="like-count" class="like-count">0 Likes</span>
+                                                <a class="button preview-disabled" href="#" data-preview-action="Comments">Comments</a>
+                                                <a class="button preview-disabled" href="#" data-preview-action="Q&A">Q&A</a>
+                                                <a class="button preview-disabled" href="#" data-preview-action="Community">Community</a>
+                                                <button class="button preview-disabled" type="button" data-preview-action="Report">Report</button>
+                                            </div>
+                                            <div id="owner-actions" class="owner-actions"></div>
                                         </div>
-                                        <div id="owner-actions" class="owner-actions"></div>
+                                    </div>
+                                </section>
+                                <section id="chapters-gallery-container"></section>
+                            </div>
+                        </main>
+                        <div id="reader-overlay" class="reader-overlay">
+                            <div id="reader-bg-base" class="reader-bg-base"></div>
+                            <div id="reader-bg-image" class="reader-bg-image"></div>
+                            <div id="reader-bg-overlay" class="reader-bg-overlay"></div>
+                            <div id="reader-ui" class="reader-ui">
+                                <div class="reader-topbar">
+                                    <div class="reader-title">
+                                        <strong id="reader-title">Comic Reader</strong>
+                                        <span id="reader-subtitle">Choose a page to begin</span>
+                                    </div>
+                                    <div class="reader-actions">
+                                        <button id="reader-mode-paged" class="reader-action" type="button" data-local-control="reader-paged">Paged</button>
+                                        <button id="reader-mode-webtoon" class="reader-action" type="button" data-local-control="reader-webtoon">Webtoon</button>
+                                        <button class="reader-action" type="button" data-local-control="reader-close">Close</button>
                                     </div>
                                 </div>
-                            </section>
-                            <section id="chapters-gallery-container"></section>
-                        </div>
-                    </main>
-                    <div id="reader-overlay" class="reader-overlay">
-                        <div id="reader-bg-base" class="reader-bg-base"></div>
-                        <div id="reader-bg-image" class="reader-bg-image"></div>
-                        <div id="reader-bg-overlay" class="reader-bg-overlay"></div>
-                        <div id="reader-ui" class="reader-ui">
-                            <div class="reader-topbar">
-                                <div class="reader-title">
-                                    <strong id="reader-title">Comic Reader</strong>
-                                    <span id="reader-subtitle">Choose a page to begin</span>
+                                <div id="reader-stage" class="reader-stage">
+                                    <div class="tap-zone tap-left" data-local-control="reader-back"></div>
+                                    <div class="tap-zone tap-right" data-local-control="reader-forward"></div>
+                                    <button class="reader-arrow left" type="button" data-local-control="reader-back">‹</button>
+                                    <button class="reader-arrow right" type="button" data-local-control="reader-forward">›</button>
+                                    <div id="reader-content"></div>
+                                    <button id="reader-credit-mobile-btn" class="reader-credit-mobile-btn" type="button" data-local-control="credit-sheet">?</button>
+                                    <div id="reader-credit-desktop" class="reader-credit-desktop"></div>
                                 </div>
-                                <div class="reader-actions">
-                                    <button id="reader-mode-paged" class="reader-action" type="button" data-local-control="reader-paged">Paged</button>
-                                    <button id="reader-mode-webtoon" class="reader-action" type="button" data-local-control="reader-webtoon">Webtoon</button>
-                                    <button class="reader-action" type="button" data-local-control="reader-close">Close</button>
-                                </div>
+                                <div id="reader-bottombar" class="reader-bottombar"></div>
                             </div>
-                            <div id="reader-stage" class="reader-stage">
-                                <div class="tap-zone tap-left" data-local-control="reader-back"></div>
-                                <div class="tap-zone tap-right" data-local-control="reader-forward"></div>
-                                <button class="reader-arrow left" type="button" data-local-control="reader-back">‹</button>
-                                <button class="reader-arrow right" type="button" data-local-control="reader-forward">›</button>
-                                <div id="reader-content"></div>
-                                <button id="reader-credit-mobile-btn" class="reader-credit-mobile-btn" type="button" data-local-control="credit-sheet">?</button>
-                                <div id="reader-credit-desktop" class="reader-credit-desktop"></div>
-                            </div>
-                            <div id="reader-bottombar" class="reader-bottombar"></div>
                         </div>
-                    </div>
-                    <div id="reader-credit-sheet" class="reader-credit-sheet"></div>
-                `;
+                        <div id="reader-credit-sheet" class="reader-credit-sheet"></div>
+                    `;
 
             applyComicTheme(activeProject);
             renderComicHero(activeProject, activeOwnerProfile);
@@ -755,6 +1329,15 @@
                     closeSectionImageLightbox();
                     closeReader();
                     closeCreditSheet();
+
+                    if (activeType === "literature") {
+                        closeLiteraturePreviewCover();
+                        closeLiteraturePreviewChapterDrawer();
+                        if (document.getElementById("literature-focus-overlay")?.classList.contains("open")) {
+                            closeLiteraturePreviewFocus();
+                        }
+                        window.__closePreviewLiteratureNav?.();
+                    }
                 }
 
                 const readerOpen = document.getElementById("reader-overlay")?.classList.contains("open");
@@ -783,11 +1366,11 @@
         function showPreviewError(title, message) {
             document.getElementById("preview-root").className = "preview-error-screen";
             document.getElementById("preview-root").innerHTML = `
-                    <section class="preview-error-card">
-                        <h1>${escapeHtml(title)}</h1>
-                        <p>${escapeHtml(message)}</p>
-                    </section>
-                `;
+                        <section class="preview-error-card">
+                            <h1>${escapeHtml(title)}</h1>
+                            <p>${escapeHtml(message)}</p>
+                        </section>
+                    `;
         }
 
         function getImageUrl(source, keys) {
@@ -816,13 +1399,13 @@
 
         function buildUnavailableImagePlaceholder(label = "Image") {
             return `
-                    <div class="preview-image-placeholder">
-                        <span>
-                            <strong>${escapeHtml(label)} needs saving first.</strong>
-                            Preview will still show your text, colors, layout, and saved images.
-                        </span>
-                    </div>
-                `;
+                        <div class="preview-image-placeholder">
+                            <span>
+                                <strong>${escapeHtml(label)} needs saving first.</strong>
+                                Preview will still show your text, colors, layout, and saved images.
+                            </span>
+                        </div>
+                    `;
         }
 
         function normalizeImagePlacement(value) {
@@ -861,10 +1444,10 @@
             if (!url) return "";
             const safe = normalizeImagePlacement(placement);
             return `
-                    <div class="placed-image-stage ${escapeHtml(className)}">
-                        <img src="${escapeHtml(url)}" alt="" style="object-fit:${escapeHtml(safe.fit || "cover")}; transform:${escapeHtml(getImagePlacementTransform(safe))};">
-                    </div>
-                `;
+                        <div class="placed-image-stage ${escapeHtml(className)}">
+                            <img src="${escapeHtml(url)}" alt="" style="object-fit:${escapeHtml(safe.fit || "cover")}; transform:${escapeHtml(getImagePlacementTransform(safe))};">
+                        </div>
+                    `;
         }
 
         function buildCreatorLine(profile) {
@@ -911,19 +1494,19 @@
             }
 
             const tooltipContent = `
-                    <strong>${escapeHtml(context)} Credit</strong>
-                    <br>
-                    Source: ${escapeHtml(source)}
-                    ${note ? `<br><br>${escapeHtml(note)}` : ""}
-                    ${url ? `<br><br>External link disabled in preview.` : ""}
-                `;
+                        <strong>${escapeHtml(context)} Credit</strong>
+                        <br>
+                        Source: ${escapeHtml(source)}
+                        ${note ? `<br><br>${escapeHtml(note)}` : ""}
+                        ${url ? `<br><br>External link disabled in preview.` : ""}
+                    `;
 
             return `
-                    <span class="credit-pill">
-                        ${escapeHtml(label)}
-                        <span class="credit-tooltip">${tooltipContent}</span>
-                    </span>
-                `;
+                        <span class="credit-pill">
+                            ${escapeHtml(label)}
+                            <span class="credit-tooltip">${tooltipContent}</span>
+                        </span>
+                    `;
         }
 
         function splitTags(value) {
@@ -1033,12 +1616,12 @@
             }
 
             return `
-                    --section-card-background:${cardBackground};
-                    --section-card-text:${section.theme_card_text_color || "#f5f5f5"};
-                    --section-card-image:none;
-                    --section-card-image-opacity:${section.theme_card_opacity ?? .85};
-                    --section-card-overlay:${section.theme_card_overlay ?? .35};
-                `;
+                        --section-card-background:${cardBackground};
+                        --section-card-text:${section.theme_card_text_color || "#f5f5f5"};
+                        --section-card-image:none;
+                        --section-card-image-opacity:${section.theme_card_opacity ?? .85};
+                        --section-card-overlay:${section.theme_card_overlay ?? .35};
+                    `;
         }
 
         function getSectionImageStage(section) {
@@ -1051,16 +1634,16 @@
             const safe = normalizeImagePlacement(section.image_placement);
 
             return `
-                    <div class="section-image-stage section-image-zoomable"
-                         role="button"
-                         tabindex="0"
-                         aria-label="Open section image"
-                         data-section-image-src="${escapeAttr(imageUrl)}"
-                         data-section-image-alt="${escapeAttr(section.title || "Section image")}"
-                         style="width:${width}; max-width:100%; height:${height}; display:block; float:${section.image_position === "left" ? "left" : section.image_position === "right" ? "right" : "none"}; margin-right:${section.image_position === "left" ? "22px" : "0"}; margin-left:${section.image_position === "right" ? "22px" : "0"};">
-                        <img src="${escapeAttr(imageUrl)}" alt="" style="object-fit:${escapeHtml(safe.fit || "cover")}; transform:${escapeHtml(getImagePlacementTransform(safe))};">
-                    </div>
-                `;
+                        <div class="section-image-stage section-image-zoomable"
+                             role="button"
+                             tabindex="0"
+                             aria-label="Open section image"
+                             data-section-image-src="${escapeAttr(imageUrl)}"
+                             data-section-image-alt="${escapeAttr(section.title || "Section image")}"
+                             style="width:${width}; max-width:100%; height:${height}; display:block; float:${section.image_position === "left" ? "left" : section.image_position === "right" ? "right" : "none"}; margin-right:${section.image_position === "left" ? "22px" : "0"}; margin-left:${section.image_position === "right" ? "22px" : "0"};">
+                            <img src="${escapeAttr(imageUrl)}" alt="" style="object-fit:${escapeHtml(safe.fit || "cover")}; transform:${escapeHtml(getImagePlacementTransform(safe))};">
+                        </div>
+                    `;
         }
 
         function renderWorldSections(sections) {
@@ -1077,14 +1660,14 @@
                 const cardImageUrl = getImageUrl(section, ["theme_card_image_url", "card_image_url"]);
                 const sectionImageUrl = getImageUrl(section, ["image_url", "section_image_url"]);
                 return `
-                        <article id="section-${index}" class="world-section" style="${buildSectionCardStyle(section)}">
-                            ${buildPlacedImageStage(cardImageUrl, section.theme_card_image_placement, "section-card-placed-image")}
-                            <h2>${escapeHtml(section.title || "Untitled Section")}</h2>
-                            <div class="section-type">${escapeHtml(section.section_type || section.type || "Section")}</div>
-                            ${getSectionImageStage(section)}
-                            ${sectionImageUrl ? `
-                                <div class="section-image-credit-under">
-                                    ${buildCreditPill({
+                            <article id="section-${index}" class="world-section" style="${buildSectionCardStyle(section)}">
+                                ${buildPlacedImageStage(cardImageUrl, section.theme_card_image_placement, "section-card-placed-image")}
+                                <h2>${escapeHtml(section.title || "Untitled Section")}</h2>
+                                <div class="section-type">${escapeHtml(section.section_type || section.type || "Section")}</div>
+                                ${getSectionImageStage(section)}
+                                ${sectionImageUrl ? `
+                                    <div class="section-image-credit-under">
+                                        ${buildCreditPill({
                     type: section.image_credit_type,
                     name: section.image_credit_name,
                     username: section.image_credit_nullverse_username,
@@ -1093,11 +1676,11 @@
                     ownerUsername: activeOwnerProfile?.username,
                     context: "Section Image"
                 })}
-                                </div>` : ""}
-                            <div class="section-content rich-section-content" data-world-section-content-index="${index}">
-                                ${formatRichContent(section.content || section.body || section.description || "No content yet.")}
-                            </div>
-                            ${buildCreditPill({
+                                    </div>` : ""}
+                                <div class="section-content rich-section-content" data-world-section-content-index="${index}">
+                                    ${formatRichContent(section.content || section.body || section.description || "No content yet.")}
+                                </div>
+                                ${buildCreditPill({
                     type: section.card_credit_type,
                     name: section.card_credit_name,
                     username: section.card_credit_nullverse_username,
@@ -1106,8 +1689,8 @@
                     ownerUsername: activeOwnerProfile?.username,
                     context: "Section Card Image"
                 })}
-                        </article>
-                    `;
+                            </article>
+                        `;
             }).join("");
 
             container.querySelectorAll(".rich-section-content").forEach(normalizeRenderedRichText);
@@ -1158,11 +1741,11 @@
 
                 count.textContent = `${filtered.length} of ${sections.length} section${sections.length === 1 ? "" : "s"}`;
                 links.innerHTML = filtered.map(({ section, index }) => `
-                        <a href="#section-${index}" data-local-control="section-link" data-target="section-${index}">
-                            <span>${escapeHtml(section.title || `Section ${index + 1}`)}</span>
-                            <small>${escapeHtml(section.section_type || section.type || "Section")}</small>
-                        </a>
-                    `).join("") || `<p class="empty">No matching sections.</p>`;
+                            <a href="#section-${index}" data-local-control="section-link" data-target="section-${index}">
+                                <span>${escapeHtml(section.title || `Section ${index + 1}`)}</span>
+                                <small>${escapeHtml(section.section_type || section.type || "Section")}</small>
+                            </a>
+                        `).join("") || `<p class="empty">No matching sections.</p>`;
             }
 
             filters.addEventListener("click", event => {
@@ -1291,8 +1874,13 @@
             coverWrap.classList.toggle("placed-cover", !!literature.cover_image_placement);
 
             if (coverUrl) {
-                coverWrap.innerHTML = `<img src="${escapeAttr(coverUrl)}" alt="" style="${getImagePlacementStyle(literature.cover_image_placement)}">${coverCredit}`;
+                const coverAlt = `${literature.title || "Literature"} cover`;
+                coverWrap.dataset.coverImageSrc = coverUrl;
+                coverWrap.dataset.coverImageAlt = coverAlt;
+                coverWrap.innerHTML = `<img src="${escapeAttr(coverUrl)}" alt="${escapeAttr(coverAlt)}" style="${getImagePlacementStyle(literature.cover_image_placement)}">${coverCredit}`;
             } else {
+                delete coverWrap.dataset.coverImageSrc;
+                delete coverWrap.dataset.coverImageAlt;
                 coverWrap.innerHTML = `<div class="cover-placeholder">No cover image yet</div>`;
             }
 
@@ -1317,47 +1905,54 @@
             const wordCount = chapters.reduce((total, chapter) => total + countWords(plainTextFromRich(chapter.body || chapter.content || "")), 0);
             const minutes = Math.max(1, Math.ceil(wordCount / 220));
             meta.innerHTML = `
-                    <span>${chapterCount} chapter${chapterCount === 1 ? "" : "s"}</span>
-                    <span>${wordCount.toLocaleString()} words</span>
-                    <span>${minutes} min read</span>
-                `;
+                        <span>${chapterCount} chapter${chapterCount === 1 ? "" : "s"}</span>
+                        <span>${wordCount.toLocaleString()} words</span>
+                        <span>${minutes} min read</span>
+                    `;
         }
 
         function renderLiteratureChapters(chapters) {
             const container = document.getElementById("chapters-container");
+            const tools = document.getElementById("reader-tools");
             if (!container) return;
-            document.getElementById("reader-tools").style.display = chapters.length ? "flex" : "none";
+
+            if (tools) tools.style.display = chapters.length ? "flex" : "none";
 
             if (!chapters.length) {
                 container.innerHTML = `<p class="empty">This preview does not have any chapters yet.</p>`;
+                document.getElementById("chapter-index")?.style.setProperty("display", "none");
                 return;
             }
 
-            container.innerHTML = chapters.map((chapter, index) => buildLiteratureChapterArticle(chapter, index)).join("");
-            container.querySelectorAll(".chapter-main-text.rich-chapter-content").forEach(normalizeRenderedRichText);
+            literaturePreviewChapterIndex = Math.min(
+                chapters.length - 1,
+                Math.max(0, Number(literaturePreviewChapterIndex) || 0)
+            );
+
+            setLiteraturePreviewChapter(literaturePreviewChapterIndex, { scroll: false });
         }
 
-        function buildLiteratureChapterArticle(chapter, index) {
+        function buildLiteratureChapterArticle(chapter, index, idPrefix = "chapter") {
             const chapterNumber = index + 1;
             const visualTop = buildLiteratureChapterHeaderImage(chapter, "top");
             const visualLeftRight = ["left", "right"].includes(chapter.image_position) ? buildLiteratureChapterHeaderImage(chapter, chapter.image_position) : "";
             const visualBottom = buildLiteratureChapterHeaderImage(chapter, "bottom");
 
             return `
-                    <article id="chapter-${chapterNumber}" class="literature-chapter" style="${buildLiteratureChapterCardStyle(chapter)} ${buildLiteratureChapterWritingStyle(chapter)}">
-                        <div class="chapter-title-row">
-                            <div class="chapter-eyebrow">Chapter ${chapterNumber} · ${getChapterReadTime(chapter)} min read</div>
-                            <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
-                            ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
-                        </div>
-                        ${visualTop}
-                        <div class="chapter-main-text rich-chapter-content">
-                            ${visualLeftRight}
-                            ${formatRichContent(chapter.body || chapter.content || "No chapter text yet.")}
-                        </div>
-                        ${visualBottom}
-                        ${chapter.author_note ? `<div class="author-note"><strong>Author Note</strong><br><br>${escapeHtml(chapter.author_note)}</div>` : ""}
-                        ${chapter.theme_card_style === "image" && getImageUrl(chapter, ["theme_card_image_url"]) ? buildCreditPill({
+                        <article id="${idPrefix}-${chapterNumber}" class="literature-chapter" style="${buildLiteratureChapterCardStyle(chapter)} ${buildLiteratureChapterWritingStyle(chapter)}">
+                            <div class="chapter-title-row">
+                                <div class="chapter-eyebrow">Chapter ${chapterNumber} · ${getChapterReadTime(chapter)} min read</div>
+                                <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
+                                ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
+                            </div>
+                            ${visualTop}
+                            <div class="chapter-main-text rich-chapter-content">
+                                ${visualLeftRight}
+                                ${formatRichContent(chapter.body || chapter.content || "No chapter text yet.")}
+                            </div>
+                            ${visualBottom}
+                            ${chapter.author_note ? `<div class="author-note"><strong>Author Note</strong><br><br>${escapeHtml(chapter.author_note)}</div>` : ""}
+                            ${chapter.theme_card_style === "image" && getImageUrl(chapter, ["theme_card_image_url"]) ? buildCreditPill({
                 type: chapter.card_credit_type,
                 name: chapter.card_credit_name,
                 username: chapter.card_credit_nullverse_username,
@@ -1366,8 +1961,8 @@
                 ownerUsername: activeOwnerProfile?.username,
                 context: "Chapter Card Image"
             }) : ""}
-                    </article>
-                `;
+                        </article>
+                    `;
         }
 
         function buildLiteratureChapterHeaderImage(chapter, requestedPosition) {
@@ -1402,14 +1997,14 @@
             const image = chapter.theme_card_style === "image" && imageUrl ? `url("${imageUrl}")` : "none";
 
             return `
-                    --chapter-card-background:${background};
-                    --chapter-card-text:${chapter.theme_card_text_color || "#f5f5f5"};
-                    --chapter-card-image:${image};
-                    --chapter-card-image-size:${getImagePlacementFit(chapter.theme_card_image_placement)};
-                    --chapter-card-image-transform:${getImagePlacementTransform(chapter.theme_card_image_placement)};
-                    --chapter-card-image-opacity:${chapter.theme_card_opacity ?? .85};
-                    --chapter-card-overlay:${chapter.theme_card_overlay ?? .35};
-                `;
+                        --chapter-card-background:${background};
+                        --chapter-card-text:${chapter.theme_card_text_color || "#f5f5f5"};
+                        --chapter-card-image:${image};
+                        --chapter-card-image-size:${getImagePlacementFit(chapter.theme_card_image_placement)};
+                        --chapter-card-image-transform:${getImagePlacementTransform(chapter.theme_card_image_placement)};
+                        --chapter-card-image-opacity:${chapter.theme_card_opacity ?? .85};
+                        --chapter-card-overlay:${chapter.theme_card_overlay ?? .35};
+                    `;
         }
 
         function buildLiteratureChapterWritingStyle(chapter) {
@@ -1421,11 +2016,11 @@
             };
             const spacing = spacingMap[chapter.spacing_type || "comfortable"] || spacingMap.comfortable;
             return `
-                    --chapter-text-color:${chapter.text_color || "#f5f5f5"};
-                    --chapter-panel-background:${chapter.chapter_panel_color || "#141416"};
-                    --chapter-line-height:${spacing[0]};
-                    --chapter-letter-spacing:${spacing[1]};
-                `;
+                        --chapter-text-color:${chapter.text_color || "#f5f5f5"};
+                        --chapter-panel-background:${chapter.chapter_panel_color || "#141416"};
+                        --chapter-line-height:${spacing[0]};
+                        --chapter-letter-spacing:${spacing[1]};
+                    `;
         }
 
         function getChapterReadTime(chapter) {
@@ -1433,17 +2028,33 @@
         }
 
         function setupLiteratureReaderTools() {
-            document.querySelectorAll("[data-local-control]").forEach(button => {
+            document.querySelectorAll("[data-lit-control]").forEach(button => {
                 button.addEventListener("click", event => {
-                    const control = event.currentTarget.dataset.localControl;
-                    if (control === "toggle-mobile-index") document.getElementById("chapter-index")?.classList.toggle("mobile-open");
-                    if (control === "start-reading") scrollToFirstChapter();
-                    if (control === "toggle-focus") document.body.classList.toggle("reader-focus");
-                    if (control === "large-text") document.body.classList.toggle("reader-large-text");
-                    if (control === "wide-reader") document.body.classList.toggle("reader-wide");
-                    if (control === "center-headings") document.body.classList.toggle("reader-center-headings");
+                    const control = event.currentTarget.dataset.litControl;
+
+                    if (control === "open-chapters") openLiteraturePreviewChapterDrawer();
+                    if (control === "open-focus") openLiteraturePreviewFocus();
+                    if (control === "close-focus") closeLiteraturePreviewFocus();
+                    if (control === "focus-prev") setLiteraturePreviewChapter(literaturePreviewChapterIndex - 1, { focus: true });
+                    if (control === "focus-next") {
+                        if (literaturePreviewChapterIndex >= activeChapters.length - 1) {
+                            closeLiteraturePreviewFocus();
+                        } else {
+                            setLiteraturePreviewChapter(literaturePreviewChapterIndex + 1, { focus: true });
+                        }
+                    }
+                    if (control === "large-text") toggleLiteraturePreviewPreference("reader-large-text");
+                    if (control === "wide-reader") toggleLiteraturePreviewPreference("reader-wide");
+                    if (control === "center-headings") toggleLiteraturePreviewPreference("reader-center-headings");
+                    if (control === "line-spacing") toggleLiteraturePreviewPreference("reader-airy");
+                    if (control === "reset-reader") resetLiteraturePreviewPreferences();
+                    if (control === "close-cover") closeLiteraturePreviewCover();
                 });
             });
+
+            document.getElementById("chapter-index-close")?.addEventListener("click", closeLiteraturePreviewChapterDrawer);
+            document.getElementById("chapter-index-mobile-scrim")?.addEventListener("click", closeLiteraturePreviewChapterDrawer);
+            syncLiteraturePreviewPreferenceButtons();
         }
 
         function scrollToFirstChapter() {
@@ -1452,16 +2063,47 @@
 
         function setupReaderScrollTracking() {
             const progress = document.getElementById("reading-progress");
-            if (!progress) return;
+            const focusOverlay = document.getElementById("literature-focus-overlay");
+            const focusScroll = document.getElementById("literature-focus-scroll");
 
-            function update() {
-                const scrollTop = window.scrollY || document.documentElement.scrollTop;
-                const scrollHeight = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-                progress.style.width = `${Math.min(100, Math.max(0, (scrollTop / scrollHeight) * 100))}%`;
+            if (window.__previewLiteratureScrollHandler) {
+                window.removeEventListener("scroll", window.__previewLiteratureScrollHandler);
             }
 
-            update();
-            window.addEventListener("scroll", update, { passive: true });
+            if (window.__previewLiteratureFocusScrollHandler && focusScroll) {
+                focusScroll.removeEventListener("scroll", window.__previewLiteratureFocusScrollHandler);
+            }
+
+            function updateWindowProgress() {
+                if (focusOverlay?.classList.contains("open")) return;
+                const article = document.querySelector("#chapters-container .literature-chapter");
+                if (!article) {
+                    if (progress) progress.style.width = "0%";
+                    return;
+                }
+
+                const rect = article.getBoundingClientRect();
+                const articleTop = (window.scrollY || document.documentElement.scrollTop) + rect.top;
+                const readableHeight = Math.max(1, article.offsetHeight - window.innerHeight);
+                const scrolled = (window.scrollY || document.documentElement.scrollTop) - articleTop;
+                const percentage = Math.min(100, Math.max(0, (scrolled / readableHeight) * 100));
+                if (progress) progress.style.width = `${percentage}%`;
+            }
+
+            function updateFocusProgress() {
+                if (!focusOverlay?.classList.contains("open") || !focusScroll) return;
+                const distance = Math.max(1, focusScroll.scrollHeight - focusScroll.clientHeight);
+                const percentage = Math.min(100, Math.max(0, (focusScroll.scrollTop / distance) * 100));
+                if (progress) progress.style.width = `${percentage}%`;
+            }
+
+            window.__previewLiteratureScrollHandler = updateWindowProgress;
+            window.__previewLiteratureFocusScrollHandler = updateFocusProgress;
+            window.addEventListener("scroll", updateWindowProgress, { passive: true });
+            focusScroll?.addEventListener("scroll", updateFocusProgress, { passive: true });
+
+            if (focusOverlay?.classList.contains("open")) updateFocusProgress();
+            else updateWindowProgress();
         }
 
         function renderGenericChapterIndex(chapters, mode) {
@@ -1503,11 +2145,11 @@
                         ? `${(activePagesByChapter[chapter.id] || []).length} page${(activePagesByChapter[chapter.id] || []).length === 1 ? "" : "s"}`
                         : `${getChapterReadTime(chapter)} min read`;
                     return `
-                            <a href="#${target}" class="chapter-nav-link" data-local-control="chapter-link" data-target="${target}">
-                                <span>Chapter ${index + 1}: ${escapeHtml(chapter.title || "Untitled")}</span>
-                                <small>${escapeHtml(chapter.subtitle || small)}</small>
-                            </a>
-                        `;
+                                <a href="#${target}" class="chapter-nav-link" data-local-control="chapter-link" data-target="${target}">
+                                    <span>Chapter ${index + 1}: ${escapeHtml(chapter.title || "Untitled")}</span>
+                                    <small>${escapeHtml(chapter.subtitle || small)}</small>
+                                </a>
+                            `;
                 }).join("") || `<p class="empty">No matching chapters.</p>`;
             }
 
@@ -1628,23 +2270,23 @@
             container.innerHTML = activeChapters.map((chapter, chapterIndex) => {
                 const pages = activePagesByChapter[chapter.id] || activePagesByChapter[String(chapter.id)] || [];
                 return `
-                        <section class="comic-gallery-panel" id="comic-chapter-${chapterIndex}">
-                            <div class="gallery-top">
-                                <div>
-                                    <div class="chapter-eyebrow">Chapter ${chapterIndex + 1}</div>
-                                    <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
-                                    ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
+                            <section class="comic-gallery-panel" id="comic-chapter-${chapterIndex}">
+                                <div class="gallery-top">
+                                    <div>
+                                        <div class="chapter-eyebrow">Chapter ${chapterIndex + 1}</div>
+                                        <h2>${escapeHtml(chapter.title || "Untitled")}</h2>
+                                        ${chapter.subtitle ? `<div class="chapter-subtitle">${escapeHtml(chapter.subtitle)}</div>` : ""}
+                                    </div>
+                                    ${pages.length ? `<button class="button" type="button" data-local-control="open-reader" data-chapter-index="${chapterIndex}" data-page-index="0">Start Reading</button>` : ""}
                                 </div>
-                                ${pages.length ? `<button class="button" type="button" data-local-control="open-reader" data-chapter-index="${chapterIndex}" data-page-index="0">Start Reading</button>` : ""}
-                            </div>
-                            ${chapter.author_note ? `<div class="author-note">${escapeHtml(chapter.author_note)}</div>` : ""}
-                            ${pages.length ? `
-                                <div class="chapter-gallery-grid">
-                                    ${pages.map((page, pageIndex) => buildComicPageThumb(page, chapterIndex, pageIndex)).join("")}
-                                </div>
-                            ` : `<p class="empty">No pages in this chapter yet.</p>`}
-                        </section>
-                    `;
+                                ${chapter.author_note ? `<div class="author-note">${escapeHtml(chapter.author_note)}</div>` : ""}
+                                ${pages.length ? `
+                                    <div class="chapter-gallery-grid">
+                                        ${pages.map((page, pageIndex) => buildComicPageThumb(page, chapterIndex, pageIndex)).join("")}
+                                    </div>
+                                ` : `<p class="empty">No pages in this chapter yet.</p>`}
+                            </section>
+                        `;
             }).join("");
         }
 
@@ -1652,16 +2294,16 @@
             const imageUrl = getImageUrl(page, ["image_url", "page_image_url", "src"]);
             const hasCredit = !!buildPageCreditText(page);
             return `
-                    <div class="page-thumb" role="button" tabindex="0" data-local-control="open-reader" data-chapter-index="${chapterIndex}" data-page-index="${pageIndex}">
-                        ${imageUrl
+                        <div class="page-thumb" role="button" tabindex="0" data-local-control="open-reader" data-chapter-index="${chapterIndex}" data-page-index="${pageIndex}">
+                            ${imageUrl
                     ? `<img src="${escapeAttr(imageUrl)}" alt="${escapeAttr(page.title || `Page ${pageIndex + 1}`)}" style="${getImagePlacementStyle(page.image_placement || page.placement)}">`
                     : buildUnavailableImagePlaceholder(`Page ${pageIndex + 1}`)}
-                        <div class="page-thumb-footer">
-                            <span>Page ${pageIndex + 1}</span>
-                            ${hasCredit ? `<span class="credit-dot">i</span>` : ""}
+                            <div class="page-thumb-footer">
+                                <span>Page ${pageIndex + 1}</span>
+                                ${hasCredit ? `<span class="credit-dot">i</span>` : ""}
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
         }
 
         function setupComicReaderControls() {
@@ -1736,15 +2378,15 @@
 
             if (fullscreenMode === "webtoon") {
                 content.innerHTML = `
-                        <div class="reader-webtoon-stack">
-                            ${pages.map((readerPage, index) => {
+                            <div class="reader-webtoon-stack">
+                                ${pages.map((readerPage, index) => {
                     const url = getImageUrl(readerPage, ["image_url", "page_image_url", "src"]);
                     return url
                         ? `<img src="${escapeAttr(url)}" alt="Page ${index + 1}" data-reader-page-index="${index}" style="${getImagePlacementStyle(readerPage.image_placement || readerPage.placement)}">`
                         : buildUnavailableImagePlaceholder(`Page ${index + 1}`);
                 }).join("")}
-                        </div>
-                    `;
+                            </div>
+                        `;
                 document.getElementById("reader-bottombar").textContent = `${pages.length} page${pages.length === 1 ? "" : "s"} · Webtoon mode`;
             } else {
                 const url = getImageUrl(page, ["image_url", "page_image_url", "src"]);
