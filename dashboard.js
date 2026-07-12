@@ -7,7 +7,7 @@ import {
     renderProjectCard,
     renderSkeletonCards,
     escapeHtml
-} from "./nullverse-content-cards.js";
+} from "./nullverse-content-cards.js?v=2";
 import { fetchDashboardMetrics, loadViewerContext } from "./nullverse-data.js";
 
 const currentUser = await requireBetaAccess({ allowRestricted: false });
@@ -241,4 +241,3 @@ function isHidden(item) {
     const status = String(item.moderation_status || "visible").toLowerCase();
     return ["hidden", "removed", "rejected", "suspended", "banned"].includes(status);
 }
-// JavaScript source code

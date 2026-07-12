@@ -11,7 +11,10 @@ export function normalizeContentType(value) {
 }
 
 export function contentTypeLabel(value) {
-    const type = normalizeContentType(value);
+    const clean = String(value || "world").trim().toLowerCase();
+    if (["gallery", "gallery_item", "gallery-item"].includes(clean)) return "Gallery";
+
+    const type = normalizeContentType(clean);
     return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
