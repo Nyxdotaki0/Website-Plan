@@ -6132,14 +6132,20 @@ Reason: ${escapeHtml(item.moderation_reason || "No reason provided.")}
         }
 
         function viewerExperience() {
-            const exp = String(viewerProfile?.content_experience || "safe")
+            // Public guests have no saved profile preference, so Creator Gallery
+            // uses Balanced Mode: warned content is blurred and requires a
+            // confirmation instead of being silently removed. Age restrictions
+            // and explicit signed-in warning blocks still remain absolute.
+            if (!currentUser || !viewerProfile) return "balanced";
+
+            const exp = String(viewerProfile.content_experience || "balanced")
                 .trim()
                 .toLowerCase()
                 .replace(/\s+/g, "_");
 
             if (["safe", "strict"].includes(exp)) return "safe";
             if (["open", "adult", "all", "unfiltered", "full"].includes(exp)) return "open";
-            return currentUser ? "balanced" : "safe";
+            return "balanced";
         }
 
         function viewerIsGalleryStaff() {

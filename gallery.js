@@ -1,4 +1,5 @@
 import { requireBetaAccess } from "./betaGate.js";
+import { supabase } from "./supabaseClient.js";
 import { initNullverseShell } from "./nullverse-shell.js";
 import {
     bindCardInteractions,
@@ -7,12 +8,13 @@ import {
     renderEmptyCard,
     renderGalleryCard,
     renderSkeletonCards
-} from "./nullverse-content-cards.js?v=3";
-import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nullverse-data.js";
+} from "./nullverse-content-cards.js?v=5";
+import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nullverse-data.js?v=5";
 
 const currentUser = await requireBetaAccess();
 if (!currentUser) throw new Error("Nullverse session unavailable.");
 const viewer = await loadViewerContext(currentUser.id);
+await refreshGalleryViewerContext();
 await initNullverseShell({ page: "gallery", user: currentUser, profile: viewer.profile });
 
 if (viewer.profile?.username) {
@@ -36,6 +38,45 @@ const state = {
 
 const revealedWarningItemIds = new Set();
 let pendingWarningCard = null;
+
+async function refreshGalleryViewerContext() {
+    const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("id, username, display_name, avatar_url, role, account_status, content_experience, blocked_content_warnings, age_role")
+        .eq("id", currentUser.id)
+        .maybeSingle();
+
+    if (error) {
+        console.warn("Could not refresh Gallery safety preferences:", error.message);
+        return false;
+    }
+
+    if (!profile) return false;
+
+    viewer.profile = { ...(viewer.profile || {}), ...profile };
+    viewer.safety = {
+        ...(viewer.safety || {}),
+        contentExperience: profile.content_experience || "balanced",
+        blockedContentWarnings: profile.blocked_content_warnings || [],
+        ageRole: profile.age_role || "unknown"
+    };
+
+    document.body.dataset.contentExperience = normalizeViewerExperience(viewer.safety.contentExperience);
+    return true;
+}
+
+window.addEventListener("pageshow", async event => {
+    if (!event.persisted) return;
+
+    const before = JSON.stringify(viewer.safety || {});
+    const refreshed = await refreshGalleryViewerContext();
+    const after = JSON.stringify(viewer.safety || {});
+
+    if (refreshed && before !== after) {
+        revealedWarningItemIds.clear();
+        await resetGallery();
+    }
+});
 
 setupControls();
 setupWarningConfirmation();
