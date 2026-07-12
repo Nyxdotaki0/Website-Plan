@@ -49,7 +49,7 @@ export async function fetchGalleryFeed(mode = "trending", limit = 12, offset = 0
         p_age_rating: options.ageRating || null
     });
 
-    if (!rpc.error) return rpc.data || [];
+    if (!rpc.error) return hydrateGalleryPreviewMedia(rpc.data || []);
     console.warn("nv_gallery_feed unavailable, using direct query:", rpc.error.message);
 
     let query = supabase
@@ -68,7 +68,44 @@ export async function fetchGalleryFeed(mode = "trending", limit = 12, offset = 0
 
     const { data, error } = await query;
     if (error) throw error;
-    return attachProfiles(data || [], "owner_id");
+    return hydrateGalleryPreviewMedia(await attachProfiles(data || [], "owner_id"));
+}
+
+async function hydrateGalleryPreviewMedia(rows = []) {
+    const safeRows = Array.isArray(rows) ? rows : [];
+    const ids = [...new Set(safeRows.map(row => row?.id).filter(Boolean))];
+    if (!ids.length) return safeRows;
+
+    let result = await supabase
+        .from("creator_proof_gallery")
+        .select("id, image_url, image_placement, updated_at")
+        .in("id", ids);
+
+    // Older schemas may not have image_placement yet. Still refresh the image
+    // URL so a newly replaced preview never remains stale.
+    if (result.error) {
+        result = await supabase
+            .from("creator_proof_gallery")
+            .select("id, image_url, updated_at")
+            .in("id", ids);
+    }
+
+    if (result.error || !result.data?.length) {
+        if (result.error) console.warn("Could not refresh Gallery preview media:", result.error.message);
+        return safeRows;
+    }
+
+    const mediaById = new Map(result.data.map(row => [String(row.id), row]));
+    return safeRows.map(row => {
+        const latest = mediaById.get(String(row.id));
+        if (!latest) return row;
+        return {
+            ...row,
+            image_url: latest.image_url || row.image_url || "",
+            image_placement: latest.image_placement ?? row.image_placement ?? null,
+            updated_at: latest.updated_at || row.updated_at
+        };
+    });
 }
 
 export async function fetchDiscoverCreators(limit = 10) {
@@ -199,4 +236,3 @@ function readLocalRecentContent(limit) {
 function sanitizePostgrestTerm(value) {
     return String(value || "").replace(/[,%()]/g, " ").trim();
 }
-// JavaScript source code

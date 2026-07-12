@@ -15,7 +15,7 @@ import {
     renderSkeletonCards,
     timeAgo,
     escapeHtml
-} from "./nullverse-content-cards.js?v=3";
+} from "./nullverse-content-cards.js?v=6";
 import {
     attachProfiles,
     fetchDiscoverCreators,
@@ -25,7 +25,7 @@ import {
     fetchHomeFeed,
     fetchRecentContent,
     loadViewerContext
-} from "./nullverse-data.js";
+} from "./nullverse-data.js?v=6";
 
 const currentUser = await requireBetaAccess();
 if (!currentUser) throw new Error("Nullverse session unavailable.");

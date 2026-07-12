@@ -117,6 +117,43 @@ export function renderContentCard(item = {}, options = {}) {
     `;
 }
 
+function normalizeGalleryPreviewPlacement(value) {
+    let parsed = value;
+    if (typeof parsed === "string") {
+        try { parsed = JSON.parse(parsed); } catch { parsed = null; }
+    }
+
+    const source = parsed && typeof parsed === "object" ? parsed : {};
+    const number = (input, fallback) => {
+        const parsedNumber = Number(input);
+        return Number.isFinite(parsedNumber) ? parsedNumber : fallback;
+    };
+    const clampNumber = (input, min, max, fallback) =>
+        Math.min(max, Math.max(min, number(input, fallback)));
+
+    return {
+        x: clampNumber(source.x, -640, 640, 0),
+        y: clampNumber(source.y, -640, 640, 0),
+        scale: clampNumber(source.scale, .3, 3, 1),
+        rotation: clampNumber(source.rotation, -180, 180, 0),
+        fit: source.fit === "contain" ? "contain" : "cover"
+    };
+}
+
+function galleryPreviewPlacementStyle(value) {
+    const placement = normalizeGalleryPreviewPlacement(value);
+    const xPercent = Math.min(100, Math.max(-100, (placement.x / 640) * 100));
+    const yPercent = Math.min(100, Math.max(-100, (placement.y / 640) * 100));
+
+    return [
+        `--nv-gallery-x:${xPercent}%`,
+        `--nv-gallery-y:${yPercent}%`,
+        `--nv-gallery-scale:${placement.scale}`,
+        `--nv-gallery-rotation:${placement.rotation}deg`,
+        `--nv-gallery-fit:${placement.fit}`
+    ].join(";");
+}
+
 export function renderGalleryCard(item = {}, options = {}) {
     const safety = options.safety || { action: "show", warnings: [] };
     if (safety.action === "hide") return "";
@@ -155,7 +192,9 @@ export function renderGalleryCard(item = {}, options = {}) {
     return `
         <article class="nv-gallery-card${warningClass}${revealedClass}${lockedClass}" data-nv-warning-card data-gallery-item-id="${escapeHtml(item.id || "")}">
             <a class="nv-card-media" ${linkAttributes(primaryUrl)}>
-                <img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" loading="lazy" onerror="this.src='${DEFAULT_GALLERY}'">
+                <span class="nv-gallery-image-placement" style="${escapeHtml(galleryPreviewPlacementStyle(item.image_placement))}">
+                    <img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" loading="lazy" onerror="this.src='${DEFAULT_GALLERY}'">
+                </span>
                 <span class="nv-card-type nv-type-gallery">Gallery</span>
                 ${likeCount ? `<span class="nv-card-count">${formatCompactNumber(likeCount)} likes</span>` : ""}
                 ${useGenericWarning ? renderSafetyOverlay(safety) : ""}
