@@ -248,9 +248,9 @@
                 if (!group || !direction) return;
                 const groupedIds = new Set(galleryGroups(layout).flatMap(item => item.objectIds.map(String)));
                 const units = [
-                    ...galleryGroups(layout).map(item => ({ type: 'group', id: item.id, objects: galleryGroupObjects(item) })),
-                    ...(layout.objects || []).filter(object => !groupedIds.has(String(object.id))).map(object => ({ type: 'object', id: object.id, objects: [object] }))
-                ].filter(unit => unit.objects.length).sort((a, b) => Math.max(...b.objects.map(o => Number(o.z) || 0)) - Math.max(...a.objects.map(o => Number(o.z) || 0)));
+                    ...galleryGroups(layout).map(item => ({ type:'group', id:item.id, objects:galleryGroupObjects(item) })),
+                    ...(layout.objects || []).filter(object => !groupedIds.has(String(object.id))).map(object => ({ type:'object', id:object.id, objects:[object] }))
+                ].filter(unit => unit.objects.length).sort((a,b) => Math.max(...b.objects.map(o=>Number(o.z)||0)) - Math.max(...a.objects.map(o=>Number(o.z)||0)));
                 const index = units.findIndex(unit => unit.type === 'group' && String(unit.id) === String(groupId));
                 const target = direction > 0 ? index - 1 : index + 1;
                 if (index < 0 || target < 0 || target >= units.length) return;
@@ -258,7 +258,7 @@
                 [units[index], units[target]] = [units[target], units[index]];
                 let z = units.reduce((sum, unit) => sum + unit.objects.length, 0) + 20;
                 units.forEach(unit => {
-                    [...unit.objects].sort((a, b) => (Number(b.z) || 0) - (Number(a.z) || 0)).forEach(object => object.z = z--);
+                    [...unit.objects].sort((a,b)=>(Number(b.z)||0)-(Number(a.z)||0)).forEach(object => object.z = z--);
                 });
                 protectRequired(layout, false);
                 renderAll();
@@ -270,17 +270,17 @@
                 const allLocked = objects.length && objects.every(object => object.locked);
                 const anyVisible = objects.some(object => !object.hidden);
                 return `<div class="layer layer-group-parent ${selected ? 'active' : ''} ${allLocked ? 'locked' : ''}" data-layer-group-id="${escA(group.id)}">
-                        <button class="layer-group-caret" type="button" onclick="toggleGalleryLayerGroupExpanded('${escA(group.id)}')">${group.expanded === false ? '▶' : '▼'}</button>
-                        <button class="layer-select" type="button" onclick="selectGalleryLayerGroup('${escA(group.id)}',event.shiftKey||event.ctrlKey||event.metaKey)"><span>📁 ${esc(group.name || 'Group')}</span></button>
-                        <div class="layer-meta"><span class="layer-group-count">${objects.length}</span><button class="tiny" title="Move group up" onclick="moveGalleryLayerGroup('${escA(group.id)}',1)">↑</button><button class="tiny" title="Move group down" onclick="moveGalleryLayerGroup('${escA(group.id)}',-1)">↓</button><button class="tiny ${anyVisible ? 'on' : 'warn'}" title="${anyVisible ? 'Visible' : 'Hidden'}" onclick="setGalleryLayerGroupVisible('${escA(group.id)}',${anyVisible ? 'false' : 'true'})">${anyVisible ? '👁️' : '🙈'}</button><button class="tiny ${allLocked ? 'locked' : 'unlocked'}" title="${allLocked ? 'Locked' : 'Unlocked'}" onclick="setGalleryLayerGroupLocked('${escA(group.id)}',${allLocked ? 'false' : 'true'})">${allLocked ? '🔒' : '🔓'}</button></div>
-                    </div>`;
+                    <button class="layer-group-caret" type="button" onclick="toggleGalleryLayerGroupExpanded('${escA(group.id)}')">${group.expanded === false ? '▶' : '▼'}</button>
+                    <button class="layer-select" type="button" onclick="selectGalleryLayerGroup('${escA(group.id)}',event.shiftKey||event.ctrlKey||event.metaKey)"><span>📁 ${esc(group.name || 'Group')}</span></button>
+                    <div class="layer-meta"><span class="layer-group-count">${objects.length}</span><button class="tiny" title="Move group up" onclick="moveGalleryLayerGroup('${escA(group.id)}',1)">↑</button><button class="tiny" title="Move group down" onclick="moveGalleryLayerGroup('${escA(group.id)}',-1)">↓</button><button class="tiny ${anyVisible ? 'on' : 'warn'}" title="${anyVisible ? 'Visible' : 'Hidden'}" onclick="setGalleryLayerGroupVisible('${escA(group.id)}',${anyVisible ? 'false' : 'true'})">${anyVisible ? '👁️' : '🙈'}</button><button class="tiny ${allLocked ? 'locked' : 'unlocked'}" title="${allLocked ? 'Locked' : 'Unlocked'}" onclick="setGalleryLayerGroupLocked('${escA(group.id)}',${allLocked ? 'false' : 'true'})">${allLocked ? '🔒' : '🔓'}</button></div>
+                </div>`;
             }
             function renderGroupChildRow(object, group) {
-                const index = [...getLayout().objects].sort((a, b) => (b.z || 0) - (a.z || 0)).findIndex(item => item.id === object.id);
+                const index = [...getLayout().objects].sort((a,b)=>(b.z||0)-(a.z||0)).findIndex(item => item.id === object.id);
                 return `<div class="layer layer-group-child ${state.selected.includes(object.id) ? 'active' : ''} ${object.locked ? 'locked' : ''} ${object.hidden ? 'hidden-layer' : ''}" data-layer="${escA(object.id)}" data-layer-group-id="${escA(group.id)}">
-                        <div class="drag-handle">↳</div><button class="layer-select" type="button" onclick="selectGalleryLayerGroupChild('${escA(group.id)}','${escA(object.id)}',event)"><span>${esc(object.required ? 'Required · ' : '')}${esc(object.name || LABELS[object.type] || object.type)}</span></button>
-                        <div class="layer-meta"><button class="tiny" title="Move up" onclick="moveLayer('${escA(object.id)}',1)" ${index === 0 ? 'disabled' : ''}>↑</button><button class="tiny" title="Move down" onclick="moveLayer('${escA(object.id)}',-1)">↓</button><button class="tiny ${object.hidden ? 'warn' : 'on'}" onclick="toggleObjectVisibility('${escA(object.id)}')">${object.hidden ? '🙈' : '👁️'}</button><button class="tiny ${object.locked ? 'locked' : 'unlocked'}" onclick="toggleObjectLock('${escA(object.id)}')">${object.locked ? '🔒' : '🔓'}</button></div>
-                    </div>`;
+                    <div class="drag-handle">↳</div><button class="layer-select" type="button" onclick="selectGalleryLayerGroupChild('${escA(group.id)}','${escA(object.id)}',event)"><span>${esc(object.required ? 'Required · ' : '')}${esc(object.name || LABELS[object.type] || object.type)}</span></button>
+                    <div class="layer-meta"><button class="tiny" title="Move up" onclick="moveLayer('${escA(object.id)}',1)" ${index===0?'disabled':''}>↑</button><button class="tiny" title="Move down" onclick="moveLayer('${escA(object.id)}',-1)">↓</button><button class="tiny ${object.hidden?'warn':'on'}" onclick="toggleObjectVisibility('${escA(object.id)}')">${object.hidden?'🙈':'👁️'}</button><button class="tiny ${object.locked?'locked':'unlocked'}" onclick="toggleObjectLock('${escA(object.id)}')">${object.locked?'🔒':'🔓'}</button></div>
+                </div>`;
             }
 
             renderLayers = function galleryGroupRenderLayers() {
@@ -290,22 +290,22 @@
                 if (!groups.length) return rawRenderLayersForGroups();
                 const groupedIds = new Set(groups.flatMap(group => group.objectIds.map(String)));
                 const units = [
-                    ...groups.map(group => ({ type: 'group', group, z: Math.max(...galleryGroupObjects(group).map(o => Number(o.z) || 0), 0) })),
-                    ...(layout.objects || []).filter(object => !groupedIds.has(String(object.id))).map(object => ({ type: 'object', object, z: Number(object.z) || 0 }))
-                ].sort((a, b) => b.z - a.z);
-                const html = [];
+                    ...groups.map(group => ({ type:'group', group, z:Math.max(...galleryGroupObjects(group).map(o=>Number(o.z)||0),0) })),
+                    ...(layout.objects || []).filter(object => !groupedIds.has(String(object.id))).map(object => ({ type:'object', object, z:Number(object.z)||0 }))
+                ].sort((a,b)=>b.z-a.z);
+                const html=[];
                 units.forEach(unit => {
                     if (unit.type === 'object') {
-                        const object = unit.object;
-                        html.push(`<div class="layer ${state.selected.includes(object.id) ? 'active' : ''} ${object.locked ? 'locked' : ''} ${object.hidden ? 'hidden-layer' : ''}" data-layer="${escA(object.id)}" draggable="true"><div class="drag-handle">⋮⋮</div><button class="layer-select" onclick="selectObject('${escA(object.id)}',event)"><span>${esc(object.required ? 'Required · ' : '')}${esc(object.name || LABELS[object.type] || object.type)}</span></button><div class="layer-meta"><button class="tiny" onclick="moveLayer('${escA(object.id)}',1)">↑</button><button class="tiny" onclick="moveLayer('${escA(object.id)}',-1)">↓</button><button class="tiny ${object.hidden ? 'warn' : 'on'}" onclick="toggleObjectVisibility('${escA(object.id)}')">${object.hidden ? '🙈' : '👁️'}</button><button class="tiny ${object.locked ? 'locked' : 'unlocked'}" onclick="toggleObjectLock('${escA(object.id)}')">${object.locked ? '🔒' : '🔓'}</button></div></div>`);
+                        const object=unit.object;
+                        html.push(`<div class="layer ${state.selected.includes(object.id)?'active':''} ${object.locked?'locked':''} ${object.hidden?'hidden-layer':''}" data-layer="${escA(object.id)}" draggable="true"><div class="drag-handle">⋮⋮</div><button class="layer-select" onclick="selectObject('${escA(object.id)}',event)"><span>${esc(object.required?'Required · ':'')}${esc(object.name||LABELS[object.type]||object.type)}</span></button><div class="layer-meta"><button class="tiny" onclick="moveLayer('${escA(object.id)}',1)">↑</button><button class="tiny" onclick="moveLayer('${escA(object.id)}',-1)">↓</button><button class="tiny ${object.hidden?'warn':'on'}" onclick="toggleObjectVisibility('${escA(object.id)}')">${object.hidden?'🙈':'👁️'}</button><button class="tiny ${object.locked?'locked':'unlocked'}" onclick="toggleObjectLock('${escA(object.id)}')">${object.locked?'🔒':'🔓'}</button></div></div>`);
                     } else {
-                        const group = unit.group;
+                        const group=unit.group;
                         html.push(renderGroupParentRow(group));
-                        if (group.expanded !== false) galleryGroupObjects(group).sort((a, b) => (b.z || 0) - (a.z || 0)).forEach(object => html.push(renderGroupChildRow(object, group)));
+                        if (group.expanded !== false) galleryGroupObjects(group).sort((a,b)=>(b.z||0)-(a.z||0)).forEach(object => html.push(renderGroupChildRow(object,group)));
                     }
                 });
                 dom.layers.innerHTML = html.join('') || `<p class="status">No layers yet.</p>`;
-                try { setupLayerDnd(); } catch { }
+                try { setupLayerDnd(); } catch {}
             };
 
             function groupInspectorMarkup() {
@@ -315,14 +315,14 @@
                     const children = galleryGroupObjects(common);
                     const allLocked = children.every(object => object.locked);
                     const anyVisible = children.some(object => !object.hidden);
-                    return `<div class="group"><h4>Parent Layer Group</h4><p class="gallery-layer-group-note">These ${children.length} layers are permanently organized under one parent layer. Moving the blue selection box still moves them together.</p><label>Group Name</label><input value="${escA(common.name || 'Group')}" onchange="renameGalleryLayerGroup('${escA(common.id)}',this.value)"><div class="gallery-layer-group-actions"><button onclick="setGalleryLayerGroupLocked('${escA(common.id)}',${allLocked ? 'false' : 'true'})">${allLocked ? '🔓 Unlock Group' : '🔒 Lock Group'}</button><button onclick="setGalleryLayerGroupVisible('${escA(common.id)}',${anyVisible ? 'false' : 'true'})">${anyVisible ? '🙈 Hide Group' : '👁️ Show Group'}</button><button onclick="moveGalleryLayerGroup('${escA(common.id)}',1)">Move Forward</button><button onclick="moveGalleryLayerGroup('${escA(common.id)}',-1)">Move Backward</button><button class="full" onclick="promptRenameGalleryLayerGroup('${escA(common.id)}')">Rename Parent Layer</button><button class="full danger-button" onclick="ungroupGalleryLayerGroup('${escA(common.id)}')">Ungroup Layers</button></div><div class="gallery-layer-group-child-list">${children.map(object => `<button class="gallery-layer-group-child-button" onclick="selectGalleryLayerGroupChild('${escA(common.id)}','${escA(object.id)}',event)">↳ ${esc(object.name || LABELS[object.type] || object.type)}</button>`).join('')}</div></div>`;
+                    return `<div class="group"><h4>Parent Layer Group</h4><p class="gallery-layer-group-note">These ${children.length} layers are permanently organized under one parent layer. Moving the blue selection box still moves them together.</p><label>Group Name</label><input value="${escA(common.name||'Group')}" onchange="renameGalleryLayerGroup('${escA(common.id)}',this.value)"><div class="gallery-layer-group-actions"><button onclick="setGalleryLayerGroupLocked('${escA(common.id)}',${allLocked?'false':'true'})">${allLocked?'🔓 Unlock Group':'🔒 Lock Group'}</button><button onclick="setGalleryLayerGroupVisible('${escA(common.id)}',${anyVisible?'false':'true'})">${anyVisible?'🙈 Hide Group':'👁️ Show Group'}</button><button onclick="moveGalleryLayerGroup('${escA(common.id)}',1)">Move Forward</button><button onclick="moveGalleryLayerGroup('${escA(common.id)}',-1)">Move Backward</button><button class="full" onclick="promptRenameGalleryLayerGroup('${escA(common.id)}')">Rename Parent Layer</button><button class="full danger-button" onclick="ungroupGalleryLayerGroup('${escA(common.id)}')">Ungroup Layers</button></div><div class="gallery-layer-group-child-list">${children.map(object=>`<button class="gallery-layer-group-child-button" onclick="selectGalleryLayerGroupChild('${escA(common.id)}','${escA(object.id)}',event)">↳ ${esc(object.name||LABELS[object.type]||object.type)}</button>`).join('')}</div></div>`;
                 }
                 if (selected.length > 1) {
                     return `<div class="group"><h4>Persistent Group</h4><p class="gallery-layer-group-note">Create a parent layer from this multi-selection. The layers stay grouped after saving, reloading, switching layouts, and publishing.</p><button style="width:100%" onclick="createGalleryLayerGroup()">Create Parent Group</button></div>`;
                 }
                 if (selected.length === 1) {
                     const group = galleryGroupForObject(selected[0]);
-                    if (group) return `<div class="group"><h4>Grouped Layer</h4><p class="gallery-layer-group-note">This layer belongs to <strong>${esc(group.name || 'Group')}</strong>.</p><div class="gallery-layer-group-actions"><button class="full" onclick="selectGalleryLayerGroup('${escA(group.id)}')">Select Parent Group</button><button class="full danger-button" onclick="ungroupGalleryLayerGroup('${escA(group.id)}')">Ungroup All Children</button></div></div>`;
+                    if (group) return `<div class="group"><h4>Grouped Layer</h4><p class="gallery-layer-group-note">This layer belongs to <strong>${esc(group.name||'Group')}</strong>.</p><div class="gallery-layer-group-actions"><button class="full" onclick="selectGalleryLayerGroup('${escA(group.id)}')">Select Parent Group</button><button class="full danger-button" onclick="ungroupGalleryLayerGroup('${escA(group.id)}')">Ungroup All Children</button></div></div>`;
                 }
                 return '';
             }
@@ -352,10 +352,10 @@
                 if (!sourceGroup) return;
                 const copies = (getLayout().objects || []).filter(object => !beforeIds.has(object.id) && state.selected.includes(object.id));
                 if (copies.length < 2) return;
-                const group = { id: id(), name: `${sourceGroup.name || 'Group'} Copy`, objectIds: copies.map(object => object.id), expanded: true, locked: false, visible: true };
+                const group = { id:id(), name:`${sourceGroup.name || 'Group'} Copy`, objectIds:copies.map(object=>object.id), expanded:true, locked:false, visible:true };
                 getLayout().groups = galleryGroups(getLayout());
                 getLayout().groups.push(group);
-                copies.forEach(object => { object.groupId = group.id; object.layerGroupId = group.id; });
+                copies.forEach(object => { object.groupId=group.id; object.layerGroupId=group.id; });
                 renderAll();
             };
 
@@ -379,7 +379,7 @@
             });
 
             try {
-                ['desktop', 'mobile'].forEach(mode => {
+                ['desktop','mobile'].forEach(mode => {
                     const layout = state.layouts?.[mode];
                     if (layout) layout.groups = normalizeGalleryLayerGroups(layout.groups || [], layout.objects || []);
                 });
@@ -4003,7 +4003,7 @@
                 opacity: .35;
                 cursor: not-allowed !important;
             }
-
+    
 
         /* ============================================================
            GALLERY STUDIO PERSISTENT LAYER GROUPS
@@ -4014,108 +4014,86 @@
             background: linear-gradient(180deg,rgba(120,190,255,.13),rgba(120,190,255,.045)) !important;
             color: #eaf3ff !important;
         }
-
-            .layer.layer-group-parent.active {
-                border-color: rgba(150,215,255,.62) !important;
-                background: linear-gradient(180deg,rgba(120,190,255,.20),rgba(120,190,255,.07)) !important;
-                box-shadow: 0 0 18px rgba(120,190,255,.12) !important;
-            }
-
-            .layer.layer-group-parent.locked {
-                border-color: rgba(255,214,102,.52) !important;
-                background: linear-gradient(180deg,rgba(255,214,102,.15),rgba(255,214,102,.055)) !important;
-                color: #ffe7aa !important;
-            }
-
+        .layer.layer-group-parent.active {
+            border-color: rgba(150,215,255,.62) !important;
+            background: linear-gradient(180deg,rgba(120,190,255,.20),rgba(120,190,255,.07)) !important;
+            box-shadow: 0 0 18px rgba(120,190,255,.12) !important;
+        }
+        .layer.layer-group-parent.locked {
+            border-color: rgba(255,214,102,.52) !important;
+            background: linear-gradient(180deg,rgba(255,214,102,.15),rgba(255,214,102,.055)) !important;
+            color: #ffe7aa !important;
+        }
         .layer.layer-group-child {
             width: calc(100% - 22px) !important;
             margin-left: 22px !important;
             border-left-color: rgba(120,190,255,.32) !important;
             background: rgba(255,255,255,.025) !important;
         }
-
-            .layer.layer-group-child::before {
-                content: "";
-                width: 10px;
-                height: 1px;
-                background: rgba(120,190,255,.34);
-                position: absolute;
-                left: -14px;
-                top: 50%;
-                pointer-events: none;
-            }
-
+        .layer.layer-group-child::before {
+            content:"";
+            width:10px;
+            height:1px;
+            background:rgba(120,190,255,.34);
+            position:absolute;
+            left:-14px;
+            top:50%;
+            pointer-events:none;
+        }
         .layer-group-caret {
-            min-height: 26px !important;
-            width: 28px !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            border-radius: 9px !important;
-            border: 1px solid rgba(120,190,255,.18) !important;
-            background: rgba(120,190,255,.075) !important;
-            color: #dcecff !important;
-            box-shadow: none !important;
-            font-size: .74rem !important;
-            font-weight: 900 !important;
-            line-height: 1 !important;
-            transform: none !important;
+            min-height:26px !important;
+            width:28px !important;
+            padding:0 !important;
+            margin:0 !important;
+            border-radius:9px !important;
+            border:1px solid rgba(120,190,255,.18) !important;
+            background:rgba(120,190,255,.075) !important;
+            color:#dcecff !important;
+            box-shadow:none !important;
+            font-size:.74rem !important;
+            font-weight:900 !important;
+            line-height:1 !important;
+            transform:none !important;
         }
-
         .layer-group-count {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 22px;
-            height: 22px;
-            padding: 0 7px;
-            border-radius: 999px;
-            border: 1px solid rgba(120,190,255,.18);
-            background: rgba(120,190,255,.075);
-            color: #dcecff;
-            font-size: .72rem;
-            font-weight: 850;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            min-width:22px;
+            height:22px;
+            padding:0 7px;
+            border-radius:999px;
+            border:1px solid rgba(120,190,255,.18);
+            background:rgba(120,190,255,.075);
+            color:#dcecff;
+            font-size:.72rem;
+            font-weight:850;
         }
-
         .gallery-layer-group-actions {
-            display: grid;
-            grid-template-columns: repeat(2,minmax(0,1fr));
-            gap: 8px;
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:8px;
         }
-
-            .gallery-layer-group-actions .full {
-                grid-column: 1/-1;
-            }
-
+        .gallery-layer-group-actions .full { grid-column:1/-1; }
         .gallery-layer-group-note {
-            margin: 0 0 10px;
-            color: var(--text-muted,rgba(255,255,255,.54));
-            line-height: 1.45;
-            font-size: .86rem;
+            margin:0 0 10px;
+            color:var(--text-muted,rgba(255,255,255,.54));
+            line-height:1.45;
+            font-size:.86rem;
         }
-
-        .gallery-layer-group-child-list {
-            display: grid;
-            gap: 7px;
-            margin-top: 10px;
-        }
-
+        .gallery-layer-group-child-list { display:grid; gap:7px; margin-top:10px; }
         .gallery-layer-group-child-button {
-            width: 100%;
-            justify-content: flex-start;
-            min-height: 36px;
-            background: rgba(255,255,255,.035);
-            box-shadow: none;
+            width:100%;
+            justify-content:flex-start;
+            min-height:36px;
+            background:rgba(255,255,255,.035);
+            box-shadow:none;
         }
-
         @media(max-width:620px) and (any-pointer:coarse) {
-            .gallery-layer-group-actions {
-                grid-template-columns: 1fr;
-            }
-
-                .gallery-layer-group-actions .full {
-                    grid-column: auto;
-                }
+            .gallery-layer-group-actions { grid-template-columns:1fr; }
+            .gallery-layer-group-actions .full { grid-column:auto; }
         }
+
     </style>
 </head>
 <body>
@@ -5021,56 +4999,56 @@
                 : `<p class="credit-security-note">Search a Nullverse username, then press Add Creator. This is the only credit type that becomes a clickable profile link.</p>`;
 
             return `<div class="group credit-system-overhaul" data-credit-inspector="${idv}">
-                                                                                                    <h4>Credit Pill System</h4>
-                                                                                                    <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
-                                                                                                    <div class="credit-live-preview">
-                                                                                                        <span class="credit-live-label">Live credit pill</span>
-                                                                                                        <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
-                                                                                                        <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
-                                                                                                    </div>
-                                                                                                    <label>Credit Type</label>
-                                                                                                    <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
+                                                                                                <h4>Credit Pill System</h4>
+                                                                                                <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
+                                                                                                <div class="credit-live-preview">
+                                                                                                    <span class="credit-live-label">Live credit pill</span>
+                                                                                                    <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
+                                                                                                    <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
+                                                                                                </div>
+                                                                                                <label>Credit Type</label>
+                                                                                                <select id="credit-type-${idv}" onchange="updateCreditType('${idv}', this.value)">${creditTypeOptions(type)}</select>
 
-                                                                                                    <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
-                                                                                                        <label>Custom Credit Text</label>
-                                                                                                        <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
-                                                                                                    </div>
+                                                                                                <div id="credit-custom-${idv}" class="credit-mode-panel" style="display:${show("custom")};">
+                                                                                                    <label>Custom Credit Text</label>
+                                                                                                    <input id="credit-customText-${idv}" value="${escA(c.customText || "")}" placeholder="Example: Character owned by Nyx" oninput="updateCreditPillField('${idv}','customText',this.value,{live:true})" onchange="updateCreditPillField('${idv}','customText',this.value,{commit:true})">
+                                                                                                </div>
 
-                                                                                                    <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
-                                                                                                        <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
-                                                                                                    </div>
+                                                                                                <div id="credit-own-${idv}" class="credit-mode-panel" style="display:${show("own_work")};">
+                                                                                                    <p class="credit-auto-preview">This automatically displays <strong>Artwork by you</strong>.</p>
+                                                                                                </div>
 
-                                                                                                    <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
-                                                                                                        <label>Nullverse Username</label>
-                                                                                                        <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
-                                                                                                        <div style="margin-top:-6px;margin-bottom:12px;">
-                                                                                                            <label>Search Nullverse Creator</label>
-                                                                                                            <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
-                                                                                                        </div>
-                                                                                                        ${selectedCreator}
-                                                                                                        <div id="credit-results-${idv}" class="credit-search-results"></div>
+                                                                                                <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
+                                                                                                    <label>Nullverse Username</label>
+                                                                                                    <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
+                                                                                                    <div style="margin-top:-6px;margin-bottom:12px;">
+                                                                                                        <label>Search Nullverse Creator</label>
+                                                                                                        <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
                                                                                                     </div>
+                                                                                                    ${selectedCreator}
+                                                                                                    <div id="credit-results-${idv}" class="credit-search-results"></div>
+                                                                                                </div>
 
-                                                                                                    <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
-                                                                                                        <label>Artist / Creator / Source Name</label>
-                                                                                                        <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
-                                                                                                    </div>
+                                                                                                <div id="credit-name-wrap-${idv}" class="credit-mode-panel" style="display:${showName};">
+                                                                                                    <label>Artist / Creator / Source Name</label>
+                                                                                                    <input id="credit-name-${idv}" value="${escA(c.name || "")}" placeholder="Name, username, or source" oninput="updateCreditPillField('${idv}','name',this.value,{live:true})" onchange="updateCreditPillField('${idv}','name',this.value,{commit:true})">
+                                                                                                </div>
 
-                                                                                                    <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
-                                                                                                        <label>Credit Link / Source Text</label>
-                                                                                                        <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
-                                                                                                        <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
-                                                                                                    </div>
+                                                                                                <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
+                                                                                                    <label>Credit Link / Source Text</label>
+                                                                                                    <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
+                                                                                                    <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
+                                                                                                </div>
 
-                                                                                                    <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
-                                                                                                        <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
-                                                                                                        <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
-                                                                                                    </div>
+                                                                                                <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
+                                                                                                    <label>${type === "custom" ? "Hover Note" : "Permission / Source Note"}</label>
+                                                                                                    <textarea id="credit-note-${idv}" rows="3" placeholder="Used with permission, public domain, my own artwork, etc." oninput="updateCreditPillField('${idv}','note',this.value,{live:true})" onchange="updateCreditPillField('${idv}','note',this.value,{commit:true})">${escT(c.note || "")}</textarea>
+                                                                                                </div>
 
-                                                                                                    <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
-                                                                                                        <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
-                                                                                                    </div>
-                                                                                                </div>`;
+                                                                                                <div id="credit-noai-wrap-${idv}" class="credit-mode-panel" style="display:${showNoAi};">
+                                                                                                    <label style="display:flex;align-items:center;gap:10px;"><input id="credit-noAi-${idv}" type="checkbox" style="width:auto;" ${c.noAi ? "checked" : ""} onchange="updateCreditPillField('${idv}','noAi',this.checked,{commit:true})">I confirm this credit is not for AI-generated artwork</label>
+                                                                                                </div>
+                                                                                            </div>`;
         }
 
         function creditTypeOptions(active) {
@@ -7528,15 +7506,15 @@
                                 : "Hold anywhere on this row, then drag to reorder.";
 
                     return `<div class="layer ${state.selected.includes(layer.id) ? "active" : ""} ${layer.locked ? "locked layer-locked-reorder" : ""} ${layer.hidden ? "hidden-layer" : ""} ${isPinned ? "layer-pinned" : ""}" data-layer="${idv}" data-layer-reorder-row="true" title="${escA(dragTitle)}">
-                                            <div class="drag-handle" aria-hidden="true">⋮⋮</div>
-                                            <button class="layer-select" type="button" onclick="selectObject('${idv}',event)"><span>${esc(layer.required ? "Required · " : "")}${esc(galleryStudioLayerDisplayName(layer))}</span></button>
-                                            <div class="layer-meta">
-                                                <button class="tiny" type="button" title="Move forward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',1)" ${canUp ? "" : "disabled"}>↑</button>
-                                                <button class="tiny" type="button" title="Move backward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',-1)" ${canDown ? "" : "disabled"}>↓</button>
-                                                <button class="tiny ${layer.hidden ? "warn" : "on"}" type="button" title="${layer.hidden ? "Hidden" : "Visible"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectVisibility('${idv}')">${layer.hidden ? "🙈" : "👁️"}</button>
-                                                <button class="tiny ${layer.locked ? "locked" : "unlocked"}" type="button" title="${layer.locked ? "Locked" : "Unlocked"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectLock('${idv}')">${layer.locked ? "🔒" : "🔓"}</button>
-                                            </div>
-                                        </div>`;
+                                        <div class="drag-handle" aria-hidden="true">⋮⋮</div>
+                                        <button class="layer-select" type="button" onclick="selectObject('${idv}',event)"><span>${esc(layer.required ? "Required · " : "")}${esc(galleryStudioLayerDisplayName(layer))}</span></button>
+                                        <div class="layer-meta">
+                                            <button class="tiny" type="button" title="Move forward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',1)" ${canUp ? "" : "disabled"}>↑</button>
+                                            <button class="tiny" type="button" title="Move backward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',-1)" ${canDown ? "" : "disabled"}>↓</button>
+                                            <button class="tiny ${layer.hidden ? "warn" : "on"}" type="button" title="${layer.hidden ? "Hidden" : "Visible"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectVisibility('${idv}')">${layer.hidden ? "🙈" : "👁️"}</button>
+                                            <button class="tiny ${layer.locked ? "locked" : "unlocked"}" type="button" title="${layer.locked ? "Locked" : "Unlocked"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectLock('${idv}')">${layer.locked ? "🔒" : "🔓"}</button>
+                                        </div>
+                                    </div>`;
                 }).join("") || `<p class="status">No layers yet.</p>`;
 
                 if (stack.length) {
@@ -8005,15 +7983,15 @@
                     : "Hold anywhere on this row, then drag it between two layers.";
 
                 return `<div class="layer ${state.selected.includes(layer.id) ? "active" : ""} ${layer.locked ? "locked" : ""} ${layer.hidden ? "hidden-layer" : ""} ${isPinned ? "layer-pinned" : ""}" data-layer="${idv}" data-layer-reorder-row="true" draggable="false" title="${escA(title)}">
-                                    <div class="drag-handle" aria-hidden="true">⋮⋮</div>
-                                    <button class="layer-select" type="button" onclick="event.preventDefault();event.stopPropagation();selectObject('${idv}',event)"><span>${esc(layer.required ? "Required · " : "")}${esc(galleryStudioLayerDisplayName(layer))}</span></button>
-                                    <div class="layer-meta">
-                                        <button class="tiny" type="button" title="Move forward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',1)" ${canUp ? "" : "disabled"}>↑</button>
-                                        <button class="tiny" type="button" title="Move backward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',-1)" ${canDown ? "" : "disabled"}>↓</button>
-                                        <button class="tiny ${layer.hidden ? "warn" : "on"}" type="button" title="${layer.hidden ? "Hidden" : "Visible"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectVisibility('${idv}')">${layer.hidden ? "🙈" : "👁️"}</button>
-                                        <button class="tiny ${layer.locked ? "locked" : "unlocked"}" type="button" title="${layer.locked ? "Locked" : "Unlocked"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectLock('${idv}')">${layer.locked ? "🔒" : "🔓"}</button>
-                                    </div>
-                                </div>`;
+                                <div class="drag-handle" aria-hidden="true">⋮⋮</div>
+                                <button class="layer-select" type="button" onclick="event.preventDefault();event.stopPropagation();selectObject('${idv}',event)"><span>${esc(layer.required ? "Required · " : "")}${esc(galleryStudioLayerDisplayName(layer))}</span></button>
+                                <div class="layer-meta">
+                                    <button class="tiny" type="button" title="Move forward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',1)" ${canUp ? "" : "disabled"}>↑</button>
+                                    <button class="tiny" type="button" title="Move backward" onclick="event.preventDefault();event.stopPropagation();moveLayer('${idv}',-1)" ${canDown ? "" : "disabled"}>↓</button>
+                                    <button class="tiny ${layer.hidden ? "warn" : "on"}" type="button" title="${layer.hidden ? "Hidden" : "Visible"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectVisibility('${idv}')">${layer.hidden ? "🙈" : "👁️"}</button>
+                                    <button class="tiny ${layer.locked ? "locked" : "unlocked"}" type="button" title="${layer.locked ? "Locked" : "Unlocked"}" onclick="event.preventDefault();event.stopPropagation();toggleObjectLock('${idv}')">${layer.locked ? "🔒" : "🔓"}</button>
+                                </div>
+                            </div>`;
             }
 
             renderLayers = function galleryStudioRenderLayersAuthoritative() {
