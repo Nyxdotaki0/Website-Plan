@@ -6,6 +6,7 @@ import {
     getEditorContentUrl,
     getPublicContentUrl,
     getSafetyDecision,
+    normalizeWarningList,
     renderActivityCard,
     renderContentCard,
     renderEmptyCard,
@@ -14,7 +15,7 @@ import {
     renderSkeletonCards,
     timeAgo,
     escapeHtml
-} from "./nullverse-content-cards.js";
+} from "./nullverse-content-cards.js?v=3";
 import {
     attachProfiles,
     fetchDiscoverCreators,
@@ -41,9 +42,13 @@ const state = {
     feedLoading: false
 };
 
+const revealedGalleryWarningItemIds = new Set();
+let pendingGalleryWarningCard = null;
+
 setupWelcome();
 setupFeedTabs();
 setupRandomDiscovery();
+setupGalleryWarningConfirmation();
 paintInitialSkeletons();
 
 await Promise.all([
@@ -249,16 +254,148 @@ async function loadMoreFeed(replace = false) {
 async function loadGalleryShelf() {
     const container = document.getElementById("home-gallery-shelf");
     try {
-        const items = await fetchGalleryFeed("trending", 8, 0);
+        const items = (await fetchGalleryFeed("trending", 8, 0))
+            .filter(item => !viewer.blockedUserIds.includes(item.owner_id));
+
         const html = items
-            .map(item => renderGalleryCard(item, { safety: getSafetyDecision(item, viewer.safety) }))
+            .map(item => renderGalleryCard(item, {
+                safety: getGallerySafetyDecision(item),
+                galleryDestination: "creator",
+                showGalleryActions: true,
+                requireWarningConfirmation: true,
+                warningRevealed: revealedGalleryWarningItemIds.has(String(item.id || "")),
+                viewerRole: viewer.profile?.role_name || viewer.profile?.role || "creator",
+                viewerStatus: viewer.profile?.account_status || "active"
+            }))
             .filter(Boolean)
             .join("");
+
         container.innerHTML = html || renderEmptyCard("No public gallery items yet", "Artwork will appear here as creators publish it.");
         bindCardInteractions(container);
+        bindGalleryWarningGates(container);
     } catch (error) {
         container.innerHTML = renderEmptyCard("Gallery unavailable", error.message || "Refresh and try again.");
     }
+}
+
+function getGallerySafetyDecision(item = {}) {
+    const warnings = normalizeWarningList(item.content_warnings);
+    const blockedWarnings = new Set(normalizeWarningList(viewer.safety?.blockedContentWarnings));
+    const rating = String(item.content_rating || item.age_rating || "general").trim().toLowerCase();
+    const censorMode = String(item.censor_mode || "none").trim().toLowerCase();
+    const ageRole = String(viewer.safety?.ageRole || "unknown").trim().toLowerCase();
+    const experience = String(viewer.safety?.contentExperience || "balanced").trim().toLowerCase();
+    const isMature = ["mature", "adult", "18+", "18_plus"].includes(rating);
+    const explicitlyBlocked = warnings.some(warning => blockedWarnings.has(warning));
+
+    // Match the Global Gallery exactly: blocked tags and age restrictions remain
+    // hard blocks, while every warning-bearing artwork requires confirmation.
+    if (explicitlyBlocked) return { action: "hide", warnings, rating, reason: "blocked_preference" };
+    if (["minor", "blocked"].includes(ageRole) && isMature) return { action: "hide", warnings, rating, reason: "age_block" };
+    if (isMature && (ageRole !== "adult" || experience !== "adult")) {
+        return { action: "hide", warnings, rating, reason: "adult_mode_required" };
+    }
+
+    if (warnings.length || censorMode === "blur" || censorMode === "hide") {
+        return { action: "warn", warnings, rating, reason: "confirmation_required" };
+    }
+
+    return { action: "show", warnings, rating, reason: "clear" };
+}
+
+function setupGalleryWarningConfirmation() {
+    const modal = document.getElementById("home-gallery-warning-modal");
+    const closeButton = document.getElementById("home-gallery-warning-close");
+    const cancelButton = document.getElementById("home-gallery-warning-cancel");
+    const confirmButton = document.getElementById("home-gallery-warning-confirm");
+
+    if (!modal || !closeButton || !cancelButton || !confirmButton) return;
+
+    closeButton.addEventListener("click", closeGalleryWarningModal);
+    cancelButton.addEventListener("click", closeGalleryWarningModal);
+    confirmButton.addEventListener("click", revealPendingGalleryWarning);
+    modal.addEventListener("click", event => {
+        if (event.target === modal) closeGalleryWarningModal();
+    });
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && modal.classList.contains("open")) {
+            closeGalleryWarningModal();
+        }
+    });
+}
+
+function bindGalleryWarningGates(root = document) {
+    root.querySelectorAll("[data-nv-gallery-warning-gate]").forEach(button => {
+        if (button.dataset.bound === "true") return;
+        button.dataset.bound = "true";
+        button.addEventListener("click", event => {
+            event.preventDefault();
+            event.stopPropagation();
+            openGalleryWarningModal(button);
+        });
+    });
+}
+
+function openGalleryWarningModal(button) {
+    const modal = document.getElementById("home-gallery-warning-modal");
+    const title = document.getElementById("home-gallery-warning-title");
+    const summary = document.getElementById("home-gallery-warning-summary");
+    const tags = document.getElementById("home-gallery-warning-tags");
+    const confirmButton = document.getElementById("home-gallery-warning-confirm");
+    if (!modal || !title || !summary || !tags || !confirmButton) return;
+
+    pendingGalleryWarningCard = button.closest(".nv-gallery-card");
+    const itemTitle = button.dataset.galleryItemTitle || "Gallery item";
+    const warningSummary = button.dataset.galleryWarningSummary || "Sensitive content";
+    const warningTags = String(button.dataset.galleryWarningTags || warningSummary)
+        .split("|")
+        .map(value => value.trim())
+        .filter(Boolean);
+
+    title.textContent = `Content Warning: ${itemTitle}`;
+    summary.textContent = `${warningSummary}. Confirm that you want to reveal this preview.`;
+    tags.replaceChildren(...warningTags.map(label => {
+        const chip = document.createElement("span");
+        chip.className = "gallery-warning-tag";
+        chip.textContent = label;
+        return chip;
+    }));
+
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("gallery-warning-modal-open");
+    window.setTimeout(() => confirmButton.focus(), 0);
+}
+
+function closeGalleryWarningModal() {
+    const modal = document.getElementById("home-gallery-warning-modal");
+    const gate = pendingGalleryWarningCard?.querySelector("[data-nv-gallery-warning-gate]");
+    modal?.classList.remove("open");
+    modal?.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("gallery-warning-modal-open");
+    pendingGalleryWarningCard = null;
+    gate?.focus();
+}
+
+function revealPendingGalleryWarning() {
+    const card = pendingGalleryWarningCard;
+    if (!card) return closeGalleryWarningModal();
+
+    const itemId = String(card.dataset.galleryItemId || "");
+    if (itemId) revealedGalleryWarningItemIds.add(itemId);
+
+    card.classList.remove("warning-gated", "warning-hidden");
+    card.classList.add("warning-revealed");
+    card.querySelectorAll("[data-nv-protected-href]").forEach(link => {
+        link.setAttribute("href", link.dataset.nvProtectedHref || "#");
+        link.removeAttribute("data-nv-protected-href");
+        link.removeAttribute("aria-disabled");
+        link.removeAttribute("tabindex");
+    });
+
+    const firstLink = card.querySelector(".nv-card-media");
+    closeGalleryWarningModal();
+    window.setTimeout(() => firstLink?.focus(), 0);
 }
 
 async function loadTypeShelf(type, containerId) {
@@ -324,4 +461,3 @@ function formatFeatureLabel(value) {
 function escapeCssUrl(value) {
     return String(value || "").replace(/["'\\()]/g, "\\$&");
 }
-// JavaScript source code
