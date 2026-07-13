@@ -145,11 +145,20 @@ function renderProjectWithManagement(item) {
         ? (item.image_url || "https://placehold.co/900x700/16161d/ffffff?text=Gallery")
         : (item.cover_image_url || "https://placehold.co/900x700/16161d/ffffff?text=Nullverse");
     const title = item.title || "Untitled Project";
+    const creatorGalleryUrl = profile?.username
+        ? `creator-gallery.html?user=${encodeURIComponent(profile.username)}`
+        : "creator-gallery.html";
+
+    /*
+        Dashboard Gallery cards represent the creator's Gallery as a whole.
+        The retired gallery-item-studio.html route no longer exists, so every
+        Gallery card action now returns to the owner's Creator Gallery.
+    */
     const editorUrl = isGallery
-        ? `gallery-item-studio.html?item=${encodeURIComponent(item.id || "")}`
+        ? creatorGalleryUrl
         : dashboardEditorUrl(item);
     const publicUrl = isGallery
-        ? `creator-gallery-item.html?id=${encodeURIComponent(item.id || "")}`
+        ? creatorGalleryUrl
         : dashboardPublicUrl(item);
     const published = isGallery ? item.visibility === "public" : item.visibility === "published";
     const hidden = isHidden(item);
