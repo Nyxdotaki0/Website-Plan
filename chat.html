@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <title>Chat - Nullverse</title>
     <link rel="icon" type="image/png" href="favicon.png">
 
@@ -13,7 +13,7 @@
 
     <link rel="stylesheet" href="theme.css?v=25">
     <link rel="stylesheet" href="nullverse-shell.css?v=5">
-    <link rel="stylesheet" href="chat.css?v=4">
+    <link rel="stylesheet" href="chat.css?v=5">
 </head>
 
 <body data-page="messages" data-nv-beta-only-user="true" data-nv-active-only="true">
@@ -174,7 +174,9 @@
         const visualViewport = window.visualViewport;
 
         let viewportFrame = 0;
+        let viewportSettleTimer = 0;
         let composerResizeObserver = null;
+        let workspaceResizeObserver = null;
         let realtimeRefreshTimer = 0;
 
         syncChatViewport();
@@ -182,6 +184,12 @@
         window.addEventListener("orientationchange", scheduleChatViewportSync, { passive: true });
         visualViewport?.addEventListener("resize", scheduleChatViewportSync, { passive: true });
         visualViewport?.addEventListener("scroll", scheduleChatViewportSync, { passive: true });
+        document.addEventListener("focusin", event => {
+            if (event.target === messageInput) scheduleChatViewportSync(true);
+        });
+        document.addEventListener("focusout", event => {
+            if (event.target === messageInput) scheduleChatViewportSync(true);
+        });
 
         let otherUser = null;
         let canSendMessages = false;
@@ -202,8 +210,16 @@
             composerResizeObserver = new ResizeObserver(() => {
                 syncComposerHeight();
                 updateJumpLatestButton();
+                ensureComposerVisible();
             });
             composerResizeObserver.observe(composer);
+
+            workspaceResizeObserver = new ResizeObserver(() => {
+                scheduleChatViewportSync();
+                ensureComposerVisible();
+            });
+            workspaceResizeObserver.observe(document.querySelector(".chat-workspace"));
+            workspaceResizeObserver.observe(document.getElementById("nv-site-header"));
         }
 
         await loadConversation();
@@ -229,8 +245,10 @@
 
         window.addEventListener("beforeunload", () => {
             cancelAnimationFrame(viewportFrame);
+            clearTimeout(viewportSettleTimer);
             clearTimeout(realtimeRefreshTimer);
             composerResizeObserver?.disconnect();
+            workspaceResizeObserver?.disconnect();
             supabase.removeChannel(chatChannel);
             revokeSelectedImagePreview();
         });
@@ -243,23 +261,32 @@
             }, 90);
         }
 
-        function scheduleChatViewportSync() {
+        function scheduleChatViewportSync(settle = false) {
             cancelAnimationFrame(viewportFrame);
             viewportFrame = requestAnimationFrame(syncChatViewport);
+
+            if (settle) {
+                clearTimeout(viewportSettleTimer);
+                viewportSettleTimer = window.setTimeout(syncChatViewport, 280);
+            }
         }
 
         function syncChatViewport() {
+            const mobileLayout = window.matchMedia("(max-width: 820px)").matches;
             const layoutHeight = Math.max(
                 1,
                 Math.round(window.innerHeight || document.documentElement.clientHeight || 1)
             );
             const viewportHeight = Math.max(
                 1,
-                Math.round(visualViewport?.height || layoutHeight)
+                Math.round(mobileLayout && visualViewport?.height ? visualViewport.height : layoutHeight)
             );
-            const viewportTop = Math.max(0, Math.round(visualViewport?.offsetTop || 0));
+            const viewportTop = Math.max(
+                0,
+                Math.round(mobileLayout && visualViewport ? visualViewport.offsetTop || 0 : 0)
+            );
             const keyboardHeight = Math.max(0, layoutHeight - viewportHeight - viewportTop);
-            const keyboardOpen = keyboardHeight > 120 && window.matchMedia("(max-width: 820px)").matches;
+            const keyboardOpen = mobileLayout && keyboardHeight > 100;
 
             document.documentElement.style.setProperty("--chat-viewport-height", `${viewportHeight}px`);
             document.documentElement.style.setProperty("--chat-viewport-top", `${viewportTop}px`);
@@ -267,6 +294,7 @@
             document.body.classList.toggle("chat-keyboard-open", keyboardOpen);
 
             syncComposerHeight();
+            ensureComposerVisible();
 
             if (document.activeElement === messageInput) {
                 requestAnimationFrame(() => scrollMessagesToBottom(false));
@@ -276,6 +304,30 @@
         function syncComposerHeight() {
             const height = composer.hidden ? 0 : Math.ceil(composer.getBoundingClientRect().height || 0);
             document.documentElement.style.setProperty("--chat-composer-height", `${height}px`);
+        }
+
+        function ensureComposerVisible() {
+            if (composer.hidden) return;
+
+            const workspace = document.querySelector(".chat-workspace");
+            const workspaceRect = workspace?.getBoundingClientRect();
+            const composerRect = composer.getBoundingClientRect();
+            if (!workspaceRect || !composerRect.height) return;
+
+            const visibleBottom = window.matchMedia("(max-width: 820px)").matches && visualViewport
+                ? visualViewport.offsetTop + visualViewport.height
+                : window.innerHeight;
+            const clipped = composerRect.bottom > visibleBottom + 2
+                || composerRect.bottom > workspaceRect.bottom + 2
+                || composerRect.top >= visibleBottom;
+
+            document.body.classList.toggle("chat-composer-clipped", clipped);
+            if (clipped) {
+                document.documentElement.style.setProperty(
+                    "--chat-viewport-height",
+                    `${Math.max(1, Math.round(visualViewport?.height || window.innerHeight || 1))}px`
+                );
+            }
         }
 
         function updateJumpLatestButton() {
@@ -298,13 +350,13 @@
             });
             messageInput.addEventListener("focus", () => {
                 document.body.classList.add("chat-input-focused");
-                scheduleChatViewportSync();
+                scheduleChatViewportSync(true);
                 window.setTimeout(() => scrollMessagesToBottom(false), 80);
                 window.setTimeout(() => scrollMessagesToBottom(false), 260);
             });
             messageInput.addEventListener("blur", () => {
                 document.body.classList.remove("chat-input-focused");
-                scheduleChatViewportSync();
+                scheduleChatViewportSync(true);
             });
             messageInput.addEventListener("keydown", event => {
                 const desktopKeyboard = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
