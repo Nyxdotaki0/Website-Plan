@@ -89,7 +89,7 @@ function readProgress(contentType) {
     const chapter = chapterParam || chapterStatus || null;
 
     let label = `${Math.round(percent)}% viewed`;
-    if (contentType === "literature") label = chapter ? `${chapter} · ${Math.round(percent)}%` : `${Math.round(percent)}% read`;
+    if (contentType === "literature") label = chapter ? `${chapter}   ${Math.round(percent)}%` : `${Math.round(percent)}% read`;
     if (["comic", "manga"].includes(contentType)) label = chapter ? `${chapter}` : "Continue reading";
     if (contentType === "world") label = `${Math.round(percent)}% explored`;
 

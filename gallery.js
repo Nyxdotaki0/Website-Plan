@@ -1,6 +1,6 @@
 import { requireBetaAccess } from "./betaGate.js";
 import { supabase } from "./supabaseClient.js";
-import { initNullverseShell } from "./nullverse-shell.js?v=5";
+import { initNullverseShell } from "./nullverse-shell.js?v=7";
 import {
     bindCardInteractions,
     normalizeWarningList,
@@ -8,8 +8,8 @@ import {
     renderEmptyCard,
     renderGalleryCard,
     renderSkeletonCards
-} from "./nullverse-content-cards.js?v=6";
-import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nullverse-data.js?v=6";
+} from "./nullverse-content-cards.js?v=7";
+import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nullverse-data.js?v=7";
 
 const currentUser = await requireBetaAccess();
 if (!currentUser) throw new Error("Nullverse session unavailable.");
@@ -106,6 +106,74 @@ function setupControls() {
     });
 
     document.getElementById("gallery-load-more").addEventListener("click", () => loadMore());
+    document.getElementById("gallery-random")?.addEventListener("click", openRandomGallery);
+}
+
+
+async function openRandomGallery() {
+    const button = document.getElementById("gallery-random");
+    if (!button || button.disabled) return;
+    button.disabled = true;
+    const originalText = button.textContent;
+    button.textContent = "Finding...";
+
+    try {
+        const recentOwners = readRecentRandomGalleryOwners();
+        const pool = await fetchGalleryFeed(state.sort, 240, 0, {
+            search: state.search,
+            ageRating: state.ageRating
+        });
+
+        const eligible = pool.filter(item => {
+            if (!item?.owner_id || !item?.username) return false;
+            if (viewer.blockedUserIds.includes(item.owner_id)) return false;
+            if (state.proofType && item.proof_type !== state.proofType) return false;
+            return getGallerySafetyDecision(item).action !== "hide";
+        });
+
+        const byOwner = new Map();
+        eligible.forEach(item => {
+            if (!byOwner.has(item.owner_id)) byOwner.set(item.owner_id, item);
+        });
+
+        let choices = [...byOwner.values()].filter(item => !recentOwners.includes(String(item.owner_id)));
+        if (!choices.length) choices = [...byOwner.values()];
+
+        let selected = choices[Math.floor(Math.random() * choices.length)];
+        if (!selected) {
+            const { data, error } = await supabase.rpc("nv_random_gallery_owner", {
+                p_search: state.search || null,
+                p_age_rating: state.ageRating || null,
+                p_proof_type: state.proofType || null,
+                p_exclude_ids: recentOwners
+            });
+            if (error) throw error;
+            selected = Array.isArray(data) ? data[0] : data;
+        }
+
+        if (!selected?.username) throw new Error("No accessible creator galleries match the current filters.");
+        rememberRandomGalleryOwner(selected.owner_id);
+        window.location.href = `creator-gallery.html?user=${encodeURIComponent(selected.username)}`;
+    } catch (error) {
+        alert(error.message || "Could not find a random gallery.");
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
+
+function readRecentRandomGalleryOwners() {
+    try {
+        const parsed = JSON.parse(sessionStorage.getItem("nv-random-gallery-owners") || "[]");
+        return Array.isArray(parsed) ? parsed.slice(0, 12).map(String) : [];
+    } catch {
+        return [];
+    }
+}
+
+function rememberRandomGalleryOwner(ownerId) {
+    if (!ownerId) return;
+    const next = [String(ownerId), ...readRecentRandomGalleryOwners().filter(id => id !== String(ownerId))].slice(0, 12);
+    sessionStorage.setItem("nv-random-gallery-owners", JSON.stringify(next));
 }
 
 async function resetGallery() {

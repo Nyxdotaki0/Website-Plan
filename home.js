@@ -1,6 +1,6 @@
 import { requireBetaAccess } from "./betaGate.js";
 import { supabase } from "./supabaseClient.js";
-import { initNullverseShell } from "./nullverse-shell.js?v=5";
+import { initNullverseShell } from "./nullverse-shell.js?v=7";
 import {
     bindCardInteractions,
     getEditorContentUrl,
@@ -15,7 +15,7 @@ import {
     renderSkeletonCards,
     timeAgo,
     escapeHtml
-} from "./nullverse-content-cards.js?v=6";
+} from "./nullverse-content-cards.js?v=7";
 import {
     attachProfiles,
     fetchDiscoverCreators,
@@ -25,7 +25,7 @@ import {
     fetchHomeFeed,
     fetchRecentContent,
     loadViewerContext
-} from "./nullverse-data.js?v=6";
+} from "./nullverse-data.js?v=7";
 
 const currentUser = await requireBetaAccess();
 if (!currentUser) throw new Error("Nullverse session unavailable.");
@@ -511,7 +511,7 @@ async function loadCreatorSuggestions() {
         container.innerHTML = creators.length ? creators.map(creator => `
             <a class="home-mini-item" href="profile.html?user=${encodeURIComponent(creator.username || "")}">
                 <img src="${escapeHtml(creator.avatar_url || "https://placehold.co/100x100/1b1b28/ffffff?text=NV")}" alt="" loading="lazy">
-                <span><strong>${escapeHtml(creator.display_name || creator.username || "Creator")}</strong><span>@${escapeHtml(creator.username || "creator")} · ${Number(creator.content_count || 0)} creations</span></span>
+                <span><strong>${escapeHtml(creator.display_name || creator.username || "Creator")}</strong><span>@${escapeHtml(creator.username || "creator")}   ${Number(creator.content_count || 0)} creations</span></span>
             </a>`).join("") : renderEmptyCard("No suggestions yet", "More creators will appear as Nullverse grows.");
     } catch (error) {
         container.innerHTML = renderEmptyCard("Creator suggestions unavailable", error.message || "Refresh and try again.");

@@ -266,10 +266,15 @@ export function renderCreatorCard(profile = {}) {
     const banner = profile.banner_url || "";
     const contentCount = Number(profile.content_count || 0);
     const followerCount = Number(profile.follower_count || 0);
+    const isPrivate = String(profile.profile_visibility || "public") === "private";
+    const relationship = String(profile.relationship_state || "none");
+    const galleryCount = Number(profile.gallery_count || 0);
+    const canOpenGallery = !isPrivate || relationship === "following" || galleryCount > 0;
 
     return `
         <article class="nv-creator-card">
             <div class="nv-creator-banner"${banner ? ` style="background-image:url('${escapeCssUrl(banner)}')"` : ""}></div>
+            ${isPrivate ? `<span class="nv-creator-private-pill">Private</span>` : ""}
             <div class="nv-creator-body">
                 <div class="nv-creator-avatar"><img src="${escapeHtml(avatar)}" alt="" loading="lazy"></div>
                 <h3><a href="profile.html?user=${encodeURIComponent(username)}">${escapeHtml(displayName)}</a></h3>
@@ -281,7 +286,7 @@ export function renderCreatorCard(profile = {}) {
                 </div>
                 <div class="nv-card-actions">
                     <a class="nv-card-button" href="profile.html?user=${encodeURIComponent(username)}">View Profile</a>
-                    <a class="nv-card-button" href="creator-gallery.html?user=${encodeURIComponent(username)}">Gallery</a>
+                    ${canOpenGallery ? `<a class="nv-card-button" href="creator-gallery.html?user=${encodeURIComponent(username)}">Gallery</a>` : `<span class="nv-card-button disabled" aria-disabled="true">Gallery Locked</span>`}
                 </div>
             </div>
         </article>

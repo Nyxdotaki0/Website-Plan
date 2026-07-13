@@ -272,8 +272,8 @@
             }
         }
     </style>
-    <link rel="stylesheet" href="nullverse-shell.css?v=5">
-    <link rel="stylesheet" href="notifications.css?v=2">
+    <link rel="stylesheet" href="nullverse-shell.css?v=7">
+    <link rel="stylesheet" href="notifications.css?v=4">
 </head>
 
 <body data-page="notifications" data-nv-beta-only-user="true" data-nv-active-only="true">
@@ -288,6 +288,14 @@
                 <div class="notification-summary-card"><strong id="notification-unread-total">0</strong><span>Unread</span></div>
                 <div class="notification-summary-card"><strong id="notification-total">0</strong><span>Total</span></div>
             </div>
+        </section>
+
+        <section id="follow-requests-panel" class="follow-requests-panel" aria-labelledby="follow-requests-title" hidden>
+            <div class="follow-requests-head">
+                <div><p class="notifications-kicker">Private profile access</p><h2 id="follow-requests-title">Follow Requests</h2><p>Accepting a request unlocks your private profile, published creations, Creator Gallery, and followers/following lists for that person.</p></div>
+                <span id="follow-request-count" class="badge">0 pending</span>
+            </div>
+            <div id="follow-requests-list" class="follow-requests-list"></div>
         </section>
 
         <section class="notifications-toolbar" aria-label="Notification controls">
@@ -335,7 +343,76 @@
             renderNotifications();
         });
 
-        await loadNotifications();
+        await Promise.all([loadFollowRequests(), loadNotifications()]);
+
+
+        async function loadFollowRequests() {
+            const panel = document.getElementById("follow-requests-panel");
+            const list = document.getElementById("follow-requests-list");
+            const count = document.getElementById("follow-request-count");
+
+            const { data, error } = await supabase.rpc("nv_pending_follow_requests");
+
+            if (error) {
+                if (String(error.message || "").toLowerCase().includes("follow_requests")) {
+                    panel.hidden = false;
+                    list.innerHTML = `<div class="notifications-empty">Run SUPABASE_CREATOR_PRIVACY_DISCOVERY.sql before testing follow requests.</div>`;
+                    count.textContent = "Setup needed";
+                    return;
+                }
+                console.warn("Follow request load failed:", error);
+                panel.hidden = true;
+                return;
+            }
+
+            const requests = data || [];
+            panel.hidden = !requests.length;
+            count.textContent = `${requests.length} pending`;
+            if (!requests.length) {
+                list.innerHTML = "";
+                return;
+            }
+
+            list.innerHTML = requests.map(request => {
+                const username = request.username || "creator";
+                const displayName = request.display_name || username;
+                const avatar = request.avatar_url || "https://placehold.co/160x160/1b1b28/ffffff?text=NV";
+                return `<article class="follow-request-card" data-follow-request-id="${escapeHtml(request.request_id)}">
+                        <a href="profile.html?user=${encodeURIComponent(username)}"><img src="${escapeHtml(avatar)}" alt=""></a>
+                        <div class="follow-request-copy">
+                            <strong><a href="profile.html?user=${encodeURIComponent(username)}">${escapeHtml(displayName)}</a></strong>
+                            <span>@${escapeHtml(username)}${request.creator_type ? ` · ${escapeHtml(request.creator_type)}` : ""}</span>
+                            ${request.bio ? `<p>${escapeHtml(request.bio)}</p>` : ""}
+                            <time>${formatDate(request.created_at)}</time>
+                        </div>
+                        <div class="follow-request-actions">
+                            <button class="button" type="button" data-follow-request-action="accept">Accept</button>
+                            <button class="button" type="button" data-follow-request-action="decline">Decline</button>
+                        </div>
+                    </article>`;
+            }).join("");
+        }
+
+        document.getElementById("follow-requests-list")?.addEventListener("click", async event => {
+            const button = event.target.closest("[data-follow-request-action]");
+            if (!button) return;
+            const card = button.closest("[data-follow-request-id]");
+            if (!card) return;
+            button.disabled = true;
+            const decision = button.dataset.followRequestAction;
+
+            try {
+                const { error } = await supabase.rpc("nv_respond_follow_request", {
+                    p_request_id: card.dataset.followRequestId,
+                    p_decision: decision
+                });
+                if (error) throw error;
+                await Promise.all([loadFollowRequests(), loadNotifications()]);
+            } catch (error) {
+                alert(error.message || "Could not update this follow request.");
+                button.disabled = false;
+            }
+        });
 
         async function loadNotifications() {
             const container = document.getElementById("notifications-container");
@@ -376,18 +453,18 @@
             }
 
             container.innerHTML = filtered.map(notification => `
-                    <article class="notification-card ${notification.is_read ? "" : "unread"}">
-                        <div class="notification-content">
-                            <div class="notification-message">${escapeHtml(notification.message)}</div>
-                            <div class="notification-meta">${formatDate(notification.created_at)}</div>
-                        </div>
-                        <div class="actions">
-                            ${notification.link ? `<a class="button" href="${escapeHtml(notification.link)}" onclick="markReadInline('${notification.id}')">Open</a>` : ""}
-                            ${!notification.is_read ? `<button class="button" onclick="markRead('${notification.id}')">Mark Read</button>` : ""}
-                            <button class="button danger-action" onclick="deleteNotification('${notification.id}')">Delete</button>
-                        </div>
-                    </article>
-                `).join("");
+                        <article class="notification-card ${notification.is_read ? "" : "unread"}">
+                            <div class="notification-content">
+                                <div class="notification-message">${escapeHtml(notification.message)}</div>
+                                <div class="notification-meta">${formatDate(notification.created_at)}</div>
+                            </div>
+                            <div class="actions">
+                                ${notification.link ? `<a class="button" href="${escapeHtml(notification.link)}" onclick="markReadInline('${notification.id}')">Open</a>` : ""}
+                                ${!notification.is_read ? `<button class="button" onclick="markRead('${notification.id}')">Mark Read</button>` : ""}
+                                <button class="button danger-action" onclick="deleteNotification('${notification.id}')">Delete</button>
+                            </div>
+                        </article>
+                    `).join("");
         }
 
         window.markRead = async function (notificationId) {
@@ -455,6 +532,7 @@
         const notificationChannel = supabase
             .channel(`notification-center-${currentUser.id}`)
             .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${currentUser.id}` }, loadNotifications)
+            .on("postgres_changes", { event: "*", schema: "public", table: "follow_requests", filter: `target_id=eq.${currentUser.id}` }, loadFollowRequests)
             .subscribe();
 
         window.addEventListener("beforeunload", () => supabase.removeChannel(notificationChannel));
@@ -465,6 +543,6 @@
         };
     </script>
 
-    <script type="module" src="nullverse-shell-bootstrap.js?v=5"></script>
+    <script type="module" src="nullverse-shell-bootstrap.js?v=7"></script>
 </body>
 </html>

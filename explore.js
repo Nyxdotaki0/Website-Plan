@@ -1,6 +1,6 @@
 import { requireBetaAccess } from "./betaGate.js";
 import { supabase } from "./supabaseClient.js";
-import { initNullverseShell } from "./nullverse-shell.js?v=5";
+import { initNullverseShell } from "./nullverse-shell.js?v=7";
 import {
     bindCardInteractions,
     getPublicContentUrl,
@@ -10,8 +10,8 @@ import {
     renderEmptyCard,
     renderSkeletonCards,
     escapeHtml
-} from "./nullverse-content-cards.js";
-import { attachProfiles, fetchDiscoverCreators, fetchHomeFeed, loadViewerContext } from "./nullverse-data.js";
+} from "./nullverse-content-cards.js?v=7";
+import { attachProfiles, fetchDiscoverCreators, fetchHomeFeed, loadViewerContext } from "./nullverse-data.js?v=7";
 
 const currentUser = await requireBetaAccess();
 if (!currentUser) throw new Error("Nullverse session unavailable.");
@@ -264,7 +264,7 @@ async function loadTags() {
 
     const tags = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 22);
     container.innerHTML = tags.length ? tags.map(([tag, count]) => `
-        <button class="explore-tag-button" type="button" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)} · ${count}</button>`).join("") : `<span class="explore-count">No tags yet.</span>`;
+        <button class="explore-tag-button" type="button" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}   ${count}</button>`).join("") : `<span class="explore-count">No tags yet.</span>`;
 
     container.querySelectorAll("[data-tag]").forEach(button => {
         button.addEventListener("click", () => {
@@ -294,7 +294,7 @@ async function openRandom() {
 function updateResultTitle() {
     const labels = { world: "Worlds", literature: "Literature", comic: "Comics", manga: "Manga" };
     const typeLabel = labels[state.type] || "Creations";
-    document.getElementById("explore-results-title").textContent = state.search ? `Results for “${state.search}”` : `Discover ${typeLabel}`;
+    document.getElementById("explore-results-title").textContent = state.search ? `Results for  ${state.search} ` : `Discover ${typeLabel}`;
 }
 
 function updateUrl() {
