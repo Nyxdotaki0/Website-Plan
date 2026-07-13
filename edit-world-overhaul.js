@@ -1,0 +1,1250 @@
+﻿(() => {
+    "use strict";
+
+    const GUIDE_KEY = "nullverse-world-editor-guide-v4-seen";
+    const COLLAPSE_KEY = "nullverse-world-editor-collapsed-v4";
+    const MOBILE_BREAKPOINT = 900;
+
+    const state = {
+        dirty: false,
+        saving: false,
+        view: "overview",
+        contextObserver: null,
+        sectionObserver: null,
+        activePanelObserver: null,
+        guideIndex: 0,
+        decoratedGeneration: 0,
+        guideReturnFocus: null,
+        collapsed: readJson(COLLAPSE_KEY, {})
+    };
+
+    const guideSteps = [
+        {
+            label: "Start",
+            title: "Your world has three simple layers",
+            text: "World Studio is organized around World Setup, Design & Atmosphere, and Sections. You can move between them without losing work, then use the permanent Draft, Preview, and Publish controls whenever you are ready.",
+            checks: [
+                "World Setup controls identity, discovery, privacy, content warnings, the public index, and overview-card design.",
+                "Appearance controls the page atmosphere, background artwork, gradients, blur, overlays, and placement.",
+                "Sections hold the actual lore, characters, timelines, locations, languages, and other worldbuilding entries."
+            ],
+            actionLabel: "Open World Setup",
+            action: () => callGlobal("openOverviewSettings")
+        },
+        {
+            label: "Setup",
+            title: "Build the public identity first",
+            text: "World Setup is now presented as a sequence of focused cards. Use the sticky row beneath the command bar to jump directly to Identity, Publishing, Warnings, World Index, or the Overview Card instead of scrolling through one long form.",
+            checks: [
+                "Title, cover, summary, genres, and themes power discovery and the public page.",
+                "Visibility and community-addition controls keep the same behavior as before.",
+                "Image credits and placement stay attached to the image they describe."
+            ],
+            actionLabel: "Go to World Setup",
+            action: () => callGlobal("openOverviewSettings")
+        },
+        {
+            label: "Design",
+            title: "Appearance is a separate design workspace",
+            text: "Design & Atmosphere keeps the public-page preview beside the controls. Image framing opens in one dedicated Placement Studio, while opacity, blur, overlay, and tiling remain in the main editor.",
+            checks: [
+                "Choose solid or gradient atmosphere settings.",
+                "Open Placement Studio for framing, scale, position, rotation, and fit.",
+                "Adjust opacity, blur, overlay, and optional repeat beside the live public-page preview."
+            ],
+            actionLabel: "Open Appearance",
+            action: () => callGlobal("openAppearanceSettings")
+        },
+        {
+            label: "Sections",
+            title: "The outline is your world map",
+            text: "The left outline contains every section and stays searchable. On mobile it becomes a drawer, so it no longer consumes the page or pushes the editor below the screen.",
+            checks: [
+                "Press a section to open its workspace.",
+                "Use Quick Reorder only when you need precise numbered movement or swaps.",
+                "The Add Section action remains permanently available at the bottom of the outline."
+            ],
+            actionLabel: "Open Outline",
+            action: () => openSidebar()
+        },
+        {
+            label: "Write",
+            title: "Section editing is split by task",
+            text: "Each section keeps the same details, Writing Studio, section image, card artwork, card design, credits, and saving logic. The new local navigation lets you jump between those tasks and collapse anything you are not using.",
+            checks: [
+                "Section Details controls type and title.",
+                "Writing Studio keeps the complete rich-text toolset and formatting data used by world.html.",
+                "Images and card design stay separate so their placement and credits are easier to verify."
+            ],
+            actionLabel: "Open First Section",
+            action: () => openFirstSection()
+        },
+        {
+            label: "Media",
+            title: "Images, framing, and credits stay connected",
+            text: "Every image workflow is preserved, but each asset now keeps its preview, upload, Placement Studio button, and credit controls in one workspace so you can finish it without scrolling back and forth.",
+            checks: [
+                "Cover, background, index, overview card, section image, and section card keep their existing storage and credit rules.",
+                "Placement data still saves through the same X/Y, scale, fit, and rotation structures.",
+                "Nothing about the public world renderer or credit pills was changed."
+            ],
+            actionLabel: "View Current Media Tools",
+            action: () => jumpToPanel(/image|artwork|card appearance/i)
+        },
+        {
+            label: "Finish",
+            title: "Draft, Preview, and Publish are always close",
+            text: "Saving is now easier to understand without changing what the buttons do. Draft remains private, Preview opens the existing preview flow, and Save & Publish updates the live world through the same functions and tables as before.",
+            checks: [
+                "Unsaved status appears as soon as you change a field.",
+                "Mobile actions stay reachable above the safe area.",
+                "The public World page continues reading the exact same world and world_sections fields."
+            ],
+            actionLabel: "Close Guide",
+            action: () => closeGuide(true)
+        }
+    ];
+
+    function readJson(key, fallback) {
+        try {
+            const value = JSON.parse(localStorage.getItem(key) || "null");
+            return value && typeof value === "object" ? value : fallback;
+        } catch {
+            return fallback;
+        }
+    }
+
+    function writeJson(key, value) {
+        try {
+            localStorage.setItem(key, JSON.stringify(value));
+        } catch {
+        }
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+    }
+
+    function callGlobal(name, ...args) {
+        const fn = window[name];
+        if (typeof fn !== "function") return undefined;
+        return fn(...args);
+    }
+
+    function init() {
+        const sidebar = document.querySelector(".sidebar");
+        const main = document.querySelector(".main");
+        const topbar = document.querySelector(".topbar");
+        const editorContent = document.getElementById("editor-content");
+
+        if (!sidebar || !main || !topbar || !editorContent) return;
+
+        document.body.classList.add("nv-world-editor-modern");
+        document.body.dataset.nvView = "overview";
+
+        buildSidebar(sidebar);
+        buildCommandBar(topbar);
+        buildMobileDock();
+        buildGuide();
+        buildGuidePrompt();
+        installSaveState();
+        installInputTracking(editorContent);
+        installEditorMutationObserver(editorContent);
+        installSectionListObserver();
+        installGlobalNavigationWrappers();
+        clearLegacyTutorialState();
+
+        window.addEventListener("resize", handleResize, { passive: true });
+        window.addEventListener("keydown", handleGlobalKeydown);
+        window.addEventListener("beforeunload", event => {
+            if (!state.dirty) return;
+            event.preventDefault();
+            event.returnValue = "";
+        });
+
+        setTimeout(() => {
+            decorateCurrentEditor();
+            decorateSectionCards();
+            updateSectionProgress();
+            maybeShowGuidePrompt();
+        }, 0);
+    }
+
+    function buildSidebar(sidebar) {
+        const header = sidebar.querySelector(".sidebar-header");
+        const sectionList = sidebar.querySelector(".section-list");
+        const overview = document.getElementById("overview-card");
+        const appearance = document.getElementById("appearance-card");
+        const dynamicList = document.getElementById("section-list");
+        const reorder = sidebar.querySelector(".reorder-panel");
+
+        const topLine = document.createElement("div");
+        topLine.className = "nv-world-rail-topline";
+        topLine.innerHTML = `
+            <div class="nv-world-rail-brand">World Studio</div>
+            <button class="nv-world-rail-close" type="button" aria-label="Close outline">×</button>
+        `;
+        header?.prepend(topLine);
+        topLine.querySelector("button")?.addEventListener("click", closeSidebar);
+
+        const progress = document.createElement("div");
+        progress.className = "nv-world-rail-progress";
+        progress.innerHTML = `
+            <strong>World structure</strong>
+            <span id="nv-world-progress-label">Loading sections</span>
+            <div class="nv-world-progress-track"><i id="nv-world-progress-bar"></i></div>
+        `;
+        header?.append(progress);
+
+        if (overview) {
+            overview.dataset.nvIcon = "W";
+            const strong = overview.querySelector("strong");
+            const p = overview.querySelector("p");
+            if (strong) strong.textContent = "World Setup";
+            if (p) p.textContent = "Identity, publishing, index";
+        }
+
+        if (appearance) {
+            appearance.dataset.nvIcon = "✦";
+            const strong = appearance.querySelector("strong");
+            const p = appearance.querySelector("p");
+            if (strong) strong.textContent = "Design & Atmosphere";
+            if (p) p.textContent = "Background, color, artwork";
+        }
+
+        if (sectionList && reorder) {
+            const heading = document.createElement("div");
+            heading.className = "nv-world-rail-heading";
+            heading.innerHTML = `<span>World controls</span>`;
+            sectionList.insertBefore(heading, reorder);
+
+            const toggle = document.createElement("button");
+            toggle.type = "button";
+            toggle.className = "nv-world-reorder-toggle";
+            toggle.innerHTML = `<span>Quick Reorder</span><span aria-hidden="true">⌄</span>`;
+            toggle.addEventListener("click", () => reorder.classList.toggle("nv-open"));
+            reorder.prepend(toggle);
+
+            const oldTitle = reorder.querySelector(".reorder-title");
+            if (oldTitle) oldTitle.style.display = "none";
+        }
+
+        if (sectionList && dynamicList) {
+            const heading = document.createElement("div");
+            heading.className = "nv-world-rail-heading";
+            heading.innerHTML = `
+                <span>Your sections</span>
+                <span class="nv-world-section-count" id="nv-world-section-count">0</span>
+            `;
+            sectionList.insertBefore(heading, dynamicList);
+        }
+
+        const backdrop = document.createElement("button");
+        backdrop.type = "button";
+        backdrop.className = "nv-world-sidebar-backdrop";
+        backdrop.setAttribute("aria-label", "Close world outline");
+        backdrop.addEventListener("click", closeSidebar);
+        document.body.append(backdrop);
+    }
+
+    function buildCommandBar(topbar) {
+        const titleBlock = topbar.firstElementChild;
+        const actions = topbar.querySelector(".topbar-actions");
+        const nav = topbar.querySelector(".topbar-nav");
+        const saveArea = document.getElementById("tutorial-save-area");
+        const tutorialButton = document.getElementById("tutorial-button");
+
+        topbar.classList.add("nv-world-commandbar");
+        actions?.classList.add("nv-world-command-actions");
+        nav?.classList.add("nv-world-command-links");
+        saveArea?.classList.add("nv-world-command-save");
+
+        const outlineButton = document.createElement("button");
+        outlineButton.type = "button";
+        outlineButton.className = "nv-world-mobile-outline";
+        outlineButton.setAttribute("aria-label", "Open world outline");
+        outlineButton.textContent = "☰";
+        outlineButton.addEventListener("click", toggleSidebar);
+        topbar.prepend(outlineButton);
+
+        if (titleBlock && !titleBlock.classList.contains("nv-world-title-stack")) {
+            titleBlock.classList.add("nv-world-title-stack");
+            const children = [...titleBlock.childNodes];
+            const icon = document.createElement("div");
+            icon.className = "nv-world-title-icon";
+            icon.innerHTML = "✦";
+            const copy = document.createElement("div");
+            copy.className = "nv-world-title-copy";
+            children.forEach(child => copy.append(child));
+            titleBlock.append(icon, copy);
+        }
+
+        const moreButton = document.createElement("button");
+        moreButton.type = "button";
+        moreButton.className = "nv-world-mobile-more";
+        moreButton.setAttribute("aria-label", "More editor actions");
+        moreButton.textContent = "•••";
+        moreButton.addEventListener("click", () => {
+            document.body.classList.toggle("nv-mobile-actions-open");
+        });
+        topbar.append(moreButton);
+
+        nav?.querySelectorAll('button[onclick*="openOverviewSettings"], button[onclick*="openAppearanceSettings"]').forEach(button => {
+            button.remove();
+        });
+
+        const dashboardLink = nav?.querySelector('a[href="dashboard.html"]');
+        if (dashboardLink) {
+            dashboardLink.textContent = "← Dashboard";
+            dashboardLink.classList.add("nv-command-back");
+        }
+
+        const publicLink = document.getElementById("view-public-world");
+        if (publicLink) {
+            publicLink.textContent = "Public Page";
+            publicLink.classList.add("nv-command-public");
+        }
+
+        const previewButton = nav?.querySelector('button[onclick*="openPreviewPage"]');
+        if (previewButton) {
+            previewButton.textContent = "Preview";
+            previewButton.classList.add("nv-command-preview");
+        }
+
+        if (tutorialButton) {
+            tutorialButton.removeAttribute("onclick");
+            tutorialButton.textContent = "Guide";
+            tutorialButton.title = "Open the World Studio guide";
+            tutorialButton.classList.add("nv-command-guide");
+            tutorialButton.addEventListener("click", event => {
+                event.preventDefault();
+                event.stopPropagation();
+                openGuide(0, tutorialButton);
+            });
+        }
+
+        if (saveArea) {
+            const saveState = document.createElement("span");
+            saveState.id = "nv-world-save-state";
+            saveState.className = "nv-world-save-state nv-saved";
+            saveState.textContent = "Up to date";
+            const saveGroup = saveArea.querySelector(".nv-save-button-group");
+            saveGroup?.after(saveState);
+
+            const draftButton = saveGroup?.querySelector('button[onclick*="saveDraft"]');
+            const publishButton = saveGroup?.querySelector('button[onclick*="saveAndPublish"]');
+            if (draftButton) draftButton.textContent = "Save Draft";
+            if (publishButton) publishButton.textContent = "Publish";
+        }
+
+        document.addEventListener("pointerdown", event => {
+            if (!document.body.classList.contains("nv-mobile-actions-open")) return;
+            if (event.target.closest(".topbar-actions") || event.target.closest(".nv-world-mobile-more")) return;
+            document.body.classList.remove("nv-mobile-actions-open");
+        });
+
+        actions?.querySelectorAll("a,button").forEach(item => {
+            item.addEventListener("click", () => document.body.classList.remove("nv-mobile-actions-open"));
+        });
+    }
+
+    function buildMobileDock() {
+        const dock = document.createElement("nav");
+        dock.className = "nv-world-mobile-dock";
+        dock.setAttribute("aria-label", "World editor actions");
+        dock.innerHTML = `
+            <button type="button" data-nv-mobile-outline>Outline</button>
+            <button type="button" data-nv-mobile-preview>Preview</button>
+            <button type="button" data-nv-mobile-draft>Save Draft</button>
+            <button type="button" data-nv-mobile-publish>Publish</button>
+        `;
+        dock.querySelector("[data-nv-mobile-outline]")?.addEventListener("click", openSidebar);
+        dock.querySelector("[data-nv-mobile-preview]")?.addEventListener("click", () => callGlobal("openPreviewPage"));
+        dock.querySelector("[data-nv-mobile-draft]")?.addEventListener("click", () => callGlobal("saveDraft"));
+        dock.querySelector("[data-nv-mobile-publish]")?.addEventListener("click", () => callGlobal("saveAndPublish"));
+        document.body.append(dock);
+    }
+
+    function installEditorMutationObserver(editorContent) {
+        state.contextObserver = new MutationObserver(() => scheduleDecorate());
+        state.contextObserver.observe(editorContent, { childList: true, subtree: true });
+    }
+
+    let decorateFrame = 0;
+    function scheduleDecorate() {
+        cancelAnimationFrame(decorateFrame);
+        decorateFrame = requestAnimationFrame(decorateCurrentEditor);
+    }
+
+    function detectView() {
+        if (document.getElementById("tutorial-world-appearance-area")) return "appearance";
+        if (document.getElementById("tutorial-section-workspace-area")) return "section";
+        return "overview";
+    }
+
+    function collectPanels(view) {
+        const root = document.getElementById("editor-content");
+        if (!root) return [];
+
+        if (view === "overview" || view === "appearance") {
+            const shell = root.querySelector(".settings-panel-v2");
+            return shell
+                ? [...shell.children].filter(node => node.classList?.contains("settings-section-v2"))
+                : [];
+        }
+
+        const shell = root.querySelector(".section-editor-v2");
+        if (!shell) return [];
+
+        const panels = [];
+        [...shell.children].forEach(node => {
+            if (
+                node.classList?.contains("section-tool-card") ||
+                node.classList?.contains("writing-studio-card-v2") ||
+                node.classList?.contains("section-save-row-v2")
+            ) {
+                panels.push(node);
+            }
+            if (node.classList?.contains("section-main-grid-v2")) {
+                [...node.children].forEach(child => {
+                    if (child.classList?.contains("section-tool-card")) panels.push(child);
+                });
+            }
+        });
+        return panels;
+    }
+
+    function panelLabel(panel, index) {
+        const heading = panel.querySelector(":scope > h2, :scope > h3, :scope > .nv-world-panel-heading h2, :scope > .nv-world-panel-heading h3");
+        const text = heading?.textContent?.trim();
+        if (text) return text;
+        if (panel.classList.contains("section-save-row-v2")) return "Save Section";
+        return `Step ${index + 1}`;
+    }
+
+    function decorateCurrentEditor() {
+        const root = document.getElementById("editor-content");
+        if (!root || !root.firstElementChild) return;
+
+        state.contextObserver?.disconnect();
+
+        try {
+            state.view = detectView();
+            document.body.dataset.nvView = state.view;
+            closeSidebar();
+
+            root.querySelectorAll(":scope > .nv-world-context-bar").forEach(node => node.remove());
+
+            normalizeEditorWorkflow();
+            const panels = collectPanels(state.view);
+            const generation = ++state.decoratedGeneration;
+            panels.forEach((panel, index) => decoratePanel(panel, index, generation));
+            panels.forEach(panel => buildPreviewWorkbench(panel));
+            refinePlacementLaunchers();
+            buildContextBar(root, panels);
+            updateEditorTitle();
+            updateSectionProgress();
+            installActivePanelTracking(panels);
+        } finally {
+            state.contextObserver?.observe(root, { childList: true, subtree: true });
+        }
+    }
+
+    function normalizeEditorWorkflow() {
+        hideLegacyThemeName();
+        consolidateBackgroundEffects();
+        consolidateSectionCardEditor();
+        enhanceCompactAddButtons();
+    }
+
+    function hideLegacyThemeName() {
+        const input = document.getElementById("theme-name");
+        if (!input) return;
+        input.classList.add("nv-world-hidden-legacy-control");
+        input.setAttribute("aria-hidden", "true");
+        input.tabIndex = -1;
+
+        const labelWrap = input.previousElementSibling;
+        if (labelWrap) labelWrap.classList.add("nv-world-hidden-legacy-control");
+    }
+
+
+    function enhanceCompactAddButtons() {
+        const labelsByInputId = {
+            "genre-input": "Add Genre",
+            "theme-input": "Add Theme",
+            "warning-input": "Add Warning"
+        };
+
+        Object.entries(labelsByInputId).forEach(([inputId, label]) => {
+            const input = document.getElementById(inputId);
+            const row = input?.closest(".tag-input-row, .warning-tag-tools");
+            const button = row?.querySelector("button");
+            if (!button) return;
+            button.classList.add("nv-world-add-action");
+            button.setAttribute("aria-label", label);
+            button.innerHTML = `<span class="nv-world-add-action-icon" aria-hidden="true">+</span><span>${label}</span>`;
+        });
+
+        document.querySelectorAll("#editor-content button").forEach(button => {
+            if (button.classList.contains("nv-world-add-action")) return;
+            if ((button.textContent || "").trim().toLowerCase() !== "add") return;
+            button.classList.add("nv-world-add-action");
+            button.innerHTML = '<span class="nv-world-add-action-icon" aria-hidden="true">+</span><span>Add</span>';
+        });
+    }
+
+    function makeSectionCardGroup(title, description, className) {
+        const group = document.createElement("section");
+        group.className = `nv-world-section-card-group ${className}`;
+        group.innerHTML = `
+            <div class="nv-world-section-card-group-heading">
+                <div>
+                    <span>Section card</span>
+                    <h4>${title}</h4>
+                </div>
+                <p>${description}</p>
+            </div>
+        `;
+        return group;
+    }
+
+    function consolidateSectionCardEditor() {
+        if (state.view !== "section") return;
+
+        const appearancePanel = document.getElementById("tutorial-section-card-appearance-area");
+        if (!appearancePanel || appearancePanel.dataset.nvSectionCardStudio === "true") return;
+
+        const sectionRoot = appearancePanel.closest(".section-editor-v2");
+        const designPanel = [...(sectionRoot?.querySelectorAll(":scope > .section-tool-card") || [])]
+            .find(panel => /^Card Design Controls$/i.test(panelTitle(panel)));
+
+        if (!designPanel) return;
+
+        appearancePanel.dataset.nvSectionCardStudio = "true";
+        appearancePanel.classList.add("nv-world-section-card-studio");
+
+        const title = appearancePanel.querySelector(":scope > h3");
+        const intro = appearancePanel.querySelector(":scope > p.muted");
+        if (intro) intro.classList.add("nv-world-section-card-intro");
+
+        const preview = appearancePanel.querySelector("#section-card-preview");
+        const upload = appearancePanel.querySelector(".section-card-preview-upload");
+        const placement = appearancePanel.querySelector(".image-fit-launch-row");
+        const creditPanel = appearancePanel.querySelector("#section-card-credit-panel");
+        const imageLabel = appearancePanel.querySelector(":scope > .info-wrap");
+
+        const workspace = document.createElement("div");
+        workspace.className = "nv-world-section-card-workspace";
+
+        const previewPane = document.createElement("aside");
+        previewPane.className = "nv-world-section-card-preview-pane";
+        previewPane.innerHTML = `
+            <div class="nv-world-section-card-preview-heading">
+                <div>
+                    <span>Live preview</span>
+                    <strong>Public section card</strong>
+                </div>
+                <p>Changes update here while you edit.</p>
+            </div>
+        `;
+        if (preview) previewPane.append(preview);
+
+        const controlsPane = document.createElement("div");
+        controlsPane.className = "nv-world-section-card-controls";
+
+        const imageGroup = makeSectionCardGroup(
+            "Image & placement",
+            "Upload the card artwork, then use Placement Studio for crop, scale, fit, and position.",
+            "nv-world-section-card-image-group"
+        );
+        if (imageLabel) imageGroup.append(imageLabel);
+        if (upload) imageGroup.append(upload);
+        if (placement) imageGroup.append(placement);
+        if (creditPanel) {
+            const creditWrap = document.createElement("div");
+            creditWrap.className = "nv-world-section-card-credit-wrap";
+            creditWrap.append(creditPanel);
+            imageGroup.append(creditWrap);
+        }
+
+        const styleGroup = makeSectionCardGroup(
+            "Style & surface",
+            "Choose the card surface, colors, contrast, opacity, and overlay strength.",
+            "nv-world-section-card-style-group"
+        );
+
+        const designHeading = designPanel.querySelector(":scope > h3");
+        const designIntro = designPanel.querySelector(":scope > p.muted");
+        designHeading?.remove();
+        designIntro?.remove();
+
+        const styleInfo = designPanel.querySelector(":scope > .info-wrap");
+        const styleGrid = designPanel.querySelector(":scope > .style-choice-grid");
+        const hiddenStyle = designPanel.querySelector("#section-card-style");
+        const connectedColors = designPanel.querySelector(":scope > .connected-color-picker");
+        const textColor = designPanel.querySelector(":scope > .compact-color-row");
+        const effectGrid = designPanel.querySelector(":scope > .settings-grid-v2");
+
+        const stylePickerBlock = document.createElement("div");
+        stylePickerBlock.className = "nv-world-section-card-control-block";
+        stylePickerBlock.innerHTML = '<div class="nv-world-section-card-control-label">Card surface</div>';
+        if (styleInfo) stylePickerBlock.append(styleInfo);
+        if (styleGrid) stylePickerBlock.append(styleGrid);
+        if (hiddenStyle) stylePickerBlock.append(hiddenStyle);
+
+        const colorBlock = document.createElement("div");
+        colorBlock.className = "nv-world-section-card-control-block";
+        colorBlock.innerHTML = `
+            <div class="nv-world-section-card-control-label">Card colors</div>
+            <p class="nv-world-section-card-control-help">Use the two swatches for solid or gradient surfaces, then set the text color for readability.</p>
+        `;
+        if (connectedColors) colorBlock.append(connectedColors);
+        if (textColor) colorBlock.append(textColor);
+
+        const effectsBlock = document.createElement("div");
+        effectsBlock.className = "nv-world-section-card-control-block";
+        effectsBlock.innerHTML = `
+            <div class="nv-world-section-card-control-label">Image visibility</div>
+            <p class="nv-world-section-card-control-help">Opacity controls the artwork strength. Overlay adds darkness behind text.</p>
+        `;
+        if (effectGrid) effectsBlock.append(effectGrid);
+
+        styleGroup.append(stylePickerBlock, colorBlock, effectsBlock);
+        controlsPane.append(imageGroup, styleGroup);
+        workspace.append(previewPane, controlsPane);
+
+        if (intro) intro.after(workspace);
+        else if (title) title.after(workspace);
+        else appearancePanel.append(workspace);
+
+        designPanel.remove();
+    }
+
+    function directPanelHeading(panel) {
+        return panel?.querySelector(":scope > h2, :scope > h3, :scope > .nv-world-panel-heading h2, :scope > .nv-world-panel-heading h3");
+    }
+
+    function panelTitle(panel) {
+        return directPanelHeading(panel)?.textContent?.trim() || "";
+    }
+
+    function hideRedundantBackgroundPlacementControls(panel) {
+        if (!panel) return;
+        [
+            "theme-background-position-x",
+            "theme-background-position-y",
+            "theme-background-zoom",
+            "theme-background-image-position",
+            "theme-background-image-size"
+        ].forEach(id => {
+            const control = panel.querySelector(`#${id}`);
+            const row = control?.closest(".settings-grid-v2 > div") || control?.parentElement;
+            row?.classList.add("nv-world-hidden-legacy-control");
+            control?.setAttribute("aria-hidden", "true");
+            if (control) control.tabIndex = -1;
+        });
+    }
+
+    function consolidateBackgroundEffects() {
+        if (state.view !== "appearance") return;
+
+        const panels = [...document.querySelectorAll("#editor-content .settings-section-v2")];
+        const artworkPanel = panels.find(panel => /^Artwork Controls$/i.test(panelTitle(panel)));
+        const backgroundPanel = document.getElementById("background-art-preview")?.closest(".settings-section-v2");
+
+        if (!artworkPanel || !backgroundPanel || artworkPanel === backgroundPanel) return;
+
+        hideRedundantBackgroundPlacementControls(artworkPanel);
+
+        const grid = artworkPanel.querySelector(":scope > .settings-grid-v2");
+        const saveRow = artworkPanel.querySelector(":scope > .settings-save-row-v2");
+        const message = artworkPanel.querySelector(":scope > .message");
+
+        const group = document.createElement("section");
+        group.className = "nv-world-inline-effects";
+        group.innerHTML = `
+            <div class="nv-world-subsection-heading">
+                <div>
+                    <span>Background finishing</span>
+                    <h3>Atmosphere Effects</h3>
+                </div>
+                <p>Position, scale, rotation, and fit now live only in Placement Studio. These controls handle opacity, blur, overlay, and optional image tiling.</p>
+            </div>
+        `;
+        if (grid) group.append(grid);
+        if (saveRow) group.append(saveRow);
+        if (message) group.append(message);
+        backgroundPanel.append(group);
+        artworkPanel.remove();
+    }
+
+    function previewCandidates(panel) {
+        const selectors = [
+            "#cover-preview-wrap",
+            "#index-preview",
+            "#overview-card-preview",
+            "#button-preview",
+            "#background-art-preview",
+            "#section-image-preview-wrap",
+            "#section-card-preview"
+        ];
+        return selectors
+            .map(selector => panel.querySelector(selector))
+            .filter(Boolean);
+    }
+
+    function previewLabel(node) {
+        const labels = {
+            "cover-preview-wrap": "World cover",
+            "index-preview": "World index",
+            "overview-card-preview": "Overview card",
+            "button-preview": "Public buttons",
+            "background-art-preview": "Public page background",
+            "section-image-preview-wrap": "Section image",
+            "section-card-preview": "Section card"
+        };
+        return labels[node.id] || "Live preview";
+    }
+
+    function buildPreviewWorkbench(panel) {
+        if (!panel || panel.classList.contains("nv-world-section-card-studio") || panel.querySelector(":scope > .nv-world-preview-workbench")) return;
+        const previews = previewCandidates(panel);
+        if (!previews.length) return;
+
+        const persistent = new Set([
+            panel.querySelector(":scope > .nv-world-step-badge"),
+            panel.querySelector(":scope > .nv-world-panel-heading")
+        ].filter(Boolean));
+
+        const workbench = document.createElement("div");
+        workbench.className = "nv-world-preview-workbench";
+
+        const previewRail = document.createElement("aside");
+        previewRail.className = "nv-world-preview-rail";
+        previewRail.innerHTML = `
+            <div class="nv-world-preview-rail-heading">
+                <span>Live preview</span>
+                <strong>See changes while you edit</strong>
+            </div>
+        `;
+
+        const controls = document.createElement("div");
+        controls.className = "nv-world-control-stack";
+
+        [...panel.children].forEach(child => {
+            if (persistent.has(child) || child === workbench) return;
+            controls.append(child);
+        });
+
+        previews.forEach(preview => {
+            const card = document.createElement("section");
+            card.className = "nv-world-preview-card";
+            card.dataset.preview = preview.id;
+            const label = document.createElement("div");
+            label.className = "nv-world-preview-card-label";
+            label.textContent = previewLabel(preview);
+            preview.before(card);
+            card.append(label, preview);
+            previewRail.append(card);
+        });
+
+        workbench.append(previewRail, controls);
+        const heading = panel.querySelector(":scope > .nv-world-panel-heading");
+        if (heading) heading.after(workbench);
+        else panel.append(workbench);
+    }
+
+    function refinePlacementLaunchers() {
+        document.querySelectorAll("#editor-content .image-fit-launch-row").forEach(row => {
+            row.classList.add("nv-world-placement-launch");
+            const button = row.querySelector("button");
+            const note = row.querySelector(".muted");
+            if (button) button.textContent = "Open Placement Studio";
+            if (note) {
+                note.textContent = "Drag, crop, scale, rotate, and choose image fit in one focused workspace.";
+            }
+        });
+    }
+
+    function decoratePanel(panel, index, generation) {
+        if (!panel.id) panel.id = `nv-world-${state.view}-panel-${index + 1}`;
+        panel.dataset.nvModernGeneration = String(generation);
+        panel.classList.add("nv-world-collapsible");
+
+        let badge = panel.querySelector(":scope > .nv-world-step-badge");
+        if (!badge) {
+            badge = document.createElement("span");
+            badge.className = "nv-world-step-badge";
+            panel.prepend(badge);
+        }
+        badge.textContent = state.view === "section" ? `Section task ${index + 1}` : `Step ${index + 1}`;
+
+        let headingWrap = panel.querySelector(":scope > .nv-world-panel-heading");
+        if (!headingWrap) {
+            const heading = panel.querySelector(":scope > h2, :scope > h3");
+            if (heading) {
+                headingWrap = document.createElement("div");
+                headingWrap.className = "nv-world-panel-heading";
+                heading.before(headingWrap);
+                headingWrap.append(heading);
+
+                const toggle = document.createElement("button");
+                toggle.type = "button";
+                toggle.className = "nv-world-panel-toggle";
+                toggle.setAttribute("aria-label", "Collapse this editor section");
+                toggle.textContent = "⌄";
+                toggle.addEventListener("click", () => togglePanel(panel));
+                headingWrap.append(toggle);
+            }
+        }
+
+        const key = collapseKey(panel);
+        panel.classList.toggle("nv-collapsed", state.collapsed[key] === true);
+    }
+
+    function collapseKey(panel) {
+        return `${state.view}:${panel.id}`;
+    }
+
+    function togglePanel(panel, force) {
+        const collapsed = typeof force === "boolean" ? force : !panel.classList.contains("nv-collapsed");
+        panel.classList.toggle("nv-collapsed", collapsed);
+        state.collapsed[collapseKey(panel)] = collapsed;
+        writeJson(COLLAPSE_KEY, state.collapsed);
+    }
+
+    function buildContextBar(root, panels) {
+        if (!panels.length) return;
+        const bar = document.createElement("div");
+        bar.className = "nv-world-context-bar";
+        bar.innerHTML = `
+            <div class="nv-world-context-links"></div>
+            <div class="nv-world-context-actions">
+                <button type="button" data-nv-expand-all>Expand all</button>
+                <button type="button" data-nv-collapse-all>Collapse all</button>
+            </div>
+        `;
+
+        const links = bar.querySelector(".nv-world-context-links");
+        panels.forEach((panel, index) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "nv-world-context-link";
+            button.dataset.nvTarget = panel.id;
+            button.innerHTML = `<span>${index + 1}</span>${escapeHtml(panelLabel(panel, index))}`;
+            button.addEventListener("click", () => {
+                togglePanel(panel, false);
+                panel.scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+            links?.append(button);
+        });
+
+        bar.querySelector("[data-nv-expand-all]")?.addEventListener("click", () => panels.forEach(panel => togglePanel(panel, false)));
+        bar.querySelector("[data-nv-collapse-all]")?.addEventListener("click", () => panels.forEach(panel => togglePanel(panel, true)));
+        root.prepend(bar);
+    }
+
+    function installActivePanelTracking(panels) {
+        state.activePanelObserver?.disconnect();
+        const main = document.querySelector(".main");
+        if (!main || !panels.length || !("IntersectionObserver" in window)) return;
+
+        state.activePanelObserver = new IntersectionObserver(entries => {
+            const visible = entries
+                .filter(entry => entry.isIntersecting)
+                .sort((a, b) => Math.abs(a.boundingClientRect.top) - Math.abs(b.boundingClientRect.top));
+            if (!visible.length) return;
+            setActiveContextLink(visible[0].target.id);
+        }, {
+            root: main,
+            rootMargin: `-${Math.round(parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--nve-bar")) || 78) + 58}px 0px -60% 0px`,
+            threshold: [0, .1, .4]
+        });
+        panels.forEach(panel => state.activePanelObserver.observe(panel));
+    }
+
+    function setActiveContextLink(id) {
+        document.querySelectorAll(".nv-world-context-link").forEach(button => {
+            button.classList.toggle("active", button.dataset.nvTarget === id);
+        });
+    }
+
+    function updateEditorTitle() {
+        const title = document.getElementById("editor-title");
+        if (!title) return;
+        const worldName = document.getElementById("world-name")?.textContent?.trim() || "World";
+        const sectionHeading = document.querySelector("#tutorial-section-workspace-area h2")?.textContent?.trim();
+        if (state.view === "appearance") title.textContent = `${worldName} · Appearance`;
+        else if (state.view === "section" && sectionHeading) title.textContent = sectionHeading;
+        else title.textContent = `${worldName} · Setup`;
+    }
+
+    function installSectionListObserver() {
+        const list = document.getElementById("section-list");
+        if (!list) return;
+        state.sectionObserver = new MutationObserver(() => {
+            decorateSectionCards();
+            updateSectionProgress();
+        });
+        state.sectionObserver.observe(list, { childList: true, subtree: true });
+    }
+
+    function decorateSectionCards() {
+        const list = document.getElementById("section-list");
+        if (!list) return;
+        [...list.querySelectorAll(".section-card")].forEach((card, index) => {
+            card.dataset.nvIcon = String(index + 1);
+            card.setAttribute("role", "button");
+            card.setAttribute("tabindex", "0");
+            if (!card.dataset.nvKeyboardBound) {
+                card.dataset.nvKeyboardBound = "true";
+                card.addEventListener("keydown", event => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    card.click();
+                });
+            }
+        });
+    }
+
+    function updateSectionProgress() {
+        const count = document.querySelectorAll("#section-list .section-card").length;
+        const countNode = document.getElementById("nv-world-section-count");
+        const label = document.getElementById("nv-world-progress-label");
+        const bar = document.getElementById("nv-world-progress-bar");
+        if (countNode) countNode.textContent = String(count);
+        if (label) label.textContent = `${count} ${count === 1 ? "section" : "sections"}`;
+        if (bar) {
+            const progress = Math.min(96, 34 + count * 8);
+            bar.style.setProperty("--nve-progress", `${progress}%`);
+        }
+    }
+
+    function installInputTracking(root) {
+        const mark = event => {
+            if (!event.target.closest("#editor-content, .writing-studio-overlay, .image-placement-overlay")) return;
+            setDirty(true);
+        };
+        document.addEventListener("input", mark, true);
+        document.addEventListener("change", mark, true);
+        root.addEventListener("click", event => {
+            if (event.target.closest(".warning-choice, .theme-color, .gradient-direction, .gradient-strength, .style-choice")) {
+                setDirty(true);
+            }
+        });
+    }
+
+    function installSaveState() {
+        const names = [
+            "saveDraft",
+            "saveAndPublish",
+            "saveOverviewOnly",
+            "saveAppearanceSettings",
+            "saveCurrentSection"
+        ];
+        names.forEach(name => wrapSaveAction(name));
+    }
+
+    function wrapSaveAction(name) {
+        const original = window[name];
+        if (typeof original !== "function" || original.__nvModernWrapped) return;
+        const wrapped = async function (...args) {
+            setSaving(true, name === "saveAndPublish" ? "Publishing…" : "Saving…");
+            try {
+                const result = await original.apply(this, args);
+                if (result !== false) setDirty(false, name === "saveAndPublish" ? "Published" : "Saved");
+                else setSaving(false, "Needs attention");
+                return result;
+            } catch (error) {
+                setSaving(false, "Save failed");
+                throw error;
+            }
+        };
+        wrapped.__nvModernWrapped = true;
+        wrapped.__nvModernOriginal = original;
+        window[name] = wrapped;
+    }
+
+    function setDirty(dirty, text) {
+        state.dirty = dirty;
+        state.saving = false;
+        const node = document.getElementById("nv-world-save-state");
+        if (!node) return;
+        node.classList.remove("nv-dirty", "nv-saving", "nv-saved");
+        node.classList.add(dirty ? "nv-dirty" : "nv-saved");
+        node.textContent = text || (dirty ? "Unsaved changes" : "Up to date");
+    }
+
+    function setSaving(saving, text) {
+        state.saving = saving;
+        const node = document.getElementById("nv-world-save-state");
+        if (!node) return;
+        node.classList.remove("nv-dirty", "nv-saving", "nv-saved");
+        node.classList.add(saving ? "nv-saving" : (state.dirty ? "nv-dirty" : "nv-saved"));
+        node.textContent = text || (saving ? "Saving…" : (state.dirty ? "Unsaved changes" : "Up to date"));
+    }
+
+    function installGlobalNavigationWrappers() {
+        ["openOverviewSettings", "openAppearanceSettings", "openSection"].forEach(name => {
+            const original = window[name];
+            if (typeof original !== "function" || original.__nvModernNavigationWrapped) return;
+            const wrapped = function (...args) {
+                const value = original.apply(this, args);
+                closeSidebar();
+                requestAnimationFrame(scheduleDecorate);
+                return value;
+            };
+            wrapped.__nvModernNavigationWrapped = true;
+            window[name] = wrapped;
+        });
+
+        const oldStart = window.startWorldTutorial;
+        window.startWorldTutorial = function () {
+            openGuide(0, document.getElementById("tutorial-button"));
+            return false;
+        };
+        window.startWorldTutorial.__nvLegacy = oldStart;
+
+        window.acceptWorldTutorialPrompt = function () {
+            clearLegacyTutorialState();
+            openGuide(0);
+        };
+
+        window.skipWorldTutorialPrompt = function () {
+            clearLegacyTutorialState();
+            localStorage.setItem(GUIDE_KEY, "true");
+        };
+    }
+
+    function buildGuide() {
+        document.getElementById("nv-world-guide-overlay")?.remove();
+
+        const overlay = document.createElement("div");
+        overlay.className = "nv-world-guide-overlay";
+        overlay.id = "nv-world-guide-overlay";
+        overlay.setAttribute("aria-hidden", "true");
+        overlay.innerHTML = `
+            <section class="nv-world-guide" role="dialog" aria-modal="true" aria-labelledby="nv-world-guide-title">
+                <aside class="nv-world-guide-steps">
+                    <strong>Studio guide</strong>
+                    ${guideSteps.map((step, index) => `
+                        <button type="button" class="nv-world-guide-step" data-nv-guide-step="${index}">
+                            <i>${index + 1}</i><span>${escapeHtml(step.label)}</span>
+                        </button>
+                    `).join("")}
+                </aside>
+                <div class="nv-world-guide-content">
+                    <header class="nv-world-guide-top">
+                        <div>
+                            <p id="nv-world-guide-kicker"></p>
+                            <h2 id="nv-world-guide-title"></h2>
+                        </div>
+                        <button class="nv-world-guide-close" type="button" aria-label="Close guide">×</button>
+                    </header>
+                    <div class="nv-world-guide-body">
+                        <p id="nv-world-guide-text"></p>
+                        <div id="nv-world-guide-checklist" class="nv-world-guide-checklist"></div>
+                    </div>
+                    <footer class="nv-world-guide-footer">
+                        <button type="button" data-nv-guide-action class="primary"></button>
+                        <div>
+                            <button type="button" data-nv-guide-previous>← Previous</button>
+                            <button type="button" data-nv-guide-next>Next →</button>
+                        </div>
+                    </footer>
+                </div>
+            </section>
+        `;
+        document.body.append(overlay);
+
+        overlay.querySelector(".nv-world-guide-close")?.addEventListener("click", () => closeGuide(false));
+        overlay.querySelector("[data-nv-guide-previous]")?.addEventListener("click", () => showGuideStep(state.guideIndex - 1));
+        overlay.querySelector("[data-nv-guide-next]")?.addEventListener("click", () => {
+            if (state.guideIndex >= guideSteps.length - 1) closeGuide(true);
+            else showGuideStep(state.guideIndex + 1);
+        });
+        overlay.querySelector("[data-nv-guide-action]")?.addEventListener("click", () => {
+            const step = guideSteps[state.guideIndex];
+            if (!step) return;
+            if (state.guideIndex < guideSteps.length - 1) closeGuide(false);
+            step.action?.();
+        });
+        overlay.querySelectorAll("[data-nv-guide-step]").forEach(button => {
+            button.addEventListener("click", () => showGuideStep(Number(button.dataset.nvGuideStep) || 0));
+        });
+        overlay.addEventListener("pointerdown", event => {
+            if (event.target === overlay) closeGuide(false);
+        });
+    }
+
+    function buildGuidePrompt() {
+        const prompt = document.createElement("aside");
+        prompt.id = "nv-world-guide-prompt";
+        prompt.className = "nv-world-guide-prompt";
+        prompt.innerHTML = `
+            <div><strong>World Studio has a new workflow</strong><span>Take a stable 2-minute tour—no moving spotlight.</span></div>
+            <button type="button" data-nv-guide-later>Later</button>
+            <button type="button" data-nv-guide-start>Start guide</button>
+        `;
+        prompt.querySelector("[data-nv-guide-later]")?.addEventListener("click", dismissGuidePrompt);
+        prompt.querySelector("[data-nv-guide-start]")?.addEventListener("click", () => {
+            dismissGuidePrompt();
+            openGuide(0);
+        });
+        document.body.append(prompt);
+    }
+
+    function maybeShowGuidePrompt() {
+        clearLegacyTutorialState();
+        if (localStorage.getItem(GUIDE_KEY) === "true") return;
+        const prompt = document.getElementById("nv-world-guide-prompt");
+        setTimeout(() => prompt?.classList.add("open"), 650);
+    }
+
+    function dismissGuidePrompt() {
+        document.getElementById("nv-world-guide-prompt")?.classList.remove("open");
+        localStorage.setItem(GUIDE_KEY, "true");
+    }
+
+    function openGuide(index = 0, returnFocus = null) {
+        clearLegacyTutorialState();
+        dismissGuidePrompt();
+        document.body.classList.remove("nv-mobile-actions-open", "nv-sidebar-open");
+
+        let overlay = document.getElementById("nv-world-guide-overlay");
+        if (!overlay) {
+            buildGuide();
+            overlay = document.getElementById("nv-world-guide-overlay");
+        }
+        if (!overlay) return;
+
+        state.guideReturnFocus = returnFocus || document.activeElement;
+        overlay.classList.remove("open");
+        overlay.setAttribute("aria-hidden", "false");
+        void overlay.offsetWidth;
+        overlay.classList.add("open");
+        document.body.classList.add("nv-guide-open");
+        document.documentElement.classList.add("nv-guide-open");
+        showGuideStep(index);
+
+        requestAnimationFrame(() => {
+            overlay.querySelector(".nv-world-guide-close")?.focus({ preventScroll: true });
+        });
+    }
+
+    function closeGuide(completed) {
+        const overlay = document.getElementById("nv-world-guide-overlay");
+        overlay?.classList.remove("open");
+        overlay?.setAttribute("aria-hidden", "true");
+        document.body.classList.remove("nv-guide-open");
+        document.documentElement.classList.remove("nv-guide-open");
+        if (completed) localStorage.setItem(GUIDE_KEY, "true");
+
+        const focusTarget = state.guideReturnFocus;
+        state.guideReturnFocus = null;
+        if (focusTarget && typeof focusTarget.focus === "function" && document.contains(focusTarget)) {
+            requestAnimationFrame(() => focusTarget.focus({ preventScroll: true }));
+        }
+    }
+
+    function showGuideStep(index) {
+        state.guideIndex = Math.max(0, Math.min(guideSteps.length - 1, index));
+        const step = guideSteps[state.guideIndex];
+        const overlay = document.getElementById("nv-world-guide-overlay");
+        if (!overlay || !step) return;
+
+        overlay.querySelector("#nv-world-guide-kicker").textContent = `Step ${state.guideIndex + 1} of ${guideSteps.length} · ${step.label}`;
+        overlay.querySelector("#nv-world-guide-title").textContent = step.title;
+        overlay.querySelector("#nv-world-guide-text").textContent = step.text;
+        overlay.querySelector("#nv-world-guide-checklist").innerHTML = step.checks.map((check, index) => `
+            <div class="nv-world-guide-check"><i>${index + 1}</i><span>${escapeHtml(check)}</span></div>
+        `).join("");
+        overlay.querySelector("[data-nv-guide-action]").textContent = step.actionLabel;
+        overlay.querySelector("[data-nv-guide-previous]").disabled = state.guideIndex === 0;
+        overlay.querySelector("[data-nv-guide-next]").textContent = state.guideIndex === guideSteps.length - 1 ? "Finish" : "Next →";
+        overlay.querySelectorAll("[data-nv-guide-step]").forEach(button => {
+            button.classList.toggle("active", Number(button.dataset.nvGuideStep) === state.guideIndex);
+        });
+    }
+
+    function clearLegacyTutorialState() {
+        document.body.classList.remove("tutorial-active");
+        ["tutorial-overlay", "tutorial-welcome-overlay"].forEach(id => {
+            const node = document.getElementById(id);
+            node?.classList.remove("open");
+            node?.setAttribute("aria-hidden", "true");
+            if (node) node.style.pointerEvents = "none";
+        });
+        document.querySelectorAll(".tutorial-target-lift").forEach(node => node.classList.remove("tutorial-target-lift"));
+    }
+
+    function openFirstSection() {
+        const first = document.querySelector("#section-list .section-card");
+        if (!first) {
+            closeGuide(false);
+            openSidebar();
+            return;
+        }
+        closeGuide(false);
+        first.click();
+        setTimeout(() => {
+            document.querySelector("#tutorial-writing-studio-card-area")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 180);
+    }
+
+    function jumpToPanel(pattern) {
+        closeGuide(false);
+        const panels = collectPanels(detectView());
+        const target = panels.find((panel, index) => pattern.test(panelLabel(panel, index)));
+        if (target) {
+            togglePanel(target, false);
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
+            return;
+        }
+        if (detectView() === "overview") callGlobal("openAppearanceSettings");
+    }
+
+    function openSidebar() {
+        document.body.classList.add("nv-sidebar-open");
+    }
+
+    function closeSidebar() {
+        document.body.classList.remove("nv-sidebar-open");
+    }
+
+    function toggleSidebar() {
+        document.body.classList.toggle("nv-sidebar-open");
+    }
+
+    function handleResize() {
+        if (window.innerWidth > MOBILE_BREAKPOINT) {
+            closeSidebar();
+            document.body.classList.remove("nv-mobile-actions-open");
+        }
+    }
+
+    function handleGlobalKeydown(event) {
+        if (event.key === "Escape") {
+            if (document.body.classList.contains("nv-guide-open")) closeGuide(false);
+            else if (document.body.classList.contains("nv-sidebar-open")) closeSidebar();
+            else document.body.classList.remove("nv-mobile-actions-open");
+        }
+
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+            event.preventDefault();
+            callGlobal("saveDraft");
+        }
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init, { once: true });
+    } else {
+        init();
+    }
+})();
