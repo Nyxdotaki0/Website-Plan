@@ -3223,13 +3223,66 @@
             font-weight: 900;
         }
 
-        #follow-stats .stat-card[data-connection-kind] {
+        #follow-stats .stat-card[data-connection-kind],
+        #follow-stats .stat-card[data-profile-works],
+        .system-stat-object[data-connection-kind],
+        .system-stat-object[data-profile-works],
+        .stats-object .stat-mini[data-connection-kind],
+        .stats-object .stat-mini[data-profile-works] {
             cursor: pointer;
+            pointer-events: auto;
+            transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
+            -webkit-tap-highlight-color: transparent;
         }
 
-            #follow-stats .stat-card[data-connection-kind]:hover {
+            #follow-stats .stat-card[data-connection-kind]:hover,
+            #follow-stats .stat-card[data-profile-works]:hover,
+            .system-stat-object[data-connection-kind]:hover,
+            .system-stat-object[data-profile-works]:hover,
+            .stats-object .stat-mini[data-connection-kind]:hover,
+            .stats-object .stat-mini[data-profile-works]:hover {
                 border-color: color-mix(in srgb, var(--accent-color) 42%, var(--border-color));
                 transform: translateY(-1px);
+                background: color-mix(in srgb, var(--accent-color) 8%, rgba(0,0,0,.18));
+            }
+
+            #follow-stats .stat-card[data-connection-kind]:focus-visible,
+            #follow-stats .stat-card[data-profile-works]:focus-visible,
+            .system-stat-object[data-connection-kind]:focus-visible,
+            .system-stat-object[data-profile-works]:focus-visible,
+            .stats-object .stat-mini[data-connection-kind]:focus-visible,
+            .stats-object .stat-mini[data-profile-works]:focus-visible {
+                outline: 2px solid var(--accent-color);
+                outline-offset: 3px;
+            }
+
+        .profile-works-modal-panel {
+            width: min(760px, calc(100vw - 28px));
+            max-height: min(820px, 88vh);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .profile-works-modal-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .profile-works-modal-list {
+            overflow: auto;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            padding-right: 3px;
+        }
+
+            .profile-works-modal-list .card {
+                margin: 0;
+                min-width: 0;
             }
 
         .connections-modal-panel {
@@ -3315,7 +3368,7 @@
         }
 
         @media (max-width:620px) {
-            .connections-modal-panel {
+            .connections-modal-panel, .profile-works-modal-panel {
                 width: 100%;
                 max-width: none;
                 max-height: 88vh;
@@ -3330,6 +3383,10 @@
             .connection-actions {
                 grid-column: 2;
                 flex-wrap: wrap;
+            }
+
+            .profile-works-modal-list {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -3378,7 +3435,7 @@
                         <span class="stat-label">Following</span>
                     </div>
 
-                    <div class="stat-card">
+                    <div class="stat-card" data-profile-works role="button" tabindex="0" aria-label="View published works">
                         <span id="world-count" class="stat-value">0</span>
                         <span class="stat-label">Published Works</span>
                     </div>
@@ -3394,7 +3451,7 @@
                 <div id="private-profile-panel" class="private-profile-panel" aria-live="polite">
                     <div class="private-profile-lock" aria-hidden="true">🔒</div>
                     <h2>This profile is private</h2>
-                    <p>Follow this creator to request access. Once they approve you, their published works, Creator Gallery, and followers/following lists will unlock automatically.</p>
+                    <p>You can still find and follow this creator, but only approved followers can view their published works, Creator Gallery, followers, and following lists.</p>
                     <span class="private-profile-badge">Approval required</span>
                 </div>
             </section>
@@ -3438,6 +3495,16 @@
             </div>
             <input id="connections-search" class="connections-search" type="search" placeholder="Search people..." autocomplete="off">
             <div id="connections-list" class="connections-list"><p class="empty">Loading...</p></div>
+        </div>
+    </div>
+
+    <div id="profile-works-modal" class="modal-backdrop" aria-hidden="true">
+        <div class="modal-panel profile-works-modal-panel">
+            <div class="profile-works-modal-head">
+                <div><h2 style="margin:0;">Published Works</h2><p id="profile-works-modal-subtitle" class="muted" style="margin:5px 0 0;"></p></div>
+                <button id="profile-works-modal-close" class="button secondary" type="button">Close</button>
+            </div>
+            <div id="profile-works-modal-list" class="profile-works-modal-list"><p class="empty">Loading...</p></div>
         </div>
     </div>
 
@@ -3593,6 +3660,7 @@
             followers: 0,
             following: 0
         };
+        let publishedWorkCount = 0;
 
         let isFollowingProfile = false;
         let followRelationshipState = "none";
@@ -3728,6 +3796,7 @@
                     loadProfileWorlds(profileId),
                     loadCreatorGalleryPreview(profileId)
                 ]);
+                publishedWorkCount = profileWorlds.length;
             } else {
                 profileWorlds = [];
                 galleryItems = [];
@@ -4674,7 +4743,7 @@
 
             document.getElementById("followers-count").textContent = String(followCounts.followers || 0);
             document.getElementById("following-count").textContent = String(followCounts.following || 0);
-            document.getElementById("world-count").textContent = String(profileWorlds.length || 0);
+            document.getElementById("world-count").textContent = String(publishedWorkCount || 0);
 
             const galleryLink = document.getElementById("creator-gallery-link");
             galleryLink.href = `creator-gallery.html?user=${encodeURIComponent(profile.username || "")}`;
@@ -4691,7 +4760,7 @@
             document.getElementById("private-profile-panel")?.classList.toggle("open", locked);
             document.getElementById("creator-gallery-section").style.display = locked ? "none" : "block";
             document.getElementById("all-worlds-section").style.display = locked ? "none" : "block";
-            document.getElementById("world-count").textContent = locked ? "—" : String(profileWorlds.length || 0);
+            document.getElementById("world-count").textContent = String(publishedWorkCount || 0);
         }
 
 
@@ -7961,8 +8030,11 @@
             }
 
             if (["followers_box", "following_box", "works_count_box"].includes(object.type)) {
+                const interactionAttributes = object.type === "works_count_box"
+                    ? 'data-profile-works role="button" tabindex="0" aria-label="View published works"'
+                    : `data-connection-kind="${object.type === "following_box" ? "following" : "followers"}" role="button" tabindex="0" aria-label="View ${object.type === "following_box" ? "following" : "followers"}` + '"';
                 return `
-                                                                                                                                                                                                                                                    <div class="system-stat-object" data-system-stat="${escapeHtml(object.type)}">
+                                                                                                                                                                                                                                                    <div class="system-stat-object" data-system-stat="${escapeHtml(object.type)}" ${interactionAttributes}>
                                                                                                                                                                                                                                                         <strong>${escapeHtml(getSingleStatValue(object.type))}</strong>
                                                                                                                                                                                                                                                         <span>${escapeHtml(getSingleStatLabel(object.type))}</span>
                                                                                                                                                                                                                                                     </div>
@@ -7972,9 +8044,9 @@
             if (object.type === "stats") {
                 return `
                                                                                                                                                                                                                                                     <div class="stats-object">
-                                                                                                                                                                                                                                                        <div class="stat-mini"><strong>${followCounts.followers || 0}</strong><span>Followers</span></div>
-                                                                                                                                                                                                                                                        <div class="stat-mini"><strong>${followCounts.following || 0}</strong><span>Following</span></div>
-                                                                                                                                                                                                                                                        <div class="stat-mini"><strong>${profileWorlds.length || 0}</strong><span>Works</span></div>
+                                                                                                                                                                                                                                                        <div class="stat-mini" data-connection-kind="followers" role="button" tabindex="0" aria-label="View followers"><strong>${followCounts.followers || 0}</strong><span>Followers</span></div>
+                                                                                                                                                                                                                                                        <div class="stat-mini" data-connection-kind="following" role="button" tabindex="0" aria-label="View following"><strong>${followCounts.following || 0}</strong><span>Following</span></div>
+                                                                                                                                                                                                                                                        <div class="stat-mini" data-profile-works role="button" tabindex="0" aria-label="View published works"><strong>${publishedWorkCount || 0}</strong><span>Works</span></div>
                                                                                                                                                                                                                                                     </div>
                                                                                                                                                                                                                                                 `;
             }
@@ -8168,7 +8240,7 @@
         function getSingleStatValue(type) {
             if (type === "followers_box") return String(followCounts.followers || 0);
             if (type === "following_box") return String(followCounts.following || 0);
-            if (type === "works_count_box") return String(profileWorlds.length || 0);
+            if (type === "works_count_box") return String(publishedWorkCount || 0);
             return "0";
         }
 
@@ -8257,19 +8329,33 @@
 
 
         document.addEventListener("click", event => {
-            const defaultStat = event.target.closest("[data-connection-kind]");
-            const customStat = event.target.closest('.custom-profile-object[data-type="followers_box"], .custom-profile-object[data-type="following_box"]');
-            const kind = defaultStat?.dataset.connectionKind || (customStat?.dataset.type === "following_box" ? "following" : customStat ? "followers" : "");
-            if (!kind) return;
-            event.preventDefault();
-            openConnectionsModal(kind);
+            const connectionStat = event.target.closest("[data-connection-kind]");
+            const legacyConnectionStat = event.target.closest('.custom-profile-object[data-type="followers_box"], .custom-profile-object[data-type="following_box"]');
+            const worksStat = event.target.closest('[data-profile-works], .custom-profile-object[data-type="works_count_box"]');
+
+            if (connectionStat || legacyConnectionStat) {
+                const kind = connectionStat?.dataset.connectionKind || (legacyConnectionStat?.dataset.type === "following_box" ? "following" : "followers");
+                event.preventDefault();
+                event.stopPropagation();
+                openConnectionsModal(kind);
+                return;
+            }
+
+            if (worksStat) {
+                event.preventDefault();
+                event.stopPropagation();
+                openProfileWorksModal();
+            }
         });
 
         document.addEventListener("keydown", event => {
-            const stat = event.target.closest?.("[data-connection-kind]");
-            if (!stat || !["Enter", " "].includes(event.key)) return;
+            if (!["Enter", " "].includes(event.key)) return;
+            const connectionStat = event.target.closest?.("[data-connection-kind]");
+            const worksStat = event.target.closest?.("[data-profile-works]");
+            if (!connectionStat && !worksStat) return;
             event.preventDefault();
-            openConnectionsModal(stat.dataset.connectionKind);
+            if (connectionStat) openConnectionsModal(connectionStat.dataset.connectionKind);
+            else openProfileWorksModal();
         });
 
         document.getElementById("connections-modal-close")?.addEventListener("click", closeConnectionsModal);
@@ -8281,6 +8367,30 @@
             connectionsSearchTimer = setTimeout(loadConnections, 240);
         });
         document.getElementById("connections-list")?.addEventListener("click", handleConnectionAction);
+        document.getElementById("profile-works-modal-close")?.addEventListener("click", closeProfileWorksModal);
+        document.getElementById("profile-works-modal")?.addEventListener("click", event => {
+            if (event.target.id === "profile-works-modal") closeProfileWorksModal();
+        });
+
+        function openProfileWorksModal() {
+            if (!profile) return;
+            if (!canAccessProfile && currentUser.id !== profile.id) {
+                alert("This creator's published works are private until they approve your follow request.");
+                return;
+            }
+
+            document.getElementById("profile-works-modal-subtitle").textContent = `@${profile.username || "creator"}`;
+            document.getElementById("profile-works-modal-list").innerHTML = renderWorksCards(profileWorlds);
+            const modal = document.getElementById("profile-works-modal");
+            modal.style.display = "flex";
+            modal.setAttribute("aria-hidden", "false");
+        }
+
+        function closeProfileWorksModal() {
+            const modal = document.getElementById("profile-works-modal");
+            modal.style.display = "none";
+            modal.setAttribute("aria-hidden", "true");
+        }
 
         async function openConnectionsModal(kind) {
             if (!profile) return;
@@ -8521,17 +8631,22 @@
         }
 
         async function loadFollowData(profileId) {
-            const [countResult, relationshipResult] = await Promise.all([
-                supabase.rpc("nv_profile_connection_counts", { p_profile_id: profileId }),
+            let [countResult, relationshipResult] = await Promise.all([
+                supabase.rpc("nv_profile_public_counts", { p_profile_id: profileId }),
                 currentUser && currentUser.id !== profileId
                     ? supabase.rpc("nv_relationship_state", { p_target_id: profileId })
                     : Promise.resolve({ data: [{ relationship_state: "self", follows_you: false, can_access: true }], error: null })
             ]);
 
+            if (countResult.error) {
+                countResult = await supabase.rpc("nv_profile_connection_counts", { p_profile_id: profileId });
+            }
+
             if (!countResult.error) {
                 const counts = Array.isArray(countResult.data) ? countResult.data[0] : countResult.data;
                 followCounts.followers = Number(counts?.follower_count || 0);
                 followCounts.following = Number(counts?.following_count || 0);
+                publishedWorkCount = Number(counts?.work_count || publishedWorkCount || 0);
             } else {
                 const [{ count: followerCount }, { count: followingCount }] = await Promise.all([
                     supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", profileId),
@@ -8539,6 +8654,13 @@
                 ]);
                 followCounts.followers = followerCount || 0;
                 followCounts.following = followingCount || 0;
+                const { count: workCount } = await supabase
+                    .from("worlds")
+                    .select("*", { count: "exact", head: true })
+                    .eq("owner_id", profileId)
+                    .eq("visibility", "published")
+                    .in("moderation_status", ["visible", "approved"]);
+                publishedWorkCount = workCount || 0;
             }
 
             if (relationshipResult?.error) {
