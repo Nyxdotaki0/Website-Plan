@@ -10,6 +10,7 @@ const ICONS = {
     home: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg>`,
     explore: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m15.5 8.5-2 5-5 2 2-5z"></path></svg>`,
     gallery: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9" r="1.5"></circle><path d="m5 18 5-5 3 3 2-2 4 4"></path></svg>`,
+    creators: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"></circle><circle cx="17" cy="10" r="2.5"></circle><path d="M3.5 20a5.5 5.5 0 0 1 11 0"></path><path d="M14 20a4 4 0 0 1 7 0"></path></svg>`,
     dashboard: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>`,
     profile: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>`,
     settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.2 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.4V9.6h.1A1.7 1.7 0 0 0 4.2 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.6 4.2a1.7 1.7 0 0 0 1-.6A1.7 1.7 0 0 0 10 2.5v-.1h4v.1a1.7 1.7 0 0 0 1 1.7 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8.6a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1v4h-.1a1.7 1.7 0 0 0-1.7 1z"></path></svg>`,
@@ -112,6 +113,7 @@ function buildHeader({ page, user, profile, guestMode, guestBrandHref, guestLogi
                 <nav class="nv-primary-nav" aria-label="Primary navigation">
                     ${navLink("Home", "index.html", "home", page)}
                     ${navLink("Explore", "explore.html", "explore", page)}
+                    ${navLink("Creators", "creators.html", "creators", page)}
                     ${navLink("Gallery", "gallery.html", "gallery", page)}
                     <button class="nv-nav-link" type="button" data-nv-search-open>Search</button>
                 </nav>
@@ -190,7 +192,7 @@ function buildMobileNavigation({ page, user, profile }) {
     return `
         <nav class="nv-mobile-bottom-nav" aria-label="Mobile navigation">
             ${mobileLink("Home", "index.html", "home", page, ICONS.home)}
-            ${mobileLink("Explore", "explore.html", "explore", page, ICONS.explore)}
+            ${mobileLink("Discover", "explore.html", "explore", ["explore", "creators"].includes(page) ? "explore" : page, ICONS.explore)}
             ${mobileLink("Gallery", "gallery.html", "gallery", page, ICONS.gallery)}
             <button class="nv-mobile-nav-item create" type="button" data-nv-mobile-create>${ICONS.plus}<span>Create</span></button>
             ${mobileLink("Studio", "dashboard.html", "dashboard", page, ICONS.dashboard)}

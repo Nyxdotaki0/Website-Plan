@@ -4,7 +4,7 @@ export async function loadViewerContext(userId) {
     const [profileResult, forwardBlocks, reverseBlocks] = await Promise.all([
         supabase
             .from("profiles")
-            .select("id, username, display_name, avatar_url, banner_url, bio, role, account_status, content_experience, blocked_content_warnings, age_role, profile_completed, age_verified, birth_date")
+            .select("id, username, display_name, avatar_url, banner_url, bio, creator_type, profile_status, role, role_name, account_status, content_experience, blocked_content_warnings, age_role, profile_completed, age_verified, birth_date, profile_visibility, discoverable")
             .eq("id", userId)
             .maybeSingle(),
         supabase.from("user_blocks").select("blocked_id").eq("blocker_id", userId).limit(1000),
@@ -35,7 +35,7 @@ export async function fetchHomeFeed(mode = "for_you", limit = 12, offset = 0) {
         p_offset: offset
     });
 
-    if (!rpc.error) return rpc.data || [];
+    if (!rpc.error) return filterAccessibleCreatorItems(rpc.data || []);
     console.warn("nv_home_feed unavailable, using direct query:", rpc.error.message);
     return fallbackWorldFeed(mode, limit, offset);
 }
@@ -49,7 +49,7 @@ export async function fetchGalleryFeed(mode = "trending", limit = 12, offset = 0
         p_age_rating: options.ageRating || null
     });
 
-    if (!rpc.error) return hydrateGalleryPreviewMedia(rpc.data || []);
+    if (!rpc.error) return hydrateGalleryPreviewMedia(await filterAccessibleCreatorItems(rpc.data || []));
     console.warn("nv_gallery_feed unavailable, using direct query:", rpc.error.message);
 
     let query = supabase
@@ -109,18 +109,45 @@ async function hydrateGalleryPreviewMedia(rows = []) {
 }
 
 export async function fetchDiscoverCreators(limit = 10) {
+    const directory = await supabase.rpc("nv_creator_directory", {
+        p_search: null,
+        p_creator_type: null,
+        p_mode: "for_you",
+        p_privacy: "all",
+        p_require_gallery: false,
+        p_require_content: false,
+        p_limit: limit,
+        p_offset: 0
+    });
+    if (!directory.error) return directory.data || [];
+
     const rpc = await supabase.rpc("nv_discover_creators", { p_limit: limit });
     if (!rpc.error) return rpc.data || [];
 
     const { data, error } = await supabase
         .from("profiles")
-        .select("id, username, display_name, avatar_url, banner_url, bio, role, account_status")
+        .select("id, username, display_name, avatar_url, banner_url, bio, creator_type, profile_status, role, role_name, account_status, profile_visibility, discoverable")
         .eq("account_status", "active")
         .not("username", "is", null)
         .order("created_at", { ascending: false })
         .limit(limit);
     if (error) throw error;
     return data || [];
+}
+
+export async function filterAccessibleCreatorItems(items = [], ownerKey = "owner_id") {
+    const rows = Array.isArray(items) ? items : [];
+    const ownerIds = [...new Set(rows.map(row => row?.[ownerKey]).filter(Boolean))];
+    if (!ownerIds.length) return rows;
+
+    const { data, error } = await supabase.rpc("nv_filter_accessible_creator_ids", { p_owner_ids: ownerIds });
+    if (error) {
+        console.warn("Creator privacy filter unavailable until its migration runs:", error.message);
+        return rows;
+    }
+
+    const allowed = new Set((data || []).map(row => String(row.owner_id || row)));
+    return rows.filter(row => allowed.has(String(row?.[ownerKey] || "")));
 }
 
 export async function fetchFollowingActivity(limit = 8) {
@@ -174,7 +201,7 @@ export async function attachProfiles(items, ownerKey = "owner_id") {
 
     const { data } = await supabase
         .from("profiles")
-        .select("id, username, display_name, avatar_url, banner_url, bio, account_status")
+        .select("id, username, display_name, avatar_url, banner_url, bio, creator_type, profile_status, account_status, profile_visibility, discoverable")
         .in("id", ids);
 
     const map = Object.fromEntries((data || []).map(profile => [profile.id, profile]));

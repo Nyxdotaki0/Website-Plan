@@ -1,4 +1,4 @@
-import { initNullverseShell } from "./nullverse-shell.js?v=5";
+import { initNullverseShell } from "./nullverse-shell.js?v=7";
 
 const body = document.body;
 const guestMode = body.dataset.nvGuestMode || "default";
