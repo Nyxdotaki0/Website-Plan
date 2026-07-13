@@ -458,6 +458,8 @@
     function normalizeEditorWorkflow() {
         hideLegacyThemeName();
         consolidateBackgroundEffects();
+        consolidateSectionCardEditor();
+        enhanceCompactAddButtons();
     }
 
     function hideLegacyThemeName() {
@@ -469,6 +471,159 @@
 
         const labelWrap = input.previousElementSibling;
         if (labelWrap) labelWrap.classList.add("nv-world-hidden-legacy-control");
+    }
+
+
+    function enhanceCompactAddButtons() {
+        const labelsByInputId = {
+            "genre-input": "Add Genre",
+            "theme-input": "Add Theme",
+            "warning-input": "Add Warning"
+        };
+
+        Object.entries(labelsByInputId).forEach(([inputId, label]) => {
+            const input = document.getElementById(inputId);
+            const row = input?.closest(".tag-input-row, .warning-tag-tools");
+            const button = row?.querySelector("button");
+            if (!button) return;
+            button.classList.add("nv-world-add-action");
+            button.setAttribute("aria-label", label);
+            button.innerHTML = `<span class="nv-world-add-action-icon" aria-hidden="true">+</span><span>${label}</span>`;
+        });
+
+        document.querySelectorAll("#editor-content button").forEach(button => {
+            if (button.classList.contains("nv-world-add-action")) return;
+            if ((button.textContent || "").trim().toLowerCase() !== "add") return;
+            button.classList.add("nv-world-add-action");
+            button.innerHTML = '<span class="nv-world-add-action-icon" aria-hidden="true">+</span><span>Add</span>';
+        });
+    }
+
+    function makeSectionCardGroup(title, description, className) {
+        const group = document.createElement("section");
+        group.className = `nv-world-section-card-group ${className}`;
+        group.innerHTML = `
+            <div class="nv-world-section-card-group-heading">
+                <div>
+                    <span>Section card</span>
+                    <h4>${title}</h4>
+                </div>
+                <p>${description}</p>
+            </div>
+        `;
+        return group;
+    }
+
+    function consolidateSectionCardEditor() {
+        if (state.view !== "section") return;
+
+        const appearancePanel = document.getElementById("tutorial-section-card-appearance-area");
+        if (!appearancePanel || appearancePanel.dataset.nvSectionCardStudio === "true") return;
+
+        const sectionRoot = appearancePanel.closest(".section-editor-v2");
+        const designPanel = [...(sectionRoot?.querySelectorAll(":scope > .section-tool-card") || [])]
+            .find(panel => /^Card Design Controls$/i.test(panelTitle(panel)));
+
+        if (!designPanel) return;
+
+        appearancePanel.dataset.nvSectionCardStudio = "true";
+        appearancePanel.classList.add("nv-world-section-card-studio");
+
+        const title = appearancePanel.querySelector(":scope > h3");
+        const intro = appearancePanel.querySelector(":scope > p.muted");
+        if (intro) intro.classList.add("nv-world-section-card-intro");
+
+        const preview = appearancePanel.querySelector("#section-card-preview");
+        const upload = appearancePanel.querySelector(".section-card-preview-upload");
+        const placement = appearancePanel.querySelector(".image-fit-launch-row");
+        const creditPanel = appearancePanel.querySelector("#section-card-credit-panel");
+        const imageLabel = appearancePanel.querySelector(":scope > .info-wrap");
+
+        const workspace = document.createElement("div");
+        workspace.className = "nv-world-section-card-workspace";
+
+        const previewPane = document.createElement("aside");
+        previewPane.className = "nv-world-section-card-preview-pane";
+        previewPane.innerHTML = `
+            <div class="nv-world-section-card-preview-heading">
+                <div>
+                    <span>Live preview</span>
+                    <strong>Public section card</strong>
+                </div>
+                <p>Changes update here while you edit.</p>
+            </div>
+        `;
+        if (preview) previewPane.append(preview);
+
+        const controlsPane = document.createElement("div");
+        controlsPane.className = "nv-world-section-card-controls";
+
+        const imageGroup = makeSectionCardGroup(
+            "Image & placement",
+            "Upload the card artwork, then use Placement Studio for crop, scale, fit, and position.",
+            "nv-world-section-card-image-group"
+        );
+        if (imageLabel) imageGroup.append(imageLabel);
+        if (upload) imageGroup.append(upload);
+        if (placement) imageGroup.append(placement);
+        if (creditPanel) {
+            const creditWrap = document.createElement("div");
+            creditWrap.className = "nv-world-section-card-credit-wrap";
+            creditWrap.append(creditPanel);
+            imageGroup.append(creditWrap);
+        }
+
+        const styleGroup = makeSectionCardGroup(
+            "Style & surface",
+            "Choose the card surface, colors, contrast, opacity, and overlay strength.",
+            "nv-world-section-card-style-group"
+        );
+
+        const designHeading = designPanel.querySelector(":scope > h3");
+        const designIntro = designPanel.querySelector(":scope > p.muted");
+        designHeading?.remove();
+        designIntro?.remove();
+
+        const styleInfo = designPanel.querySelector(":scope > .info-wrap");
+        const styleGrid = designPanel.querySelector(":scope > .style-choice-grid");
+        const hiddenStyle = designPanel.querySelector("#section-card-style");
+        const connectedColors = designPanel.querySelector(":scope > .connected-color-picker");
+        const textColor = designPanel.querySelector(":scope > .compact-color-row");
+        const effectGrid = designPanel.querySelector(":scope > .settings-grid-v2");
+
+        const stylePickerBlock = document.createElement("div");
+        stylePickerBlock.className = "nv-world-section-card-control-block";
+        stylePickerBlock.innerHTML = '<div class="nv-world-section-card-control-label">Card surface</div>';
+        if (styleInfo) stylePickerBlock.append(styleInfo);
+        if (styleGrid) stylePickerBlock.append(styleGrid);
+        if (hiddenStyle) stylePickerBlock.append(hiddenStyle);
+
+        const colorBlock = document.createElement("div");
+        colorBlock.className = "nv-world-section-card-control-block";
+        colorBlock.innerHTML = `
+            <div class="nv-world-section-card-control-label">Card colors</div>
+            <p class="nv-world-section-card-control-help">Use the two swatches for solid or gradient surfaces, then set the text color for readability.</p>
+        `;
+        if (connectedColors) colorBlock.append(connectedColors);
+        if (textColor) colorBlock.append(textColor);
+
+        const effectsBlock = document.createElement("div");
+        effectsBlock.className = "nv-world-section-card-control-block";
+        effectsBlock.innerHTML = `
+            <div class="nv-world-section-card-control-label">Image visibility</div>
+            <p class="nv-world-section-card-control-help">Opacity controls the artwork strength. Overlay adds darkness behind text.</p>
+        `;
+        if (effectGrid) effectsBlock.append(effectGrid);
+
+        styleGroup.append(stylePickerBlock, colorBlock, effectsBlock);
+        controlsPane.append(imageGroup, styleGroup);
+        workspace.append(previewPane, controlsPane);
+
+        if (intro) intro.after(workspace);
+        else if (title) title.after(workspace);
+        else appearancePanel.append(workspace);
+
+        designPanel.remove();
     }
 
     function directPanelHeading(panel) {
@@ -558,7 +713,7 @@
     }
 
     function buildPreviewWorkbench(panel) {
-        if (!panel || panel.querySelector(":scope > .nv-world-preview-workbench")) return;
+        if (!panel || panel.classList.contains("nv-world-section-card-studio") || panel.querySelector(":scope > .nv-world-preview-workbench")) return;
         const previews = previewCandidates(panel);
         if (!previews.length) return;
 
