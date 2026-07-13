@@ -1,9 +1,5 @@
 ﻿import { supabase } from "./supabaseClient.js";
 
-const resolver = typeof window.__resolveNvCreatorPrivacy === "function"
-    ? window.__resolveNvCreatorPrivacy
-    : null;
-
 let finalState = { denied: false, access: null, route: null };
 
 try {
@@ -11,9 +7,12 @@ try {
     finalState.route = route;
     if (route) finalState = await guardProtectedRoute(route);
 } catch (error) {
-    console.warn("Creator privacy guard failed:", error);
-    finalState = { ...finalState, denied: false, error };
+    console.warn("Creator privacy guard failed safely:", error);
+    finalState = { ...finalState, denied: false, error: error?.message || String(error) };
 } finally {
+    const resolver = typeof window.__resolveNvCreatorPrivacy === "function"
+        ? window.__resolveNvCreatorPrivacy
+        : null;
     resolver?.(finalState);
     window.dispatchEvent(new CustomEvent("nvcreatorprivacyready", { detail: finalState }));
 }
@@ -22,7 +21,7 @@ function resolveProtectedRoute() {
     const file = location.pathname.split("/").pop()?.toLowerCase() || "";
     const params = new URLSearchParams(location.search);
     if (file === "creator-gallery.html") {
-        return { type: "creator_gallery", username: params.get("user") || "", contentId: null };
+        return { type: "creator_gallery", username: params.get("user") || params.get("username") || "", contentId: null };
     }
     if (file === "creator-gallery-item.html") {
         return { type: "gallery_item", username: "", contentId: params.get("id") || params.get("item") || "" };
@@ -35,30 +34,58 @@ function resolveProtectedRoute() {
 
 async function guardProtectedRoute(route) {
     if (route.type === "creator_gallery" && !route.username) {
-        const { data: { user } } = await supabase.auth.getUser();
+        const authResult = await withTimeout(
+            supabase.auth.getUser(),
+            2500,
+            "Creator privacy authentication check"
+        );
+        const user = authResult?.data?.user || null;
         if (!user) return { denied: false, access: null, route };
-        const { data: owner } = await supabase.from("profiles").select("username").eq("id", user.id).maybeSingle();
-        route.username = owner?.username || "";
+
+        const ownerResult = await withTimeout(
+            supabase.from("profiles").select("username").eq("id", user.id).maybeSingle(),
+            2500,
+            "Creator privacy owner lookup"
+        );
+        route.username = ownerResult?.data?.username || "";
     }
 
-    if (route.type !== "creator_gallery" && !route.contentId) return { denied: false, access: null, route };
-    if (route.type === "creator_gallery" && !route.username) return { denied: false, access: null, route };
+    if (route.type !== "creator_gallery" && !route.contentId) {
+        return { denied: false, access: null, route };
+    }
+    if (route.type === "creator_gallery" && !route.username) {
+        return { denied: false, access: null, route };
+    }
 
-    const { data, error } = await supabase.rpc("nv_content_access_state", {
-        p_content_type: route.type,
-        p_content_id: route.contentId || null,
-        p_username: route.username || null
-    });
+    const rpcResult = await withTimeout(
+        supabase.rpc("nv_content_access_state", {
+            p_content_type: route.type,
+            p_content_id: route.contentId || null,
+            p_username: route.username || null
+        }),
+        4500,
+        "Creator privacy access check"
+    );
+
+    const { data, error } = rpcResult || {};
     if (error) {
-        // This fallback keeps existing pages usable before the migration is installed.
+        // Database RLS remains the final privacy boundary. The fail-open client result
+        // prevents a missing/older preview migration from freezing an otherwise valid page.
         console.warn("Creator privacy guard unavailable until its migration runs:", error.message);
         return { denied: false, access: null, route, migrationMissing: true };
     }
 
     const access = Array.isArray(data) ? data[0] : data;
-    if (!access || access.can_access !== false) return { denied: false, access: access || null, route };
+    if (!access || access.can_access !== false) {
+        return { denied: false, access: access || null, route };
+    }
 
-    await renderLockedCreatorContent(access);
+    try {
+        await renderLockedCreatorContent(access);
+    } catch (error) {
+        console.error("Could not render the private creator lock screen:", error);
+        renderEmergencyPrivateLock(access);
+    }
     return { denied: true, access, route };
 }
 
@@ -66,11 +93,21 @@ async function renderLockedCreatorContent(access) {
     document.documentElement.dataset.nvCreatorAccess = "denied";
     document.body.classList.add("nv-private-content-locked");
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const authResult = await withTimeout(
+        supabase.auth.getUser(),
+        2200,
+        "Private profile viewer check"
+    ).catch(() => ({ data: { user: null } }));
+    const user = authResult?.data?.user || null;
+
     let relationship = "signed_out";
     if (user) {
-        const result = await supabase.rpc("nv_relationship_state", { p_target_id: access.owner_id });
-        const row = Array.isArray(result.data) ? result.data[0] : result.data;
+        const result = await withTimeout(
+            supabase.rpc("nv_relationship_state", { p_target_id: access.owner_id }),
+            2500,
+            "Private profile relationship check"
+        ).catch(() => ({ data: null }));
+        const row = Array.isArray(result?.data) ? result.data[0] : result?.data;
         relationship = row?.relationship_state || "none";
     }
 
@@ -80,6 +117,7 @@ async function renderLockedCreatorContent(access) {
     const actionLabel = relationship === "requested" ? "Requested" : relationship === "following" ? "Following" : "Request to Follow";
 
     const style = document.createElement("style");
+    style.id = "nv-private-content-lock-style";
     style.textContent = `
         html[data-nv-creator-access="denied"] body > :not(#nv-site-header):not(#nv-mobile-nav):not(#nv-private-content-lock):not(script):not(style) { visibility:hidden !important; }
         #nv-private-content-lock {
@@ -123,20 +161,46 @@ async function renderLockedCreatorContent(access) {
         const button = event.currentTarget;
         button.disabled = true;
         button.textContent = "Updating...";
-        const { data, error } = await supabase.rpc("nv_follow_toggle", { p_target_id: access.owner_id });
-        if (error) {
-            alert(error.message || "Could not update this follow request.");
-            button.disabled = false;
+        try {
+            const result = await withTimeout(
+                supabase.rpc("nv_follow_toggle", { p_target_id: access.owner_id }),
+                5000,
+                "Follow request update"
+            );
+            if (result?.error) throw result.error;
+            const row = Array.isArray(result?.data) ? result.data[0] : result?.data;
+            const next = row?.relationship_state || "none";
+            button.className = `primary ${next}`;
+            button.textContent = next === "requested" ? "Requested" : next === "following" ? "Following" : "Request to Follow";
+            if (row?.can_access === true) location.reload();
+        } catch (error) {
+            alert(error?.message || "Could not update this follow request.");
             button.textContent = actionLabel;
-            return;
+        } finally {
+            button.disabled = false;
         }
-        const result = Array.isArray(data) ? data[0] : data;
-        const next = result?.relationship_state || "none";
-        button.className = `primary ${next}`;
-        button.textContent = next === "requested" ? "Requested" : next === "following" ? "Following" : "Request to Follow";
-        button.disabled = false;
-        if (result?.can_access === true) location.reload();
     });
+}
+
+function renderEmergencyPrivateLock(access) {
+    document.documentElement.dataset.nvCreatorAccess = "denied";
+    document.body.innerHTML = `
+        <main style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#08080d;color:#fff;font-family:Arial,sans-serif;text-align:center;">
+            <section style="width:min(560px,100%);padding:36px;border:1px solid rgba(255,255,255,.18);border-radius:24px;background:#111119;">
+                <div style="font-size:2rem;">🔒</div>
+                <h1>${escapeHtml(access?.display_name || access?.username || "Private Creator")}</h1>
+                <p style="color:#b7b7c4;line-height:1.6;">This creator profile is private. Open their profile to request access.</p>
+                <a style="display:inline-flex;margin-top:14px;padding:12px 16px;border-radius:12px;background:#fff;color:#111;text-decoration:none;font-weight:800;" href="profile.html?user=${encodeURIComponent(access?.username || "")}">View Profile</a>
+            </section>
+        </main>`;
+}
+
+function withTimeout(promise, milliseconds, label) {
+    let timeoutId;
+    const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`${label} timed out.`)), milliseconds);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
 }
 
 function escapeHtml(value) {
@@ -147,4 +211,3 @@ function escapeHtml(value) {
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
 }
-// JavaScript source code

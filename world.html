@@ -1009,9 +1009,25 @@
     </style>
     <link rel="stylesheet" href="nullverse-shell.css?v=5">
     <script>
-        window.nvCreatorPrivacyReady = new Promise(resolve => { window.__resolveNvCreatorPrivacy = resolve; });
+        (() => {
+            let settled = false;
+            let resolveGate;
+            window.nvCreatorPrivacyReady = new Promise(resolve => { resolveGate = resolve; });
+            window.__resolveNvCreatorPrivacy = state => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(window.__nvCreatorPrivacyTimeout);
+                resolveGate(state || { denied: false });
+            };
+            window.__nvCreatorPrivacyTimeout = setTimeout(() => {
+                window.__resolveNvCreatorPrivacy({ denied: false, timedOut: true });
+            }, 6500);
+            window.__nvCreatorPrivacyScriptFailed = () => {
+                window.__resolveNvCreatorPrivacy({ denied: false, scriptFailed: true });
+            };
+        })();
     </script>
-    <script type="module" src="creator-privacy-guard.js?v=2"></script>
+    <script type="module" src="creator-privacy-guard.js?v=3" onerror="window.__nvCreatorPrivacyScriptFailed && window.__nvCreatorPrivacyScriptFailed()"></script>
 </head>
 
 <body data-page="world" data-nv-beta-only-user="true" data-nv-active-only="true">
@@ -1220,7 +1236,10 @@
     </div>
 
     <script type="module">
-        const __nvCreatorPrivacyState = await window.nvCreatorPrivacyReady;
+        const __nvCreatorPrivacyState = await Promise.race([
+            window.nvCreatorPrivacyReady || Promise.resolve({ denied: false, gateMissing: true }),
+            new Promise(resolve => setTimeout(() => resolve({ denied: false, timedOut: true }), 7000))
+        ]);
         if (__nvCreatorPrivacyState?.denied) await new Promise(() => { });
         import { requireBetaAccess } from "./betaGate.js";
         import { supabase } from "./supabaseClient.js";
