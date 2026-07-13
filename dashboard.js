@@ -257,6 +257,19 @@ function bindManagementButtons(root) {
 }
 
 document.addEventListener("click", event => {
+    const retiredGalleryLink = event.target.closest('a[href*="gallery-item-studio.html"]');
+    if (retiredGalleryLink) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        const creatorGalleryUrl = profile?.username
+            ? `creator-gallery.html?user=${encodeURIComponent(profile.username)}`
+            : "creator-gallery.html";
+
+        window.location.assign(creatorGalleryUrl);
+        return;
+    }
+
     if (event.target.closest(".dashboard-card-menu") || event.target.closest(".dashboard-card-menu-button")) return;
     document.querySelectorAll(".dashboard-card-menu.open").forEach(menu => menu.classList.remove("open"));
 });
