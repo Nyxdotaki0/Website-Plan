@@ -272,8 +272,8 @@
             }
         }
     </style>
-    <link rel="stylesheet" href="nullverse-shell.css?v=7">
-    <link rel="stylesheet" href="notifications.css?v=4">
+    <link rel="stylesheet" href="nullverse-shell.css?v=5">
+    <link rel="stylesheet" href="notifications.css?v=2">
 </head>
 
 <body data-page="notifications" data-nv-beta-only-user="true" data-nv-active-only="true">
@@ -290,14 +290,6 @@
             </div>
         </section>
 
-        <section id="follow-requests-panel" class="follow-requests-panel" aria-labelledby="follow-requests-title" hidden>
-            <div class="follow-requests-head">
-                <div><p class="notifications-kicker">Private profile access</p><h2 id="follow-requests-title">Follow Requests</h2><p>Accepting a request unlocks your private profile, published creations, Creator Gallery, and followers/following lists for that person.</p></div>
-                <span id="follow-request-count" class="badge">0 pending</span>
-            </div>
-            <div id="follow-requests-list" class="follow-requests-list"></div>
-        </section>
-
         <section class="notifications-toolbar" aria-label="Notification controls">
             <input id="notification-search" class="notifications-search" type="search" placeholder="Search notifications..." autocomplete="off">
             <div class="notifications-filter-row">
@@ -307,7 +299,6 @@
             </div>
             <div class="notifications-action-row">
                 <span id="notification-count" class="badge">Loading...</span>
-                <button class="button" type="button" onclick="markAllRead()">Mark All Read</button>
                 <button class="button" type="button" onclick="clearRead()">Clear Read</button>
             </div>
         </section>
@@ -323,12 +314,13 @@
         setupMessageBadge();
 
         const currentUser = await requireBetaAccess();
-        setupNotificationBadge();
         console.log("Viewing notifications as:", currentUser.id, currentUser.email);
 
         let allNotifications = [];
         let activeNotificationFilter = "all";
         let notificationSearchQuery = "";
+        let autoReadPromise = null;
+        let notificationRefreshTimer = null;
 
         document.querySelectorAll("[data-notification-filter]").forEach(button => {
             button.addEventListener("click", () => {
@@ -343,76 +335,66 @@
             renderNotifications();
         });
 
-        await Promise.all([loadFollowRequests(), loadNotifications()]);
+        await refreshNotifications({ acknowledge: true });
+        setupNotificationBadge();
 
+        async function acknowledgeVisibleNotifications() {
+            if (document.visibilityState === "hidden") {
+                return false;
+            }
 
-        async function loadFollowRequests() {
-            const panel = document.getElementById("follow-requests-panel");
-            const list = document.getElementById("follow-requests-list");
-            const count = document.getElementById("follow-request-count");
+            if (autoReadPromise) {
+                return autoReadPromise;
+            }
 
-            const { data, error } = await supabase.rpc("nv_pending_follow_requests");
+            autoReadPromise = (async () => {
+                const { error } = await supabase
+                    .from("notifications")
+                    .update({ is_read: true })
+                    .eq("recipient_id", currentUser.id)
+                    .eq("is_read", false);
 
-            if (error) {
-                if (String(error.message || "").toLowerCase().includes("follow_requests")) {
-                    panel.hidden = false;
-                    list.innerHTML = `<div class="notifications-empty">Run SUPABASE_CREATOR_PRIVACY_DISCOVERY.sql before testing follow requests.</div>`;
-                    count.textContent = "Setup needed";
-                    return;
+                if (error) {
+                    console.error("Could not automatically mark notifications as read:", error);
+                    return false;
                 }
-                console.warn("Follow request load failed:", error);
-                panel.hidden = true;
-                return;
-            }
 
-            const requests = data || [];
-            panel.hidden = !requests.length;
-            count.textContent = `${requests.length} pending`;
-            if (!requests.length) {
-                list.innerHTML = "";
-                return;
-            }
+                clearNotificationBadgeUi();
+                return true;
+            })().finally(() => {
+                autoReadPromise = null;
+            });
 
-            list.innerHTML = requests.map(request => {
-                const username = request.username || "creator";
-                const displayName = request.display_name || username;
-                const avatar = request.avatar_url || "https://placehold.co/160x160/1b1b28/ffffff?text=NV";
-                return `<article class="follow-request-card" data-follow-request-id="${escapeHtml(request.request_id)}">
-                        <a href="profile.html?user=${encodeURIComponent(username)}"><img src="${escapeHtml(avatar)}" alt=""></a>
-                        <div class="follow-request-copy">
-                            <strong><a href="profile.html?user=${encodeURIComponent(username)}">${escapeHtml(displayName)}</a></strong>
-                            <span>@${escapeHtml(username)}${request.creator_type ? ` · ${escapeHtml(request.creator_type)}` : ""}</span>
-                            ${request.bio ? `<p>${escapeHtml(request.bio)}</p>` : ""}
-                            <time>${formatDate(request.created_at)}</time>
-                        </div>
-                        <div class="follow-request-actions">
-                            <button class="button" type="button" data-follow-request-action="accept">Accept</button>
-                            <button class="button" type="button" data-follow-request-action="decline">Decline</button>
-                        </div>
-                    </article>`;
-            }).join("");
+            return autoReadPromise;
         }
 
-        document.getElementById("follow-requests-list")?.addEventListener("click", async event => {
-            const button = event.target.closest("[data-follow-request-action]");
-            if (!button) return;
-            const card = button.closest("[data-follow-request-id]");
-            if (!card) return;
-            button.disabled = true;
-            const decision = button.dataset.followRequestAction;
+        function clearNotificationBadgeUi() {
+            document.querySelectorAll(".notification-badge").forEach(badge => {
+                badge.textContent = "";
+                badge.style.display = "none";
+            });
 
-            try {
-                const { error } = await supabase.rpc("nv_respond_follow_request", {
-                    p_request_id: card.dataset.followRequestId,
-                    p_decision: decision
-                });
-                if (error) throw error;
-                await Promise.all([loadFollowRequests(), loadNotifications()]);
-            } catch (error) {
-                alert(error.message || "Could not update this follow request.");
-                button.disabled = false;
+            document.querySelectorAll(".notification-link").forEach(link => {
+                link.classList.remove("has-unread");
+            });
+        }
+
+        async function refreshNotifications({ acknowledge = document.visibilityState !== "hidden" } = {}) {
+            if (acknowledge) {
+                await acknowledgeVisibleNotifications();
             }
-        });
+
+            await loadNotifications();
+        }
+
+        function queueNotificationRefresh({ acknowledge = document.visibilityState !== "hidden" } = {}) {
+            clearTimeout(notificationRefreshTimer);
+            notificationRefreshTimer = setTimeout(() => {
+                refreshNotifications({ acknowledge }).catch(error => {
+                    console.error("Could not refresh notifications:", error);
+                });
+            }, 90);
+        }
 
         async function loadNotifications() {
             const container = document.getElementById("notifications-container");
@@ -459,39 +441,15 @@
                                 <div class="notification-meta">${formatDate(notification.created_at)}</div>
                             </div>
                             <div class="actions">
-                                ${notification.link ? `<a class="button" href="${escapeHtml(notification.link)}" onclick="markReadInline('${notification.id}')">Open</a>` : ""}
-                                ${!notification.is_read ? `<button class="button" onclick="markRead('${notification.id}')">Mark Read</button>` : ""}
+                                ${notification.link ? `<a class="button" href="${escapeHtml(notification.link)}">Open</a>` : ""}
                                 <button class="button danger-action" onclick="deleteNotification('${notification.id}')">Delete</button>
                             </div>
                         </article>
                     `).join("");
         }
 
-        window.markRead = async function (notificationId) {
-            await supabase
-                .from("notifications")
-                .update({ is_read: true })
-                .eq("id", notificationId)
-                .eq("recipient_id", currentUser.id);
-
-            await loadNotifications();
-        };
-
-        window.markReadInline = async function (notificationId) {
-            await supabase
-                .from("notifications")
-                .update({ is_read: true })
-                .eq("id", notificationId)
-                .eq("recipient_id", currentUser.id);
-        };
-
         window.markAllRead = async function () {
-            await supabase
-                .from("notifications")
-                .update({ is_read: true })
-                .eq("recipient_id", currentUser.id);
-
-            await loadNotifications();
+            await refreshNotifications({ acknowledge: true });
         };
 
         window.clearRead = async function () {
@@ -531,11 +489,36 @@
 
         const notificationChannel = supabase
             .channel(`notification-center-${currentUser.id}`)
-            .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${currentUser.id}` }, loadNotifications)
-            .on("postgres_changes", { event: "*", schema: "public", table: "follow_requests", filter: `target_id=eq.${currentUser.id}` }, loadFollowRequests)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "notifications",
+                    filter: `recipient_id=eq.${currentUser.id}`
+                },
+                () => queueNotificationRefresh()
+            )
             .subscribe();
 
-        window.addEventListener("beforeunload", () => supabase.removeChannel(notificationChannel));
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") {
+                queueNotificationRefresh({ acknowledge: true });
+            }
+        });
+
+        window.addEventListener("focus", () => {
+            queueNotificationRefresh({ acknowledge: true });
+        });
+
+        window.addEventListener("pageshow", () => {
+            queueNotificationRefresh({ acknowledge: true });
+        });
+
+        window.addEventListener("beforeunload", () => {
+            clearTimeout(notificationRefreshTimer);
+            supabase.removeChannel(notificationChannel);
+        });
 
         window.logOut = async function () {
             await supabase.auth.signOut();
@@ -543,6 +526,6 @@
         };
     </script>
 
-    <script type="module" src="nullverse-shell-bootstrap.js?v=7"></script>
+    <script type="module" src="nullverse-shell-bootstrap.js?v=5"></script>
 </body>
 </html>
