@@ -120,8 +120,40 @@ async function loadContinueSection() {
     const journeyCards = [];
 
     creationItems.forEach(item => {
+        let cardHtml = renderProjectCard(item);
+
+        /*
+            Gallery entries in Continue Your Journey represent the creator's
+            Gallery as a whole. They must open creator-gallery.html instead of
+            the retired gallery-item-studio.html route generated for a normal
+            editable project card.
+        */
+        if (item.__kind === "gallery") {
+            const creatorGalleryUrl = profile?.username
+                ? `creator-gallery.html?user=${encodeURIComponent(profile.username)}`
+                : "creator-gallery.html";
+
+            const generatedEditorUrl = getEditorContentUrl(item);
+            const generatedPublicUrl = getPublicContentUrl(item);
+
+            if (generatedEditorUrl) {
+                cardHtml = cardHtml.split(generatedEditorUrl).join(creatorGalleryUrl);
+            }
+
+            if (generatedPublicUrl) {
+                cardHtml = cardHtml.split(generatedPublicUrl).join(creatorGalleryUrl);
+            }
+
+            // Defensive cleanup for older card helpers that still emit the
+            // removed Gallery Item Studio filename directly.
+            cardHtml = cardHtml.replace(
+                /gallery-item-studio\.html\?item=[^"'<>\s]+/g,
+                creatorGalleryUrl
+            );
+        }
+
         journeyCards.push(
-            renderProjectCard(item).replace(
+            cardHtml.replace(
                 'class="nv-project-card"',
                 'class="nv-project-card home-journey-card home-journey-creation"'
             )
