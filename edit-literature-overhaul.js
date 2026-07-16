@@ -868,7 +868,7 @@
         if (!list) return;
         [...list.querySelectorAll(".chapter-card")].forEach((card, index) => {
             card.dataset.nvKind = "chapter";
-            card.dataset.nvIcon = String(index + 1);
+            card.dataset.nvIcon = card.dataset.nvChapterNumber || String(index + 1);
             card.setAttribute("role", "button");
             card.setAttribute("tabindex", "0");
             if (card.dataset.nvKeyboardBound === "true") return;
@@ -882,13 +882,30 @@
     }
 
     function updateChapterProgress() {
-        const count = document.querySelectorAll("#chapter-list .chapter-card").length;
+        const list = document.getElementById("chapter-list");
+        const visibleCount = list?.querySelectorAll(".chapter-card").length || 0;
+        const totalCount = Number(list?.dataset.nvTotalChapters || visibleCount);
+        const matchedCount = Number(list?.dataset.nvMatchedChapters || visibleCount);
+        const searchActive = list?.dataset.nvSearchActive === "true";
         const countNode = document.getElementById("nv-literature-chapter-count");
         const label = document.getElementById("nv-literature-progress-label");
         const bar = document.getElementById("nv-literature-progress-bar");
-        if (countNode) countNode.textContent = String(count);
-        if (label) label.textContent = `${count} ${count === 1 ? "chapter" : "chapters"}`;
-        if (bar) bar.style.setProperty("--nvl-progress", `${Math.min(96, 30 + count * 8)}%`);
+
+        if (countNode) {
+            countNode.textContent = searchActive
+                ? `${matchedCount}/${totalCount}`
+                : String(totalCount);
+        }
+
+        if (label) {
+            label.textContent = searchActive
+                ? `${matchedCount} of ${totalCount} ${totalCount === 1 ? "chapter" : "chapters"}`
+                : `${totalCount} ${totalCount === 1 ? "chapter" : "chapters"}`;
+        }
+
+        if (bar) {
+            bar.style.setProperty("--nvl-progress", `${Math.min(96, 30 + totalCount * 8)}%`);
+        }
     }
 
     function installInputTracking() {
