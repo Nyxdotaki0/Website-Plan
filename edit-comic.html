@@ -10,6 +10,8 @@
         document.documentElement.setAttribute("data-theme", savedNullverseTheme);
     </script>
     <link rel="stylesheet" href="theme.css?v=25">
+    <link rel="stylesheet" href="edit-comic-overhaul.css?v=2">
+    <script defer src="edit-comic-overhaul.js?v=2"></script>
     <style>
         html {
             min-height: 100%;
@@ -1750,7 +1752,7 @@
                 <div class="reorder-row"><button class="button" onclick="moveChapterToPosition()">Move</button><button class="button" onclick="swapChapterPositions()">Swap</button></div>
                 <p class="reorder-help">Move shifts chapters. Swap exchanges positions.</p>
             </div>
-            <input id="chapter-search" placeholder="Search chapters..." oninput="filterChapters()" style="background:#15151f;">
+            <input id="chapter-search" type="search" placeholder="Search chapter number, title, subtitle, note, page, or credit..." oninput="filterChapters()" autocomplete="off" spellcheck="false" style="background:#15151f;">
             <div class="chapter-card active" id="comic-card" onclick="openComicSettings()"><div class="info-wrap"><strong>Comic Settings</strong><div class="info-icon">i</div><div class="tooltip">Edit title, cover, summary, tags, warnings, reading mode, publishing state, and chapter index.</div></div><p>Title, cover, reader mode</p></div>
             <div class="chapter-card" id="appearance-card" onclick="openAppearanceSettings()"><div class="info-wrap"><strong>Reader Appearance</strong><div class="info-icon">i</div><div class="tooltip">Customize the public comic reader background.</div></div><p>Background and atmosphere</p></div>
             <div id="chapter-list"></div>
@@ -2027,15 +2029,15 @@
 
         function buildImagePlacementButton(key, label, existingUrl = "") {
             return `
-                                                <div class="image-fit-launch-row">
-                                                    <button type="button" class="button" onclick="openImagePlacementStudioForKey('${key}')">
-                                                        Adjust Image Placement
-                                                    </button>
-                                                    <span class="muted" style="align-self:center;">
-                                                        ${label}${existingUrl ? " · existing image detected" : ""}
-                                                    </span>
-                                                </div>
-                                            `;
+                                                    <div class="image-fit-launch-row">
+                                                        <button type="button" class="button" onclick="openImagePlacementStudioForKey('${key}')">
+                                                            Adjust Image Placement
+                                                        </button>
+                                                        <span class="muted" style="align-self:center;">
+                                                            ${label}${existingUrl ? " · existing image detected" : ""}
+                                                        </span>
+                                                    </div>
+                                                `;
         }
 
         function getImagePlacementConfig(key) {
@@ -2169,9 +2171,9 @@
             document.getElementById("image-placement-frame-width").value = config.width;
             document.getElementById("image-placement-frame-height").value = config.height;
             document.getElementById("image-placement-meta").innerHTML = `
-                                                <strong>Visible frame:</strong> ${config.width}px × ${config.height}px<br>
-                                                <strong>Tip:</strong> Drag the image to reposition it, pull the corner handle to resize, or use the top handle/slider to rotate.
-                                            `;
+                                                    <strong>Visible frame:</strong> ${config.width}px × ${config.height}px<br>
+                                                    <strong>Tip:</strong> Drag the image to reposition it, pull the corner handle to resize, or use the top handle/slider to rotate.
+                                                `;
 
             syncImagePlacementControls();
             updateImagePlacementPreview();
@@ -2360,9 +2362,738 @@
         bindImagePlacementPointerControls();
 
         async function loadComic() { const { data, error } = await supabase.from("worlds").select("*").eq("id", comicId).single(); if (error || !data) { alert("Comic not found."); window.location.href = "dashboard.html"; return } if (data.owner_id !== user.id) { alert("You can only edit your own comic."); window.location.href = "dashboard.html"; return } currentComic = data; imagePlacementData.cover = readCurrentImagePlacementFromRecord(currentComic, "cover"); imagePlacementData.background = readCurrentImagePlacementFromRecord(currentComic, "background"); imagePlacementData.index = readCurrentImagePlacementFromRecord(currentComic, "index"); if (!["comic", "manga"].includes(currentComic.content_type)) { await supabase.from("worlds").update({ content_type: "comic" }).eq("id", comicId).eq("owner_id", user.id); currentComic.content_type = "comic" } document.getElementById("comic-name").textContent = currentComic.title || "Untitled Comic"; document.getElementById("editor-title").textContent = currentComic.title || "Comic Editor"; document.getElementById("view-public-comic").href = `comic.html?id=${encodeURIComponent(currentComic.id)}` }
-        async function loadChapters() { const { data, error } = await supabase.from("comic_chapters").select("*").eq("world_id", comicId).order("display_order", { ascending: true }); if (error) { document.getElementById("chapter-list").innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`; return } allChapters = data || []; renderChapters() }
-        function renderChapters() { const container = document.getElementById("chapter-list"); const search = (document.getElementById("chapter-search")?.value || "").toLowerCase(); const filtered = allChapters.filter(ch => (ch.title || "").toLowerCase().includes(search) || (ch.subtitle || "").toLowerCase().includes(search)); if (!filtered.length) { container.innerHTML = `<p class="muted">No chapters yet.</p>`; return } container.innerHTML = filtered.map(ch => { const i = allChapters.findIndex(c => c.id === ch.id); return `<div class="chapter-card" id="chapter-${ch.id}" onclick="openChapter('${ch.id}')"><div style="display:flex;justify-content:space-between;gap:8px;align-items:start;"><div style="flex:1;"><strong>Chapter ${i + 1}: ${escapeHtml(ch.title || "Untitled")}</strong><p>${escapeHtml(ch.visibility || "draft")}${ch.subtitle ? ` · ${escapeHtml(ch.subtitle)}` : ""}</p></div><div style="display:flex;flex-direction:column;gap:6px;"><button class="move-button" onclick="event.stopPropagation();moveChapter(${i},-1)">↑</button><button class="move-button" onclick="event.stopPropagation();moveChapter(${i},1)">↓</button></div></div></div>` }).join("") }
-        window.filterChapters = renderChapters; function chapterNumber(ch) { return allChapters.findIndex(c => c.id === ch.id) + 1 } function buildInfoLabel(labelText, tooltipText) { return `<div class="info-wrap"><label>${labelText}</label><div class="info-icon">i</div><div class="tooltip">${tooltipText}</div></div>` }
+
+        const nvComicEditorChapterSearchCache = new Map();
+        let nvComicEditorSearchPagesByChapter = {};
+
+        async function nvLoadComicEditorSearchPages() {
+            try {
+                const { data, error } = await supabase
+                    .from("comic_pages")
+                    .select("*")
+                    .eq("world_id", comicId)
+                    .order("display_order", { ascending: true });
+
+                if (error) {
+                    console.warn("Comic editor page search metadata could not load:", error);
+                    nvComicEditorSearchPagesByChapter = {};
+                    return;
+                }
+
+                const grouped = {};
+
+                (data || []).forEach(page => {
+                    const chapterId = String(page?.chapter_id || "");
+                    if (!chapterId) return;
+                    if (!grouped[chapterId]) grouped[chapterId] = [];
+                    grouped[chapterId].push(page);
+                });
+
+                try {
+                    const draftPages = nvGetInternalDraftPayload()?.pagesByChapter || {};
+
+                    Object.entries(draftPages).forEach(([chapterId, pages]) => {
+                        if (!Array.isArray(pages)) return;
+
+                        const existing = grouped[String(chapterId)] || [];
+                        const byId = new Map(
+                            existing
+                                .filter(page => page?.id)
+                                .map(page => [String(page.id), page])
+                        );
+
+                        pages.forEach(page => {
+                            if (!page) return;
+                            const id = String(page.id || "");
+                            if (id && byId.has(id)) {
+                                byId.set(id, { ...byId.get(id), ...page });
+                            } else if (id) {
+                                byId.set(id, page);
+                            } else {
+                                existing.push(page);
+                            }
+                        });
+
+                        grouped[String(chapterId)] = [
+                            ...byId.values(),
+                            ...existing.filter(page => !page?.id)
+                        ].sort((a, b) => {
+                            return (Number(a?.display_order) || 0) - (Number(b?.display_order) || 0);
+                        });
+                    });
+                } catch (draftError) {
+                    console.warn("Comic editor draft page search merge skipped:", draftError);
+                }
+
+                nvComicEditorSearchPagesByChapter = grouped;
+                nvComicEditorChapterSearchCache.clear();
+            } catch (error) {
+                console.warn("Comic editor page search metadata failed:", error);
+                nvComicEditorSearchPagesByChapter = {};
+            }
+        }
+
+        function nvSyncComicEditorSearchPagesForChapter(chapterId, pages) {
+            if (!chapterId) return;
+
+            nvComicEditorSearchPagesByChapter[String(chapterId)] = (pages || []).map(page => ({ ...page }));
+            nvComicEditorChapterSearchCache.clear();
+
+            const input = document.getElementById("chapter-search");
+            if (input?.value?.trim()) {
+                renderChapters();
+            }
+        }
+
+        async function loadChapters() {
+            const { data, error } = await supabase
+                .from("comic_chapters")
+                .select("*")
+                .eq("world_id", comicId)
+                .order("display_order", { ascending: true });
+
+            if (error) {
+                document.getElementById("chapter-list").innerHTML =
+                    `<p class="muted">${escapeHtml(error.message)}</p>`;
+                return;
+            }
+
+            allChapters = data || [];
+            nvComicEditorChapterSearchCache.clear();
+            await nvLoadComicEditorSearchPages();
+            nvBindComicEditorChapterSearch();
+            renderChapters();
+        }
+
+        function nvDecodeComicEditorSearchEntities(value) {
+            const textarea = document.createElement("textarea");
+            textarea.innerHTML = String(value || "");
+            return textarea.value;
+        }
+
+        function nvNormalizeComicEditorChapterSearch(value) {
+            return nvDecodeComicEditorSearchEntities(value)
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .toLowerCase()
+                .replace(/&/g, " and ")
+                .replace(/['’‘"`´]/g, "")
+                .replace(/[^a-z0-9]+/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+        }
+
+        function nvCompactComicEditorChapterSearch(value) {
+            return nvNormalizeComicEditorChapterSearch(value).replace(/\s+/g, "");
+        }
+
+        function nvTokenizeComicEditorChapterSearch(value) {
+            return nvNormalizeComicEditorChapterSearch(value)
+                .split(" ")
+                .map(token => token.trim())
+                .filter(Boolean);
+        }
+
+        function nvSafeComicEditorSearchText(value) {
+            try {
+                return nvDecodeComicEditorSearchEntities(String(value || ""))
+                    .replace(/<!--[\s\S]*?-->/g, " ")
+                    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+                    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+                    .replace(/<[^>]+>/g, " ");
+            } catch (error) {
+                console.warn("Comic editor search text extraction failed:", error);
+                return String(value || "");
+            }
+        }
+
+        function nvGetComicEditorChapterTitle(chapter) {
+            return (
+                chapter?.title ||
+                chapter?.name ||
+                chapter?.chapter_title ||
+                chapter?.display_title ||
+                ""
+            );
+        }
+
+        function nvGetComicEditorChapterSubtitle(chapter) {
+            return (
+                chapter?.subtitle ||
+                chapter?.description ||
+                chapter?.summary ||
+                ""
+            );
+        }
+
+        function nvGetComicEditorChapterPages(chapter) {
+            if (!chapter?.id) return [];
+            return nvComicEditorSearchPagesByChapter[String(chapter.id)] || [];
+        }
+
+        function nvBuildComicEditorPageSearchText(chapter) {
+            const pages = nvGetComicEditorChapterPages(chapter);
+
+            return pages.map((page, pageIndex) => {
+                const pageNumber = pageIndex + 1;
+                return [
+                    `page ${pageNumber}`,
+                    `pg ${pageNumber}`,
+                    `p ${pageNumber}`,
+                    `#${pageNumber}`,
+                    page?.title,
+                    page?.name,
+                    page?.caption,
+                    page?.description,
+                    page?.alt_text,
+                    page?.image_credit_name,
+                    page?.image_credit_nullverse_username,
+                    page?.image_credit_note,
+                    page?.image_credit_type
+                ].filter(Boolean).join(" ");
+            }).join(" ");
+        }
+
+        function nvBuildComicEditorSearchField(label, value, weight, includeForNumeric = true) {
+            const raw = String(value || "");
+            const normalized = nvNormalizeComicEditorChapterSearch(raw);
+            const compact = normalized.replace(/\s+/g, "");
+            const tokens = normalized.split(" ").map(token => token.trim()).filter(Boolean);
+
+            return {
+                label,
+                raw,
+                normalized,
+                compact,
+                tokens,
+                weight,
+                includeForNumeric
+            };
+        }
+
+        function nvBuildComicEditorChapterSearchRecord(chapter, index) {
+            const chapterNumber = index + 1;
+            const chapterNumberText = String(chapterNumber);
+            const title = nvGetComicEditorChapterTitle(chapter);
+            const subtitle = nvGetComicEditorChapterSubtitle(chapter);
+            const authorNote = nvSafeComicEditorSearchText(chapter?.author_note || "");
+            const pages = nvGetComicEditorChapterPages(chapter);
+            const pageCount = pages.length;
+            const pageSearchText = nvBuildComicEditorPageSearchText(chapter);
+
+            const numberAliases = [
+                chapterNumberText,
+                `chapter ${chapterNumber}`,
+                `chap ${chapterNumber}`,
+                `ch ${chapterNumber}`,
+                `issue ${chapterNumber}`,
+                `episode ${chapterNumber}`,
+                `ep ${chapterNumber}`,
+                `part ${chapterNumber}`,
+                `#${chapterNumber}`,
+                `chapter ${chapterNumberText.padStart(2, "0")}`,
+                `chap ${chapterNumberText.padStart(2, "0")}`,
+                `ch ${chapterNumberText.padStart(2, "0")}`
+            ];
+
+            const fields = [
+                nvBuildComicEditorSearchField("number", numberAliases.join(" "), 130, true),
+                nvBuildComicEditorSearchField("title", title, 115, true),
+                nvBuildComicEditorSearchField("subtitle", subtitle, 85, true),
+                nvBuildComicEditorSearchField("author note", authorNote, 55, true),
+                nvBuildComicEditorSearchField("visibility", chapter?.visibility || "", 30, true),
+                nvBuildComicEditorSearchField(
+                    "page count",
+                    pageCount ? `${pageCount} pages ${pageCount} page` : "no pages",
+                    35,
+                    false
+                ),
+                nvBuildComicEditorSearchField("pages", pageSearchText, 28, false)
+            ].filter(field => field.normalized || field.compact);
+
+            const allNormalized = fields.map(field => field.normalized).filter(Boolean).join(" ");
+            const allCompact = allNormalized.replace(/\s+/g, "");
+            const tokens = [...new Set(fields.flatMap(field => field.tokens))];
+            const titleInitials = nvNormalizeComicEditorChapterSearch(title)
+                .split(" ")
+                .map(word => word[0] || "")
+                .join("");
+            const subtitleInitials = nvNormalizeComicEditorChapterSearch(subtitle)
+                .split(" ")
+                .map(word => word[0] || "")
+                .join("");
+
+            return {
+                index,
+                chapterNumber,
+                chapterNumberText,
+                fields,
+                allNormalized,
+                allCompact,
+                tokens,
+                titleInitials,
+                subtitleInitials
+            };
+        }
+
+        function nvGetComicEditorChapterSearchRecord(chapter, index) {
+            const pages = nvGetComicEditorChapterPages(chapter);
+            const pageFingerprint = pages.map((page, pageIndex) => [
+                pageIndex,
+                page?.id || "",
+                page?.updated_at || "",
+                page?.display_order || "",
+                page?.title || "",
+                page?.name || "",
+                page?.caption || "",
+                page?.description || "",
+                page?.alt_text || "",
+                page?.image_credit_name || "",
+                page?.image_credit_nullverse_username || "",
+                page?.image_credit_note || "",
+                page?.image_credit_type || ""
+            ].join("|")).join("::");
+
+            const cacheId = String(chapter?.id || `index:${index}`);
+            const signature = [
+                index,
+                chapter?.updated_at || "",
+                chapter?.title || "",
+                chapter?.subtitle || "",
+                chapter?.author_note || "",
+                chapter?.visibility || "",
+                pageFingerprint
+            ].join("::");
+            const cached = nvComicEditorChapterSearchCache.get(cacheId);
+
+            if (!cached || cached.signature !== signature) {
+                const record = nvBuildComicEditorChapterSearchRecord(chapter || {}, index);
+                nvComicEditorChapterSearchCache.set(cacheId, { signature, record });
+                return record;
+            }
+
+            return cached.record;
+        }
+
+        function nvComicEditorLevenshteinDistance(a, b) {
+            a = String(a || "");
+            b = String(b || "");
+
+            if (a === b) return 0;
+            if (!a.length) return b.length;
+            if (!b.length) return a.length;
+
+            const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+            const current = new Array(b.length + 1);
+
+            for (let i = 1; i <= a.length; i++) {
+                current[0] = i;
+
+                for (let j = 1; j <= b.length; j++) {
+                    const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+                    current[j] = Math.min(
+                        previous[j] + 1,
+                        current[j - 1] + 1,
+                        previous[j - 1] + cost
+                    );
+                }
+
+                for (let j = 0; j <= b.length; j++) {
+                    previous[j] = current[j];
+                }
+            }
+
+            return previous[b.length];
+        }
+
+        function nvIsComicEditorSearchSubsequence(needle, haystack) {
+            needle = String(needle || "");
+            haystack = String(haystack || "");
+
+            if (needle.length < 4 || haystack.length < needle.length) return false;
+
+            let needleIndex = 0;
+            for (const character of haystack) {
+                if (character === needle[needleIndex]) needleIndex++;
+                if (needleIndex >= needle.length) return true;
+            }
+
+            return false;
+        }
+
+        function nvScoreComicEditorSearchToken(queryToken, searchableToken) {
+            if (!queryToken || !searchableToken) return 0;
+            if (/^\d+$/.test(queryToken)) return searchableToken.includes(queryToken) ? 100 : 0;
+            if (searchableToken === queryToken) return 100;
+            if (searchableToken.startsWith(queryToken)) return 82;
+            if (searchableToken.includes(queryToken)) return 68;
+
+            if (queryToken.length >= 3 && searchableToken.includes(queryToken.slice(0, -1))) {
+                return 48;
+            }
+
+            if (queryToken.length >= 4 && searchableToken.length >= 4) {
+                const distance = nvComicEditorLevenshteinDistance(queryToken, searchableToken);
+                const allowedDistance = queryToken.length >= 7 ? 2 : 1;
+
+                if (distance <= allowedDistance) return 42 - (distance * 10);
+                if (nvIsComicEditorSearchSubsequence(queryToken, searchableToken)) return 28;
+            }
+
+            return 0;
+        }
+
+        function nvScoreComicEditorSearchField(field, normalizedQuery, compactQuery, queryTokens, numericOnly) {
+            if (!field || (!field.normalized && !field.compact)) return 0;
+            if (numericOnly && !field.includeForNumeric) return 0;
+
+            let score = 0;
+
+            if (normalizedQuery && field.normalized === normalizedQuery) {
+                score += field.weight * 5;
+            } else if (normalizedQuery && field.normalized.startsWith(normalizedQuery)) {
+                score += field.weight * 4;
+            } else if (normalizedQuery && field.normalized.includes(normalizedQuery)) {
+                score += field.weight * 3;
+            }
+
+            if (compactQuery && compactQuery.length >= 2 && field.compact.includes(compactQuery)) {
+                score += field.weight * 2;
+            }
+
+            for (const queryToken of queryTokens) {
+                let bestTokenScore = 0;
+
+                for (const searchableToken of field.tokens) {
+                    bestTokenScore = Math.max(
+                        bestTokenScore,
+                        nvScoreComicEditorSearchToken(queryToken, searchableToken)
+                    );
+                }
+
+                if (bestTokenScore > 0) {
+                    score += Math.round((bestTokenScore / 100) * field.weight);
+                }
+            }
+
+            return score;
+        }
+
+        function nvScoreComicEditorChapterRecord(record, query) {
+            const normalizedQuery = nvNormalizeComicEditorChapterSearch(query);
+            const compactQuery = nvCompactComicEditorChapterSearch(query);
+            const queryTokens = nvTokenizeComicEditorChapterSearch(query);
+            const numericOnly = !!compactQuery && /^\d+$/.test(compactQuery);
+            const shortLetterQuery = !numericOnly && compactQuery.length > 0 && compactQuery.length < 3;
+
+            if (!normalizedQuery && !compactQuery && !queryTokens.length) return 1;
+
+            if (numericOnly) {
+                let numericScore = record.chapterNumberText.includes(compactQuery) ? 1000 : 0;
+
+                for (const field of record.fields) {
+                    if (!field.includeForNumeric) continue;
+                    if (field.normalized.includes(compactQuery) || field.compact.includes(compactQuery)) {
+                        numericScore += nvScoreComicEditorSearchField(
+                            field,
+                            normalizedQuery,
+                            compactQuery,
+                            queryTokens,
+                            true
+                        );
+                    }
+                }
+
+                return numericScore;
+            }
+
+            const activeFields = shortLetterQuery
+                ? record.fields.filter(field => !["pages", "page count"].includes(field.label))
+                : record.fields;
+            const activeNormalized = activeFields.map(field => field.normalized).filter(Boolean).join(" ");
+            const activeCompact = activeNormalized.replace(/\s+/g, "");
+            const activeTokens = [...new Set(activeFields.flatMap(field => field.tokens))];
+
+            let score = 0;
+            let phraseMatched = false;
+
+            if (normalizedQuery && activeNormalized.includes(normalizedQuery)) {
+                phraseMatched = true;
+                score += 120;
+            }
+            if (compactQuery && compactQuery.length >= 2 && activeCompact.includes(compactQuery)) {
+                phraseMatched = true;
+                score += 90;
+            }
+            if (compactQuery && compactQuery.length >= 2 && record.titleInitials.includes(compactQuery)) {
+                phraseMatched = true;
+                score += 75;
+            }
+            if (compactQuery && compactQuery.length >= 2 && record.subtitleInitials.includes(compactQuery)) {
+                phraseMatched = true;
+                score += 55;
+            }
+
+            const tokenMatches = queryTokens.map(queryToken => {
+                let best = 0;
+                for (const searchableToken of activeTokens) {
+                    best = Math.max(best, nvScoreComicEditorSearchToken(queryToken, searchableToken));
+                }
+                return best;
+            });
+            const allTokensMatched = queryTokens.length > 0 && tokenMatches.every(value => value > 0);
+
+            if (!phraseMatched && !allTokensMatched) return 0;
+
+            for (const field of activeFields) {
+                score += nvScoreComicEditorSearchField(
+                    field,
+                    normalizedQuery,
+                    compactQuery,
+                    queryTokens,
+                    false
+                );
+            }
+
+            return score + tokenMatches.reduce((sum, value) => sum + value, 0);
+        }
+
+        function nvGetExactComicEditorTitleResults(query) {
+            const rawQuery = String(query || "").trim();
+            const normalizedQuery = nvNormalizeComicEditorChapterSearch(rawQuery);
+            const compactQuery = nvCompactComicEditorChapterSearch(rawQuery);
+            const numericOnly = !!compactQuery && /^\d+$/.test(compactQuery);
+
+            if (!normalizedQuery || numericOnly) return null;
+
+            const results = allChapters.map((chapter, index) => {
+                const record = nvGetComicEditorChapterSearchRecord(chapter, index);
+                const titleField = record.fields.find(field => field.label === "title");
+                const titleNormalized = titleField?.normalized || "";
+                const titleCompact = titleField?.compact || "";
+                const numberedTitle = nvNormalizeComicEditorChapterSearch(
+                    `chapter ${record.chapterNumber} ${titleNormalized}`
+                );
+                const numberedTitleCompact = numberedTitle.replace(/\s+/g, "");
+                let score = 0;
+
+                if (titleNormalized && titleNormalized === normalizedQuery) score = Math.max(score, 200000);
+                if (titleCompact && compactQuery && titleCompact === compactQuery) score = Math.max(score, 199000);
+                if (numberedTitle && numberedTitle === normalizedQuery) score = Math.max(score, 198000);
+                if (numberedTitleCompact && compactQuery && numberedTitleCompact === compactQuery) {
+                    score = Math.max(score, 197000);
+                }
+
+                return { chapter, index, score };
+            }).filter(result => result.score > 0)
+                .sort((a, b) => b.score - a.score || a.index - b.index);
+
+            return results.length ? results : null;
+        }
+
+        function nvGetComicEditorStrictPhraseScore(record, query) {
+            const normalizedQuery = nvNormalizeComicEditorChapterSearch(query);
+            const compactQuery = nvCompactComicEditorChapterSearch(query);
+            const queryTokens = nvTokenizeComicEditorChapterSearch(query);
+            const numericOnly = !!compactQuery && /^\d+$/.test(compactQuery);
+
+            if (!normalizedQuery || numericOnly) return 0;
+
+            const titleField = record.fields.find(field => field.label === "title");
+            const subtitleField = record.fields.find(field => field.label === "subtitle");
+            const titleNormalized = titleField?.normalized || "";
+            const titleCompact = titleField?.compact || "";
+            const subtitleNormalized = subtitleField?.normalized || "";
+            const subtitleCompact = subtitleField?.compact || "";
+            const numberedTitle = nvNormalizeComicEditorChapterSearch(
+                `chapter ${record.chapterNumber} ${titleNormalized}`
+            );
+            const numberedTitleCompact = numberedTitle.replace(/\s+/g, "");
+            const longEnough = queryTokens.length >= 2 || compactQuery.length >= 5;
+            let score = 0;
+
+            if (titleNormalized && titleNormalized === normalizedQuery) score = Math.max(score, 100000);
+            if (titleCompact && compactQuery.length >= 3 && titleCompact === compactQuery) score = Math.max(score, 98000);
+            if (numberedTitle && numberedTitle === normalizedQuery) score = Math.max(score, 97000);
+            if (numberedTitleCompact && compactQuery.length >= 3 && numberedTitleCompact === compactQuery) {
+                score = Math.max(score, 96000);
+            }
+            if (longEnough && titleNormalized.includes(normalizedQuery)) score = Math.max(score, 93000);
+            if (longEnough && compactQuery.length >= 4 && titleCompact.includes(compactQuery)) score = Math.max(score, 92000);
+            if (longEnough && numberedTitle.includes(normalizedQuery)) score = Math.max(score, 91000);
+            if (longEnough && subtitleNormalized === normalizedQuery) score = Math.max(score, 87000);
+            if (longEnough && compactQuery.length >= 4 && subtitleCompact === compactQuery) score = Math.max(score, 86000);
+            if (longEnough && subtitleNormalized.includes(normalizedQuery)) score = Math.max(score, 83000);
+            if (longEnough && compactQuery.length >= 4 && subtitleCompact.includes(compactQuery)) score = Math.max(score, 82000);
+
+            return score;
+        }
+
+        function nvGetStrictComicEditorTitleResults(query) {
+            const rawQuery = String(query || "").trim();
+            const normalizedQuery = nvNormalizeComicEditorChapterSearch(rawQuery);
+            const compactQuery = nvCompactComicEditorChapterSearch(rawQuery);
+            const queryTokens = nvTokenizeComicEditorChapterSearch(rawQuery);
+            const numericOnly = !!compactQuery && /^\d+$/.test(compactQuery);
+            const strictCandidate = !numericOnly && normalizedQuery && (
+                queryTokens.length >= 2 || compactQuery.length >= 5
+            );
+
+            if (!strictCandidate) return null;
+
+            const results = allChapters.map((chapter, index) => {
+                const record = nvGetComicEditorChapterSearchRecord(chapter, index);
+                return {
+                    chapter,
+                    index,
+                    score: nvGetComicEditorStrictPhraseScore(record, rawQuery)
+                };
+            }).filter(result => result.score > 0)
+                .sort((a, b) => b.score - a.score || a.index - b.index);
+
+            return results.length ? results : null;
+        }
+
+        function nvGetComicEditorChapterSearchResults(query) {
+            const rawQuery = String(query || "").trim();
+
+            if (!rawQuery) {
+                return allChapters.map((chapter, index) => ({ chapter, index, score: 1 }));
+            }
+
+            const exactResults = nvGetExactComicEditorTitleResults(rawQuery);
+            if (exactResults) return exactResults;
+
+            const strictResults = nvGetStrictComicEditorTitleResults(rawQuery);
+            if (strictResults) return strictResults;
+
+            return allChapters.map((chapter, index) => {
+                const record = nvGetComicEditorChapterSearchRecord(chapter, index);
+                return {
+                    chapter,
+                    index,
+                    score: nvScoreComicEditorChapterRecord(record, rawQuery)
+                };
+            }).filter(result => result.score > 0)
+                .sort((a, b) => b.score - a.score || a.index - b.index);
+        }
+
+        function nvTrimComicEditorSearchSnippet(value, maxLength = 92) {
+            const text = String(value || "").replace(/\s+/g, " ").trim();
+            if (text.length <= maxLength) return text;
+            return `${text.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`;
+        }
+
+        function nvGetComicEditorSearchSnippet(chapter, query) {
+            const subtitle = nvGetComicEditorChapterSubtitle(chapter);
+            const authorNote = nvSafeComicEditorSearchText(chapter?.author_note || "");
+            const pages = nvGetComicEditorChapterPages(chapter);
+            const pageSearchText = nvBuildComicEditorPageSearchText(chapter);
+            const normalizedQuery = nvNormalizeComicEditorChapterSearch(query);
+            const pageLabel = pages.length
+                ? `${pages.length} ${pages.length === 1 ? "page" : "pages"}`
+                : "No pages";
+
+            if (!normalizedQuery) return subtitle || authorNote || pageLabel;
+            if (subtitle && nvNormalizeComicEditorChapterSearch(subtitle).includes(normalizedQuery)) {
+                return nvTrimComicEditorSearchSnippet(subtitle);
+            }
+            if (authorNote && nvNormalizeComicEditorChapterSearch(authorNote).includes(normalizedQuery)) {
+                return `Author note · ${nvTrimComicEditorSearchSnippet(authorNote, 74)}`;
+            }
+            if (pageSearchText && nvNormalizeComicEditorChapterSearch(pageSearchText).includes(normalizedQuery)) {
+                return `Page match · ${pageLabel}`;
+            }
+
+            return subtitle || authorNote || pageLabel;
+        }
+
+        function nvBindComicEditorChapterSearch() {
+            const input = document.getElementById("chapter-search");
+            if (!input || input.dataset.nvSearchBound === "true") return;
+
+            input.dataset.nvSearchBound = "true";
+            input.addEventListener("search", renderChapters);
+            input.addEventListener("compositionend", renderChapters);
+            input.addEventListener("keydown", event => {
+                if (event.key === "Escape" && input.value) {
+                    event.preventDefault();
+                    input.value = "";
+                    renderChapters();
+                    return;
+                }
+
+                if (event.key === "Enter") {
+                    const firstResult = document.querySelector("#chapter-list .chapter-card");
+                    if (firstResult) {
+                        event.preventDefault();
+                        firstResult.click();
+                    }
+                }
+            });
+        }
+
+        function renderChapters() {
+            const container = document.getElementById("chapter-list");
+            const input = document.getElementById("chapter-search");
+            if (!container) return;
+
+            const query = String(input?.value || "").trim();
+            const results = nvGetComicEditorChapterSearchResults(query);
+
+            container.dataset.nvTotalChapters = String(allChapters.length);
+            container.dataset.nvMatchedChapters = String(results.length);
+            container.dataset.nvSearchActive = String(Boolean(query));
+            container.dataset.nvSearchQuery = query;
+
+            if (!allChapters.length) {
+                container.innerHTML = `<p class="muted">No chapters yet.</p>`;
+                return;
+            }
+
+            if (!results.length) {
+                container.innerHTML = `<p class="muted">No chapters match “${escapeHtml(query)}”. Try a chapter number, title, subtitle, author note, page number, caption, or credit.</p>`;
+                return;
+            }
+
+            container.innerHTML = results.map(result => {
+                const chapter = result.chapter;
+                const realIndex = result.index;
+                const title = nvGetComicEditorChapterTitle(chapter) || "Untitled";
+                const snippet = nvGetComicEditorSearchSnippet(chapter, query);
+                const visibility = chapter.visibility || "draft";
+                const active = currentChapter && String(currentChapter.id) === String(chapter.id);
+
+                return `
+                        <div class="chapter-card${active ? " active" : ""}"
+                             id="chapter-${chapter.id}"
+                             data-nv-chapter-number="${realIndex + 1}"
+                             data-nv-search-score="${Math.round(result.score || 0)}"
+                             onclick="openChapter('${chapter.id}')">
+                            <div style="display:flex;justify-content:space-between;gap:8px;align-items:start;">
+                                <div style="flex:1;min-width:0;">
+                                    <strong>Chapter ${realIndex + 1}: ${escapeHtml(title)}</strong>
+                                    <p>${escapeHtml(visibility)}${snippet ? ` · ${escapeHtml(snippet)}` : ""}</p>
+                                </div>
+                                <div style="display:flex;flex-direction:column;gap:6px;flex:0 0 auto;">
+                                    <button class="move-button" aria-label="Move chapter up" onclick="event.stopPropagation();moveChapter(${realIndex},-1)">↑</button>
+                                    <button class="move-button" aria-label="Move chapter down" onclick="event.stopPropagation();moveChapter(${realIndex},1)">↓</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+            }).join("");
+        }
+
+        window.filterChapters = function () {
+            renderChapters();
+        };
+
+        function chapterNumber(ch) {
+            return allChapters.findIndex(c => c.id === ch.id) + 1;
+        }
+
+        function buildInfoLabel(labelText, tooltipText) { return `<div class="info-wrap"><label>${labelText}</label><div class="info-icon">i</div><div class="tooltip">${tooltipText}</div></div>` }
         window.openComicSettings = function () {
             currentChapter = null; document.querySelectorAll(".chapter-card").forEach(c => c.classList.remove("active")); document.getElementById("comic-card").classList.add("active"); genreTags = currentComic.genres ? currentComic.genres.split(",").map(t => t.trim()).filter(Boolean) : []; themeTags = currentComic.themes ? currentComic.themes.split(",").map(t => t.trim()).filter(Boolean) : []; document.getElementById("editor-content").innerHTML = `
 <div class="settings-panel-v2">
@@ -2385,7 +3116,30 @@
 <div id="page-studio-overlay" class="page-studio-overlay" aria-hidden="true"><div class="page-studio-topbar"><div><span class="chapter-kicker">Page Studio</span><h2>Chapter ${num}: ${escapeHtml(chapter.title || "Untitled")}</h2><div class="writing-studio-inline-stats" id="page-studio-summary">${allPages.length.toLocaleString()} pages · ${escapeHtml((currentComic.comic_reading_mode || "paged") === "webtoon" ? "Webtoon" : "Paged")}</div></div><div class="page-studio-actions"><button type="button" class="button" onclick="setPreviewMode('paged')">Paged</button><button type="button" class="button" onclick="setPreviewMode('webtoon')">Webtoon</button><button type="button" class="button" onclick="adjustSelectedComicPagePlacement()">Adjust Page Placement</button><button type="button" class="button" onclick="closePageStudio()">Exit</button><button type="button" class="button primary-button" onclick="saveAndClosePageStudio()">Save & Exit</button></div></div><div class="page-studio-body"><div class="page-studio-layout"><div class="page-studio-panel"><div id="page-studio-active-page" class="page-studio-active-page"></div><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px;"><button class="button" onclick="previewPreviousPage()">← Previous</button><button class="button" onclick="previewNextPage()">Next →</button><button class="button" onclick="adjustSelectedComicPagePlacement()">Adjust This Page</button><button class="button" onclick="openPublicComicReader()">View Public</button></div></div><div class="page-studio-panel"><h3 style="margin-top:0;">Pages</h3><p class="muted">Select a page to preview, then reorder or edit its credit in the library below.</p><div id="page-studio-thumbs" class="page-studio-thumbs"></div></div></div></div></div>
 </div>`; renderComicReaderPreview(); renderPages(); renderPageStudio()
         };
-        async function loadPages(chapterId) { const { data, error } = await supabase.from("comic_pages").select("*").eq("world_id", comicId).eq("chapter_id", chapterId).order("display_order", { ascending: true }); if (error) { allPages = []; console.error(error); return } allPages = nvMergeInternalDraftPages(chapterId, data || []); allPages.forEach(page => { imagePlacementData[placementKeyForPage(page.id)] = normalizeImagePlacement(page.image_placement || readCurrentImagePlacementFromRecord(page, "page")); }) }
+        async function loadPages(chapterId) {
+            const { data, error } = await supabase
+                .from("comic_pages")
+                .select("*")
+                .eq("world_id", comicId)
+                .eq("chapter_id", chapterId)
+                .order("display_order", { ascending: true });
+
+            if (error) {
+                allPages = [];
+                console.error(error);
+                nvSyncComicEditorSearchPagesForChapter(chapterId, []);
+                return;
+            }
+
+            allPages = nvMergeInternalDraftPages(chapterId, data || []);
+            nvSyncComicEditorSearchPagesForChapter(chapterId, allPages);
+
+            allPages.forEach(page => {
+                imagePlacementData[placementKeyForPage(page.id)] = normalizeImagePlacement(
+                    page.image_placement || readCurrentImagePlacementFromRecord(page, "page")
+                );
+            });
+        }
         function renderComicReaderPreview() { const container = document.getElementById("comic-reader-preview"); if (!container) return; const mode = previewMode === "auto" ? (currentComic.comic_reading_mode || "paged") : previewMode; const chapterTitle = document.getElementById("chapter-title")?.value.trim() || currentChapter?.title || "Untitled"; const chapterSubtitle = document.getElementById("chapter-subtitle")?.value.trim() || currentChapter?.subtitle || ""; const chapterNote = document.getElementById("chapter-note")?.value.trim() || ""; const currentPage = allPages[previewPageIndex] || allPages[0]; container.innerHTML = `<div class="comic-preview-shell"><div class="comic-preview-top"><div><h3>${escapeHtml(currentComic.title || "Comic Preview")}</h3><div class="comic-mode-pill">${escapeHtml(mode === "webtoon" ? "Webtoon scroll preview" : "Paged reader preview")}</div></div><div class="comic-preview-controls"><button class="button" onclick="setPreviewMode('auto')">Auto</button><button class="button" onclick="setPreviewMode('paged')">Paged</button><button class="button" onclick="setPreviewMode('webtoon')">Webtoon</button>${mode === "paged" ? `<button class="button" onclick="previewPreviousPage()">← Prev</button><button class="button" onclick="previewNextPage()">Next →</button>` : ""}</div></div><div id="comic-preview-stage" class="comic-reader-stage"><div id="comic-preview-bg-image" class="comic-reader-bg-image"></div><div id="comic-preview-overlay" class="comic-reader-overlay"></div><div class="comic-reader-content"><div class="preview-reader-card" style="margin-bottom:18px;"><h2 style="margin:0 0 8px;">Chapter ${chapterNumber(currentChapter)}: ${escapeHtml(chapterTitle)}</h2>${chapterSubtitle ? `<p style="margin:0 0 8px;color:var(--text-secondary);">${escapeHtml(chapterSubtitle)}</p>` : ""}${chapterNote ? `<p style="margin:0;color:var(--text-secondary);">${escapeHtml(chapterNote)}</p>` : ""}</div>${!allPages.length ? `<div class="comic-empty-preview"><div><strong>No pages uploaded yet.</strong><p>Upload comic pages below and they will appear here instantly.</p></div></div>` : mode === "webtoon" ? `<div class="comic-preview-webtoon">${allPages.map((page, index) => `<img src="${escapeHtml(page.image_url || "")}" alt="Preview page ${index + 1}" style="${getPlacementTransformStyle(page.image_placement)}">`).join("")}</div>` : `<div class="comic-preview-page-wrap"><img class="comic-preview-page" src="${escapeHtml(currentPage?.image_url || "")}" alt="Preview page ${previewPageIndex + 1}" style="${getPlacementTransformStyle(currentPage?.image_placement)}"></div><div class="comic-preview-page-info">Page ${previewPageIndex + 1} / ${allPages.length}</div>`}</div></div></div>`; applyComicPreviewBackground(); renderPageStudio() }
         function applyComicPreviewBackground() { const stage = document.getElementById("comic-preview-stage"); const bg = document.getElementById("comic-preview-bg-image"); if (!stage || !bg || !currentComic) return; const style = currentComic.theme_background_style || "default", color1 = currentComic.theme_background_color_1 || "#050505", color2 = currentComic.theme_background_color_2 || "#000000", imageUrl = currentComic.theme_background_image_url || ""; if (style === "solid") { stage.style.setProperty("--comic-preview-bg", color1); bg.style.setProperty("--preview-bg-image", "none") } else if (style === "gradient") { stage.style.setProperty("--comic-preview-bg", `linear-gradient(135deg, ${color1}, ${color2})`); bg.style.setProperty("--preview-bg-image", "none") } else if (style === "image" && imageUrl) { stage.style.setProperty("--comic-preview-bg", `linear-gradient(135deg, ${color1}, ${color2})`); bg.style.setProperty("--preview-bg-image", `url("${imageUrl}")`) } else { stage.style.setProperty("--comic-preview-bg", "var(--page-bg)"); bg.style.setProperty("--preview-bg-image", "none") } bg.style.setProperty("--preview-bg-opacity", currentComic.theme_background_image_opacity ?? 0.35); bg.style.setProperty("--preview-bg-blur", `${currentComic.theme_background_image_blur ?? 0}px`); bg.style.setProperty("--preview-bg-position", `${currentComic.theme_background_position_x ?? 50}% ${currentComic.theme_background_position_y ?? 50}%`); bg.style.setProperty("--preview-bg-repeat", currentComic.theme_background_image_repeat || "no-repeat"); const size = currentComic.theme_background_image_size || "cover", zoom = currentComic.theme_background_zoom ?? 100; bg.style.setProperty("--preview-bg-size", size === "cover" || size === "contain" ? size : `${zoom}%`); stage.style.setProperty("--preview-overlay-strength", currentComic.theme_background_overlay_strength ?? 0.35) }
         window.setPreviewMode = function (mode) { previewMode = mode; previewPageIndex = 0; renderComicReaderPreview(); renderPages() }; window.syncComicPreviewFromSettings = function () { if (previewMode === "auto") { currentComic.comic_reading_mode = document.getElementById("comic-reading-mode")?.value || currentComic.comic_reading_mode || "paged" } }; window.previewNextPage = function () { if (!allPages.length) return; previewPageIndex = Math.min(previewPageIndex + 1, allPages.length - 1); renderComicReaderPreview(); renderPages() }; window.previewPreviousPage = function () { if (!allPages.length) return; previewPageIndex = Math.max(previewPageIndex - 1, 0); renderComicReaderPreview(); renderPages() };
@@ -2407,7 +3161,18 @@
         window.updatePageCreditFields = function (pageId) { const type = document.getElementById(`page-credit-type-${pageId}`)?.value; const username = document.getElementById(`page-credit-username-${pageId}`); const name = document.getElementById(`page-credit-name-${pageId}`); const url = document.getElementById(`page-credit-url-${pageId}`); const noAi = document.getElementById(`page-credit-no-ai-${pageId}`)?.parentElement; const searchWrap = document.getElementById(`page-credit-search-wrap-${pageId}`); if (username) username.style.display = type === "nullverse_creator" ? "block" : "none"; if (searchWrap) searchWrap.style.display = type === "nullverse_creator" ? "block" : "none"; if (name) name.style.display = ["external_artist", "photographer", "stock_public_domain"].includes(type) ? "block" : "none"; if (url) url.style.display = ["external_artist", "photographer", "stock_public_domain"].includes(type) ? "block" : "none"; if (noAi) noAi.style.display = type === "stock_public_domain" || type === "no_credit_needed" ? "none" : "flex" };
         window.refreshPages = async function () { if (!currentChapter) return; await loadPages(currentChapter.id); if (previewPageIndex >= allPages.length) previewPageIndex = Math.max(allPages.length - 1, 0); renderPages() }; window.uploadComicPages = async function () { if (!currentChapter) return; const input = document.getElementById("page-upload-input"); const files = [...(input?.files || [])]; if (!files.length) { alert("Choose at least one page image first."); return } const message = document.getElementById("message"); message.textContent = "Uploading pages..."; let nextOrder = allPages.length ? Math.max(...allPages.map(p => Number(p.display_order) || 0)) + 1 : 1; for (const file of files) { const imageUrl = await uploadImage(file, "world-images", "comic-page", 1800, 2600); const { error } = await supabase.from("comic_pages").insert({ world_id: comicId, comic_id: comicId, chapter_id: currentChapter.id, owner_id: user.id, image_url: imageUrl, display_order: nextOrder, visibility: "published", image_credit_type: "own_work", image_credit_note: "Uploaded by comic owner.", image_credit_no_ai: true, image_placement: getDefaultImagePlacement() }); if (error) { message.textContent = error.message; return } nextOrder++ } input.value = ""; await loadPages(currentChapter.id); previewPageIndex = Math.max(allPages.length - files.length, 0); renderPages(); message.textContent = "Pages uploaded." };
         window.savePageCredit = async function (pageId) { const credit = { type: document.getElementById(`page-credit-type-${pageId}`)?.value || "no_credit_needed", nullverse_username: document.getElementById(`page-credit-username-${pageId}`)?.value.trim().replace("@", "") || "", name: document.getElementById(`page-credit-name-${pageId}`)?.value.trim() || "", url: document.getElementById(`page-credit-url-${pageId}`)?.value.trim() || "", note: document.getElementById(`page-credit-note-${pageId}`)?.value.trim() || "", no_ai: document.getElementById(`page-credit-no-ai-${pageId}`)?.checked || false }; if (credit.type === "nullverse_creator" && !credit.nullverse_username) { alert("Page credit needs a Nullverse username."); return } if ((credit.type === "external_artist" || credit.type === "photographer") && (!credit.name || !credit.url)) { alert("Page credit needs a name and URL."); return } if (credit.type === "stock_public_domain" && (!credit.url && !credit.note)) { alert("Stock/public domain credit needs a source URL or note."); return } if (credit.type === "no_credit_needed" && !credit.note) { alert("No credit needed requires a short reason."); return } const { error } = await supabase.from("comic_pages").update({ image_credit_type: credit.type, image_credit_nullverse_username: credit.nullverse_username, image_credit_name: credit.name, image_credit_url: credit.url, image_credit_note: credit.note, image_credit_no_ai: credit.no_ai, updated_at: new Date().toISOString() }).eq("id", pageId).eq("world_id", comicId).eq("owner_id", user.id); if (error) { alert(error.message); return } await notifyCredit(credit, currentComic.id, `You were credited for comic page artwork in "${currentComic.title || "a comic"}".`); await refreshPages() };
-        window.deletePage = async function (pageId) { if (!confirm("Delete this page?")) return; const { error } = await supabase.from("comic_pages").delete().eq("id", pageId).eq("world_id", comicId).eq("owner_id", user.id); if (error) { alert(error.message); return } await refreshPages(); await savePageOrder(); renderPages() }; window.movePage = async function (index, direction) { const newIndex = index + direction; if (newIndex < 0 || newIndex >= allPages.length) return;[allPages[index], allPages[newIndex]] = [allPages[newIndex], allPages[index]]; previewPageIndex = newIndex; await savePageOrder(); renderPages() }; async function savePageOrder() { for (let i = 0; i < allPages.length; i++) { allPages[i].display_order = i + 1 } nvMarkDirty(); await nvSaveInternalDraft(); }
+        window.deletePage = async function (pageId) { if (!confirm("Delete this page?")) return; const { error } = await supabase.from("comic_pages").delete().eq("id", pageId).eq("world_id", comicId).eq("owner_id", user.id); if (error) { alert(error.message); return } await refreshPages(); await savePageOrder(); renderPages() }; window.movePage = async function (index, direction) { const newIndex = index + direction; if (newIndex < 0 || newIndex >= allPages.length) return;[allPages[index], allPages[newIndex]] = [allPages[newIndex], allPages[index]]; previewPageIndex = newIndex; await savePageOrder(); renderPages() }; async function savePageOrder() {
+            for (let i = 0; i < allPages.length; i++) {
+                allPages[i].display_order = i + 1;
+            }
+
+            if (currentChapter?.id) {
+                nvSyncComicEditorSearchPagesForChapter(currentChapter.id, allPages);
+            }
+
+            nvMarkDirty();
+            await nvSaveInternalDraft();
+        }
         window.movePageToPosition = async function () { const from = Number(document.getElementById("page-move-from").value) - 1; const to = Number(document.getElementById("page-move-to").value) - 1; if (from < 0 || to < 0 || from >= allPages.length || to >= allPages.length) { alert("Invalid page positions."); return } const moved = allPages.splice(from, 1)[0]; allPages.splice(to, 0, moved); previewPageIndex = to; await savePageOrder(); renderPages() }; window.swapPagePositions = async function () { const first = Number(document.getElementById("page-move-from").value) - 1; const second = Number(document.getElementById("page-move-to").value) - 1; if (first < 0 || second < 0 || first >= allPages.length || second >= allPages.length) { alert("Invalid page positions."); return } [allPages[first], allPages[second]] = [allPages[second], allPages[first]]; previewPageIndex = second; await savePageOrder(); renderPages() };
         function initializeIndexAppearanceControls() { const preview = document.getElementById("index-preview"); if (!preview) return; const links = document.getElementById("index-preview-links"), styleInput = document.getElementById("theme-index-style"), color1 = document.getElementById("theme-index-color-1"), color2 = document.getElementById("theme-index-color-2"), colorPreview = document.getElementById("index-color-preview"), textColor = document.getElementById("theme-index-text-color"), imageInput = document.getElementById("theme-index-image-input"), opacity = document.getElementById("theme-index-opacity"), overlay = document.getElementById("theme-index-overlay"); let imageUrl = currentComic.theme_index_image_url || ""; links.innerHTML = allChapters.slice(0, 3).map((ch, i) => `<div style="padding:12px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);">Chapter ${i + 1}: ${escapeHtml(ch.title || "Untitled")}</div>`).join("") || `<div style="opacity:.75;">No chapters yet</div>`; function updatePreview() { const style = styleInput.value; colorPreview.style.setProperty("--left-color", color1.value); colorPreview.style.setProperty("--right-color", color2.value); applyCardStyle({ preview, style, color1: color1.value, color2: color2.value, textColor: textColor.value, imageUrl, opacity: opacity.value, overlay: overlay.value }); document.querySelectorAll("[data-index-style]").forEach(button => button.classList.toggle("active", button.dataset.indexStyle === style)) } document.querySelectorAll("[data-index-style]").forEach(button => button.addEventListener("click", () => { styleInput.value = button.dataset.indexStyle; updatePreview(); setImageCreditVisible("index", styleInput.value === "image" && !!imageUrl) })); imageInput.addEventListener("change", function () { if (!this.files[0]) return; imageUrl = URL.createObjectURL(this.files[0]); styleInput.value = "image"; setImagePlacement("index", getDefaultImagePlacement()); setImageCreditVisible("index", true); updatePreview() });[color1, color2, textColor, opacity, overlay].forEach(control => { control.addEventListener("input", updatePreview); control.addEventListener("change", updatePreview) }); updatePreview() }
         function initializeReaderAppearanceControls() { const preview = document.getElementById("background-art-preview"), previewImage = document.getElementById("background-art-preview-image"), styleInput = document.getElementById("theme-background-style"), color1 = document.getElementById("theme-background-color-1"), color2 = document.getElementById("theme-background-color-2"), colorPreview = document.getElementById("reader-bg-color-preview"), imageInput = document.getElementById("comic-background-input"), opacity = document.getElementById("theme-background-image-opacity"), blur = document.getElementById("theme-background-image-blur"), overlay = document.getElementById("theme-background-overlay-strength"), positionX = document.getElementById("theme-background-position-x"), positionY = document.getElementById("theme-background-position-y"), zoom = document.getElementById("theme-background-zoom"), size = document.getElementById("theme-background-image-size"), repeat = document.getElementById("theme-background-image-repeat"); let imageUrl = currentComic.theme_background_image_url || ""; function updatePreview() { const style = styleInput.value; colorPreview.style.setProperty("--left-color", color1.value); colorPreview.style.setProperty("--right-color", color2.value); if (style === "solid") { preview.style.setProperty("--reader-bg", color1.value); previewImage.style.setProperty("--preview-bg-image", "none") } else if (style === "gradient") { preview.style.setProperty("--reader-bg", `linear-gradient(135deg, ${color1.value}, ${color2.value})`); previewImage.style.setProperty("--preview-bg-image", "none") } else if (style === "image" && imageUrl) { preview.style.setProperty("--reader-bg", `linear-gradient(135deg, ${color1.value}, ${color2.value})`); previewImage.style.setProperty("--preview-bg-image", `url("${imageUrl}")`) } else { preview.style.setProperty("--reader-bg", "var(--page-bg)"); previewImage.style.setProperty("--preview-bg-image", "none") } previewImage.style.setProperty("--preview-bg-opacity", opacity.value); previewImage.style.setProperty("--preview-bg-blur", `${blur.value}px`); previewImage.style.setProperty("--preview-bg-position", `${positionX.value}% ${positionY.value}%`); const zoomSize = size.value === "cover" || size.value === "contain" ? size.value : `${zoom.value}%`; previewImage.style.setProperty("--preview-bg-size", zoomSize); previewImage.style.setProperty("--preview-bg-repeat", repeat.value); preview.style.setProperty("--preview-overlay-strength", overlay.value); document.querySelectorAll("[data-reader-style]").forEach(button => button.classList.toggle("active", button.dataset.readerStyle === style)) } document.querySelectorAll("[data-reader-style]").forEach(button => button.addEventListener("click", () => { styleInput.value = button.dataset.readerStyle; updatePreview(); setImageCreditVisible("background", styleInput.value === "image" && !!imageUrl) })); imageInput.addEventListener("change", function () { if (!this.files[0]) return; imageUrl = URL.createObjectURL(this.files[0]); styleInput.value = "image"; setImagePlacement("background", getDefaultImagePlacement()); setImageCreditVisible("background", true); updatePreview() });[color1, color2, opacity, blur, overlay, positionX, positionY, zoom, size, repeat].forEach(control => { control.addEventListener("input", updatePreview); control.addEventListener("change", updatePreview) }); updatePreview() }
@@ -3222,9 +3987,9 @@
             toast.className = `nv-editor-toast ${type || "success"}`;
             toast.dataset.toastId = String(id);
             toast.innerHTML = `
-                                    <strong>${escapeHtml(title || "Saved")}</strong>
-                                    ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
-                                `;
+                                        <strong>${escapeHtml(title || "Saved")}</strong>
+                                        ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
+                                    `;
             stack.appendChild(toast);
             setTimeout(() => {
                 toast.style.opacity = "0";
@@ -3324,17 +4089,17 @@
             modal.id = "nv-unsaved-modal-backdrop";
             modal.className = "nv-unsaved-modal-backdrop";
             modal.innerHTML = `
-                                    <div class="nv-unsaved-modal" role="dialog" aria-modal="true" aria-labelledby="nv-unsaved-title">
-                                        <h2 id="nv-unsaved-title">Unsaved changes</h2>
-                                        <p id="nv-unsaved-message">
-                                            You have unsaved edits. Save before leaving so your latest changes are not lost.
-                                        </p>
-                                        <div class="nv-unsaved-modal-actions">
-                                            <button type="button" class="button" data-unsaved-cancel>Keep Editing</button>
-                                            <button type="button" class="button danger-button" data-unsaved-leave>Leave Anyway</button>
+                                        <div class="nv-unsaved-modal" role="dialog" aria-modal="true" aria-labelledby="nv-unsaved-title">
+                                            <h2 id="nv-unsaved-title">Unsaved changes</h2>
+                                            <p id="nv-unsaved-message">
+                                                You have unsaved edits. Save before leaving so your latest changes are not lost.
+                                            </p>
+                                            <div class="nv-unsaved-modal-actions">
+                                                <button type="button" class="button" data-unsaved-cancel>Keep Editing</button>
+                                                <button type="button" class="button danger-button" data-unsaved-leave>Leave Anyway</button>
+                                            </div>
                                         </div>
-                                    </div>
-                                `;
+                                    `;
             document.body.appendChild(modal);
             return modal;
         }
