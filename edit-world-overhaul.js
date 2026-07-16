@@ -899,7 +899,7 @@
         const list = document.getElementById("section-list");
         if (!list) return;
         [...list.querySelectorAll(".section-card")].forEach((card, index) => {
-            card.dataset.nvIcon = String(index + 1);
+            card.dataset.nvIcon = card.dataset.nvSectionNumber || String(index + 1);
             card.setAttribute("role", "button");
             card.setAttribute("tabindex", "0");
             if (!card.dataset.nvKeyboardBound) {
@@ -914,14 +914,29 @@
     }
 
     function updateSectionProgress() {
-        const count = document.querySelectorAll("#section-list .section-card").length;
+        const list = document.getElementById("section-list");
+        const visibleCount = list?.querySelectorAll(".section-card").length || 0;
+        const totalCount = Number(list?.dataset.nvTotalSections || visibleCount);
+        const matchedCount = Number(list?.dataset.nvMatchedSections || visibleCount);
+        const searchActive = list?.dataset.nvSearchActive === "true";
         const countNode = document.getElementById("nv-world-section-count");
         const label = document.getElementById("nv-world-progress-label");
         const bar = document.getElementById("nv-world-progress-bar");
-        if (countNode) countNode.textContent = String(count);
-        if (label) label.textContent = `${count} ${count === 1 ? "section" : "sections"}`;
+
+        if (countNode) {
+            countNode.textContent = searchActive
+                ? `${matchedCount}/${totalCount}`
+                : String(totalCount);
+        }
+
+        if (label) {
+            label.textContent = searchActive
+                ? `${matchedCount} of ${totalCount} ${totalCount === 1 ? "section" : "sections"}`
+                : `${totalCount} ${totalCount === 1 ? "section" : "sections"}`;
+        }
+
         if (bar) {
-            const progress = Math.min(96, 34 + count * 8);
+            const progress = Math.min(96, 34 + totalCount * 8);
             bar.style.setProperty("--nve-progress", `${progress}%`);
         }
     }
