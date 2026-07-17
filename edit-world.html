@@ -3161,7 +3161,848 @@ background:#15151f;
         import { supabase } from "./supabaseClient.js";
         import { optimizeImage } from "./imageUtils.js";
         import { createNotification } from "./notifications.js";
-        import { createEditorDraftManager } from "./editor-draft-manager.js?v=1";
+
+        const DRAFT_TABLE = "editor_drafts";
+        const AUTOSAVE_DELAY_MS = 1800;
+        const AUTOSAVE_HEARTBEAT_MS = 30000;
+
+        const CREDIT_PARTS = [
+            "credit_type",
+            "credit_name",
+            "credit_url",
+            "credit_note",
+            "credit_no_ai",
+            "credit_nullverse_username"
+        ];
+
+        function creditFields(prefixes) {
+            return prefixes.flatMap(prefix => CREDIT_PARTS.map(part => `${prefix}_${part}`));
+        }
+
+        const COMMON_PROJECT_FIELDS = [
+            "title",
+            "summary",
+            "genres",
+            "themes",
+            "visibility",
+            "featured",
+            "content_type",
+            "content_rating",
+            "content_warnings",
+            "cover_image_url",
+            "cover_image_placement",
+            "theme_name",
+            "theme_background_style",
+            "theme_background_color_1",
+            "theme_background_color_2",
+            "theme_background_image_url",
+            "theme_background_image_placement",
+            "theme_background_image_opacity",
+            "theme_background_image_blur",
+            "theme_background_image_position",
+            "theme_background_position_x",
+            "theme_background_position_y",
+            "theme_background_zoom",
+            "theme_background_image_size",
+            "theme_background_image_repeat",
+            "theme_background_overlay_strength",
+            "theme_index_style",
+            "theme_index_color_1",
+            "theme_index_color_2",
+            "theme_index_text_color",
+            "theme_index_image_url",
+            "theme_index_image_placement",
+            "theme_index_opacity",
+            "theme_index_overlay",
+            "theme_index_button_style",
+            "theme_index_button_color_1",
+            "theme_index_button_color_2",
+            "theme_index_button_text_color"
+        ];
+
+        const PROJECT_FIELDS = {
+            world: [
+                ...COMMON_PROJECT_FIELDS,
+                "addition_mode",
+                "theme_gradient_enabled",
+                "theme_gradient_color_1",
+                "theme_gradient_color_2",
+                "theme_gradient_direction",
+                "theme_gradient_strength",
+                "theme_overview_card_style",
+                "theme_overview_card_color_1",
+                "theme_overview_card_color_2",
+                "theme_overview_card_text_color",
+                "theme_overview_card_image_url",
+                "theme_overview_card_image_placement",
+                "theme_overview_card_opacity",
+                "theme_overview_card_overlay",
+                "theme_button_style",
+                "theme_button_color_1",
+                "theme_button_color_2",
+                "theme_button_text_color",
+                ...creditFields(["cover", "overview_card", "index", "background"])
+            ],
+            literature: [
+                ...COMMON_PROJECT_FIELDS,
+                ...creditFields(["cover", "index", "background"])
+            ],
+            comic: [
+                ...COMMON_PROJECT_FIELDS,
+                "comic_reading_mode",
+                "comic_page_direction",
+                ...creditFields(["cover", "index", "background"])
+            ]
+        };
+
+        const CHILD_SPECS = {
+            world: [
+                {
+                    payloadKey: "sections",
+                    table: "world_sections",
+                    foreignKey: "world_id",
+                    fields: [
+                        "display_order",
+                        "section_type",
+                        "title",
+                        "content",
+                        "image_url",
+                        "image_placement",
+                        "image_position",
+                        "theme_card_style",
+                        "theme_card_color_1",
+                        "theme_card_color_2",
+                        "theme_card_text_color",
+                        "theme_card_image_url",
+                        "theme_card_image_placement",
+                        "theme_card_opacity",
+                        "theme_card_overlay",
+                        ...creditFields(["image", "card"])
+                    ]
+                }
+            ],
+            literature: [
+                {
+                    payloadKey: "chapters",
+                    table: "literature_chapters",
+                    foreignKey: "literature_id",
+                    fields: [
+                        "display_order",
+                        "title",
+                        "subtitle",
+                        "visibility",
+                        "body",
+                        "author_note",
+                        "image_url",
+                        "image_placement",
+                        "image_position",
+                        "spacing_type",
+                        "text_color",
+                        "chapter_panel_color",
+                        "theme_card_style",
+                        "theme_card_color_1",
+                        "theme_card_color_2",
+                        "theme_card_text_color",
+                        "theme_card_image_url",
+                        "theme_card_image_placement",
+                        "theme_card_opacity",
+                        "theme_card_overlay",
+                        ...creditFields(["image", "card"])
+                    ]
+                }
+            ],
+            comic: [
+                {
+                    payloadKey: "chapters",
+                    table: "comic_chapters",
+                    foreignKey: "world_id",
+                    fields: [
+                        "display_order",
+                        "title",
+                        "subtitle",
+                        "visibility",
+                        "author_note"
+                    ]
+                },
+                {
+                    payloadKey: "pagesByChapter",
+                    table: "comic_pages",
+                    foreignKey: "world_id",
+                    flattenObjectArrays: true,
+                    fields: [
+                        "display_order",
+                        "image_placement",
+                        "image_credit_type",
+                        "image_credit_nullverse_username",
+                        "image_credit_name",
+                        "image_credit_url",
+                        "image_credit_note",
+                        "image_credit_no_ai"
+                    ]
+                }
+            ]
+        };
+
+        function safeDate(value) {
+            const time = Date.parse(value || "");
+            return Number.isFinite(time) ? time : 0;
+        }
+
+        function isMissingDraftTableError(error) {
+            const code = String(error?.code || "");
+            const message = String(error?.message || "").toLowerCase();
+
+            return code === "42P01"
+                || code === "PGRST205"
+                || message.includes("editor_drafts")
+                || message.includes("schema cache")
+                || message.includes("does not exist");
+        }
+
+        function hasSerializableValue(value) {
+            if (typeof value === "undefined" || typeof value === "function" || typeof value === "symbol") {
+                return false;
+            }
+
+            if (typeof File !== "undefined" && value instanceof File) return false;
+            if (typeof Blob !== "undefined" && value instanceof Blob) return false;
+
+            return true;
+        }
+
+        function isPendingImageValue(value) {
+            return value === "__NV_IMAGE_NEEDS_SAVE__"
+                || (value && typeof value === "object" && (
+                    (typeof File !== "undefined" && value instanceof File)
+                    || (typeof Blob !== "undefined" && value instanceof Blob)
+                ));
+        }
+
+        function pickWritableFields(record, fields) {
+            const update = {};
+
+            for (const field of fields) {
+                if (!Object.prototype.hasOwnProperty.call(record || {}, field)) continue;
+
+                const value = record[field];
+                if (!hasSerializableValue(value)) continue;
+                if (field.endsWith("_url") && isPendingImageValue(value)) continue;
+
+                update[field] = value;
+            }
+
+            update.updated_at = new Date().toISOString();
+            return update;
+        }
+
+        function flattenPayloadCollection(payload, spec) {
+            const value = payload?.[spec.payloadKey];
+
+            if (spec.flattenObjectArrays) {
+                return Object.values(value || {}).flatMap(rows => Array.isArray(rows) ? rows : []);
+            }
+
+            return Array.isArray(value) ? value : [];
+        }
+
+        function createStatusNode(editorType) {
+            const existing = document.getElementById("nv-editor-autosave-status");
+            if (existing) return existing;
+
+            const group = document.querySelector(".nv-save-button-group");
+            if (!group) return null;
+
+            const node = document.createElement("span");
+            node.id = "nv-editor-autosave-status";
+            node.dataset.editorType = editorType;
+            node.textContent = "Autosave ready";
+
+            Object.assign(node.style, {
+                display: "inline-flex",
+                alignItems: "center",
+                minHeight: "34px",
+                padding: "7px 11px",
+                border: "1px solid rgba(255,255,255,.12)",
+                borderRadius: "999px",
+                background: "rgba(255,255,255,.045)",
+                color: "var(--text-muted)",
+                fontSize: ".78rem",
+                fontWeight: "700",
+                whiteSpace: "nowrap"
+            });
+
+            group.appendChild(node);
+            return node;
+        }
+
+        function createEditorDraftManager(options) {
+            const {
+                supabase,
+                editorType,
+                projectId,
+                ownerId,
+                buildPayload,
+                applyPayload,
+                localStorageKey,
+                prepareActivePublish,
+                hasPendingFiles = () => false,
+                markClean = () => { },
+                showToast = () => { },
+                setMessage = () => { },
+                looksLikeSaveFailure = () => false,
+                getVisibilitySelector = () => null
+            } = options || {};
+
+            if (!supabase || !editorType || !projectId || !ownerId) {
+                throw new Error("Editor draft manager is missing its project configuration.");
+            }
+
+            if (typeof buildPayload !== "function" || typeof applyPayload !== "function") {
+                throw new Error("Editor draft manager requires buildPayload and applyPayload callbacks.");
+            }
+
+            let autosaveTimer = null;
+            let heartbeatTimer = null;
+            let queue = Promise.resolve();
+            let dirty = false;
+            let publishing = false;
+            let installed = false;
+            let cloudAvailable = true;
+            let lastPayload = null;
+            let lastSavedAt = 0;
+            let statusNode = null;
+
+            function status(text, mode = "idle") {
+                statusNode = statusNode || createStatusNode(editorType);
+                if (!statusNode) return;
+
+                statusNode.textContent = text;
+                statusNode.style.color = mode === "error"
+                    ? "#ffb3b3"
+                    : mode === "warning"
+                        ? "#ffe0a3"
+                        : mode === "saving"
+                            ? "#dbe9ff"
+                            : mode === "saved"
+                                ? "#cffff0"
+                                : "var(--text-muted)";
+
+                statusNode.style.borderColor = mode === "error"
+                    ? "rgba(255,120,120,.34)"
+                    : mode === "warning"
+                        ? "rgba(255,214,102,.34)"
+                        : mode === "saved"
+                            ? "rgba(120,255,190,.28)"
+                            : "rgba(255,255,255,.12)";
+            }
+
+            function enqueue(task) {
+                queue = queue
+                    .catch(() => undefined)
+                    .then(task);
+
+                return queue;
+            }
+
+            function getLocalKey() {
+                return typeof localStorageKey === "function"
+                    ? localStorageKey()
+                    : String(localStorageKey || `nullverse-editor-draft:${editorType}:${projectId}:${ownerId}`);
+            }
+
+            function readLocal() {
+                try {
+                    const raw = localStorage.getItem(getLocalKey());
+                    return raw ? JSON.parse(raw) : null;
+                } catch (error) {
+                    console.warn("Could not read the local editor draft.", error);
+                    return null;
+                }
+            }
+
+            function writeLocal(payload) {
+                try {
+                    localStorage.setItem(getLocalKey(), JSON.stringify(payload));
+                    return true;
+                } catch (error) {
+                    console.warn("Could not write the local editor draft.", error);
+                    return false;
+                }
+            }
+
+            function clearLocal() {
+                try {
+                    localStorage.removeItem(getLocalKey());
+                } catch {
+                }
+            }
+
+            async function buildFreshPayload(reason = "manual") {
+                const built = await buildPayload();
+                const savedAt = new Date().toISOString();
+
+                return {
+                    ...(built || {}),
+                    type: editorType,
+                    editorType,
+                    projectId,
+                    ownerId,
+                    savedAt,
+                    saveReason: reason,
+                    draftVersion: 3
+                };
+            }
+
+            async function writeCloud(payload) {
+                const { error } = await supabase
+                    .from(DRAFT_TABLE)
+                    .upsert({
+                        owner_id: ownerId,
+                        project_id: projectId,
+                        editor_type: editorType,
+                        payload,
+                        status: "draft",
+                        saved_at: payload.savedAt,
+                        published_at: null,
+                        updated_at: new Date().toISOString()
+                    }, {
+                        onConflict: "owner_id,project_id,editor_type"
+                    });
+
+                if (error) {
+                    if (isMissingDraftTableError(error)) {
+                        cloudAvailable = false;
+                        return { ok: false, missingTable: true, error };
+                    }
+
+                    return { ok: false, missingTable: false, error };
+                }
+
+                cloudAvailable = true;
+                return { ok: true, missingTable: false, error: null };
+            }
+
+            async function readCloud() {
+                const { data, error } = await supabase
+                    .from(DRAFT_TABLE)
+                    .select("payload,saved_at,updated_at,status")
+                    .eq("owner_id", ownerId)
+                    .eq("project_id", projectId)
+                    .eq("editor_type", editorType)
+                    .eq("status", "draft")
+                    .maybeSingle();
+
+                if (error) {
+                    if (isMissingDraftTableError(error)) {
+                        cloudAvailable = false;
+                        return null;
+                    }
+
+                    console.warn("Could not load the cloud editor draft.", error);
+                    return null;
+                }
+
+                cloudAvailable = true;
+                if (!data?.payload) return null;
+
+                return {
+                    ...data.payload,
+                    savedAt: data.payload.savedAt || data.saved_at || data.updated_at
+                };
+            }
+
+            async function markCloudPublished() {
+                const now = new Date().toISOString();
+
+                const { error } = await supabase
+                    .from(DRAFT_TABLE)
+                    .update({
+                        status: "published",
+                        published_at: now,
+                        updated_at: now
+                    })
+                    .eq("owner_id", ownerId)
+                    .eq("project_id", projectId)
+                    .eq("editor_type", editorType);
+
+                if (error && !isMissingDraftTableError(error)) {
+                    console.warn("Could not mark the cloud draft as published.", error);
+                }
+
+                const { error: deleteError } = await supabase
+                    .from(DRAFT_TABLE)
+                    .delete()
+                    .eq("owner_id", ownerId)
+                    .eq("project_id", projectId)
+                    .eq("editor_type", editorType)
+                    .eq("status", "published");
+
+                if (deleteError && !isMissingDraftTableError(deleteError)) {
+                    console.warn("Could not remove the published cloud draft marker.", deleteError);
+                }
+            }
+
+            async function persistDraft({ manual = false, reason = "autosave", preserveDirty = false } = {}) {
+                status(manual ? "Saving draft…" : "Autosaving…", "saving");
+
+                let payload;
+
+                try {
+                    payload = await buildFreshPayload(reason);
+                } catch (error) {
+                    status("Autosave failed", "error");
+
+                    if (manual) {
+                        showToast(
+                            "Draft save failed",
+                            error?.message || "The editor could not collect the current draft.",
+                            "error"
+                        );
+                    }
+
+                    return { ok: false, error };
+                }
+
+                const localSaved = writeLocal(payload);
+                const cloudResult = await writeCloud(payload);
+
+                lastPayload = payload;
+                lastSavedAt = safeDate(payload.savedAt);
+
+                try {
+                    applyPayload(payload);
+                } catch (error) {
+                    console.warn("The saved draft could not be reapplied to the editor state.", error);
+                }
+
+                const pendingFiles = !!hasPendingFiles();
+                const fullyProtected = cloudResult.ok && !pendingFiles;
+
+                if (!preserveDirty && fullyProtected) {
+                    dirty = false;
+                    markClean(manual ? "Draft saved" : "Autosaved");
+                } else if (!preserveDirty && localSaved && !pendingFiles && !cloudResult.ok) {
+                    dirty = false;
+                    markClean(manual ? "Draft saved locally" : "Autosaved locally");
+                }
+
+                if (pendingFiles) {
+                    dirty = true;
+                    status("Text autosaved — image pending", "warning");
+                } else if (cloudResult.ok) {
+                    status(manual ? "Draft saved" : "Autosaved", "saved");
+                } else if (localSaved) {
+                    status("Saved locally — cloud unavailable", "warning");
+                } else {
+                    status("Draft save failed", "error");
+                }
+
+                if (manual) {
+                    if (pendingFiles) {
+                        showToast(
+                            cloudResult.ok ? "Draft saved" : "Draft saved locally",
+                            "Text, layout, colors, credits, and existing image URLs are protected. A newly selected image file must remain open until Save & Publish uploads it.",
+                            "warning"
+                        );
+                    } else if (cloudResult.ok) {
+                        showToast(
+                            "Draft saved",
+                            "Your private draft was saved to your Nullverse account and this device. The public page was not changed.",
+                            "success"
+                        );
+                    } else if (localSaved) {
+                        showToast(
+                            "Draft saved on this device",
+                            cloudResult.missingTable
+                                ? "Run the included editor_drafts SQL migration to enable account-wide cloud drafts."
+                                : "The cloud copy could not be reached, but the local recovery copy was saved.",
+                            "warning"
+                        );
+                    } else {
+                        showToast(
+                            "Draft save failed",
+                            cloudResult.error?.message || "Neither the cloud draft nor local recovery copy could be saved.",
+                            "error"
+                        );
+                    }
+                }
+
+                return {
+                    ok: localSaved || cloudResult.ok,
+                    payload,
+                    cloudSaved: cloudResult.ok,
+                    pendingFiles
+                };
+            }
+
+            async function updateRows(table, foreignKey, rows, fields) {
+                for (const record of rows) {
+                    if (!record?.id) continue;
+
+                    const update = pickWritableFields(record, fields);
+                    if (Object.keys(update).length <= 1) continue;
+
+                    const { error } = await supabase
+                        .from(table)
+                        .update(update)
+                        .eq("id", record.id)
+                        .eq(foreignKey, projectId)
+                        .eq("owner_id", ownerId);
+
+                    if (error) {
+                        throw new Error(`${table}: ${error.message}`);
+                    }
+                }
+            }
+
+            async function publishSnapshot(payload) {
+                const specs = CHILD_SPECS[editorType] || [];
+
+                for (const spec of specs) {
+                    const rows = flattenPayloadCollection(payload, spec);
+                    await updateRows(spec.table, spec.foreignKey, rows, spec.fields);
+                }
+
+                const project = payload?.project
+                    || payload?.world
+                    || payload?.literature
+                    || payload?.comic
+                    || {};
+
+                const projectUpdate = pickWritableFields(
+                    { ...project, visibility: "published" },
+                    PROJECT_FIELDS[editorType] || COMMON_PROJECT_FIELDS
+                );
+
+                projectUpdate.visibility = "published";
+                projectUpdate.updated_at = new Date().toISOString();
+
+                const { error } = await supabase
+                    .from("worlds")
+                    .update(projectUpdate)
+                    .eq("id", projectId)
+                    .eq("owner_id", ownerId);
+
+                if (error) {
+                    throw new Error(`worlds: ${error.message}`);
+                }
+
+                return true;
+            }
+
+            async function restoreLatest() {
+                status("Checking for drafts…", "saving");
+
+                const local = readLocal();
+                const cloud = await readCloud();
+                const candidates = [local, cloud].filter(Boolean);
+
+                if (!candidates.length) {
+                    status(cloudAvailable ? "Autosave ready" : "Local autosave ready", "idle");
+                    return false;
+                }
+
+                const latest = candidates.sort((a, b) => safeDate(b.savedAt) - safeDate(a.savedAt))[0];
+
+                if (latest.ownerId && String(latest.ownerId) !== String(ownerId)) return false;
+                if (latest.projectId && String(latest.projectId) !== String(projectId)) return false;
+                if (latest.type && String(latest.type) !== String(editorType)) return false;
+
+                const applied = applyPayload(latest);
+
+                if (!applied) {
+                    status("Draft could not load", "error");
+                    return false;
+                }
+
+                writeLocal(latest);
+                lastPayload = latest;
+                lastSavedAt = safeDate(latest.savedAt);
+                dirty = false;
+                markClean("Draft restored");
+                status(cloud && latest === cloud ? "Cloud draft restored" : "Draft restored", "saved");
+
+                showToast(
+                    cloud && latest === cloud ? "Cloud draft restored" : "Draft restored",
+                    "Your private work was loaded. The public page still shows the last published version.",
+                    "warning"
+                );
+
+                return true;
+            }
+
+            async function publish() {
+                if (publishing) return false;
+
+                clearTimeout(autosaveTimer);
+                publishing = true;
+                status("Publishing…", "saving");
+
+                return enqueue(async () => {
+                    try {
+                        const prePublishDraft = await persistDraft({
+                            manual: false,
+                            reason: "before-publish",
+                            preserveDirty: true
+                        });
+
+                        if (!prePublishDraft.ok) {
+                            throw new Error("The safety draft could not be created before publishing.");
+                        }
+
+                        const selector = getVisibilitySelector();
+                        if (selector) selector.value = "published";
+
+                        if (typeof prepareActivePublish === "function") {
+                            const activeResult = await prepareActivePublish();
+
+                            if (activeResult === false || looksLikeSaveFailure()) {
+                                throw new Error(
+                                    document.getElementById("message")?.textContent
+                                    || "The active editor panel could not be prepared for publishing."
+                                );
+                            }
+                        }
+
+                        const payload = await buildFreshPayload("publish");
+                        const finalLocalSaved = writeLocal(payload);
+                        const cloudResult = await writeCloud(payload);
+
+                        if (!cloudResult.ok && !finalLocalSaved) {
+                            throw new Error("The final publish snapshot could not be protected.");
+                        }
+
+                        await publishSnapshot(payload);
+                        await markCloudPublished();
+                        clearLocal();
+
+                        lastPayload = null;
+                        lastSavedAt = 0;
+                        dirty = false;
+                        markClean("Saved and published");
+                        setMessage("Saved and published.");
+                        status("Published", "saved");
+
+                        showToast(
+                            "Saved and published",
+                            `The complete ${editorType} draft is now live. Your private draft was cleared only after every saved record finished.`,
+                            "success"
+                        );
+
+                        return true;
+                    } catch (error) {
+                        dirty = true;
+                        status("Publish failed — draft kept", "error");
+
+                        showToast(
+                            "Publish failed — draft kept",
+                            error?.message || "The public update did not finish. Your private draft is still available.",
+                            "error"
+                        );
+
+                        return false;
+                    } finally {
+                        publishing = false;
+                    }
+                });
+            }
+
+            function markDirtyAndSchedule() {
+                if (publishing) return;
+
+                dirty = true;
+                status("Autosave pending", "warning");
+                clearTimeout(autosaveTimer);
+
+                autosaveTimer = setTimeout(() => {
+                    if (!dirty || publishing) return;
+                    enqueue(() => persistDraft({ manual: false, reason: "autosave" }));
+                }, AUTOSAVE_DELAY_MS);
+            }
+
+            function eventBelongsToEditor(target) {
+                if (!(target instanceof Element)) return false;
+                if (target.closest(".nv-unsaved-modal-backdrop")) return false;
+                if (target.id === "chapter-search" || target.id === "section-search") return false;
+
+                return !!target.closest(
+                    "#editor-content, .writing-studio-overlay, .page-studio-overlay, .image-placement-overlay"
+                );
+            }
+
+            function installAutosave() {
+                if (installed) return;
+
+                installed = true;
+                status("Autosave ready", "idle");
+
+                document.addEventListener("input", event => {
+                    if (!eventBelongsToEditor(event.target)) return;
+                    markDirtyAndSchedule();
+                }, true);
+
+                document.addEventListener("change", event => {
+                    if (!eventBelongsToEditor(event.target)) return;
+                    markDirtyAndSchedule();
+                }, true);
+
+                document.addEventListener("click", event => {
+                    if (!eventBelongsToEditor(event.target)) return;
+
+                    const control = event.target.closest(
+                        ".style-choice, .gradient-direction, .gradient-strength, .warning-choice, .theme-color, .move-button, .page-actions button, .image-placement-button-row button"
+                    );
+
+                    if (control) {
+                        setTimeout(markDirtyAndSchedule, 0);
+                    }
+                }, true);
+
+                document.addEventListener("visibilitychange", () => {
+                    if (document.visibilityState !== "hidden" || !dirty || publishing) return;
+
+                    clearTimeout(autosaveTimer);
+                    enqueue(() => persistDraft({ manual: false, reason: "visibility-hidden" }));
+                });
+
+                window.addEventListener("pagehide", () => {
+                    if (!dirty || publishing) return;
+
+                    clearTimeout(autosaveTimer);
+                    void persistDraft({ manual: false, reason: "pagehide" });
+                });
+
+                heartbeatTimer = window.setInterval(() => {
+                    if (!dirty || publishing) return;
+
+                    clearTimeout(autosaveTimer);
+                    enqueue(() => persistDraft({ manual: false, reason: "heartbeat" }));
+                }, AUTOSAVE_HEARTBEAT_MS);
+            }
+
+            function saveDraft() {
+                clearTimeout(autosaveTimer);
+
+                return enqueue(() => persistDraft({ manual: true, reason: "manual" }))
+                    .then(result => !!result?.ok);
+            }
+
+            function destroy() {
+                clearTimeout(autosaveTimer);
+                clearInterval(heartbeatTimer);
+                installed = false;
+            }
+
+            return {
+                restoreLatest,
+                installAutosave,
+                saveDraft,
+                publish,
+                destroy,
+                getLastPayload: () => lastPayload,
+                getLastSavedAt: () => lastSavedAt
+            };
+        }
         const user = await requireBetaAccess({ allowRestricted: false });
 
         const params = new URLSearchParams(window.location.search);
@@ -12631,7 +13472,49 @@ background:#15151f;
             setTimeout(openWorldTutorialPrompt, 500);
         }
 
-        initEditor();
+
+        function nvHandleEditorStartupFailure(error) {
+            console.error("Nullverse editor startup failed:", error);
+
+            const content = document.getElementById("editor-content");
+
+            if (content) {
+                content.replaceChildren();
+
+                const panel = document.createElement("section");
+                panel.className = "panel";
+                panel.style.maxWidth = "760px";
+                panel.style.margin = "28px auto";
+                panel.style.borderColor = "rgba(255,120,120,.36)";
+                panel.style.background = "rgba(42,8,12,.82)";
+
+                const heading = document.createElement("h2");
+                heading.textContent = "The editor could not finish loading.";
+
+                const message = document.createElement("p");
+                message.className = "muted";
+                message.textContent = error?.message
+                    || "A startup error stopped this editor before the project could load.";
+
+                const note = document.createElement("p");
+                note.className = "muted";
+                note.textContent = "Refresh once after the deployment finishes. If this remains visible, open the browser console and copy the first red error.";
+
+                panel.append(heading, message, note);
+                content.appendChild(panel);
+            }
+
+            try {
+                nvShowEditorToast(
+                    "Editor failed to load",
+                    error?.message || "A startup error stopped the editor.",
+                    "error"
+                );
+            } catch {
+            }
+        }
+
+        initEditor().catch(nvHandleEditorStartupFailure);
 
         function escapeHtml(value) {
             return String(value || "")
