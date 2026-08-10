@@ -5762,14 +5762,25 @@
         }
 
         function removeEmptyInlineShell(element) {
-            if (!element || !["SPAN", "B", "STRONG", "EM", "I", "U", "S"].includes(element.tagName)) {
+            if (!element || !["SPAN", "B", "STRONG", "EM", "I", "U", "S", "MARK"].includes(element.tagName)) {
                 return;
             }
 
-            const text = element.textContent || "";
+            const text = element.textContent ?? "";
             const hasMediaOrBreak = element.querySelector?.("br,hr,img");
 
-            if (!text.trim() && !hasMediaOrBreak) {
+            /*
+             * Whitespace is content in the Writing Studio.
+             *
+             * Formatting a small inline selection can leave the separator
+             * space in its own styled span. The old `!text.trim()` check
+             * deleted that span and joined neighboring words together.
+             *
+             * Only remove a shell that is truly empty. A span containing
+             * spaces, tabs, NBSPs, or other author-entered whitespace must
+             * survive sanitization exactly as written.
+             */
+            if (text.length === 0 && !hasMediaOrBreak) {
                 element.remove();
             }
         }
@@ -7695,7 +7706,12 @@
                         }
 
                         if (!node.nodeValue.trim()) {
-                            return NodeFilter.FILTER_ACCEPT;
+                            /*
+                             * Keep separator whitespace as a raw text node.
+                             * Wrapping it in a styled span made the sanitizer
+                             * treat that space as an "empty" formatting shell.
+                             */
+                            return NodeFilter.FILTER_REJECT;
                         }
 
                         return NodeFilter.FILTER_ACCEPT;
