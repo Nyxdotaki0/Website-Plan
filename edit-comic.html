@@ -1898,6 +1898,7 @@
     <script type="module">
         import { requireBetaAccess } from "./betaGate.js";
         import { supabase } from "./supabaseClient.js";
+        import { getPremiumEntitlement, installAppearanceGate, showPremiumNotice } from "./premiumAccess.js?v=1";
         import { createEditorDraftManager as createSharedEditorDraftManager } from "./edit-draft-manager.js?v=4";
         import { optimizeImage } from "./imageUtils.js";
         import { createNotification } from "./notifications.js";
@@ -2744,6 +2745,9 @@
             };
         }
         const user = await requireBetaAccess({ allowRestricted: false });
+        const premiumEntitlement = await getPremiumEntitlement(supabase, user.id);
+        document.body.dataset.premiumAccess = premiumEntitlement.isPremium ? "premium" : "basic";
+        installAppearanceGate({ isPremium: premiumEntitlement.isPremium, root: document, featureLabel: "Comic appearance customization" });
         const params = new URLSearchParams(window.location.search);
         const comicId = params.get("id");
         let currentComic = null, currentChapter = null, allChapters = [], allPages = [], genreTags = [], themeTags = [], warningTags = [], previewMode = "auto", previewPageIndex = 0;
@@ -2872,15 +2876,15 @@
 
         function buildImagePlacementButton(key, label, existingUrl = "") {
             return `
-                                                                <div class="image-fit-launch-row">
-                                                                    <button type="button" class="button" onclick="openImagePlacementStudioForKey('${key}')">
-                                                                        Adjust Image Placement
-                                                                    </button>
-                                                                    <span class="muted" style="align-self:center;">
-                                                                        ${label}${existingUrl ? " · existing image detected" : ""}
-                                                                    </span>
-                                                                </div>
-                                                            `;
+                                                                    <div class="image-fit-launch-row">
+                                                                        <button type="button" class="button" onclick="openImagePlacementStudioForKey('${key}')">
+                                                                            Adjust Image Placement
+                                                                        </button>
+                                                                        <span class="muted" style="align-self:center;">
+                                                                            ${label}${existingUrl ? " · existing image detected" : ""}
+                                                                        </span>
+                                                                    </div>
+                                                                `;
         }
 
         function getImagePlacementConfig(key) {
@@ -3014,9 +3018,9 @@
             document.getElementById("image-placement-frame-width").value = config.width;
             document.getElementById("image-placement-frame-height").value = config.height;
             document.getElementById("image-placement-meta").innerHTML = `
-                                                                <strong>Visible frame:</strong> ${config.width}px × ${config.height}px<br>
-                                                                <strong>Tip:</strong> Drag the image to reposition it, pull the corner handle to resize, or use the top handle/slider to rotate.
-                                                            `;
+                                                                    <strong>Visible frame:</strong> ${config.width}px × ${config.height}px<br>
+                                                                    <strong>Tip:</strong> Drag the image to reposition it, pull the corner handle to resize, or use the top handle/slider to rotate.
+                                                                `;
 
             syncImagePlacementControls();
             updateImagePlacementPreview();
@@ -3908,23 +3912,23 @@
                 const active = currentChapter && String(currentChapter.id) === String(chapter.id);
 
                 return `
-                                    <div class="chapter-card${active ? " active" : ""}"
-                                         id="chapter-${chapter.id}"
-                                         data-nv-chapter-number="${realIndex + 1}"
-                                         data-nv-search-score="${Math.round(result.score || 0)}"
-                                         onclick="openChapter('${chapter.id}')">
-                                        <div style="display:flex;justify-content:space-between;gap:8px;align-items:start;">
-                                            <div style="flex:1;min-width:0;">
-                                                <strong>Chapter ${realIndex + 1}: ${escapeHtml(title)}</strong>
-                                                <p>${escapeHtml(visibility)}${snippet ? ` · ${escapeHtml(snippet)}` : ""}</p>
-                                            </div>
-                                            <div style="display:flex;flex-direction:column;gap:6px;flex:0 0 auto;">
-                                                <button class="move-button" aria-label="Move chapter up" onclick="event.stopPropagation();moveChapter(${realIndex},-1)">↑</button>
-                                                <button class="move-button" aria-label="Move chapter down" onclick="event.stopPropagation();moveChapter(${realIndex},1)">↓</button>
+                                        <div class="chapter-card${active ? " active" : ""}"
+                                             id="chapter-${chapter.id}"
+                                             data-nv-chapter-number="${realIndex + 1}"
+                                             data-nv-search-score="${Math.round(result.score || 0)}"
+                                             onclick="openChapter('${chapter.id}')">
+                                            <div style="display:flex;justify-content:space-between;gap:8px;align-items:start;">
+                                                <div style="flex:1;min-width:0;">
+                                                    <strong>Chapter ${realIndex + 1}: ${escapeHtml(title)}</strong>
+                                                    <p>${escapeHtml(visibility)}${snippet ? ` · ${escapeHtml(snippet)}` : ""}</p>
+                                                </div>
+                                                <div style="display:flex;flex-direction:column;gap:6px;flex:0 0 auto;">
+                                                    <button class="move-button" aria-label="Move chapter up" onclick="event.stopPropagation();moveChapter(${realIndex},-1)">↑</button>
+                                                    <button class="move-button" aria-label="Move chapter down" onclick="event.stopPropagation();moveChapter(${realIndex},1)">↓</button>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                `;
+                                    `;
             }).join("");
         }
 
@@ -3947,7 +3951,9 @@
 <section class="settings-section-v2" id="tutorial-index-design-area"><h2>Chapter Index Appearance</h2><div id="index-preview" class="mini-live-card"><h3 style="margin-top:0;">Chapter Index</h3><p>Readers can jump between chapters.</p><div id="index-preview-links" style="display:flex;flex-direction:column;gap:10px;"></div>${buildCreditPill("index")}</div>${buildInfoLabel("Index Style", "Controls how the chapter index card looks on the public Comic page.")}<div class="style-choice-grid"><button type="button" class="style-choice" data-index-style="default">Default</button><button type="button" class="style-choice" data-index-style="solid">Solid</button><button type="button" class="style-choice" data-index-style="gradient">Gradient</button><button type="button" class="style-choice" data-index-style="image">Image</button></div><input id="theme-index-style" type="hidden" value="${currentComic.theme_index_style || "default"}">${buildInfoLabel("Index Colors", "Used when the index style is Solid or Gradient.")}<div class="connected-color-picker"><input id="theme-index-color-1" type="color" value="${currentComic.theme_index_color_1 || "#141416"}"><div id="index-color-preview" class="connected-gradient"></div><input id="theme-index-color-2" type="color" value="${currentComic.theme_index_color_2 || "#0b0b0d"}"></div><div class="compact-color-row"><label>Index Text Color</label><input id="theme-index-text-color" type="color" value="${currentComic.theme_index_text_color || "#f5f5f5"}"></div>${buildInfoLabel("Index Image", "Optional image background for the chapter index card. Credits are required if an image is used.")}<div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap;"><input id="theme-index-image-input" type="file" accept="image/*" style="margin-bottom:0;flex:1;min-width:220px;"><button type="button" class="button danger-button" onclick="removeIndexImage()">Remove Image</button></div>${buildImagePlacementButton("index", "Index card frame", currentComic.theme_index_image_url)}${buildCreditFields("index", "Index Image Credit")}<label>Index Opacity</label><input id="theme-index-opacity" type="range" min="0.2" max="1" step="0.05" value="${currentComic.theme_index_opacity ?? 0.85}"><label>Index Overlay</label><input id="theme-index-overlay" type="range" min="0" max="0.85" step="0.05" value="${currentComic.theme_index_overlay ?? 0.35}"></section>
 <button class="button primary-button" id="tutorial-save-comic-settings" onclick="saveComicSettings()">Save Comic Settings</button><p id="message" class="message"></p></div>`; renderGenreTags(); renderThemeTags(); renderWarningSetup(); initializeIndexAppearanceControls(); setCreditValues("cover", currentComic, "cover"); setCreditValues("index", currentComic, "index"); setImageCreditVisible("cover", !!currentComic.cover_image_url); setImageCreditVisible("index", currentComic.theme_index_style === "image" && !!currentComic.theme_index_image_url); document.getElementById("cover-image-input")?.addEventListener("change", function () { const file = this.files[0]; if (!file) return; const previewUrl = URL.createObjectURL(file); currentComic.remove_cover_image = false; setImagePlacement("cover", getDefaultImagePlacement()); updateCoverPreview(previewUrl) }); document.getElementById("theme-index-image-input")?.addEventListener("change", function () { if (this.files[0]) setImagePlacement("index", getDefaultImagePlacement()); setImageCreditVisible("index", !!this.files[0] || !!currentComic.theme_index_image_url) })
         };
-        window.openAppearanceSettings = function () { currentChapter = null; document.querySelectorAll(".chapter-card").forEach(c => c.classList.remove("active")); document.getElementById("appearance-card").classList.add("active"); document.getElementById("editor-content").innerHTML = `<div class="settings-panel-v2"><section class="settings-hero-v2"><span class="chapter-kicker">Reader Theme</span><h2>Reader Appearance</h2><p class="muted">Customize the full public Comic/Manga reader background. Default uses your Nullverse space-glass theme.</p></section><section class="settings-section-v2"><h2>Reader Background</h2>${buildInfoLabel("Theme Name", "Optional name for this reader style.")}<input id="theme-name" value="${escapeHtml(currentComic.theme_name || "")}" placeholder="Example: Ink Void, Moonlit Panels">${buildInfoLabel("Reader Background Style", "Default uses the Nullverse space-glass look. Solid, Gradient, and Image override the page background.")}<div class="style-choice-grid"><button type="button" class="style-choice" data-reader-style="default">Default</button><button type="button" class="style-choice" data-reader-style="solid">Solid</button><button type="button" class="style-choice" data-reader-style="gradient">Gradient</button><button type="button" class="style-choice" data-reader-style="image">Image</button></div><input id="theme-background-style" type="hidden" value="${currentComic.theme_background_style || "default"}">${buildInfoLabel("Reader Background Colors", "Used when the reader background style is Solid or Gradient.")}<div class="connected-color-picker"><input id="theme-background-color-1" type="color" value="${currentComic.theme_background_color_1 || "#050505"}"><div id="reader-bg-color-preview" class="connected-gradient"></div><input id="theme-background-color-2" type="color" value="${currentComic.theme_background_color_2 || "#000000"}"></div><div id="background-art-preview" class="reader-preview"><div id="background-art-preview-image" class="reader-preview-image"></div><div id="background-art-preview-overlay" class="reader-preview-overlay"></div><div class="reader-preview-content"><div class="preview-reader-card"><h2>${escapeHtml(currentComic.title || "Comic Title")}</h2><p>This preview shows the background behind your comic reader.</p></div><div class="preview-chapter-card"><strong>Chapter 1</strong><p>Comic pages and chapter panels sit above this reader background.</p></div></div>${buildCreditPill("background")}</div>${buildInfoLabel("Background Artwork", "Optional artwork behind the comic reader. Credits are required if an image is used.")}<div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap;"><input id="comic-background-input" type="file" accept="image/*" style="margin-bottom:0;flex:1;min-width:220px;"><button type="button" class="button danger-button" onclick="removeBackgroundImage()">Remove Image</button></div>${buildImagePlacementButton("background", "Reader/page background frame", currentComic.theme_background_image_url)}${buildCreditFields("background", "Reader Background Credit")}</section><section class="settings-section-v2"><h2>Artwork Controls</h2><div class="settings-grid-v2"><div><label>Artwork Horizontal Position</label><input id="theme-background-position-x" type="range" min="0" max="100" step="1" value="${currentComic.theme_background_position_x ?? 50}"></div><div><label>Artwork Vertical Position</label><input id="theme-background-position-y" type="range" min="0" max="100" step="1" value="${currentComic.theme_background_position_y ?? 50}"></div><div><label>Artwork Zoom</label><input id="theme-background-zoom" type="range" min="50" max="250" step="5" value="${currentComic.theme_background_zoom ?? 100}"></div><div><label>Artwork Opacity</label><input id="theme-background-image-opacity" type="range" min="0" max="1" step="0.05" value="${currentComic.theme_background_image_opacity ?? 0.35}"></div><div><label>Artwork Blur</label><input id="theme-background-image-blur" type="range" min="0" max="12" step="1" value="${currentComic.theme_background_image_blur ?? 0}"></div><div><label>Dark Overlay Strength</label><input id="theme-background-overlay-strength" type="range" min="0" max="0.85" step="0.05" value="${currentComic.theme_background_overlay_strength ?? 0.35}"></div><div><label>Artwork Size</label><select id="theme-background-image-size"><option value="cover" ${currentComic.theme_background_image_size === "cover" ? "selected" : ""}>Cover</option><option value="contain" ${currentComic.theme_background_image_size === "contain" ? "selected" : ""}>Contain</option><option value="auto" ${currentComic.theme_background_image_size === "auto" ? "selected" : ""}>Original Size</option></select></div><div><label>Repeat Artwork</label><select id="theme-background-image-repeat"><option value="no-repeat" ${currentComic.theme_background_image_repeat === "no-repeat" ? "selected" : ""}>No Repeat</option><option value="repeat" ${currentComic.theme_background_image_repeat === "repeat" ? "selected" : ""}>Repeat</option><option value="repeat-y" ${currentComic.theme_background_image_repeat === "repeat-y" ? "selected" : ""}>Repeat Down Page</option></select></div></div><div style="display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap;margin-top:22px;"><button class="button" type="button" onclick="revertReaderThemeToDefault()">Revert to Default</button><button class="button primary-button" onclick="saveAppearanceSettings()">Save Appearance</button></div><p id="message" class="message"></p></section></div>`; initializeReaderAppearanceControls(); setCreditValues("background", currentComic, "background"); setImageCreditVisible("background", currentComic.theme_background_style === "image" && !!currentComic.theme_background_image_url) };
+        window.openAppearanceSettings = function () {
+            if (!premiumEntitlement.isPremium) return showPremiumNotice("Comic appearance customization"); currentChapter = null; document.querySelectorAll(".chapter-card").forEach(c => c.classList.remove("active")); document.getElementById("appearance-card").classList.add("active"); document.getElementById("editor-content").innerHTML = `<div class="settings-panel-v2"><section class="settings-hero-v2"><span class="chapter-kicker">Reader Theme</span><h2>Reader Appearance</h2><p class="muted">Customize the full public Comic/Manga reader background. Default uses your Nullverse space-glass theme.</p></section><section class="settings-section-v2"><h2>Reader Background</h2>${buildInfoLabel("Theme Name", "Optional name for this reader style.")}<input id="theme-name" value="${escapeHtml(currentComic.theme_name || "")}" placeholder="Example: Ink Void, Moonlit Panels">${buildInfoLabel("Reader Background Style", "Default uses the Nullverse space-glass look. Solid, Gradient, and Image override the page background.")}<div class="style-choice-grid"><button type="button" class="style-choice" data-reader-style="default">Default</button><button type="button" class="style-choice" data-reader-style="solid">Solid</button><button type="button" class="style-choice" data-reader-style="gradient">Gradient</button><button type="button" class="style-choice" data-reader-style="image">Image</button></div><input id="theme-background-style" type="hidden" value="${currentComic.theme_background_style || "default"}">${buildInfoLabel("Reader Background Colors", "Used when the reader background style is Solid or Gradient.")}<div class="connected-color-picker"><input id="theme-background-color-1" type="color" value="${currentComic.theme_background_color_1 || "#050505"}"><div id="reader-bg-color-preview" class="connected-gradient"></div><input id="theme-background-color-2" type="color" value="${currentComic.theme_background_color_2 || "#000000"}"></div><div id="background-art-preview" class="reader-preview"><div id="background-art-preview-image" class="reader-preview-image"></div><div id="background-art-preview-overlay" class="reader-preview-overlay"></div><div class="reader-preview-content"><div class="preview-reader-card"><h2>${escapeHtml(currentComic.title || "Comic Title")}</h2><p>This preview shows the background behind your comic reader.</p></div><div class="preview-chapter-card"><strong>Chapter 1</strong><p>Comic pages and chapter panels sit above this reader background.</p></div></div>${buildCreditPill("background")}</div>${buildInfoLabel("Background Artwork", "Optional artwork behind the comic reader. Credits are required if an image is used.")}<div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap;"><input id="comic-background-input" type="file" accept="image/*" style="margin-bottom:0;flex:1;min-width:220px;"><button type="button" class="button danger-button" onclick="removeBackgroundImage()">Remove Image</button></div>${buildImagePlacementButton("background", "Reader/page background frame", currentComic.theme_background_image_url)}${buildCreditFields("background", "Reader Background Credit")}</section><section class="settings-section-v2"><h2>Artwork Controls</h2><div class="settings-grid-v2"><div><label>Artwork Horizontal Position</label><input id="theme-background-position-x" type="range" min="0" max="100" step="1" value="${currentComic.theme_background_position_x ?? 50}"></div><div><label>Artwork Vertical Position</label><input id="theme-background-position-y" type="range" min="0" max="100" step="1" value="${currentComic.theme_background_position_y ?? 50}"></div><div><label>Artwork Zoom</label><input id="theme-background-zoom" type="range" min="50" max="250" step="5" value="${currentComic.theme_background_zoom ?? 100}"></div><div><label>Artwork Opacity</label><input id="theme-background-image-opacity" type="range" min="0" max="1" step="0.05" value="${currentComic.theme_background_image_opacity ?? 0.35}"></div><div><label>Artwork Blur</label><input id="theme-background-image-blur" type="range" min="0" max="12" step="1" value="${currentComic.theme_background_image_blur ?? 0}"></div><div><label>Dark Overlay Strength</label><input id="theme-background-overlay-strength" type="range" min="0" max="0.85" step="0.05" value="${currentComic.theme_background_overlay_strength ?? 0.35}"></div><div><label>Artwork Size</label><select id="theme-background-image-size"><option value="cover" ${currentComic.theme_background_image_size === "cover" ? "selected" : ""}>Cover</option><option value="contain" ${currentComic.theme_background_image_size === "contain" ? "selected" : ""}>Contain</option><option value="auto" ${currentComic.theme_background_image_size === "auto" ? "selected" : ""}>Original Size</option></select></div><div><label>Repeat Artwork</label><select id="theme-background-image-repeat"><option value="no-repeat" ${currentComic.theme_background_image_repeat === "no-repeat" ? "selected" : ""}>No Repeat</option><option value="repeat" ${currentComic.theme_background_image_repeat === "repeat" ? "selected" : ""}>Repeat</option><option value="repeat-y" ${currentComic.theme_background_image_repeat === "repeat-y" ? "selected" : ""}>Repeat Down Page</option></select></div></div><div style="display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap;margin-top:22px;"><button class="button" type="button" onclick="revertReaderThemeToDefault()">Revert to Default</button><button class="button primary-button" onclick="saveAppearanceSettings()">Save Appearance</button></div><p id="message" class="message"></p></section></div>`; initializeReaderAppearanceControls(); setCreditValues("background", currentComic, "background"); setImageCreditVisible("background", currentComic.theme_background_style === "image" && !!currentComic.theme_background_image_url)
+        };
         window.openChapter = async function (chapterId) {
             const chapter = allChapters.find(c => c.id === chapterId); if (!chapter) return; currentChapter = chapter; previewPageIndex = 0; await loadPages(chapter.id); const num = chapterNumber(chapter); document.querySelectorAll(".chapter-card").forEach(c => c.classList.remove("active")); document.getElementById(`chapter-${chapterId}`)?.classList.add("active"); document.getElementById("editor-content").innerHTML = `
 <div class="chapter-editor-v2"><section class="chapter-hero-v2"><div><span class="chapter-kicker">Chapter Workspace</span><h2>Chapter ${num}: ${escapeHtml(chapter.title || "Untitled")}</h2><p class="muted" style="margin:0;">Edit chapter details here, then open the full-screen Page Studio to manage pages without the clutter.</p><div class="chapter-quick-stats"><span class="chapter-stat-pill">${escapeHtml(chapter.visibility || "draft")}</span><span class="chapter-stat-pill" id="chapter-page-count-pill">${allPages.length.toLocaleString()} pages</span><span class="chapter-stat-pill">${escapeHtml(currentComic.comic_reading_mode === "webtoon" ? "Webtoon" : "Paged")}</span></div></div><button type="button" class="button primary-button" onclick="openPageStudio()">Open Page Studio</button></section>
@@ -4830,9 +4836,9 @@
             toast.className = `nv-editor-toast ${type || "success"}`;
             toast.dataset.toastId = String(id);
             toast.innerHTML = `
-                                                    <strong>${escapeHtml(title || "Saved")}</strong>
-                                                    ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
-                                                `;
+                                                        <strong>${escapeHtml(title || "Saved")}</strong>
+                                                        ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
+                                                    `;
             stack.appendChild(toast);
             setTimeout(() => {
                 toast.style.opacity = "0";
@@ -4932,17 +4938,17 @@
             modal.id = "nv-unsaved-modal-backdrop";
             modal.className = "nv-unsaved-modal-backdrop";
             modal.innerHTML = `
-                                                    <div class="nv-unsaved-modal" role="dialog" aria-modal="true" aria-labelledby="nv-unsaved-title">
-                                                        <h2 id="nv-unsaved-title">Unsaved changes</h2>
-                                                        <p id="nv-unsaved-message">
-                                                            You have unsaved edits. Save before leaving so your latest changes are not lost.
-                                                        </p>
-                                                        <div class="nv-unsaved-modal-actions">
-                                                            <button type="button" class="button" data-unsaved-cancel>Keep Editing</button>
-                                                            <button type="button" class="button danger-button" data-unsaved-leave>Leave Anyway</button>
+                                                        <div class="nv-unsaved-modal" role="dialog" aria-modal="true" aria-labelledby="nv-unsaved-title">
+                                                            <h2 id="nv-unsaved-title">Unsaved changes</h2>
+                                                            <p id="nv-unsaved-message">
+                                                                You have unsaved edits. Save before leaving so your latest changes are not lost.
+                                                            </p>
+                                                            <div class="nv-unsaved-modal-actions">
+                                                                <button type="button" class="button" data-unsaved-cancel>Keep Editing</button>
+                                                                <button type="button" class="button danger-button" data-unsaved-leave>Leave Anyway</button>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                `;
+                                                    `;
             document.body.appendChild(modal);
             return modal;
         }
