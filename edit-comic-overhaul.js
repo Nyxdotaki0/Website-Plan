@@ -3,6 +3,7 @@
 
     const GUIDE_KEY = "nullverse-comic-editor-guide-v1-seen";
     const COLLAPSE_KEY = "nullverse-comic-editor-collapsed-v1";
+    const RAIL_STATE_KEY = "nullverse-comic-editor-rail-collapsed-v1";
     const MOBILE_BREAKPOINT = 900;
 
     const state = {
@@ -150,6 +151,8 @@
 
         document.body.classList.add("nv-comic-editor-modern");
         document.body.dataset.nvView = "overview";
+        restoreDesktopRailState();
+        installFocusedStudioRailGuard();
 
         buildSidebar(sidebar);
         buildCommandBar(topbar);
@@ -200,9 +203,9 @@
             topLine.className = "nv-comic-rail-topline";
             topLine.innerHTML = `
                 <div class="nv-comic-rail-brand">Comic Studio</div>
-                <button class="nv-comic-rail-close" type="button" aria-label="Close chapter outline">×</button>
+                <button class="nv-comic-rail-close" type="button" aria-label="Collapse chapter outline" title="Collapse chapter outline">‹</button>
             `;
-            topLine.querySelector("button")?.addEventListener("click", closeSidebar);
+            topLine.querySelector("button")?.addEventListener("click", handleRailCloseButton);
             header.prepend(topLine);
 
             const progress = document.createElement("div");
@@ -1181,23 +1184,88 @@
         if (detectView() === "overview") callGlobal("openAppearanceSettings");
     }
 
+    function isMobileRail() {
+        return window.innerWidth <= MOBILE_BREAKPOINT;
+    }
+
+    function readDesktopRailCollapsed() {
+        try {
+            return localStorage.getItem(RAIL_STATE_KEY) === "1";
+        } catch {
+            return false;
+        }
+    }
+
+    function setDesktopRailCollapsed(collapsed, persist = true) {
+        const shouldCollapse = !isMobileRail() && collapsed === true;
+        document.body.classList.toggle("nv-rail-collapsed", shouldCollapse);
+        document.body.classList.remove("nv-sidebar-open");
+        if (persist) {
+            try {
+                localStorage.setItem(RAIL_STATE_KEY, shouldCollapse ? "1" : "0");
+            } catch { }
+        }
+    }
+
+    function restoreDesktopRailState() {
+        if (isMobileRail()) {
+            document.body.classList.remove("nv-rail-collapsed");
+            return;
+        }
+        setDesktopRailCollapsed(readDesktopRailCollapsed(), false);
+    }
+
     function openSidebar() {
-        document.body.classList.add("nv-sidebar-open");
+        if (isMobileRail()) {
+            document.body.classList.remove("nv-rail-collapsed");
+            document.body.classList.add("nv-sidebar-open");
+            return;
+        }
+        setDesktopRailCollapsed(false);
     }
 
     function closeSidebar() {
         document.body.classList.remove("nv-sidebar-open");
     }
 
+    function collapseSidebar() {
+        if (isMobileRail()) {
+            closeSidebar();
+            return;
+        }
+        setDesktopRailCollapsed(true);
+    }
+
+    function handleRailCloseButton() {
+        collapseSidebar();
+    }
+
     function toggleSidebar() {
-        document.body.classList.toggle("nv-sidebar-open");
+        if (isMobileRail()) {
+            document.body.classList.toggle("nv-sidebar-open");
+            return;
+        }
+        setDesktopRailCollapsed(!document.body.classList.contains("nv-rail-collapsed"));
+    }
+
+    function focusedStudioIsOpen() {
+        return document.body.classList.contains("page-studio-active")
+            || !!document.querySelector(".writing-studio-overlay.open, .page-studio-overlay.open, .image-placement-overlay.open");
+    }
+
+    function installFocusedStudioRailGuard() {
+        const sync = () => {
+            if (focusedStudioIsOpen()) document.body.classList.remove("nv-sidebar-open");
+        };
+        sync();
+        const observer = new MutationObserver(sync);
+        observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     }
 
     function handleResize() {
-        if (window.innerWidth > MOBILE_BREAKPOINT) {
-            closeSidebar();
-            document.body.classList.remove("nv-mobile-actions-open");
-        }
+        closeSidebar();
+        document.body.classList.remove("nv-mobile-actions-open");
+        restoreDesktopRailState();
     }
 
     function handleGlobalKeydown(event) {

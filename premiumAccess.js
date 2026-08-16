@@ -150,45 +150,13 @@ function ensurePremiumGateStyles() {
     const style = document.createElement("style");
     style.id = "nullverse-premium-gate-styles";
     style.textContent = `
-        .nv-premium-locked { position: relative !important; opacity: .72; }
-        .nv-premium-locked::after {
-            content: "Premium";
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            margin-left: 8px;
-            padding: 3px 8px;
-            border-radius: 999px;
-            border: 1px solid rgba(255,214,102,.52);
-            background: rgba(255,214,102,.11);
-            color: #ffe6a1;
-            font-size: .72rem;
-            font-weight: 850;
-            letter-spacing: .05em;
-            text-transform: uppercase;
-            vertical-align: middle;
+        /* Basic accounts should see a clean creation experience, not disabled upsell clutter. */
+        .nv-premium-hidden,
+        .nv-premium-section-hidden {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
         }
-        .nv-premium-section-locked { position: relative !important; }
-        .nv-premium-section-locked::before {
-            content: "Premium appearance customization";
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 4;
-            padding: 5px 9px;
-            border-radius: 999px;
-            border: 1px solid rgba(255,214,102,.45);
-            background: rgba(12,12,14,.92);
-            color: #ffe6a1;
-            font-size: .72rem;
-            font-weight: 850;
-            letter-spacing: .04em;
-            pointer-events: none;
-        }
-        .nv-premium-section-locked input,
-        .nv-premium-section-locked select,
-        .nv-premium-section-locked textarea,
-        .nv-premium-section-locked button:not([data-premium-info-button]) { pointer-events: none !important; opacity: .56 !important; }
         .profile-badge.premium,
         .custom-profile-badge.premium {
             background: linear-gradient(180deg, rgba(255,214,102,.18), rgba(255,214,102,.055)), #050506;
@@ -200,22 +168,21 @@ function ensurePremiumGateStyles() {
     document.head.appendChild(style);
 }
 
-function lockSection(section, featureLabel) {
+function hidePremiumSection(section) {
     if (!section || section.dataset.premiumGateApplied === "1") return;
     section.dataset.premiumGateApplied = "1";
-    section.classList.add("nv-premium-section-locked");
-    section.querySelectorAll("input,select,textarea,button").forEach(control => {
-        if (control.closest("[data-premium-allow]") || control.dataset.premiumAllow === "true") return;
-        control.dataset.premiumWasDisabled = control.disabled ? "1" : "0";
-        control.disabled = true;
-    });
-    section.addEventListener("click", event => {
-        const control = event.target.closest("input,select,textarea,button,.style-choice");
-        if (!control) return;
-        event.preventDefault();
-        event.stopPropagation();
-        showPremiumNotice(featureLabel);
-    }, true);
+    section.classList.add("nv-premium-section-hidden");
+    section.hidden = true;
+    section.setAttribute("aria-hidden", "true");
+}
+
+function hidePremiumControl(control) {
+    if (!control || control.dataset.premiumGateApplied === "1") return;
+    control.dataset.premiumGateApplied = "1";
+    control.classList.add("nv-premium-hidden");
+    control.hidden = true;
+    control.setAttribute("aria-hidden", "true");
+    control.setAttribute("tabindex", "-1");
 }
 
 export function lockAppearanceSections(root = document, { isPremium = false, featureLabel = "Appearance customization" } = {}) {
@@ -228,18 +195,10 @@ export function lockAppearanceSections(root = document, { isPremium = false, fea
         if (!heading) return;
         const title = String(heading.textContent || "").trim();
         if (!/(appearance|page design|reader theme|index design|overview card)/i.test(title)) return;
-        lockSection(section, featureLabel);
+        hidePremiumSection(section);
     });
 
-    scope.querySelectorAll('[onclick*="openAppearanceSettings"], #appearance-card').forEach(control => {
-        control.classList.add("nv-premium-locked");
-        control.setAttribute("aria-disabled", "true");
-        control.addEventListener("click", event => {
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            showPremiumNotice(featureLabel);
-        }, true);
-    });
+    scope.querySelectorAll('[onclick*="openAppearanceSettings"], #appearance-card, [data-premium-only="true"]').forEach(hidePremiumControl);
 }
 
 export function installAppearanceGate({ isPremium = false, root = document, featureLabel = "Appearance customization" } = {}) {
