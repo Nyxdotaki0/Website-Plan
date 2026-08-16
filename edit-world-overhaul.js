@@ -1292,65 +1292,200 @@
         setDesktopRailCollapsed(!document.body.classList.contains("nv-rail-collapsed"));
     }
 
+    const focusedStudioIsolation = {
+        active: false,
+        sidebar: null,
+        sidebarPlaceholder: null,
+        savedStyles: new Map(),
+        syncQueued: false
+    };
+
+    const FOCUSED_STUDIO_SELECTOR = ".writing-studio-overlay, .page-studio-overlay, .image-placement-overlay";
+
+    function saveInlineStyle(element, property) {
+        if (!element) return;
+        let entry = focusedStudioIsolation.savedStyles.get(element);
+        if (!entry) {
+            entry = new Map();
+            focusedStudioIsolation.savedStyles.set(element, entry);
+        }
+        if (!entry.has(property)) {
+            entry.set(property, {
+                value: element.style.getPropertyValue(property),
+                priority: element.style.getPropertyPriority(property)
+            });
+        }
+    }
+
+    function forceStyle(element, property, value) {
+        if (!element) return;
+        saveInlineStyle(element, property);
+        if (element.style.getPropertyValue(property) !== value || element.style.getPropertyPriority(property) !== "important") {
+            element.style.setProperty(property, value, "important");
+        }
+    }
+
+    function restoreFocusedStudioStyles() {
+        focusedStudioIsolation.savedStyles.forEach((properties, element) => {
+            properties.forEach((saved, property) => {
+                if (saved.value) element.style.setProperty(property, saved.value, saved.priority || "");
+                else element.style.removeProperty(property);
+            });
+        });
+        focusedStudioIsolation.savedStyles.clear();
+    }
+
+    function studioOverlayIsActuallyVisible(overlay) {
+        if (!overlay || overlay.hidden) return false;
+
+        // Explicit active/open states win immediately, before transitions finish.
+        if (overlay.classList.contains("open") ||
+            overlay.classList.contains("active") ||
+            overlay.classList.contains("is-open") ||
+            overlay.getAttribute("aria-hidden") === "false") {
+            return true;
+        }
+
+        const style = window.getComputedStyle(overlay);
+        if (style.display === "none" ||
+            style.visibility === "hidden" ||
+            style.visibility === "collapse" ||
+            Number.parseFloat(style.opacity || "1") <= 0.01) {
+            return false;
+        }
+
+        const rect = overlay.getBoundingClientRect();
+        if (rect.width <= 1 || rect.height <= 1) return false;
+
+        // Closed full-screen overlays are sometimes translated off canvas instead
+        // of display:none. Only count an overlay that intersects the viewport.
+        return rect.bottom > 0 &&
+            rect.right > 0 &&
+            rect.top < (window.innerHeight || document.documentElement.clientHeight) &&
+            rect.left < (window.innerWidth || document.documentElement.clientWidth);
+    }
+
     function focusedStudioIsOpen() {
-        return document.body.classList.contains("writing-studio-active")
-            || !!document.querySelector(".writing-studio-overlay.open, .page-studio-overlay.open, .image-placement-overlay.open");
+        if (document.body.classList.contains("writing-studio-active")) return true;
+        return Array.from(document.querySelectorAll(FOCUSED_STUDIO_SELECTOR)).some(studioOverlayIsActuallyVisible);
+    }
+
+    function detachProjectRailForStudio() {
+        if (!focusedStudioIsolation.sidebar || focusedStudioIsolation.sidebar.isConnected) {
+            const currentSidebar = document.querySelector(".sidebar");
+            if (currentSidebar) focusedStudioIsolation.sidebar = currentSidebar;
+        }
+
+        const sidebar = focusedStudioIsolation.sidebar;
+        if (sidebar?.isConnected && !focusedStudioIsolation.sidebarPlaceholder) {
+            const placeholder = document.createComment("nullverse-focused-studio-sidebar");
+            sidebar.parentNode?.insertBefore(placeholder, sidebar);
+            sidebar.remove();
+            focusedStudioIsolation.sidebarPlaceholder = placeholder;
+        }
+    }
+
+    function restoreProjectRailAfterStudio() {
+        const sidebar = focusedStudioIsolation.sidebar;
+        const placeholder = focusedStudioIsolation.sidebarPlaceholder;
+        if (sidebar && placeholder?.isConnected) {
+            placeholder.parentNode?.insertBefore(sidebar, placeholder);
+            placeholder.remove();
+        }
+        focusedStudioIsolation.sidebarPlaceholder = null;
+    }
+
+    function enforceFocusedStudioIsolation(active) {
+        document.body.classList.toggle("nv-focused-studio-open", active);
+
+        if (active) {
+            document.body.classList.remove("nv-sidebar-open");
+
+            // This is intentionally stronger than CSS hiding: the rail is physically
+            // detached from the DOM for the lifetime of Writing/Page Studio. No
+            // orientation, media query, z-index, transform, or stale drawer state can
+            // make it appear over the focused workspace.
+            detachProjectRailForStudio();
+
+            forceStyle(document.body, "grid-template-columns", "minmax(0, 1fr)");
+            const main = document.querySelector(".main");
+            forceStyle(main, "grid-column", "1 / -1");
+            forceStyle(main, "width", "100%");
+            forceStyle(main, "max-width", "none");
+            forceStyle(main, "min-width", "0");
+
+            document.querySelectorAll(".nv-world-sidebar-backdrop, .nv-world-mobile-outline").forEach(element => {
+                forceStyle(element, "display", "none");
+                forceStyle(element, "visibility", "hidden");
+                forceStyle(element, "pointer-events", "none");
+            });
+        } else {
+            restoreProjectRailAfterStudio();
+            restoreFocusedStudioStyles();
+        }
+
+        focusedStudioIsolation.active = active;
     }
 
     function syncFocusedStudioRailState() {
         const active = focusedStudioIsOpen();
-        document.body.classList.toggle("nv-focused-studio-open", active);
-        if (active) document.body.classList.remove("nv-sidebar-open");
+        enforceFocusedStudioIsolation(active);
+    }
+
+    function queueFocusedStudioRailSync() {
+        if (focusedStudioIsolation.syncQueued) return;
+        focusedStudioIsolation.syncQueued = true;
+        requestAnimationFrame(() => {
+            focusedStudioIsolation.syncQueued = false;
+            syncFocusedStudioRailState();
+        });
     }
 
     function installFocusedStudioRailGuard() {
-        const studioSelector = ".writing-studio-overlay, .page-studio-overlay, .image-placement-overlay";
-        const observer = new MutationObserver(syncFocusedStudioRailState);
-
-        // Body classes cover the legacy active-state flags.
-        observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-
-        // The focused studios also toggle their own .open class. Watching those
-        // nodes directly makes the rail guard work at every viewport width,
-        // including landscape iPads that are wider than the mobile breakpoint.
-        document.querySelectorAll(studioSelector).forEach(node => {
-            observer.observe(node, { attributes: true, attributeFilter: ["class"] });
+        // Watch every state mechanism used by the legacy studios: body classes,
+        // overlay classes/styles, aria-hidden, late-rendered overlays, and removal.
+        const observer = new MutationObserver(queueFocusedStudioRailSync);
+        observer.observe(document.body, {
+            subtree: true,
+            childList: true,
+            attributes: true,
+            attributeFilter: ["class", "style", "hidden", "aria-hidden", "aria-expanded"]
         });
 
-        // Some editor panels are rendered/re-rendered after initial load. If a
-        // studio overlay is inserted later, attach the same class watcher to it.
-        const insertionObserver = new MutationObserver(mutations => {
-            let foundNewStudio = false;
-            for (const mutation of mutations) {
-                for (const node of mutation.addedNodes) {
-                    if (!(node instanceof Element)) continue;
-                    const candidates = [
-                        ...(node.matches?.(studioSelector) ? [node] : []),
-                        ...(node.querySelectorAll ? node.querySelectorAll(studioSelector) : [])
-                    ];
-                    for (const candidate of candidates) {
-                        observer.observe(candidate, { attributes: true, attributeFilter: ["class"] });
-                        foundNewStudio = true;
-                    }
-                }
+        // Capture the launch/exit interaction before legacy handlers run, then check
+        // again through the next few frames. This covers studios that update state
+        // asynchronously after uploads or section/chapter selection.
+        document.addEventListener("click", () => {
+            queueFocusedStudioRailSync();
+            setTimeout(queueFocusedStudioRailSync, 0);
+            setTimeout(queueFocusedStudioRailSync, 80);
+            setTimeout(queueFocusedStudioRailSync, 220);
+        }, true);
+
+        // A tiny watchdog makes this orientation-proof even on iPad Safari where
+        // visual viewport / class mutation delivery can be delayed during rotation.
+        window.setInterval(() => {
+            const active = focusedStudioIsOpen();
+            if (active !== focusedStudioIsolation.active || active) {
+                enforceFocusedStudioIsolation(active);
             }
-            if (foundNewStudio) syncFocusedStudioRailState();
-        });
-        insertionObserver.observe(document.body, { childList: true, subtree: true });
-
-        syncFocusedStudioRailState();
+        }, 250);
 
         window.addEventListener("orientationchange", () => {
-            requestAnimationFrame(syncFocusedStudioRailState);
+            setTimeout(queueFocusedStudioRailSync, 0);
+            setTimeout(queueFocusedStudioRailSync, 180);
+            setTimeout(queueFocusedStudioRailSync, 500);
         }, { passive: true });
+        window.visualViewport?.addEventListener("resize", queueFocusedStudioRailSync, { passive: true });
 
-        window.visualViewport?.addEventListener("resize", syncFocusedStudioRailState, { passive: true });
+        syncFocusedStudioRailState();
     }
 
     function handleResize() {
         closeSidebar();
         document.body.classList.remove("nv-mobile-actions-open");
         restoreDesktopRailState();
+        queueFocusedStudioRailSync();
         syncFocusedStudioRailState();
     }
 
