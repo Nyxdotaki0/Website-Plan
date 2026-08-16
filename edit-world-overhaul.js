@@ -1297,19 +1297,61 @@
             || !!document.querySelector(".writing-studio-overlay.open, .page-studio-overlay.open, .image-placement-overlay.open");
     }
 
+    function syncFocusedStudioRailState() {
+        const active = focusedStudioIsOpen();
+        document.body.classList.toggle("nv-focused-studio-open", active);
+        if (active) document.body.classList.remove("nv-sidebar-open");
+    }
+
     function installFocusedStudioRailGuard() {
-        const sync = () => {
-            if (focusedStudioIsOpen()) document.body.classList.remove("nv-sidebar-open");
-        };
-        sync();
-        const observer = new MutationObserver(sync);
+        const studioSelector = ".writing-studio-overlay, .page-studio-overlay, .image-placement-overlay";
+        const observer = new MutationObserver(syncFocusedStudioRailState);
+
+        // Body classes cover the legacy active-state flags.
         observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+
+        // The focused studios also toggle their own .open class. Watching those
+        // nodes directly makes the rail guard work at every viewport width,
+        // including landscape iPads that are wider than the mobile breakpoint.
+        document.querySelectorAll(studioSelector).forEach(node => {
+            observer.observe(node, { attributes: true, attributeFilter: ["class"] });
+        });
+
+        // Some editor panels are rendered/re-rendered after initial load. If a
+        // studio overlay is inserted later, attach the same class watcher to it.
+        const insertionObserver = new MutationObserver(mutations => {
+            let foundNewStudio = false;
+            for (const mutation of mutations) {
+                for (const node of mutation.addedNodes) {
+                    if (!(node instanceof Element)) continue;
+                    const candidates = [
+                        ...(node.matches?.(studioSelector) ? [node] : []),
+                        ...(node.querySelectorAll ? node.querySelectorAll(studioSelector) : [])
+                    ];
+                    for (const candidate of candidates) {
+                        observer.observe(candidate, { attributes: true, attributeFilter: ["class"] });
+                        foundNewStudio = true;
+                    }
+                }
+            }
+            if (foundNewStudio) syncFocusedStudioRailState();
+        });
+        insertionObserver.observe(document.body, { childList: true, subtree: true });
+
+        syncFocusedStudioRailState();
+
+        window.addEventListener("orientationchange", () => {
+            requestAnimationFrame(syncFocusedStudioRailState);
+        }, { passive: true });
+
+        window.visualViewport?.addEventListener("resize", syncFocusedStudioRailState, { passive: true });
     }
 
     function handleResize() {
         closeSidebar();
         document.body.classList.remove("nv-mobile-actions-open");
         restoreDesktopRailState();
+        syncFocusedStudioRailState();
     }
 
     function handleGlobalKeydown(event) {
