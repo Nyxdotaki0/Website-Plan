@@ -6361,6 +6361,34 @@
             return getOwnedBadges(profileRecord).find(badge => badge.key === key) || null;
         }
 
+        function getPublicBadgeForSavedObject(object, profileRecord = profile) {
+            const key = String(object?.badgeKey || "").trim();
+            const owned = getBadgeByKey(key, profileRecord);
+
+            if (owned) {
+                return owned;
+            }
+
+            /*
+                If the entitlement service itself is temporarily unavailable,
+                keep an already-published Premium badge layer visible. A
+                confirmed Basic entitlement (available:true, isPremium:false)
+                still hides Premium exactly as before.
+            */
+            if (
+                key === "premium" &&
+                profilePremiumEntitlement?.available === false
+            ) {
+                return {
+                    key: "premium",
+                    label: "Premium",
+                    className: "premium"
+                };
+            }
+
+            return null;
+        }
+
 
         const DEFAULT_PREMIUM_BADGE_COLOR = "#ffd76a";
         const DEFAULT_PREMIUM_BADGE_TEXT_COLOR = "#fff4bf";
@@ -6466,14 +6494,19 @@
             };
         }
 
-        function getPublicPremiumBadgeStyle(styles = {}) {
+        function getPublicPremiumBadgeStyle(source = {}) {
+            const direct = source && typeof source === "object" ? source : {};
+            const styles = direct.styles && typeof direct.styles === "object"
+                ? direct.styles
+                : direct;
             const defaults = getPublicPremiumBadgeDefaultStyle(styles);
-            const saved = styles?.premiumBadgeStyleV2;
+            const saved = styles?.premiumBadgeStyleV2 || direct?.premiumBadgeStyleV2;
 
             /*
-                The old Premium gradient field maze is intentionally ignored.
-                Only the new V2 object can create a gradient. premiumBadgeColor
-                remains a solid-color fallback for profiles saved before V2.
+                Public rendering accepts the V2 style from either the normal
+                object.styles bucket or the object root. Profile Studio writes
+                to object.styles, but accepting both protects older/published
+                snapshots from schema-normalization differences.
             */
             if (
                 !saved ||
@@ -6515,9 +6548,8 @@
             return `linear-gradient(${direction}, ${start} 0%, ${end} 100%)`;
         }
 
-        function buildPublicPremiumBadgeInlineStyle(styles = {}) {
-            const style = getPublicPremiumBadgeStyle(styles);
-            const textPaint = getPublicPremiumBadgePartPaint(style.text);
+        function buildPublicPremiumBadgeInlineStyle(source = {}) {
+            const style = getPublicPremiumBadgeStyle(source);
             const borderPaint = getPublicPremiumBadgePartPaint(style.border);
             const glowColor = normalizePublicPremiumBadgeColor(
                 style.border.mode === "gradient"
@@ -6529,14 +6561,46 @@
             const g = parseInt(glowColor.slice(3, 5), 16);
             const b = parseInt(glowColor.slice(5, 7), 16);
 
+            /*
+                Paint the black center and gradient border directly on the pill.
+                Do not depend on inherited CSS variables for visibility.
+            */
             return [
-                `--nv-premium-badge-text-paint:${textPaint}`,
-                `--nv-premium-badge-text-fallback:${style.text.mode === "gradient" ? style.text.start : style.text.color}`,
-                `--nv-premium-badge-border-paint:${borderPaint}`,
-                `--nv-premium-badge-border-fallback:${glowColor}`,
+                "display:inline-flex",
+                "align-items:center",
+                "background-color:#000000",
                 "border:1px solid transparent",
                 `background:linear-gradient(#000000,#000000) padding-box,${borderPaint} border-box`,
                 `box-shadow:0 0 0 1px rgba(${r},${g},${b},.14),0 0 18px rgba(${r},${g},${b},.22),inset 0 1px 0 rgba(255,255,255,.05)`
+            ].join(";");
+        }
+
+        function buildPublicPremiumBadgeLabelInlineStyle(source = {}) {
+            const style = getPublicPremiumBadgeStyle(source);
+            const text = style.text;
+
+            if (text.mode === "gradient") {
+                const textPaint = getPublicPremiumBadgePartPaint(text);
+                const fallback = normalizePublicPremiumBadgeColor(text.start, DEFAULT_PREMIUM_BADGE_TEXT_COLOR);
+
+                return [
+                    `background:${textPaint}`,
+                    "background-size:100% 100%",
+                    "background-repeat:no-repeat",
+                    "background-clip:text",
+                    "-webkit-background-clip:text",
+                    `color:${fallback}`,
+                    "-webkit-text-fill-color:transparent",
+                    "display:inline-block"
+                ].join(";");
+            }
+
+            const color = normalizePublicPremiumBadgeColor(text.color, DEFAULT_PREMIUM_BADGE_TEXT_COLOR);
+            return [
+                "background:none",
+                `color:${color}`,
+                `-webkit-text-fill-color:${color}`,
+                "display:inline-block"
             ].join(";");
         }
 
@@ -6553,13 +6617,14 @@
                 return `<span class="${className} moderator-badge"><span>${escapeHtml(badge.label || "Moderator")}</span></span>`;
             }
 
-            const premiumStyles = badge.key === "premium" ? (options.premiumStyles || null) : null;
-            const premiumStyle = premiumStyles
-                ? ` style="${escapeHtml(buildPublicPremiumBadgeInlineStyle(premiumStyles))}"`
-                : "";
-            const labelClass = badge.key === "premium" ? " class=\"nv-premium-badge-label\"" : "";
+            if (badge.key === "premium") {
+                const premiumSource = options.premiumObject || options.premiumStyles || {};
+                const pillStyle = escapeHtml(buildPublicPremiumBadgeInlineStyle(premiumSource));
+                const labelStyle = escapeHtml(buildPublicPremiumBadgeLabelInlineStyle(premiumSource));
+                return `<span class="${className} premium" style="${pillStyle}"><span class="nv-premium-badge-label" style="${labelStyle}">${escapeHtml(badge.label || "Premium")}</span></span>`;
+            }
 
-            return `<span class="${className} ${escapeHtml(badge.className || badge.key)}"${premiumStyle}><span${labelClass}>${escapeHtml(badge.label)}</span></span>`;
+            return `<span class="${className} ${escapeHtml(badge.className || badge.key)}"><span>${escapeHtml(badge.label)}</span></span>`;
         }
 
         function hasVisibleCustomObjects(layout) {
@@ -8593,9 +8658,11 @@
             }
 
             if (object.type === "profile_badge") {
-                const badge = getBadgeByKey(object.badgeKey, profile) || getOwnedBadges(profile)[0];
+                const badge = getPublicBadgeForSavedObject(object, profile);
+                if (!badge) return "";
+
                 return buildProfileBadgeMarkup(badge, "custom-profile-badge", {
-                    premiumStyles: object.styles || {}
+                    premiumObject: object
                 });
             }
 
