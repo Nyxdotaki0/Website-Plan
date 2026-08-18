@@ -10545,18 +10545,28 @@
             const bKey = `${prefix}GradientB`;
             const directionKey = `${prefix}GradientDirection`;
 
-            const legacyMode = styles[`${prefix}PaintMode`];
-            const mode = styles[modeKey] === "gradient" || (!styles[modeKey] && legacyMode === "gradient")
-                ? "gradient"
-                : "solid";
-            const solidColor = normalizePremiumBadgeColor(styles[colorKey] || styles[`${prefix}SolidColor`], defaultSolid);
-            const gradientA = normalizePremiumBadgeColor(styles[aKey], solidColor);
+            // Compatibility with the earlier Premium badge paint experiment.
+            const legacyMode = String(styles[`${prefix}PaintMode`] || "").toLowerCase();
+            const requestedMode = String(styles[modeKey] || legacyMode || "solid").toLowerCase();
+            const mode = requestedMode === "gradient" ? "gradient" : "solid";
+            const solidColor = normalizePremiumBadgeColor(
+                styles[colorKey] || styles[`${prefix}SolidColor`],
+                defaultSolid
+            );
+            const gradientA = normalizePremiumBadgeColor(
+                styles[aKey] || styles[`${prefix}PaintGradientA`],
+                solidColor
+            );
             const gradientB = normalizePremiumBadgeColor(
-                styles[bKey],
+                styles[bKey] || styles[`${prefix}PaintGradientB`],
                 kind === "border" ? "#fff0b8" : "#ffffff"
             );
-            const direction = normalizePremiumBadgeDirection(styles[directionKey]);
+            const direction = normalizePremiumBadgeDirection(
+                styles[directionKey] || styles[`${prefix}PaintGradientDirection`]
+            );
 
+            // Keep a single canonical state on the badge object. These fields are
+            // what Studio, Inspector, save/publish, and profile.html all consume.
             styles[modeKey] = mode;
             styles[colorKey] = solidColor;
             styles[aKey] = gradientA;
@@ -10564,8 +10574,8 @@
             styles[directionKey] = direction;
 
             const paint = mode === "gradient"
-                ? `linear-gradient(${direction}, ${gradientA}, ${gradientB})`
-                : `linear-gradient(${solidColor}, ${solidColor})`;
+                ? `linear-gradient(${direction}, ${gradientA} 0%, ${gradientB} 100%)`
+                : `linear-gradient(90deg, ${solidColor} 0%, ${solidColor} 100%)`;
 
             return {
                 kind,
@@ -10597,20 +10607,23 @@
         }
 
         function refreshPremiumBadgeStudioPreview(object) {
+            if (!object) return;
             const element = getStudioCanvasObjectElementById(object.id);
             const preview = element?.querySelector(".studio-badge-preview.premium");
+
             if (preview) {
                 preview.setAttribute("style", buildPremiumBadgeInlineStyle(object));
-            } else {
-                updateObjectElement(object);
+            } else if (element) {
+                // If the object was rebuilt for any reason, use the normal Studio
+                // renderer once. This does not normalize/replace the object model.
+                renderStudio();
             }
         }
 
         function refreshPremiumBadgeInspectorPreview(object) {
+            if (!object) return;
             const preview = document.getElementById("premium-badge-live-preview");
-            if (preview) {
-                preview.setAttribute("style", buildPremiumBadgeInlineStyle(object));
-            }
+            if (preview) preview.setAttribute("style", buildPremiumBadgeInlineStyle(object));
 
             ["text", "border"].forEach(kind => {
                 const state = getPremiumBadgeStyleState(object, kind);
@@ -10620,128 +10633,174 @@
         }
 
         function commitPremiumBadgeStyleChange(object, options = {}) {
+            if (!object) return;
+
+            // IMPORTANT: do not call syncActiveLayout() here. That function
+            // normalizes the layout and rebuilds object references. Doing that
+            // while the Inspector is actively editing a badge was the cause of
+            // changes appearing temporarily and then snapping back on deselect.
             persistActiveStudioLayoutReference();
-            syncActiveLayout();
             refreshPremiumBadgeStudioPreview(object);
             refreshPremiumBadgeInspectorPreview(object);
-            if (options.refreshInspector) renderInspector();
+            updateRequirementDisplays();
+
+            if (options.refreshInspector) {
+                renderInspector();
+            }
         }
 
-        function updatePremiumBadgeMode(kind, mode, options = {}) {
-            const object = getSelectedObject();
-            if (!object || object.type !== "profile_badge" || object.badgeKey !== "premium") return;
+        function getPremiumBadgeObjectForInspector(objectId = selectedObjectId) {
+            const object = findStudioObjectById(objectId);
+            if (!object || object.type !== "profile_badge" || object.badgeKey !== "premium") return null;
+            return object;
+        }
+
+        function setPremiumBadgeMode(kind, mode, objectId = selectedObjectId, options = {}) {
+            const object = getPremiumBadgeObjectForInspector(objectId);
+            if (!object) return;
             if (!guardUnlockedObject(object)) { renderInspector(); return; }
             if (!options.skipHistory) pushStudioHistory();
 
-            object.styles = object.styles || {};
             const prefix = kind === "border" ? "premiumBadgeBorder" : "premiumBadgeText";
+            object.styles = object.styles || {};
             object.styles[`${prefix}Mode`] = mode === "gradient" ? "gradient" : "solid";
-
             getPremiumBadgeStyleState(object, kind);
             commitPremiumBadgeStyleChange(object, { refreshInspector: true });
         }
 
-        function updatePremiumBadgeSolidColor(kind, value, options = {}) {
-            const object = getSelectedObject();
-            if (!object || object.type !== "profile_badge" || object.badgeKey !== "premium") return;
+        function setPremiumBadgeSolidColor(kind, value, objectId = selectedObjectId, options = {}) {
+            const object = getPremiumBadgeObjectForInspector(objectId);
+            if (!object) return;
             if (!guardUnlockedObject(object)) { renderInspector(); return; }
             if (!options.skipHistory) pushStudioHistory();
 
-            object.styles = object.styles || {};
             const prefix = kind === "border" ? "premiumBadgeBorder" : "premiumBadgeText";
             const color = normalizePremiumBadgeColor(
                 value,
                 kind === "border" ? DEFAULT_PREMIUM_BADGE_BORDER_COLOR : DEFAULT_PREMIUM_BADGE_TEXT_COLOR
             );
 
-            object.styles[`${prefix}Color`] = color;
+            object.styles = object.styles || {};
             object.styles[`${prefix}Mode`] = "solid";
+            object.styles[`${prefix}Color`] = color;
 
+            // Keep the legacy accent only as a compatibility fallback for older
+            // published profile payloads. It never controls the black fill.
             if (kind === "border") object.styles.premiumBadgeColor = color;
-            commitPremiumBadgeStyleChange(object, options);
+            commitPremiumBadgeStyleChange(object);
         }
 
-        function updatePremiumBadgeGradient(kind, options = {}) {
-            const object = getSelectedObject();
-            if (!object || object.type !== "profile_badge" || object.badgeKey !== "premium") return;
+        function setPremiumBadgeGradientPart(kind, field, value, objectId = selectedObjectId, options = {}) {
+            const object = getPremiumBadgeObjectForInspector(objectId);
+            if (!object) return;
             if (!guardUnlockedObject(object)) { renderInspector(); return; }
             if (!options.skipHistory) pushStudioHistory();
 
-            object.styles = object.styles || {};
             const prefix = kind === "border" ? "premiumBadgeBorder" : "premiumBadgeText";
             const state = getPremiumBadgeStyleState(object, kind);
-
-            const a = normalizePremiumBadgeColor(
-                document.getElementById(`premium-badge-${kind}-a`)?.value || state.gradientA,
-                state.gradientA
-            );
-            const b = normalizePremiumBadgeColor(
-                document.getElementById(`premium-badge-${kind}-b`)?.value || state.gradientB,
-                state.gradientB
-            );
-            const direction = normalizePremiumBadgeDirection(
-                document.getElementById(`premium-badge-${kind}-direction`)?.value || state.direction
-            );
-
+            object.styles = object.styles || {};
             object.styles[`${prefix}Mode`] = "gradient";
-            object.styles[`${prefix}GradientA`] = a;
-            object.styles[`${prefix}GradientB`] = b;
-            object.styles[`${prefix}GradientDirection`] = direction;
 
-            if (kind === "border") object.styles.premiumBadgeColor = a;
-            commitPremiumBadgeStyleChange(object, options);
+            if (field === "a") {
+                object.styles[`${prefix}GradientA`] = normalizePremiumBadgeColor(value, state.gradientA);
+                if (kind === "border") object.styles.premiumBadgeColor = object.styles[`${prefix}GradientA`];
+            } else if (field === "b") {
+                object.styles[`${prefix}GradientB`] = normalizePremiumBadgeColor(value, state.gradientB);
+            } else if (field === "direction") {
+                object.styles[`${prefix}GradientDirection`] = normalizePremiumBadgeDirection(value);
+            }
+
+            commitPremiumBadgeStyleChange(object);
         }
 
-        function resetPremiumBadgeAppearance() {
-            const object = getSelectedObject();
-            if (!object || object.type !== "profile_badge" || object.badgeKey !== "premium") return;
+        function resetPremiumBadgeAppearance(objectId = selectedObjectId) {
+            const object = getPremiumBadgeObjectForInspector(objectId);
+            if (!object) return;
             if (!guardUnlockedObject(object)) { renderInspector(); return; }
             pushStudioHistory();
 
             object.styles = object.styles || {};
-            object.styles.premiumBadgeColor = DEFAULT_PREMIUM_BADGE_COLOR;
+
+            // Explicit defaults are persisted instead of deleting fields and
+            // relying on fallbacks. This guarantees Reset survives deselection,
+            // reopening the Inspector, autosave, and publish.
+            Object.assign(object.styles, {
+                premiumBadgeColor: DEFAULT_PREMIUM_BADGE_BORDER_COLOR,
+                premiumBadgeTextMode: "solid",
+                premiumBadgeTextColor: DEFAULT_PREMIUM_BADGE_TEXT_COLOR,
+                premiumBadgeTextGradientA: DEFAULT_PREMIUM_BADGE_TEXT_COLOR,
+                premiumBadgeTextGradientB: "#ffffff",
+                premiumBadgeTextGradientDirection: "90deg",
+                premiumBadgeBorderMode: "solid",
+                premiumBadgeBorderColor: DEFAULT_PREMIUM_BADGE_BORDER_COLOR,
+                premiumBadgeBorderGradientA: DEFAULT_PREMIUM_BADGE_BORDER_COLOR,
+                premiumBadgeBorderGradientB: "#fff0b8",
+                premiumBadgeBorderGradientDirection: "90deg"
+            });
 
             [
-                "premiumBadgeTextMode",
-                "premiumBadgeTextColor",
-                "premiumBadgeTextGradientA",
-                "premiumBadgeTextGradientB",
-                "premiumBadgeTextGradientDirection",
-                "premiumBadgeBorderMode",
-                "premiumBadgeBorderColor",
-                "premiumBadgeBorderGradientA",
-                "premiumBadgeBorderGradientB",
-                "premiumBadgeBorderGradientDirection",
                 "premiumBadgeText",
                 "premiumBadgeTextPaintMode",
                 "premiumBadgeTextPaintOpacity",
                 "premiumBadgeTextSolidColor",
+                "premiumBadgeTextPaintGradientA",
+                "premiumBadgeTextPaintGradientB",
+                "premiumBadgeTextPaintGradientDirection",
                 "premiumBadgeBorder",
                 "premiumBadgeBorderPaintMode",
                 "premiumBadgeBorderPaintOpacity",
-                "premiumBadgeBorderSolidColor"
+                "premiumBadgeBorderSolidColor",
+                "premiumBadgeBorderPaintGradientA",
+                "premiumBadgeBorderPaintGradientB",
+                "premiumBadgeBorderPaintGradientDirection"
             ].forEach(key => delete object.styles[key]);
 
-            getPremiumBadgeStyleState(object, "text");
-            getPremiumBadgeStyleState(object, "border");
-            commitPremiumBadgeStyleChange(object, { refreshInspector: true });
+            persistActiveStudioLayoutReference();
+            renderStudio();
+            renderInspector();
+            updateRequirementDisplays();
+            setStudioStatus("Premium badge style reset to gold.");
+        }
+
+        // Compatibility wrappers for the immediately previous version.
+        function updatePremiumBadgeMode(kind, mode, options = {}) {
+            setPremiumBadgeMode(kind, mode, selectedObjectId, options);
+        }
+
+        function updatePremiumBadgeSolidColor(kind, value, options = {}) {
+            setPremiumBadgeSolidColor(kind, value, selectedObjectId, options);
+        }
+
+        function updatePremiumBadgeGradient(kind, options = {}) {
+            const object = getPremiumBadgeObjectForInspector();
+            if (!object) return;
+            const state = getPremiumBadgeStyleState(object, kind);
+            const a = document.getElementById(`premium-badge-${kind}-a`)?.value || state.gradientA;
+            const b = document.getElementById(`premium-badge-${kind}-b`)?.value || state.gradientB;
+            const direction = document.getElementById(`premium-badge-${kind}-direction`)?.value || state.direction;
+
+            if (!options.skipHistory) pushStudioHistory();
+            const prefix = kind === "border" ? "premiumBadgeBorder" : "premiumBadgeText";
+            object.styles[`${prefix}Mode`] = "gradient";
+            object.styles[`${prefix}GradientA`] = normalizePremiumBadgeColor(a, state.gradientA);
+            object.styles[`${prefix}GradientB`] = normalizePremiumBadgeColor(b, state.gradientB);
+            object.styles[`${prefix}GradientDirection`] = normalizePremiumBadgeDirection(direction);
+            if (kind === "border") object.styles.premiumBadgeColor = object.styles[`${prefix}GradientA`];
+            commitPremiumBadgeStyleChange(object);
         }
 
         function updatePremiumBadgeColor(value, options = {}) {
-            const object = getSelectedObject();
-            if (!object || object.type !== "profile_badge" || object.badgeKey !== "premium") return;
-            if (!guardUnlockedObject(object)) { renderInspector(); return; }
-            if (!options.skipHistory) pushStudioHistory();
-
+            const object = getPremiumBadgeObjectForInspector();
+            if (!object) return;
             const accent = normalizePremiumBadgeColor(value);
+            if (!options.skipHistory) pushStudioHistory();
             object.styles = object.styles || {};
             object.styles.premiumBadgeColor = accent;
             object.styles.premiumBadgeBorderMode = "solid";
             object.styles.premiumBadgeBorderColor = accent;
             object.styles.premiumBadgeTextMode = "solid";
             object.styles.premiumBadgeTextColor = premiumBadgeTextHex(accent);
-
-            commitPremiumBadgeStyleChange(object, options);
+            commitPremiumBadgeStyleChange(object);
         }
 
         function resetPremiumBadgeColor() {
@@ -10760,50 +10819,53 @@
             ];
 
             return `
-                    <div style="margin-top:14px;padding:12px;border:1px solid rgba(255,255,255,.10);border-radius:12px;background:rgba(255,255,255,.025);">
+                    <div class="premium-badge-paint-section" data-premium-paint-section="${kind}" style="margin-top:14px;padding:12px;border:1px solid rgba(255,255,255,.10);border-radius:12px;background:rgba(255,255,255,.025);">
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
                             <strong style="font-size:13px;">${escapeHtml(label)}</strong>
                             <select
+                                data-premium-badge-control="mode"
+                                data-premium-kind="${kind}"
                                 aria-label="${escapeHtml(label)} paint type"
-                                style="width:auto;min-width:118px;margin:0;"
-                                onchange="updatePremiumBadgeMode('${kind}', this.value)">
+                                style="width:auto;min-width:118px;margin:0;">
                                 <option value="solid" ${!isGradient ? "selected" : ""}>Solid</option>
                                 <option value="gradient" ${isGradient ? "selected" : ""}>Gradient</option>
                             </select>
                         </div>
 
                         ${isGradient ? `
-                            <div id="premium-badge-${kind}-gradient-preview"
+                            <div
+                                id="premium-badge-${kind}-gradient-preview"
                                 aria-label="${escapeHtml(label)} gradient preview"
-                                style="height:28px;border-radius:9px;border:1px solid rgba(255,255,255,.14);background:${escapeHtml(state.paint)};margin-bottom:11px;"></div>
+                                style="height:30px;border-radius:9px;border:1px solid rgba(255,255,255,.14);background:${escapeHtml(state.paint)};margin-bottom:11px;"></div>
 
                             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                                 <label style="margin:0;">
                                     <span style="display:block;margin-bottom:6px;">Color 1</span>
                                     <input
                                         id="premium-badge-${kind}-a"
+                                        data-premium-badge-control="gradient-a"
+                                        data-premium-kind="${kind}"
                                         type="color"
                                         value="${escapeHtml(state.gradientA)}"
-                                        style="width:100%;height:42px;margin:0;padding:3px;"
-                                        oninput="updatePremiumBadgeGradient('${kind}', { skipHistory: true })"
-                                        onchange="updatePremiumBadgeGradient('${kind}')">
+                                        style="width:100%;height:42px;margin:0;padding:3px;">
                                 </label>
                                 <label style="margin:0;">
                                     <span style="display:block;margin-bottom:6px;">Color 2</span>
                                     <input
                                         id="premium-badge-${kind}-b"
+                                        data-premium-badge-control="gradient-b"
+                                        data-premium-kind="${kind}"
                                         type="color"
                                         value="${escapeHtml(state.gradientB)}"
-                                        style="width:100%;height:42px;margin:0;padding:3px;"
-                                        oninput="updatePremiumBadgeGradient('${kind}', { skipHistory: true })"
-                                        onchange="updatePremiumBadgeGradient('${kind}')">
+                                        style="width:100%;height:42px;margin:0;padding:3px;">
                                 </label>
                             </div>
 
                             <label style="margin-top:10px;">Direction</label>
                             <select
                                 id="premium-badge-${kind}-direction"
-                                onchange="updatePremiumBadgeGradient('${kind}')">
+                                data-premium-badge-control="gradient-direction"
+                                data-premium-kind="${kind}">
                                 ${directionOptions.map(([value, text]) =>
                 `<option value="${value}" ${state.direction === value ? "selected" : ""}>${escapeHtml(text)}</option>`
             ).join("")}
@@ -10812,15 +10874,82 @@
                             <label style="margin:0;">
                                 <span style="display:block;margin-bottom:6px;">Color</span>
                                 <input
+                                    data-premium-badge-control="solid-color"
+                                    data-premium-kind="${kind}"
                                     type="color"
                                     value="${escapeHtml(normalizePremiumBadgeColor(state.solidColor, solidFallback))}"
-                                    style="width:100%;height:42px;margin:0;padding:3px;"
-                                    oninput="updatePremiumBadgeSolidColor('${kind}', this.value, { skipHistory: true })"
-                                    onchange="updatePremiumBadgeSolidColor('${kind}', this.value)">
+                                    style="width:100%;height:42px;margin:0;padding:3px;">
                             </label>
                         `}
                     </div>
                 `;
+        }
+
+        function bindPremiumBadgeInspectorControls(container, objectId) {
+            if (!container || !objectId) return;
+            const selected = getPremiumBadgeObjectForInspector(objectId);
+            if (!selected) return;
+
+            container.querySelectorAll("[data-premium-badge-control]").forEach(control => {
+                const kind = control.dataset.premiumKind;
+                const controlType = control.dataset.premiumBadgeControl;
+
+                if (controlType === "mode") {
+                    control.addEventListener("change", () => {
+                        setPremiumBadgeMode(kind, control.value, objectId);
+                    });
+                    return;
+                }
+
+                if (controlType === "solid-color") {
+                    let historyCaptured = false;
+                    const captureHistory = () => {
+                        if (!historyCaptured) {
+                            pushStudioHistory();
+                            historyCaptured = true;
+                        }
+                    };
+                    control.addEventListener("pointerdown", captureHistory, { once: true });
+                    control.addEventListener("focus", captureHistory, { once: true });
+                    control.addEventListener("input", () => {
+                        setPremiumBadgeSolidColor(kind, control.value, objectId, { skipHistory: true });
+                    });
+                    return;
+                }
+
+                if (controlType === "gradient-a" || controlType === "gradient-b") {
+                    let historyCaptured = false;
+                    const captureHistory = () => {
+                        if (!historyCaptured) {
+                            pushStudioHistory();
+                            historyCaptured = true;
+                        }
+                    };
+                    control.addEventListener("pointerdown", captureHistory, { once: true });
+                    control.addEventListener("focus", captureHistory, { once: true });
+                    control.addEventListener("input", () => {
+                        setPremiumBadgeGradientPart(
+                            kind,
+                            controlType === "gradient-a" ? "a" : "b",
+                            control.value,
+                            objectId,
+                            { skipHistory: true }
+                        );
+                    });
+                    return;
+                }
+
+                if (controlType === "gradient-direction") {
+                    control.addEventListener("change", () => {
+                        setPremiumBadgeGradientPart(kind, "direction", control.value, objectId);
+                    });
+                }
+            });
+
+            const resetButton = container.querySelector("[data-premium-badge-reset]");
+            if (resetButton) {
+                resetButton.addEventListener("click", () => resetPremiumBadgeAppearance(objectId));
+            }
         }
 
         function makePublishedLayoutSnapshot(layout) {
@@ -20166,6 +20295,7 @@
             box.innerHTML = parts.join("");
             bindStudioLockControls(box);
             bindStudioVisibilityControls(box);
+            bindPremiumBadgeInspectorControls(box, object.id);
         }
         function isPlainTextStudioObject(object) {
             return ["text", "display_name", "username_text"].includes(object?.type);
@@ -20880,7 +21010,7 @@
                     <div class="inspector-group">
                         <h4>Official Badge</h4>
                         <p class="studio-inspector-note" style="margin-bottom:12px;">
-                            Premium keeps its official pill shape. The center fill is always black; only the text and outline can be styled.
+                            Style the Premium label and oval outline independently.
                         </p>
 
                         <label>Badge</label>
@@ -20903,12 +21033,7 @@
                         ${renderPremiumBadgePaintControls("text", "Text", textState)}
                         ${renderPremiumBadgePaintControls("border", "Border", borderState)}
 
-                        <div style="margin-top:12px;padding:10px 12px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:#000;">
-                            <div style="font-size:12px;font-weight:700;margin-bottom:2px;">Fill</div>
-                            <div class="studio-inspector-note" style="margin:0;">Always black to preserve the Premium badge look.</div>
-                        </div>
-
-                        <button type="button" class="button-muted" style="width:100%;margin-top:12px;" onclick="resetPremiumBadgeAppearance()">
+                        <button type="button" class="button-muted" data-premium-badge-reset style="width:100%;margin-top:12px;">
                             Reset Premium Style
                         </button>
                     </div>
