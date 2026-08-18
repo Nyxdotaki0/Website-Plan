@@ -1,6 +1,6 @@
-import { requireBetaAccess } from "./betaGate.js?v=8";
+import { requireBetaAccess } from "./betaGate.js?v=9";
 import { supabase } from "./supabaseClient.js";
-import { initNullverseShell } from "./nullverse-shell.js?v=8";
+import { initNullverseShell } from "./nullverse-shell.js?v=9";
 import {
     bindCardInteractions,
     normalizeWarningList,
@@ -11,11 +11,36 @@ import {
 } from "./nullverse-content-cards.js?v=7";
 import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nullverse-data.js?v=7";
 
-const currentUser = await requireBetaAccess();
-if (!currentUser) throw new Error("Nullverse session unavailable.");
-const viewer = await loadViewerContext(currentUser.id);
-document.body.dataset.contentExperience = normalizeViewerExperience(viewer.safety?.contentExperience);
-await initNullverseShell({ page: "gallery", user: currentUser, profile: viewer.profile });
+let currentUser = null;
+let viewer = null;
+
+try {
+    currentUser = await requireBetaAccess();
+    if (!currentUser) throw new Error("Nullverse session unavailable.");
+
+    viewer = await withGalleryRetry(
+        () => loadViewerContext(currentUser.id),
+        2,
+        7000
+    );
+
+    document.body.dataset.contentExperience = normalizeViewerExperience(viewer.safety?.contentExperience);
+    await initNullverseShell({ page: "gallery", user: currentUser, profile: viewer.profile });
+} catch (startupError) {
+    console.error("Gallery startup failed:", startupError);
+
+    const results = document.getElementById("gallery-results");
+    const count = document.getElementById("gallery-count");
+    if (results) {
+        results.innerHTML = renderEmptyCard(
+            "Gallery connection interrupted",
+            "Nullverse could not finish loading this gallery. Refresh or try again after a moment."
+        );
+    }
+    if (count) count.textContent = "Could not load";
+
+    throw startupError;
+}
 
 if (viewer.profile?.username) {
     const base = `creator-gallery.html?user=${encodeURIComponent(viewer.profile.username)}`;
@@ -27,16 +52,30 @@ function waitForGallery(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function withGalleryRetry(task, attempts = 3) {
+async function withGalleryRetry(task, attempts = 3, timeoutMs = 8000) {
     let lastError = null;
+
     for (let attempt = 1; attempt <= attempts; attempt++) {
+        let timer = null;
         try {
-            return await task();
+            const timeout = new Promise((_, reject) => {
+                timer = setTimeout(
+                    () => reject(new Error("Gallery request timed out")),
+                    timeoutMs
+                );
+            });
+            return await Promise.race([
+                Promise.resolve().then(task),
+                timeout
+            ]);
         } catch (error) {
             lastError = error;
-            if (attempt < attempts) await waitForGallery(450 * attempt);
+            if (attempt < attempts) await waitForGallery(350 * attempt);
+        } finally {
+            if (timer) clearTimeout(timer);
         }
     }
+
     throw lastError || new Error("Gallery request failed.");
 }
 

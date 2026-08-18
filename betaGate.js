@@ -208,9 +208,9 @@ export async function requireBetaAccess(options = {}) {
     let user = null;
 
     try {
-        const sessionResult = await withRetry(
-            () => supabase.auth.getSession(),
-            { attempts: 2, timeoutMs: 9000, delayMs: 350 }
+        const sessionResult = await withTimeout(
+            supabase.auth.getSession(),
+            4500
         );
 
         if (sessionResult?.error) throw sessionResult.error;
@@ -236,14 +236,32 @@ export async function requireBetaAccess(options = {}) {
     try {
         const normalizedEmail = normalizeEmail(user.email);
 
-        const { data: betaData, error: betaError } = await withRetry(
-            () => supabase
-                .from("beta_access")
-                .select("role")
-                .ilike("email", normalizedEmail)
-                .maybeSingle(),
-            { attempts: 3, timeoutMs: 9000, delayMs: 450 }
-        );
+        // Beta membership and profile status are independent. Load them in
+        // parallel so a slow mobile request cannot make editor startup wait
+        // through two long retry chains back-to-back.
+        const [betaResult, profileResult] = await Promise.all([
+            withRetry(
+                () => supabase
+                    .from("beta_access")
+                    .select("role")
+                    .ilike("email", normalizedEmail)
+                    .maybeSingle(),
+                { attempts: 2, timeoutMs: 5000, delayMs: 300 }
+            ),
+            withRetry(
+                () => supabase
+                    .from("profiles")
+                    .select("id, role, account_status, moderation_expires_at, moderation_reason, profile_completed, age_verified, age_role, birth_date")
+                    .eq("id", user.id)
+                    .maybeSingle(),
+                { attempts: 2, timeoutMs: 5000, delayMs: 300 }
+            )
+        ]);
+
+        const betaData = betaResult?.data || null;
+        const betaError = betaResult?.error || null;
+        const profile = profileResult?.data || null;
+        const profileError = profileResult?.error || null;
 
         // A backend error is not the same thing as revoked beta access.
         if (betaError) {
@@ -252,25 +270,16 @@ export async function requireBetaAccess(options = {}) {
             return null;
         }
 
+        if (profileError) {
+            console.warn("Profile gate lookup failed:", profileError);
+            showConnectionError();
+            return null;
+        }
+
         if (!betaData) {
             await supabase.auth.signOut();
             clearBrokenSession();
             showBetaAccessError(normalizedEmail);
-            return null;
-        }
-
-        const { data: profile, error: profileError } = await withRetry(
-            () => supabase
-                .from("profiles")
-                .select("id, role, account_status, moderation_expires_at, moderation_reason, profile_completed, age_verified, age_role, birth_date")
-                .eq("id", user.id)
-                .maybeSingle(),
-            { attempts: 3, timeoutMs: 9000, delayMs: 450 }
-        );
-
-        if (profileError) {
-            console.warn("Profile gate lookup failed:", profileError);
-            showConnectionError();
             return null;
         }
 

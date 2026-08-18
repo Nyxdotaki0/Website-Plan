@@ -2,6 +2,21 @@ const PREMIUM_PLAN = "premium";
 const PREMIUM_CACHE_TTL_MS = 30000;
 const premiumCache = new Map();
 
+const PREMIUM_LOOKUP_TIMEOUT_MS = 6500;
+
+async function withPremiumTimeout(promise, ms = PREMIUM_LOOKUP_TIMEOUT_MS) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Premium entitlement lookup timed out")), ms);
+    });
+
+    try {
+        return await Promise.race([promise, timeout]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 export const PREMIUM_BADGE = Object.freeze({
     key: "premium",
     label: "Premium",
@@ -50,7 +65,9 @@ export async function getPremiumEntitlement(supabase, userId, { force = false } 
     try {
         // The browser only receives the active Premium boolean. Billing/expiry
         // metadata stays private in user_entitlements and is evaluated server-side.
-        const { data, error } = await supabase.rpc("nv_has_premium", { p_user_id: id });
+        const { data, error } = await withPremiumTimeout(
+            supabase.rpc("nv_has_premium", { p_user_id: id })
+        );
 
         if (error) throw error;
         const value = {
