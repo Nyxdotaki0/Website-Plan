@@ -10876,7 +10876,7 @@
         }
 
         function updatePremiumBadgeStylePart(kind, patch = {}, options = {}) {
-            const object = getSelectedObject();
+            let object = getSelectedObject();
 
             if (
                 !object ||
@@ -10892,8 +10892,21 @@
                 return;
             }
 
+            const objectId = object.id;
+
             if (options.skipHistory !== true) {
                 pushStudioHistory();
+
+                /*
+                    History is allowed to clone/restore state in the future.
+                    Always reacquire the authoritative selected layer before
+                    writing Premium style data instead of trusting a stale ref.
+                */
+                object = findStudioObjectById(objectId);
+
+                if (!object) {
+                    return;
+                }
             }
 
             const style = ensurePremiumBadgeStyle(object);
@@ -10939,7 +10952,7 @@
         }
 
         function resetPremiumBadgeAppearance() {
-            const object = getSelectedObject();
+            let object = getSelectedObject();
 
             if (
                 !object ||
@@ -10954,7 +10967,14 @@
                 return;
             }
 
+            const objectId = object.id;
             pushStudioHistory();
+            object = findStudioObjectById(objectId);
+
+            if (!object) {
+                return;
+            }
+
             object.styles = object.styles || {};
 
             const defaults = {
@@ -11080,7 +11100,9 @@
 
             root.querySelectorAll("[data-premium-mode-part][data-premium-mode-value]")
                 .forEach(button => {
-                    button.addEventListener("click", () => {
+                    button.addEventListener("click", event => {
+                        event.preventDefault();
+                        event.stopPropagation();
                         updatePremiumBadgeStylePart(
                             button.dataset.premiumModePart,
                             { mode: button.dataset.premiumModeValue },
@@ -11137,7 +11159,9 @@
                     });
                 });
 
-            root.querySelector("[data-premium-reset]")?.addEventListener("click", () => {
+            root.querySelector("[data-premium-reset]")?.addEventListener("click", event => {
+                event.preventDefault();
+                event.stopPropagation();
                 resetPremiumBadgeAppearance();
             });
         }
@@ -16082,7 +16106,18 @@
         }
 
         function captureStudioSnapshot() {
-            syncActiveLayout();
+            /*
+                History must never normalize the live editor before a control
+                finishes its edit. normalizeStudioLayout() rebuilds the objects
+                array, which invalidates references held by Inspector handlers.
+                Keep the exact live layout reference, then clone it for history.
+            */
+            if (!studioLayouts) {
+                studioLayouts = createProfileLayoutBundle(null);
+            }
+
+            persistActiveStudioLayoutReference();
+
             return {
                 activeStudioLayout,
                 layouts: cloneStudioData(studioLayouts || createProfileLayoutBundle(null)),
