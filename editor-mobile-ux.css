@@ -1,0 +1,969 @@
+/* Nullverse Touch Editor UX
+   Mobile/tablet presentation layer for World, Literature, and Comic editors.
+   Desktop workflow and data/save/publish logic are intentionally untouched. */
+
+:root {
+    --nv-touch-vh: 100dvh;
+    --nv-touch-vw: 100vw;
+    --nv-touch-vv-top: 0px;
+    --nv-touch-vv-left: 0px;
+    --nv-touch-keyboard: 0px;
+}
+
+/* Only the primary coarse-pointer/mobile-tablet experience is changed. */
+@media (pointer: coarse) and (max-width: 1400px) {
+    html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern) {
+        width: 100% !important;
+        height: var(--nv-touch-vh, 100dvh) !important;
+        min-height: 0 !important;
+        max-width: 100vw !important;
+        overflow: hidden !important;
+        overscroll-behavior: none;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern),
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern) * {
+        box-sizing: border-box;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select) {
+        min-width: 0;
+        max-width: 100%;
+        font-size: 16px !important; /* prevents iOS focus zoom */
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        :is(img, video, canvas, svg) {
+        max-width: 100%;
+    }
+
+    /* ---------------------------------------------------------
+       Project rail: always a drawer on touch tablets/phones.
+       This leaves the editor at full width in portrait + landscape.
+    ---------------------------------------------------------- */
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail {
+        display: block !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail .main {
+        grid-column: 1 / -1 !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        height: var(--nv-touch-vh, 100dvh) !important;
+        max-height: var(--nv-touch-vh, 100dvh) !important;
+        padding: 0 !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        overscroll-behavior-y: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail .sidebar {
+        position: fixed !important;
+        left: max(0px, env(safe-area-inset-left)) !important;
+        top: var(--nv-touch-vv-top, 0px) !important;
+        bottom: auto !important;
+        z-index: 7200 !important;
+        width: min(360px, calc(var(--nv-touch-vw, 100vw) - 34px)) !important;
+        max-width: 90vw !important;
+        height: var(--nv-touch-vh, 100dvh) !important;
+        min-height: 0 !important;
+        transform: translate3d(-106%, 0, 0) !important;
+        transition: transform .2s ease !important;
+        pointer-events: none !important;
+        overflow: hidden !important;
+        border-bottom: 0 !important;
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail.nv-sidebar-open .sidebar {
+        transform: translate3d(0, 0, 0) !important;
+        pointer-events: auto !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.section-list, .chapter-list) {
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.sidebar-header, .sidebar-footer) {
+        flex: 0 0 auto;
+    }
+
+    /* ---------------------------------------------------------
+       Main editor chrome
+    ---------------------------------------------------------- */
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail .topbar {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 2400 !important;
+        min-width: 0 !important;
+        min-height: 58px !important;
+        grid-template-columns: auto minmax(0, 1fr) auto !important;
+        gap: 8px !important;
+        padding:
+            max(7px, env(safe-area-inset-top))
+            max(10px, env(safe-area-inset-right))
+            7px
+            max(10px, env(safe-area-inset-left)) !important;
+        margin: 0 !important;
+        border-radius: 0 0 18px 18px !important;
+        backdrop-filter: blur(22px) !important;
+        -webkit-backdrop-filter: blur(22px) !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.nv-world-mobile-outline, .nv-world-mobile-more,
+            .nv-literature-mobile-outline, .nv-literature-mobile-more,
+            .nv-comic-mobile-outline, .nv-comic-mobile-more) {
+        display: grid !important;
+        place-items: center !important;
+        flex: 0 0 auto !important;
+        width: 40px !important;
+        height: 40px !important;
+        min-width: 40px !important;
+        min-height: 40px !important;
+        padding: 0 !important;
+        border-radius: 12px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.nv-world-title-stack, .nv-literature-title-stack, .nv-comic-title-stack) {
+        grid-column: 2 !important;
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail #editor-title {
+        max-width: 100% !important;
+        font-size: clamp(.88rem, 2.2vw, 1.04rem) !important;
+        line-height: 1.1 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.nv-world-title-stack, .nv-literature-title-stack, .nv-comic-title-stack) > p,
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.nv-world-title-icon, .nv-literature-title-icon, .nv-comic-title-icon) {
+        display: none !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail .topbar-actions {
+        display: none !important;
+    }
+
+    /* Touch overflow menu; uses the existing More button/functionality. */
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail.nv-mobile-actions-open .topbar-actions {
+        position: fixed !important;
+        left: max(8px, env(safe-area-inset-left)) !important;
+        right: max(8px, env(safe-area-inset-right)) !important;
+        top: calc(var(--nv-touch-vv-top, 0px) + max(8px, env(safe-area-inset-top)) + 52px) !important;
+        z-index: 7600 !important;
+        width: auto !important;
+        max-height: calc(var(--nv-touch-vh, 100dvh) - 72px) !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 8px !important;
+        padding: 10px !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        border: 1px solid rgba(255,255,255,.14) !important;
+        border-radius: 18px !important;
+        background: rgba(8,8,12,.97) !important;
+        box-shadow: 0 24px 70px rgba(0,0,0,.58) !important;
+        backdrop-filter: blur(24px) !important;
+        -webkit-backdrop-filter: blur(24px) !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail.nv-mobile-actions-open
+        :is(.topbar-nav, #tutorial-save-area) {
+        width: 100% !important;
+        min-width: 0 !important;
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 7px !important;
+        overflow: visible !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail.nv-mobile-actions-open
+        :is(.topbar .button, .topbar .primary-button) {
+        width: 100% !important;
+        min-width: 0 !important;
+        min-height: 42px !important;
+        justify-content: center !important;
+        text-align: center !important;
+        white-space: normal !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail.nv-mobile-actions-open
+        .nv-save-button-group {
+        grid-column: 1 / -1 !important;
+        width: 100% !important;
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 7px !important;
+    }
+
+    /* ---------------------------------------------------------
+       Editor content and forms
+    ---------------------------------------------------------- */
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail #editor-content {
+        width: min(100% - 18px, 1180px) !important;
+        max-width: 1180px !important;
+        min-width: 0 !important;
+        margin-inline: auto !important;
+        padding:
+            10px
+            max(0px, env(safe-area-inset-right))
+            calc(102px + env(safe-area-inset-bottom))
+            max(0px, env(safe-area-inset-left)) !important;
+        overflow-x: hidden !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.settings-panel-v2, .section-editor-v2, .chapter-editor-v2) {
+        min-width: 0 !important;
+        gap: 12px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.settings-grid-v2, .section-main-grid-v2, .section-field-grid,
+            .chapter-main-grid-v2, .chapter-field-grid) {
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 11px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.settings-hero-v2, .section-hero-v2, .chapter-hero-v2) {
+        min-width: 0 !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 10px !important;
+        padding: clamp(17px, 3vw, 23px) !important;
+        border-radius: 20px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.settings-section-v2, .section-tool-card, .chapter-tool-card, .writing-studio-card-v2, .world-studio-card-v2) {
+        min-width: 0 !important;
+        padding: clamp(15px, 2.6vw, 21px) !important;
+        border-radius: 19px !important;
+        overflow: hidden !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.writing-studio-card-v2, .world-studio-card-v2) {
+        grid-template-columns: minmax(0, 1fr) !important;
+        align-items: stretch !important;
+        gap: 13px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.writing-studio-card-v2, .world-studio-card-v2) .primary-button {
+        width: 100% !important;
+        min-height: 46px !important;
+        text-align: center !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.tag-input-row, .warning-tag-tools, .image-fit-launch-row,
+            .section-card-preview-upload-row, .image-placement-button-row) {
+        min-width: 0 !important;
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.tag-input-row, .warning-tag-tools, .image-fit-launch-row,
+            .section-card-preview-upload-row) > * {
+        min-width: 0 !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.tag-input-row, .warning-tag-tools) input {
+        flex: 1 1 180px !important;
+        width: auto !important;
+        margin-bottom: 0 !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.tag-input-row, .warning-tag-tools) .button {
+        flex: 0 0 auto !important;
+        min-height: 44px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        .style-choice-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 9px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        .style-choice {
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        min-height: 74px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        .warning-choice-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.connected-color-picker, .gradient-preview-wrapper, .compact-color-row) {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.connected-gradient, .gradient-preview) {
+        min-width: 0 !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        input[type="file"] {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail .tooltip {
+        position: fixed !important;
+        left: max(12px, env(safe-area-inset-left)) !important;
+        right: max(12px, env(safe-area-inset-right)) !important;
+        bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+        top: auto !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: min(44vh, 320px) !important;
+        transform: none !important;
+        overflow-y: auto !important;
+        z-index: 10000 !important;
+    }
+
+    /* ---------------------------------------------------------
+       Bottom action docks
+    ---------------------------------------------------------- */
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        :is(.nv-world-mobile-dock, .nv-literature-mobile-dock, .nv-comic-mobile-dock) {
+        bottom: max(8px, env(safe-area-inset-bottom)) !important;
+        width: min(640px, calc(100vw - 14px)) !important;
+        max-width: calc(100vw - 14px) !important;
+        min-width: 0 !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        gap: 5px !important;
+        padding: 6px !important;
+        border-radius: 17px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        :is(.nv-world-mobile-dock, .nv-literature-mobile-dock, .nv-comic-mobile-dock) button {
+        min-width: 0 !important;
+        min-height: 42px !important;
+        padding: 7px 4px !important;
+        font-size: clamp(.62rem, 1.9vw, .72rem) !important;
+        line-height: 1.08 !important;
+        white-space: normal !important;
+    }
+
+    /* ---------------------------------------------------------
+       True full-screen Writing / Page Studio.
+       The existing overhaul JS still owns open/close/save behavior.
+    ---------------------------------------------------------- */
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-studio-workspace-active {
+        overflow: hidden !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-studio-workspace-active
+        :is(.sidebar,
+            .nv-world-sidebar-backdrop, .nv-literature-sidebar-backdrop, .nv-comic-sidebar-backdrop,
+            .nv-world-mobile-outline, .nv-literature-mobile-outline, .nv-comic-mobile-outline,
+            .nv-world-mobile-dock, .nv-literature-mobile-dock, .nv-comic-mobile-dock) {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        > [data-nv-studio-root="true"] {
+        position: fixed !important;
+        left: var(--nv-touch-vv-left, 0px) !important;
+        top: var(--nv-touch-vv-top, 0px) !important;
+        right: auto !important;
+        bottom: auto !important;
+        width: var(--nv-touch-vw, 100vw) !important;
+        height: var(--nv-touch-vh, 100dvh) !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        max-width: none !important;
+        max-height: none !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+        isolation: isolate !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay[data-nv-studio-root="true"].open {
+        display: grid !important;
+        grid-template-rows: auto minmax(0, 1fr) !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .writing-studio-topbar {
+        min-width: 0 !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 6px !important;
+        padding:
+            max(6px, env(safe-area-inset-top))
+            max(9px, env(safe-area-inset-right))
+            6px
+            max(9px, env(safe-area-inset-left)) !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .writing-studio-topbar h2 {
+        max-width: 100% !important;
+        margin: 0 !important;
+        font-size: clamp(.9rem, 2.6vw, 1.08rem) !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .writing-studio-topbar
+        :is(.section-kicker, .chapter-kicker) {
+        display: none !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .writing-studio-inline-stats {
+        margin-top: 2px !important;
+        font-size: .7rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .writing-studio-actions {
+        width: 100% !important;
+        max-width: 100% !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        justify-content: flex-start !important;
+        gap: 7px !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        padding-bottom: 1px !important;
+        scrollbar-width: none !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .writing-studio-actions::-webkit-scrollbar {
+        display: none;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .writing-studio-actions :is(.button, .primary-button) {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+        min-height: 36px !important;
+        height: 36px !important;
+        padding: 7px 10px !important;
+        font-size: .75rem !important;
+        white-space: nowrap !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .nv-doc-shell {
+        min-width: 0 !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        display: grid !important;
+        grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+        overflow: hidden !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .nv-doc-toolbar {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        gap: 6px !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        padding: 7px 8px !important;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none !important;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .nv-doc-toolbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .nv-doc-toolbar > * {
+        flex: 0 0 auto !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .nv-doc-toolbar :is(button, select, input[type="color"]) {
+        width: auto !important;
+        min-width: 40px !important;
+        max-width: none !important;
+        min-height: 36px !important;
+        height: 36px !important;
+        margin: 0 !important;
+        padding-top: 6px !important;
+        padding-bottom: 6px !important;
+        white-space: nowrap !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .nv-doc-findbar {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        gap: 7px !important;
+        padding: 7px 8px !important;
+        overflow-x: auto !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .nv-doc-findbar input {
+        flex: 1 1 180px !important;
+        width: auto !important;
+        min-width: 160px !important;
+        margin: 0 !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .nv-doc-page-wrap {
+        min-width: 0 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        padding:
+            8px
+            max(8px, env(safe-area-inset-right))
+            max(22px, env(safe-area-inset-bottom))
+            max(8px, env(safe-area-inset-left)) !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .nv-doc-editor {
+        width: 100% !important;
+        max-width: 920px !important;
+        min-width: 0 !important;
+        min-height: max(260px, calc(var(--nv-touch-vh, 100dvh) - 190px)) !important;
+        margin: 0 auto !important;
+        padding: clamp(22px, 4.2vw, 44px) !important;
+        border-radius: 13px !important;
+        font-size: clamp(16px, 2.25vw, 18px) !important;
+        line-height: 1.65 !important;
+        overflow-wrap: break-word !important;
+        word-break: normal !important;
+        touch-action: pan-y;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .nv-doc-footer {
+        min-width: 0 !important;
+        gap: 8px !important;
+        padding:
+            7px
+            max(9px, env(safe-area-inset-right))
+            max(7px, env(safe-area-inset-bottom))
+            max(9px, env(safe-area-inset-left)) !important;
+        font-size: .72rem !important;
+    }
+
+    /* Color picker panels must stay inside the visible keyboard-safe viewport. */
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        .nv-doc-color-panel {
+        width: min(250px, calc(var(--nv-touch-vw, 100vw) - 16px)) !important;
+        max-height: min(380px, calc(var(--nv-touch-vh, 100dvh) - 16px)) !important;
+        overscroll-behavior: contain;
+    }
+
+    /* ---------------------------------------------------------
+       Comic Page Studio
+    ---------------------------------------------------------- */
+    body.nv-comic-editor-modern > .page-studio-overlay[data-nv-studio-root="true"].open {
+        display: grid !important;
+        grid-template-rows: auto minmax(0, 1fr) !important;
+    }
+
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-topbar {
+        min-width: 0 !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 6px !important;
+        padding:
+            max(6px, env(safe-area-inset-top))
+            max(9px, env(safe-area-inset-right))
+            6px
+            max(9px, env(safe-area-inset-left)) !important;
+    }
+
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-topbar h2 {
+        max-width: 100% !important;
+        margin: 0 !important;
+        font-size: clamp(.9rem, 2.6vw, 1.08rem) !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-topbar .chapter-kicker {
+        display: none !important;
+    }
+
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-actions {
+        width: 100% !important;
+        max-width: 100% !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        justify-content: flex-start !important;
+        gap: 7px !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        scrollbar-width: none !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-actions::-webkit-scrollbar {
+        display: none;
+    }
+
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-actions :is(.button, .primary-button) {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-height: 36px !important;
+        height: 36px !important;
+        padding: 7px 10px !important;
+        font-size: .75rem !important;
+        white-space: nowrap !important;
+    }
+
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-body {
+        min-width: 0 !important;
+        min-height: 0 !important;
+        padding:
+            8px
+            max(8px, env(safe-area-inset-right))
+            max(14px, env(safe-area-inset-bottom))
+            max(8px, env(safe-area-inset-left)) !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-layout {
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 9px !important;
+    }
+
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-panel {
+        min-width: 0 !important;
+        padding: 11px !important;
+        border-radius: 15px !important;
+    }
+
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-active-page {
+        min-width: 0 !important;
+        min-height: min(50vh, 520px) !important;
+        padding: 7px !important;
+        border-radius: 13px !important;
+    }
+
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-active-page img {
+        max-width: 100% !important;
+        max-height: min(58vh, 640px) !important;
+        object-fit: contain !important;
+    }
+
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-thumbs {
+        min-width: 0 !important;
+        max-height: 290px !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+    }
+
+    /* ---------------------------------------------------------
+       Image Placement Studio, shared by all three editors.
+    ---------------------------------------------------------- */
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        .image-placement-overlay.open {
+        position: fixed !important;
+        left: var(--nv-touch-vv-left, 0px) !important;
+        top: var(--nv-touch-vv-top, 0px) !important;
+        right: auto !important;
+        bottom: auto !important;
+        width: var(--nv-touch-vw, 100vw) !important;
+        height: var(--nv-touch-vh, 100dvh) !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        display: grid !important;
+        grid-template-rows: auto minmax(0, 1fr) !important;
+        overflow: hidden !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        .image-placement-topbar {
+        min-width: 0 !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 7px !important;
+        padding:
+            max(7px, env(safe-area-inset-top))
+            max(9px, env(safe-area-inset-right))
+            7px
+            max(9px, env(safe-area-inset-left)) !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        .image-placement-topbar .topbar-actions {
+        width: 100% !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        gap: 7px !important;
+        overflow-x: auto !important;
+        scrollbar-width: none !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        .image-placement-topbar .topbar-actions::-webkit-scrollbar {
+        display: none;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        .image-placement-topbar .topbar-actions :is(.button, .primary-button) {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-height: 36px !important;
+        padding: 7px 10px !important;
+        white-space: nowrap !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        .image-placement-body {
+        min-width: 0 !important;
+        min-height: 0 !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 8px !important;
+        padding:
+            8px
+            max(8px, env(safe-area-inset-right))
+            max(8px, env(safe-area-inset-bottom))
+            max(8px, env(safe-area-inset-left)) !important;
+        overflow: hidden !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        .image-placement-workspace {
+        min-width: 0 !important;
+        min-height: 34vh !important;
+        overflow: auto !important;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 15px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        .image-placement-frame-shell {
+        padding: 18px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        .image-placement-sidebar {
+        min-width: 0 !important;
+        max-height: min(40vh, 360px) !important;
+        padding: 12px !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        border-radius: 15px !important;
+    }
+
+    /* ---------------------------------------------------------
+       Keyboard-open mode
+    ---------------------------------------------------------- */
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-soft-keyboard-open {
+        height: var(--nv-touch-vh, 100dvh) !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-soft-keyboard-open
+        :is(.nv-world-mobile-dock, .nv-literature-mobile-dock, .nv-comic-mobile-dock) {
+        display: none !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-soft-keyboard-open
+        :is(.nv-world-context-bar, .nv-literature-context-bar, .nv-comic-context-bar) {
+        position: relative !important;
+        top: auto !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern).nv-soft-keyboard-open
+        > .writing-studio-overlay .writing-studio-inline-stats,
+    body.nv-comic-editor-modern.nv-soft-keyboard-open
+        > .page-studio-overlay .writing-studio-inline-stats {
+        display: none !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern).nv-soft-keyboard-open
+        > .writing-studio-overlay .writing-studio-topbar,
+    body.nv-comic-editor-modern.nv-soft-keyboard-open
+        > .page-studio-overlay .page-studio-topbar {
+        padding-top: 5px !important;
+        padding-bottom: 5px !important;
+        gap: 4px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern).nv-soft-keyboard-open
+        > .writing-studio-overlay .nv-doc-editor {
+        min-height: max(190px, calc(var(--nv-touch-vh, 100dvh) - 118px)) !important;
+        padding-top: 18px !important;
+        padding-bottom: 18px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern).nv-soft-keyboard-open
+        > .writing-studio-overlay .nv-doc-footer {
+        display: none !important;
+    }
+}
+
+/* Phone-specific density reduction. */
+@media (pointer: coarse) and (max-width: 600px) {
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail #editor-content {
+        width: calc(100% - 10px) !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.settings-hero-v2, .section-hero-v2, .chapter-hero-v2,
+            .settings-section-v2, .section-tool-card, .chapter-tool-card,
+            .writing-studio-card-v2, .world-studio-card-v2) {
+        border-radius: 15px !important;
+        padding: 14px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail
+        :is(.warning-choice-grid, .style-choice-grid) {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail.nv-mobile-actions-open
+        :is(.topbar-nav, #tutorial-save-area, .nv-save-button-group) {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .writing-studio-topbar,
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-topbar {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .nv-doc-editor {
+        padding: 18px 14px !important;
+        border-radius: 10px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        .image-placement-small-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+}
+
+/* Landscape tablets/phones: use width efficiently without letting controls clip. */
+@media (pointer: coarse) and (orientation: landscape) and (max-width: 1400px) and (max-height: 900px) {
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail .topbar {
+        min-height: 50px !important;
+        padding-top: max(5px, env(safe-area-inset-top)) !important;
+        padding-bottom: 5px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern).nv-compact-rail #editor-content {
+        padding-top: 7px !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .writing-studio-topbar,
+    body.nv-comic-editor-modern
+        > .page-studio-overlay .page-studio-topbar {
+        grid-template-columns: minmax(0, 1fr) auto !important;
+        align-items: center !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .writing-studio-actions,
+    body.nv-comic-editor-modern
+        > .page-studio-overlay .page-studio-actions {
+        width: auto !important;
+        max-width: min(64vw, 720px) !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern)
+        > .writing-studio-overlay .nv-doc-editor {
+        min-height: max(220px, calc(var(--nv-touch-vh, 100dvh) - 142px)) !important;
+        padding: 16px clamp(18px, 3vw, 36px) !important;
+    }
+
+    /* Comic uses a two-pane Page Studio only when landscape has room. */
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-layout {
+        grid-template-columns: minmax(0, 1.2fr) minmax(250px, .8fr) !important;
+        gap: 9px !important;
+    }
+
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-active-page {
+        min-height: calc(var(--nv-touch-vh, 100dvh) - 122px) !important;
+    }
+
+    body.nv-comic-editor-modern > .page-studio-overlay .page-studio-thumbs {
+        max-height: calc(var(--nv-touch-vh, 100dvh) - 150px) !important;
+    }
+
+    /* Placement workspace + controls share the landscape width on tablets. */
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        .image-placement-body {
+        grid-template-columns: minmax(0, 1fr) minmax(260px, 34vw) !important;
+    }
+
+    body:is(.nv-world-editor-modern, .nv-literature-editor-modern, .nv-comic-editor-modern)
+        .image-placement-sidebar {
+        max-height: none !important;
+    }
+}
