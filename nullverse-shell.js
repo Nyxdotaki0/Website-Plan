@@ -1,6 +1,6 @@
-import { supabase } from "./supabaseClient.js";
-import { setupNotificationBadge } from "./notificationBadge.js?v=8";
-import { setupMessageBadge } from "./messageBadge.js?v=8";
+import { supabase } from "./supabaseClient.js?v=20260818";
+import { setupNotificationBadge } from "./notificationBadge.js?v=20260818";
+import { setupMessageBadge } from "./messageBadge.js?v=20260818";
 
 const ICONS = {
     search: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>`,
@@ -40,8 +40,8 @@ export async function initNullverseShell(options = {}) {
     let profile = options.profile || null;
 
     if (!user) {
-        const { data } = await supabase.auth.getUser();
-        user = data?.user || null;
+        const { data } = await supabase.auth.getSession();
+        user = data?.session?.user || null;
     }
 
     if (user && options.betaOnlyUser) {

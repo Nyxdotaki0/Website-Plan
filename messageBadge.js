@@ -1,4 +1,4 @@
-import { supabase } from "./supabaseClient.js";
+import { supabase } from "./supabaseClient.js?v=20260818";
 
 export async function setupMessageBadge(options = {}) {
     const navMessagesLink =
@@ -19,8 +19,8 @@ export async function setupMessageBadge(options = {}) {
 
     let user = options.user || null;
     if (!user) {
-        const { data, error: userError } = await supabase.auth.getUser();
-        user = data?.user || null;
+        const { data, error: userError } = await supabase.auth.getSession();
+        user = data?.session?.user || null;
         if (userError || !user) {
             badge.style.display = "none";
             return;

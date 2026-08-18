@@ -1,4 +1,4 @@
-﻿import { supabase } from "./supabaseClient.js";
+import { supabase } from "./supabaseClient.js?v=20260818";
 
 let finalState = { denied: false, access: null, route: null };
 

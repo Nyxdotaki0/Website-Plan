@@ -1,5 +1,5 @@
 import { requireBetaAccess } from "./betaGate.js";
-import { supabase } from "./supabaseClient.js";
+import { supabase } from "./supabaseClient.js?v=20260818";
 import { initNullverseShell } from "./nullverse-shell.js?v=7";
 import { escapeHtml, renderEmptyCard, renderSkeletonCards } from "./nullverse-content-cards.js?v=7";
 import { loadViewerContext } from "./nullverse-data.js?v=7";

@@ -1,4 +1,4 @@
-import { supabase } from "./supabaseClient.js";
+import { supabase } from "./supabaseClient.js?v=20260818";
 
 const LOCAL_KEY = "nullverse-recent-content";
 
