@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient.js";
 
-export async function setupMessageBadge() {
+export async function setupMessageBadge(options = {}) {
     const navMessagesLink =
         document.querySelector('a[href="messages.html"]');
 
@@ -17,12 +17,14 @@ export async function setupMessageBadge() {
         navMessagesLink.appendChild(badge);
     }
 
-    const { data: { user }, error: userError } =
-        await supabase.auth.getUser();
-
-    if (userError || !user) {
-        badge.style.display = "none";
-        return;
+    let user = options.user || null;
+    if (!user) {
+        const { data, error: userError } = await supabase.auth.getUser();
+        user = data?.user || null;
+        if (userError || !user) {
+            badge.style.display = "none";
+            return;
+        }
     }
 
     async function updateBadge() {
@@ -84,6 +86,8 @@ export async function setupMessageBadge() {
 
     await updateBadge();
 
+    if (options.realtime === false) return;
+
     const messageChannel = supabase
         .channel(`message-badge-messages-${user.id}`)
         .on(
@@ -115,8 +119,13 @@ export async function setupMessageBadge() {
         )
         .subscribe();
 
-    window.addEventListener("beforeunload", () => {
+    let channelsRemoved = false;
+    const removeBadgeChannels = () => {
+        if (channelsRemoved) return;
+        channelsRemoved = true;
         supabase.removeChannel(messageChannel);
         supabase.removeChannel(memberChannel);
-    });
+    };
+    window.addEventListener("pagehide", removeBadgeChannels, { once: true });
+    window.addEventListener("beforeunload", removeBadgeChannels, { once: true });
 }// JavaScript source code

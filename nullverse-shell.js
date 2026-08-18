@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient.js";
-import { setupNotificationBadge } from "./notificationBadge.js";
-import { setupMessageBadge } from "./messageBadge.js";
+import { setupNotificationBadge } from "./notificationBadge.js?v=8";
+import { setupMessageBadge } from "./messageBadge.js?v=8";
 
 const ICONS = {
     search: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>`,
@@ -19,6 +19,15 @@ const ICONS = {
     comic: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M4 10h16M12 10v11"></path></svg>`,
     world: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"></path></svg>`
 };
+
+function useSnapshotShellBadges() {
+    const touch = (navigator.maxTouchPoints || 0) > 0 || "ontouchstart" in window;
+    const shortSide = Math.min(
+        Number(screen?.width || window.innerWidth || 0),
+        Number(screen?.height || window.innerHeight || 0)
+    );
+    return touch && shortSide > 0 && shortSide <= 1024;
+}
 
 const DEFAULT_AVATAR = "https://placehold.co/160x160/1b1b28/ffffff?text=NV";
 
@@ -75,8 +84,13 @@ export async function initNullverseShell(options = {}) {
     setupShellInteractions({ user, profile });
 
     if (user) {
-        setupNotificationBadge();
-        setupMessageBadge();
+        const realtimeBadges = !useSnapshotShellBadges();
+        void setupNotificationBadge({ user, realtime: realtimeBadges }).catch(error => {
+            console.warn("Notification badge setup skipped:", error);
+        });
+        void setupMessageBadge({ user, realtime: realtimeBadges }).catch(error => {
+            console.warn("Message badge setup skipped:", error);
+        });
     }
 
     return { user, profile };

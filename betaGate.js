@@ -164,6 +164,31 @@ async function withTimeout(promise, ms = 8000) {
     }
 }
 
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function withRetry(factory, { attempts = 3, timeoutMs = 9000, delayMs = 450 } = {}) {
+    let lastError = null;
+    let lastResult = null;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            const result = await withTimeout(Promise.resolve().then(factory), timeoutMs);
+            lastResult = result;
+            if (!result?.error) return result;
+            lastError = result.error;
+        } catch (error) {
+            lastError = error;
+        }
+
+        if (attempt < attempts) await wait(delayMs * attempt);
+    }
+
+    if (lastResult) return lastResult;
+    throw lastError || new Error("Connection failed");
+}
+
 function escapeHtml(value) {
     return String(value || "")
         .replaceAll("&", "&amp;")
@@ -183,33 +208,27 @@ export async function requireBetaAccess(options = {}) {
     let user = null;
 
     try {
-        const sessionResult = await withTimeout(
-            supabase.auth.getSession(),
-            8000
+        const sessionResult = await withRetry(
+            () => supabase.auth.getSession(),
+            { attempts: 2, timeoutMs: 9000, delayMs: 350 }
         );
+
+        if (sessionResult?.error) throw sessionResult.error;
 
         const session = sessionResult.data?.session || null;
-
-        if (!session || sessionResult.error) {
+        if (!session?.user) {
             clearBrokenSession();
             redirectTo("/login.html");
             return null;
         }
 
-        const userResult = await withTimeout(
-            supabase.auth.getUser(),
-            8000
-        );
-
-        user = userResult.data?.user || null;
-
-        if (!user || userResult.error) {
-            clearBrokenSession();
-            redirectTo("/login.html");
-            return null;
-        }
+        // The session already includes the authenticated user. Avoid a second
+        // network validation on every navigation; RLS remains the data guard.
+        user = session.user;
     } catch (error) {
         console.warn("Auth connection failed:", error);
+        // Never destroy a valid saved session because the network/backend had
+        // a temporary failure. Give the user a retry screen instead.
         showConnectionError();
         return null;
     }
@@ -217,32 +236,45 @@ export async function requireBetaAccess(options = {}) {
     try {
         const normalizedEmail = normalizeEmail(user.email);
 
-        const { data: betaData, error: betaError } = await withTimeout(
-            supabase
+        const { data: betaData, error: betaError } = await withRetry(
+            () => supabase
                 .from("beta_access")
                 .select("role")
                 .ilike("email", normalizedEmail)
                 .maybeSingle(),
-            8000
+            { attempts: 3, timeoutMs: 9000, delayMs: 450 }
         );
 
-        if (betaError || !betaData) {
+        // A backend error is not the same thing as revoked beta access.
+        if (betaError) {
+            console.warn("Beta access lookup failed:", betaError);
+            showConnectionError();
+            return null;
+        }
+
+        if (!betaData) {
             await supabase.auth.signOut();
             clearBrokenSession();
             showBetaAccessError(normalizedEmail);
             return null;
         }
 
-        const { data: profile, error: profileError } = await withTimeout(
-            supabase
+        const { data: profile, error: profileError } = await withRetry(
+            () => supabase
                 .from("profiles")
                 .select("id, role, account_status, moderation_expires_at, moderation_reason, profile_completed, age_verified, age_role, birth_date")
                 .eq("id", user.id)
                 .maybeSingle(),
-            8000
+            { attempts: 3, timeoutMs: 9000, delayMs: 450 }
         );
 
-        if (profileError || !profile) {
+        if (profileError) {
+            console.warn("Profile gate lookup failed:", profileError);
+            showConnectionError();
+            return null;
+        }
+
+        if (!profile) {
             redirectTo("/profile-setup.html");
             return null;
         }

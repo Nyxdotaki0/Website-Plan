@@ -1,6 +1,6 @@
-import { requireBetaAccess } from "./betaGate.js";
+import { requireBetaAccess } from "./betaGate.js?v=8";
 import { supabase } from "./supabaseClient.js";
-import { initNullverseShell } from "./nullverse-shell.js?v=7";
+import { initNullverseShell } from "./nullverse-shell.js?v=8";
 import {
     bindCardInteractions,
     normalizeWarningList,
@@ -14,13 +14,30 @@ import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nu
 const currentUser = await requireBetaAccess();
 if (!currentUser) throw new Error("Nullverse session unavailable.");
 const viewer = await loadViewerContext(currentUser.id);
-await refreshGalleryViewerContext();
+document.body.dataset.contentExperience = normalizeViewerExperience(viewer.safety?.contentExperience);
 await initNullverseShell({ page: "gallery", user: currentUser, profile: viewer.profile });
 
 if (viewer.profile?.username) {
     const base = `creator-gallery.html?user=${encodeURIComponent(viewer.profile.username)}`;
     document.getElementById("gallery-my-gallery").href = base;
     document.getElementById("gallery-add-item").href = `${base}&new=item`;
+}
+
+function waitForGallery(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function withGalleryRetry(task, attempts = 3) {
+    let lastError = null;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            return await task();
+        } catch (error) {
+            lastError = error;
+            if (attempt < attempts) await waitForGallery(450 * attempt);
+        }
+    }
+    throw lastError || new Error("Gallery request failed.");
 }
 
 const state = {
@@ -81,7 +98,8 @@ window.addEventListener("pageshow", async event => {
 setupControls();
 setupWarningConfirmation();
 document.getElementById("gallery-results").innerHTML = renderSkeletonCards(10);
-await Promise.all([resetGallery(), loadCreators()]);
+await resetGallery();
+void loadCreators();
 
 function setupControls() {
     document.getElementById("gallery-search").addEventListener("input", event => {
@@ -187,6 +205,7 @@ async function resetGallery() {
 async function loadMore(replace = false) {
     if (state.loading || state.finished) return;
     state.loading = true;
+    state.loadError = false;
     const button = document.getElementById("gallery-load-more");
     button.disabled = true;
     button.textContent = "Loading...";
@@ -201,10 +220,10 @@ async function loadMore(replace = false) {
         // find allowed cards or reach the end so safe content later in the feed
         // is not incorrectly replaced by an empty state.
         while (!visibleCards.length && !reachedEnd && attempts < 6) {
-            rawItems = await fetchGalleryFeed(state.sort, state.pageSize, state.offset, {
+            rawItems = await withGalleryRetry(() => fetchGalleryFeed(state.sort, state.pageSize, state.offset, {
                 search: state.search,
                 ageRating: state.ageRating
-            });
+            }));
 
             state.offset += rawItems.length;
             reachedEnd = rawItems.length < state.pageSize;
@@ -248,12 +267,14 @@ async function loadMore(replace = false) {
         bindGalleryWarningGates(container);
         document.getElementById("gallery-count").textContent = state.finished ? `${state.loaded} visible items` : `${state.loaded}+ items`;
     } catch (error) {
-        document.getElementById("gallery-results").innerHTML = renderEmptyCard("Gallery could not load", error.message || "Refresh and try again.");
-        state.finished = true;
+        console.warn("Gallery request failed after retries:", error);
+        document.getElementById("gallery-results").innerHTML = renderEmptyCard("Gallery connection interrupted", "Nullverse could not finish this request. Tap Try Again instead of refreshing the whole site.");
+        state.finished = false;
+        state.loadError = true;
     } finally {
         state.loading = false;
         button.disabled = state.finished;
-        button.textContent = state.finished ? "No more artwork" : "Load More";
+        button.textContent = state.loadError ? "Try Again" : (state.finished ? "No more artwork" : "Load More");
     }
 }
 
@@ -261,7 +282,7 @@ async function loadCreators() {
     const container = document.getElementById("gallery-creators");
     container.innerHTML = renderSkeletonCards(4);
     try {
-        const creators = (await fetchDiscoverCreators(10))
+        const creators = (await withGalleryRetry(() => fetchDiscoverCreators(10)))
             .filter(item => !viewer.blockedUserIds.includes(item.id))
             .filter(item => Number(item.gallery_count || item.content_count || 0) > 0);
         container.innerHTML = creators.length
@@ -271,6 +292,10 @@ async function loadCreators() {
         container.innerHTML = renderEmptyCard("Could not load creators", error.message || "Refresh and try again.");
     }
 }
+
+window.addEventListener("online", () => {
+    if (!state.loading && state.loaded === 0) void resetGallery();
+});
 
 function normalizeViewerExperience(value) {
     const normalized = String(value || "")

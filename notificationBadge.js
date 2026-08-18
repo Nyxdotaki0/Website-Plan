@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient.js";
 
-export async function setupNotificationBadge() {
+export async function setupNotificationBadge(options = {}) {
     const navNotificationLink =
         document.querySelector('a[href="notifications.html"]');
 
@@ -17,12 +17,14 @@ export async function setupNotificationBadge() {
         navNotificationLink.appendChild(badge);
     }
 
-    const { data: { user }, error: userError } =
-        await supabase.auth.getUser();
-
-    if (userError || !user) {
-        badge.style.display = "none";
-        return;
+    let user = options.user || null;
+    if (!user) {
+        const { data, error: userError } = await supabase.auth.getUser();
+        user = data?.user || null;
+        if (userError || !user) {
+            badge.style.display = "none";
+            return;
+        }
     }
 
     async function updateBadge() {
@@ -53,6 +55,8 @@ export async function setupNotificationBadge() {
 
     await updateBadge();
 
+    if (options.realtime === false) return;
+
     const channel = supabase
         .channel(`notification-badge-${user.id}`)
         .on(
@@ -69,7 +73,12 @@ export async function setupNotificationBadge() {
         )
         .subscribe();
 
-    window.addEventListener("beforeunload", () => {
+    let channelRemoved = false;
+    const removeBadgeChannel = () => {
+        if (channelRemoved) return;
+        channelRemoved = true;
         supabase.removeChannel(channel);
-    });
+    };
+    window.addEventListener("pagehide", removeBadgeChannel, { once: true });
+    window.addEventListener("beforeunload", removeBadgeChannel, { once: true });
 }// JavaScript source code
