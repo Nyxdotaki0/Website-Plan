@@ -1030,11 +1030,23 @@
 
             .profile-badge.premium,
             .custom-profile-badge.premium {
-                background: linear-gradient(180deg, #201a08 0%, #090806 100%);
-                color: #fff4bf;
-                border-color: rgba(255, 215, 106, .88);
+                --nv-premium-badge-text-paint: #fff4bf;
+                --nv-premium-badge-border-paint: #ffd76a;
+                border: 1px solid transparent;
+                background: linear-gradient(180deg, #201a08 0%, #090806 100%) padding-box, linear-gradient(#ffd76a, #ffd76a) border-box;
+                color: transparent;
                 box-shadow: 0 0 0 1px rgba(255, 215, 106, .20), 0 0 18px rgba(255, 215, 106, .18);
             }
+
+                .profile-badge.premium > .nv-premium-badge-label,
+                .custom-profile-badge.premium > .nv-premium-badge-label {
+                    display: inline-block;
+                    background: var(--nv-premium-badge-text-paint, #fff4bf);
+                    -webkit-background-clip: text;
+                    background-clip: text;
+                    color: transparent;
+                    -webkit-text-fill-color: transparent;
+                }
 
             .profile-badge.verified-artist,
             .custom-profile-badge.verified-artist {
@@ -6346,25 +6358,82 @@
         }
 
         const DEFAULT_PREMIUM_BADGE_COLOR = "#ffd76a";
+        const DEFAULT_PREMIUM_BADGE_TEXT_COLOR = "#fff4bf";
+        const DEFAULT_PREMIUM_BADGE_BORDER_COLOR = "#ffd76a";
+        const PUBLIC_PREMIUM_BADGE_GRADIENT_DIRECTIONS = ["90deg", "135deg", "180deg", "45deg", "0deg"];
 
-        function normalizePublicPremiumBadgeColor(value) {
+        function normalizePublicPremiumBadgeColor(value, fallback = DEFAULT_PREMIUM_BADGE_COLOR) {
             const raw = String(value || "").trim();
-            return /^#[0-9a-f]{6}$/i.test(raw) ? raw.toLowerCase() : DEFAULT_PREMIUM_BADGE_COLOR;
+            const normalizedFallback = /^#[0-9a-f]{6}$/i.test(String(fallback || ""))
+                ? String(fallback).toLowerCase()
+                : DEFAULT_PREMIUM_BADGE_COLOR;
+            return /^#[0-9a-f]{6}$/i.test(raw) ? raw.toLowerCase() : normalizedFallback;
         }
 
-        function buildPublicPremiumBadgeInlineStyle(value) {
+        function publicPremiumBadgeTextHex(value) {
             const color = normalizePublicPremiumBadgeColor(value);
             const r = parseInt(color.slice(1, 3), 16);
             const g = parseInt(color.slice(3, 5), 16);
             const b = parseInt(color.slice(5, 7), 16);
             const mix = channel => Math.round(channel + (255 - channel) * 0.64);
-            const text = `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+            return `#${[mix(r), mix(g), mix(b)].map(channel => channel.toString(16).padStart(2, "0")).join("")}`;
+        }
+
+        function normalizePublicPremiumBadgeDirection(value) {
+            const raw = String(value || "").trim();
+            return PUBLIC_PREMIUM_BADGE_GRADIENT_DIRECTIONS.includes(raw) ? raw : "90deg";
+        }
+
+        function getPublicPremiumBadgePaint(styles = {}, kind = "text") {
+            const field = kind === "border" ? "premiumBadgeBorder" : "premiumBadgeText";
+            const legacyRaw = String(styles?.premiumBadgeColor || "");
+            const hasLegacyAccent = /^#[0-9a-f]{6}$/i.test(legacyRaw);
+            const legacyAccent = normalizePublicPremiumBadgeColor(legacyRaw, DEFAULT_PREMIUM_BADGE_COLOR);
+            const fallback = kind === "border"
+                ? (hasLegacyAccent ? legacyAccent : DEFAULT_PREMIUM_BADGE_BORDER_COLOR)
+                : (hasLegacyAccent ? publicPremiumBadgeTextHex(legacyAccent) : DEFAULT_PREMIUM_BADGE_TEXT_COLOR);
+            const rawPaint = String(styles?.[field] || "");
+            const mode = styles?.[`${field}PaintMode`] === "gradient" || /linear-gradient/i.test(rawPaint)
+                ? "gradient"
+                : "solid";
+            const solidColor = normalizePublicPremiumBadgeColor(styles?.[`${field}SolidColor`] || (mode === "solid" ? rawPaint : ""), fallback);
+            const gradientA = normalizePublicPremiumBadgeColor(styles?.[`${field}GradientA`], solidColor);
+            const gradientB = normalizePublicPremiumBadgeColor(
+                styles?.[`${field}GradientB`],
+                kind === "border" ? "#fff0b8" : "#ffffff"
+            );
+            const direction = normalizePublicPremiumBadgeDirection(styles?.[`${field}GradientDirection`]);
+            const paint = mode === "gradient"
+                ? `linear-gradient(${direction}, ${gradientA}, ${gradientB})`
+                : solidColor;
+
+            return { mode, paint, solidColor, gradientA, gradientB, direction };
+        }
+
+        function publicPremiumBadgePaintAsBackgroundImage(paint, fallback) {
+            if (/linear-gradient/i.test(String(paint || ""))) return paint;
+            const color = normalizePublicPremiumBadgeColor(paint, fallback);
+            return `linear-gradient(${color}, ${color})`;
+        }
+
+        function buildPublicPremiumBadgeInlineStyle(source = {}) {
+            const styles = typeof source === "string" ? { premiumBadgeColor: source } : (source || {});
+            const textState = getPublicPremiumBadgePaint(styles, "text");
+            const borderState = getPublicPremiumBadgePaint(styles, "border");
+            const glowColor = borderState.mode === "gradient" ? borderState.gradientA : borderState.solidColor;
+            const color = normalizePublicPremiumBadgeColor(glowColor, DEFAULT_PREMIUM_BADGE_BORDER_COLOR);
+            const r = parseInt(color.slice(1, 3), 16);
+            const g = parseInt(color.slice(3, 5), 16);
+            const b = parseInt(color.slice(5, 7), 16);
+            const borderImage = publicPremiumBadgePaintAsBackgroundImage(borderState.paint, DEFAULT_PREMIUM_BADGE_BORDER_COLOR);
+
             return [
                 `--nv-premium-badge-color:${color}`,
-                `border-color:rgba(${r},${g},${b},.88)`,
-                `background:linear-gradient(180deg,rgba(${r},${g},${b},.22) 0%,rgba(${r},${g},${b},.055) 52%,#050506 100%)`,
-                `color:${text}`,
-                `box-shadow:0 0 0 1px rgba(${r},${g},${b},.20),0 0 18px rgba(${r},${g},${b},.22),inset 0 1px 0 rgba(${r},${g},${b},.12)`
+                `--nv-premium-badge-text-paint:${textState.paint}`,
+                `--nv-premium-badge-border-paint:${borderState.paint}`,
+                "border:1px solid transparent",
+                `background:linear-gradient(180deg,rgba(${r},${g},${b},.18) 0%,rgba(${r},${g},${b},.045) 50%,#050506 100%) padding-box,${borderImage} border-box`,
+                `box-shadow:0 0 0 1px rgba(${r},${g},${b},.14),0 0 18px rgba(${r},${g},${b},.20),inset 0 1px 0 rgba(${r},${g},${b},.10)`
             ].join(";");
         }
 
@@ -6381,11 +6450,13 @@
                 return `<span class="${className} moderator-badge"><span>${escapeHtml(badge.label || "Moderator")}</span></span>`;
             }
 
-            const premiumStyle = badge.key === "premium" && options.premiumColor
-                ? ` style="${escapeHtml(buildPublicPremiumBadgeInlineStyle(options.premiumColor))}"`
+            const premiumStyles = options.premiumStyles || (options.premiumColor ? { premiumBadgeColor: options.premiumColor } : {});
+            const premiumStyle = badge.key === "premium"
+                ? ` style="${escapeHtml(buildPublicPremiumBadgeInlineStyle(premiumStyles))}"`
                 : "";
+            const labelClass = badge.key === "premium" ? " class=\"nv-premium-badge-label\"" : "";
 
-            return `<span class="${className} ${escapeHtml(badge.className || badge.key)}"${premiumStyle}><span>${escapeHtml(badge.label)}</span></span>`;
+            return `<span class="${className} ${escapeHtml(badge.className || badge.key)}"${premiumStyle}><span${labelClass}>${escapeHtml(badge.label)}</span></span>`;
         }
 
         function hasVisibleCustomObjects(layout) {
@@ -8421,7 +8492,7 @@
             if (object.type === "profile_badge") {
                 const badge = getBadgeByKey(object.badgeKey, profile) || getOwnedBadges(profile)[0];
                 return buildProfileBadgeMarkup(badge, "custom-profile-badge", {
-                    premiumColor: object.styles?.premiumBadgeColor || null
+                    premiumStyles: object.styles || {}
                 });
             }
 
