@@ -10799,39 +10799,6 @@
             ].join(";");
         }
 
-        function buildPublishedStudioBadgeSnapshot(object) {
-            if (!object || object.type !== "profile_badge") {
-                return null;
-            }
-
-            const key = String(object.badgeKey || "").trim();
-            const fallbackDefinitions = {
-                void_architect: { key: "void_architect", label: "Void Architect", className: "void-architect" },
-                moderator: { key: "moderator", label: "Moderator", className: "moderator" },
-                verified_artist: { key: "verified_artist", label: "Verified Artist", className: "verified-artist" },
-                premium: { key: "premium", label: "Premium", className: "premium" }
-            };
-            const badge = getBadgeByKey(key) || fallbackDefinitions[key] || {
-                key: key || "official_badge",
-                label: "Official Badge",
-                className: key || "official-badge"
-            };
-            const isPremium = badge.key === "premium";
-
-            return {
-                version: 1,
-                key: badge.key,
-                label: badge.label || "Official Badge",
-                className: badge.className || badge.key,
-                premiumBadgeStyleV2: isPremium
-                    ? cloneStudioData(readPremiumBadgeStyle(object))
-                    : null,
-                inlineStyle: isPremium
-                    ? buildPremiumBadgeInlineStyle(object)
-                    : ""
-            };
-        }
-
         function clearLegacyPremiumBadgeGradientFields(object) {
             if (!object?.styles) {
                 return;
@@ -11219,9 +11186,6 @@
                 syncStudioObjectImageData(object);
                 if (isStudioObjectFitType(object.type)) {
                     setStudioObjectFit(object, getStudioObjectFit(object));
-                }
-                if (object.type === "profile_badge") {
-                    object.publicBadgeSnapshotV1 = buildPublishedStudioBadgeSnapshot(object);
                 }
                 object.publicStudioObjectSnapshot = true;
             });
@@ -14212,6 +14176,7 @@
             if (publishButton) publishButton.disabled = true;
 
             try {
+                syncStudioEditableTextDomToModel();
                 syncActiveLayout();
                 await prepareStudioImagesForSaving("save this slot draft", { publishActiveLayout: false });
 
@@ -14356,6 +14321,7 @@
 
             try {
                 studioImageRecoveryNoticeCount = 0;
+                syncStudioEditableTextDomToModel();
                 syncActiveLayout();
                 updateStudioSaveStatusMessage("Preparing every Profile Studio layer for this slot...");
                 await prepareStudioImagesForSaving("publish this profile slot", { publishActiveLayout: true });
@@ -15383,6 +15349,7 @@
                 return;
             }
 
+            syncStudioEditableTextDomToModel();
             syncActiveLayout();
 
             studioPreviewState = {
@@ -16487,6 +16454,31 @@
                 inputType: "insertText",
                 data: null
             }));
+        }
+
+        function syncStudioEditableTextDomToModel() {
+            if (!studioLayout || !Array.isArray(studioLayout.objects)) {
+                return;
+            }
+
+            document.querySelectorAll("#studio-canvas [data-editable-object-id]").forEach(editable => {
+                const objectId = String(editable.getAttribute("data-editable-object-id") || "").trim();
+
+                if (!objectId) {
+                    return;
+                }
+
+                const object = studioLayout.objects.find(item => item?.id === objectId);
+
+                if (!object || object.type !== "text") {
+                    return;
+                }
+
+                object.text = getEditablePlainText(editable);
+                syncStudioObjectTextAlign(object);
+            });
+
+            persistActiveStudioLayoutReference();
         }
 
         function bindCanvasTextEditors(container, object) {
