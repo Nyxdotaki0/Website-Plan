@@ -6361,6 +6361,38 @@
             return getOwnedBadges(profileRecord).find(badge => badge.key === key) || null;
         }
 
+        function getPublicBadgeForObject(object, profileRecord = profile) {
+            const badgeKey = String(object?.badgeKey || "").trim();
+
+            if (!badgeKey) {
+                return getOwnedBadges(profileRecord)[0] || null;
+            }
+
+            if (badgeKey === "premium") {
+                /*
+                    A published Premium badge layer is an actual Studio object.
+                    Do not depend on addPremiumBadge() rebuilding it before the
+                    object can render. Confirmed Basic accounts still suppress
+                    Premium presentation, while a temporary entitlement outage
+                    keeps an already-published Premium layer visible.
+                */
+                const entitlementAvailable = profilePremiumEntitlement?.available !== false;
+                const confirmedBasic = entitlementAvailable && profilePremiumEntitlement?.isPremium !== true;
+
+                if (confirmedBasic) {
+                    return null;
+                }
+
+                return {
+                    key: "premium",
+                    label: "Premium",
+                    className: "premium"
+                };
+            }
+
+            return getBadgeByKey(badgeKey, profileRecord) || null;
+        }
+
 
         const DEFAULT_PREMIUM_BADGE_COLOR = "#ffd76a";
         const DEFAULT_PREMIUM_BADGE_TEXT_COLOR = "#fff4bf";
@@ -8524,7 +8556,12 @@
             }
 
             if (object.type === "profile_badge") {
-                const badge = getBadgeByKey(object.badgeKey, profile) || getOwnedBadges(profile)[0];
+                const badge = getPublicBadgeForObject(object, profile);
+
+                if (!badge) {
+                    return "";
+                }
+
                 return buildProfileBadgeMarkup(badge, "custom-profile-badge", {
                     premiumStyles: object.styles || {}
                 });
