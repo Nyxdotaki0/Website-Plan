@@ -3714,6 +3714,111 @@
                 pointer-events: none !important;
                 cursor: default !important;
             }
+
+            /* ============================================================
+           PUBLIC PROFILE BADGE — PROFILE STUDIO 1:1 OBJECT CONTRACT
+           Custom profile badge layers use the same visual model as the
+           editor's .studio-badge-preview. The default profile badge row keeps
+           its existing public styling; these rules only affect Studio objects.
+        ============================================================ */
+            #custom-profile-root.public-custom-profile-active
+            .custom-profile-object[data-type="profile_badge"]
+            .studio-parity-profile-badge {
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                width: max-content !important;
+                min-width: max-content !important;
+                height: 34px !important;
+                min-height: 34px !important;
+                max-height: 34px !important;
+                padding: 0 16px !important;
+                margin: 0 !important;
+                overflow: visible !important;
+                border-radius: 999px !important;
+                border: 1px solid rgba(255,255,255,.20) !important;
+                background: #050506;
+                color: #fff;
+                font-size: 13px !important;
+                font-weight: 800 !important;
+                line-height: 1 !important;
+                letter-spacing: .04em !important;
+                text-transform: uppercase !important;
+                white-space: nowrap !important;
+                box-sizing: border-box !important;
+                box-shadow: 0 0 16px rgba(255,255,255,.08);
+                animation: none !important;
+                pointer-events: none !important;
+            }
+
+                #custom-profile-root.public-custom-profile-active
+                .custom-profile-object[data-type="profile_badge"]
+                .studio-parity-profile-badge.void-architect {
+                    position: relative !important;
+                    isolation: isolate !important;
+                    overflow: visible !important;
+                    border-color: rgba(255,255,255,.42) !important;
+                    background: radial-gradient(circle at 20% 20%, rgba(255,255,255,.22), transparent 34%), linear-gradient(180deg, #35353b 0%, #141419 46%, #050506 100%) !important;
+                    color: #fff !important;
+                    -webkit-text-fill-color: #fff !important;
+                    box-shadow: 0 0 0 1px rgba(255,255,255,.15), 0 0 22px rgba(255,255,255,.24), inset 0 1px 0 rgba(255,255,255,.16) !important;
+                }
+
+                    /* Retire the older public Void Architect pseudo-orbit inside a Studio
+           badge object. Profile Studio itself renders this badge as a clean
+           text pill, so the public object now does the same. */
+                    #custom-profile-root.public-custom-profile-active
+                    .custom-profile-object[data-type="profile_badge"]
+                    .studio-parity-profile-badge.void-architect::before,
+                    #custom-profile-root.public-custom-profile-active
+                    .custom-profile-object[data-type="profile_badge"]
+                    .studio-parity-profile-badge.void-architect::after {
+                        content: none !important;
+                        display: none !important;
+                        animation: none !important;
+                    }
+
+                #custom-profile-root.public-custom-profile-active
+                .custom-profile-object[data-type="profile_badge"]
+                .studio-parity-profile-badge.moderator {
+                    border-color: rgba(255,255,255,.24) !important;
+                    background: linear-gradient(180deg, #f5f5f5 0%, #bfc0c7 45%, #6c6d76 100%) !important;
+                    color: #07070a !important;
+                    -webkit-text-fill-color: #07070a !important;
+                    box-shadow: 0 0 0 1px rgba(255,255,255,.18), 0 0 18px rgba(255,255,255,.16), inset 0 1px 0 rgba(255,255,255,.55) !important;
+                }
+
+                #custom-profile-root.public-custom-profile-active
+                .custom-profile-object[data-type="profile_badge"]
+                .studio-parity-profile-badge.premium {
+                    border: 1px solid transparent !important;
+                    background: linear-gradient(#000,#000) padding-box, var(--nv-premium-badge-border-paint) border-box !important;
+                    color: var(--nv-premium-badge-text-fallback) !important;
+                }
+
+                    #custom-profile-root.public-custom-profile-active
+                    .custom-profile-object[data-type="profile_badge"]
+                    .studio-parity-profile-badge.premium .nv-premium-badge-label {
+                        display: inline-block !important;
+                        background: var(--nv-premium-badge-text-paint) !important;
+                        background-image: var(--nv-premium-badge-text-paint) !important;
+                        background-size: 100% 100% !important;
+                        background-repeat: no-repeat !important;
+                        background-clip: text !important;
+                        -webkit-background-clip: text !important;
+                        color: transparent !important;
+                        -webkit-text-fill-color: transparent !important;
+                    }
+
+                #custom-profile-root.public-custom-profile-active
+                .custom-profile-object[data-type="profile_badge"]
+                .studio-parity-profile-badge.verified-artist {
+                    border-color: rgba(135,210,255,.92) !important;
+                    background: #050506 !important;
+                    color: #fff !important;
+                    -webkit-text-fill-color: #fff !important;
+                    box-shadow: 0 0 0 1px rgba(135,210,255,.42), 0 0 18px rgba(135,210,255,.45) !important;
+                }
     </style>
     <link rel="stylesheet" href="nullverse-shell.css?v=7">
 </head>
@@ -6646,11 +6751,75 @@
             ].join(";");
         }
 
+        function normalizePublishedStudioBadgeKey(value) {
+            const raw = String(value || "")
+                .trim()
+                .toLowerCase()
+                .replace(/[\s-]+/g, "_")
+                .replace(/[^a-z0-9_]/g, "");
+
+            const aliases = {
+                voidarchitect: "void_architect",
+                void_architect: "void_architect",
+                architect: "void_architect",
+                mod: "moderator",
+                moderator: "moderator",
+                verifiedartist: "verified_artist",
+                verified_artist: "verified_artist",
+                artist_verified: "verified_artist",
+                premium: "premium"
+            };
+
+            return aliases[raw] || aliases[raw.replace(/_/g, "")] || "";
+        }
+
+        function getPublishedStudioBadgeSnapshot(object = {}) {
+            const candidates = [
+                object?.publicBadgeSnapshotV2,
+                object?.publicBadgeSnapshotV1,
+                object?.styles?.publicBadgeSnapshotV2,
+                object?.styles?.publicBadgeSnapshotV1
+            ];
+
+            return candidates.find(candidate => candidate && typeof candidate === "object") || null;
+        }
+
         function getPublishedStudioBadgeDescriptor(object = {}) {
-            const key = String(object?.badgeKey || "").trim();
+            const snapshot = getPublishedStudioBadgeSnapshot(object);
+            const directCandidates = [
+                snapshot?.key,
+                snapshot?.badgeKey,
+                object?.badgeKey,
+                object?.badge_key,
+                object?.badge,
+                object?.badgeType,
+                object?.badge_type,
+                object?.styles?.badgeKey,
+                object?.styles?.badge_key
+            ];
+
+            let key = directCandidates
+                .map(normalizePublishedStudioBadgeKey)
+                .find(Boolean) || "";
 
             if (!key) {
-                return null;
+                const hint = [
+                    snapshot?.label,
+                    object?.badgeLabel,
+                    object?.badge_label,
+                    object?.label,
+                    object?.title,
+                    object?.name,
+                    object?.text
+                ]
+                    .map(value => String(value || "").trim().toLowerCase())
+                    .filter(Boolean)
+                    .join(" ");
+
+                if (hint.includes("premium")) key = "premium";
+                else if (hint.includes("void") && hint.includes("architect")) key = "void_architect";
+                else if (hint.includes("moderator")) key = "moderator";
+                else if (hint.includes("verified") && hint.includes("artist")) key = "verified_artist";
             }
 
             const descriptors = {
@@ -6662,7 +6831,7 @@
                 moderator: {
                     key: "moderator",
                     label: "Moderator",
-                    className: "moderator-badge"
+                    className: "moderator"
                 },
                 verified_artist: {
                     key: "verified_artist",
@@ -6676,7 +6845,18 @@
                 }
             };
 
-            return descriptors[key] || null;
+            const base = descriptors[key];
+
+            if (!base) {
+                return null;
+            }
+
+            return {
+                ...base,
+                label: String(snapshot?.label || object?.badgeLabel || object?.badge_label || base.label).trim() || base.label,
+                className: String(snapshot?.className || snapshot?.class_name || base.className).trim() || base.className,
+                snapshot
+            };
         }
 
         function buildPublishedStudioBadgeMarkup(object, className = "custom-profile-badge") {
@@ -6687,34 +6867,23 @@
             }
 
             /*
-                The published Studio object is the visual source of truth.
-                Account Settings already validates which badge objects may be
-                published. Do not make profile.html rediscover the layer from a
-                second badge list before it can render.
+                Profile Studio already decides which owned badges can be placed.
+                The published profile_badge layer is therefore the visual source
+                of truth. Render it like the editor instead of rediscovering the
+                badge through the older public badge/role lookup path.
             */
-            if (badge.key === "premium") {
-                const entitlementAvailable = profilePremiumEntitlement?.available !== false;
-                const confirmedBasic = entitlementAvailable && profilePremiumEntitlement?.isPremium !== true;
-
-                if (confirmedBasic) {
-                    return "";
-                }
-            }
-
-            if (badge.key === "void_architect") {
-                return `<span class="${className} void-architect"><span class="void-badge-orbit"></span><img src="Infinity.png" alt=""><span class="void-badge-label">${escapeHtml(badge.label)}</span></span>`;
-            }
-
-            if (badge.key === "moderator") {
-                return `<span class="${className} moderator-badge"><span>${escapeHtml(badge.label)}</span></span>`;
-            }
+            const classes = `${className} studio-parity-profile-badge ${badge.className}`;
 
             if (badge.key === "premium") {
-                const premiumStyle = ` style="${escapeHtml(buildPublicPremiumBadgeInlineStyle(object?.styles || {}))}"`;
-                return `<span class="${className} premium"${premiumStyle}><span class="nv-premium-badge-label">${escapeHtml(badge.label)}</span></span>`;
+                const snapshotStyle = badge.snapshot?.premiumBadgeStyleV2;
+                const styles = snapshotStyle && typeof snapshotStyle === "object"
+                    ? { ...(object?.styles || {}), premiumBadgeStyleV2: snapshotStyle }
+                    : (object?.styles || {});
+                const premiumStyle = ` style="${escapeHtml(buildPublicPremiumBadgeInlineStyle(styles))}"`;
+                return `<span class="${escapeHtml(classes)}"${premiumStyle}><span class="nv-premium-badge-label">${escapeHtml(badge.label)}</span></span>`;
             }
 
-            return `<span class="${className} ${escapeHtml(badge.className)}"><span>${escapeHtml(badge.label)}</span></span>`;
+            return `<span class="${escapeHtml(classes)}"><span>${escapeHtml(badge.label)}</span></span>`;
         }
 
         function buildProfileBadgeMarkup(badge, className = "profile-badge", options = {}) {
@@ -7835,8 +8004,14 @@
         }
 
         function hasPublicPaintMetadata(source = {}, field = "") {
+            /*
+                Profile Studio stores opacity as `${field}Opacity` while a few
+                older public builds used `${field}PaintOpacity`. Read both so
+                profile.html resolves the exact paint state the editor saved.
+            */
             return [
                 `${field}PaintMode`,
+                `${field}Opacity`,
                 `${field}PaintOpacity`,
                 `${field}SolidColor`,
                 `${field}GradientDirection`,
@@ -7858,8 +8033,11 @@
             }
 
             const mode = source[`${field}PaintMode`] || (isPublicGradientPaint(current) ? "gradient" : "solid");
-            const alpha = source[`${field}PaintOpacity`] !== undefined && source[`${field}PaintOpacity`] !== null && source[`${field}PaintOpacity`] !== ""
-                ? clampPublicPaintAlpha(source[`${field}PaintOpacity`])
+            const storedOpacity = source[`${field}Opacity`] !== undefined && source[`${field}Opacity`] !== null && source[`${field}Opacity`] !== ""
+                ? source[`${field}Opacity`]
+                : source[`${field}PaintOpacity`];
+            const alpha = storedOpacity !== undefined && storedOpacity !== null && storedOpacity !== ""
+                ? clampPublicPaintAlpha(storedOpacity)
                 : getPublicPaintAlpha(current, 1);
             const fallbackColor = getPublicPaintFallbackColor(fallback, field === "background" || field === "actionButtonBg" || field === "backgroundColor" ? "#000000" : "#ffffff");
 
@@ -7994,20 +8172,36 @@
 
             element.classList.add("public-text-paint-target");
 
+            /*
+                IMPORTANT: the public layout has older geometry CSS that sets
+                `.studio-text-editable { background: transparent !important; }`.
+                Gradient text is painted on that same leaf with transparent
+                glyph fill. A normal inline background loses to that rule and
+                makes the text invisible until the browser selection highlight
+                exposes the glyphs. Use authoritative inline !important paint
+                values here so the public leaf follows Profile Studio exactly.
+            */
             if (isPublicGradientPaint(value)) {
-                element.style.background = value;
-                element.style.backgroundClip = "text";
-                element.style.webkitBackgroundClip = "text";
-                element.style.color = "transparent";
-                element.style.webkitTextFillColor = "transparent";
+                element.style.setProperty("background", value, "important");
+                element.style.setProperty("background-image", value, "important");
+                element.style.setProperty("background-clip", "text", "important");
+                element.style.setProperty("-webkit-background-clip", "text", "important");
+                element.style.setProperty("color", "transparent", "important");
+                element.style.setProperty("-webkit-text-fill-color", "transparent", "important");
+
+                if (getComputedStyle(element).display === "inline") {
+                    element.style.setProperty("display", "inline-block", "important");
+                }
+
                 return;
             }
 
-            element.style.background = "transparent";
-            element.style.backgroundClip = "border-box";
-            element.style.webkitBackgroundClip = "border-box";
-            element.style.color = value;
-            element.style.webkitTextFillColor = value;
+            element.style.setProperty("background", "transparent", "important");
+            element.style.setProperty("background-image", "none", "important");
+            element.style.setProperty("background-clip", "border-box", "important");
+            element.style.setProperty("-webkit-background-clip", "border-box", "important");
+            element.style.setProperty("color", value, "important");
+            element.style.setProperty("-webkit-text-fill-color", value, "important");
         }
 
 
@@ -8080,17 +8274,23 @@
             fill.classList.toggle("public-text-paint-target", true);
 
             if (fillUsesGradient) {
-                fill.style.background = background;
-                fill.style.backgroundClip = "text";
-                fill.style.webkitBackgroundClip = "text";
-                fill.style.color = "transparent";
-                fill.style.webkitTextFillColor = "transparent";
+                fill.style.setProperty("background", background, "important");
+                fill.style.setProperty("background-image", background, "important");
+                fill.style.setProperty("background-clip", "text", "important");
+                fill.style.setProperty("-webkit-background-clip", "text", "important");
+                fill.style.setProperty("color", "transparent", "important");
+                fill.style.setProperty("-webkit-text-fill-color", "transparent", "important");
             } else {
-                fill.style.background = "transparent";
-                fill.style.backgroundClip = "border-box";
-                fill.style.webkitBackgroundClip = "border-box";
-                fill.style.color = color || "";
-                fill.style.webkitTextFillColor = textFill && textFill !== "transparent" ? textFill : "";
+                fill.style.setProperty("background", "transparent", "important");
+                fill.style.setProperty("background-image", "none", "important");
+                fill.style.setProperty("background-clip", "border-box", "important");
+                fill.style.setProperty("-webkit-background-clip", "border-box", "important");
+                fill.style.setProperty("color", color || "inherit", "important");
+                fill.style.setProperty(
+                    "-webkit-text-fill-color",
+                    textFill && textFill !== "transparent" ? textFill : (color || "inherit"),
+                    "important"
+                );
             }
         }
 
