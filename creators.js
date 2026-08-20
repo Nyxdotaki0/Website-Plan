@@ -1,7 +1,7 @@
 import { requireBetaAccess } from "./betaGate.js";
 import { supabase } from "./supabaseClient.js?v=20260818";
 import { initNullverseShell } from "./nullverse-shell.js?v=7";
-import { escapeHtml, renderEmptyCard, renderSkeletonCards } from "./nullverse-content-cards.js?v=7";
+import { bindCardInteractions, escapeHtml, renderEmptyCard, renderSkeletonCards } from "./nullverse-content-cards.js?v=7";
 import { loadViewerContext } from "./nullverse-data.js?v=7";
 
 const currentUser = await requireBetaAccess();
@@ -115,6 +115,7 @@ async function loadCreators(replace = false) {
             );
         } else {
             container.insertAdjacentHTML("beforeend", creators.map(renderDirectoryCard).join(""));
+            bindCardInteractions(container);
             state.loaded += creators.length;
         }
 
@@ -144,14 +145,14 @@ function renderDirectoryCard(profile) {
     const canOpenGallery = !isPrivate || relationship === "following" || galleryCount > 0;
 
     return `
-        <article class="creator-directory-card" data-creator-id="${escapeHtml(profile.id)}">
+        <article class="creator-directory-card" data-creator-id="${escapeHtml(profile.id)}" data-nv-card-href="profile.html?user=${encodeURIComponent(username)}" role="link" tabindex="0">
             <div class="creator-directory-banner"${bannerStyle}></div>
             ${isPrivate ? `<span class="creator-directory-lock">Private</span>` : ""}
             <div class="creator-directory-body">
                 <div class="creator-directory-avatar"><img src="${escapeHtml(avatar)}" alt="" loading="lazy"></div>
                 <h3><a href="profile.html?user=${encodeURIComponent(username)}">${escapeHtml(displayName)}</a></h3>
                 <div class="creator-directory-handle">@${escapeHtml(username)}</div>
-                <div class="creator-directory-type">${escapeHtml(profile.creator_type || "Creator")}${profile.profile_status ? ` · ${escapeHtml(profile.profile_status)}` : ""}</div>
+                <div class="creator-directory-type">${escapeHtml(profile.creator_type || "Creator")}${profile.profile_status ? ` Â· ${escapeHtml(profile.profile_status)}` : ""}</div>
                 <p class="creator-directory-bio">${escapeHtml(profile.bio || (isPrivate ? "Private creator profile. Send a request to see their published work." : "This creator has not added a bio yet."))}</p>
                 <div class="creator-directory-stats">
                     <span>${formatCount(profile.follower_count)} followers</span>

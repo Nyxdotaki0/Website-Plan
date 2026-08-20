@@ -1,4 +1,4 @@
-﻿const DEFAULT_AVATAR = "https://placehold.co/160x160/1b1b28/ffffff?text=NV";
+const DEFAULT_AVATAR = "https://placehold.co/160x160/1b1b28/ffffff?text=NV";
 const DEFAULT_COVER = "https://placehold.co/900x520/16161d/ffffff?text=Nullverse";
 const DEFAULT_GALLERY = "https://placehold.co/800x800/16161d/ffffff?text=Gallery";
 
@@ -92,14 +92,14 @@ export function renderContentCard(item = {}, options = {}) {
     const credit = buildOverviewCredit(item);
 
     return `
-        <article class="nv-content-card${warningClass}" data-nv-warning-card>
-            <a class="nv-card-media" href="${escapeHtml(url)}">
+        <article class="nv-content-card${warningClass}" data-nv-warning-card data-nv-card-href="${escapeHtml(url)}" role="link" tabindex="0">
+            <div class="nv-card-media">
                 <img src="${escapeHtml(cover)}" alt="${escapeHtml(title)}" loading="lazy" onerror="this.src='${DEFAULT_COVER}'">
                 <span class="nv-card-type nv-type-${type}">${escapeHtml(contentTypeLabel(type))}</span>
                 ${likeCount ? `<span class="nv-card-count">${formatCompactNumber(likeCount)} likes</span>` : ""}
                 ${credit}
                 ${safety.action === "warn" ? renderSafetyOverlay(safety) : ""}
-            </a>
+            </div>
             <div class="nv-card-body">
                 <div class="nv-card-creator">
                     <img src="${escapeHtml(avatar)}" alt="" loading="lazy">
@@ -190,15 +190,16 @@ export function renderGalleryCard(item = {}, options = {}) {
         : `href="${escapeHtml(url)}"`;
 
     return `
-        <article class="nv-gallery-card${warningClass}${revealedClass}${lockedClass}" data-nv-warning-card data-gallery-item-id="${escapeHtml(item.id || "")}">
-            <a class="nv-card-media" ${linkAttributes(primaryUrl)}>
+        <article class="nv-gallery-card${warningClass}${revealedClass}${lockedClass}" data-nv-warning-card data-gallery-item-id="${escapeHtml(item.id || "")}" data-nv-card-href="${escapeHtml(primaryUrl)}" role="link" tabindex="0">
+            <div class="nv-card-media">
                 <span class="nv-gallery-image-placement" style="${escapeHtml(galleryPreviewPlacementStyle(item.image_placement))}">
                     <img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" loading="lazy" onerror="this.src='${DEFAULT_GALLERY}'">
                 </span>
                 <span class="nv-card-type nv-type-gallery">Gallery</span>
                 ${likeCount ? `<span class="nv-card-count">${formatCompactNumber(likeCount)} likes</span>` : ""}
+                ${buildGalleryImageCredit(item)}
                 ${useGenericWarning ? renderSafetyOverlay(safety) : ""}
-            </a>
+            </div>
             ${shouldConfirmWarning ? renderGalleryWarningGate(item, safety) : ""}
             <div class="nv-card-body">
                 <div class="nv-card-creator">
@@ -272,7 +273,7 @@ export function renderCreatorCard(profile = {}) {
     const canOpenGallery = !isPrivate || relationship === "following" || galleryCount > 0;
 
     return `
-        <article class="nv-creator-card">
+        <article class="nv-creator-card" data-nv-card-href="profile.html?user=${encodeURIComponent(username)}" role="link" tabindex="0">
             <div class="nv-creator-banner"${banner ? ` style="background-image:url('${escapeCssUrl(banner)}')"` : ""}></div>
             ${isPrivate ? `<span class="nv-creator-private-pill">Private</span>` : ""}
             <div class="nv-creator-body">
@@ -306,11 +307,13 @@ export function renderProjectCard(item = {}) {
         : getPublicContentUrl(item);
     const published = isGallery ? item.visibility === "public" : item.visibility === "published";
     const hidden = isHiddenModeration(item);
+    const credit = renderProjectImageCredit(item);
 
     return `
-        <article class="nv-project-card">
+        <article class="nv-project-card" data-nv-card-href="${escapeHtml(editorUrl)}" role="link" tabindex="0">
             <a class="nv-card-media" href="${escapeHtml(editorUrl)}">
                 <img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" loading="lazy" onerror="this.src='${isGallery ? DEFAULT_GALLERY : DEFAULT_COVER}'">
+                ${credit}
                 <span class="nv-card-type nv-type-${type}">${escapeHtml(contentTypeLabel(type))}</span>
             </a>
             <div class="nv-card-body">
@@ -337,7 +340,7 @@ export function renderActivityCard(activity = {}) {
     const label = activity.message || activityLabel(activity);
 
     return `
-        <article class="nv-activity-card">
+        <article class="nv-activity-card" data-nv-card-href="${escapeHtml(link)}" role="link" tabindex="0">
             <img class="nv-activity-avatar" src="${escapeHtml(avatar)}" alt="" loading="lazy">
             <p><a href="${escapeHtml(profileUrl)}">${escapeHtml(displayName)}</a> ${escapeHtml(label)} ${activity.title ? `<a href="${escapeHtml(link)}">${escapeHtml(activity.title)}</a>` : ""}</p>
             <time>${activity.created_at ? escapeHtml(timeAgo(activity.created_at)) : "Recently"}</time>
@@ -381,6 +384,79 @@ export function bindCardInteractions(root = document) {
             card.classList.add("warning-revealed");
         });
     });
+
+    root.querySelectorAll(".nv-credit-pill").forEach(enhanceCardCreditControl);
+
+    root.querySelectorAll("[data-nv-card-href]").forEach(card => {
+        if (card.dataset.nvCardBound === "true") return;
+        card.dataset.nvCardBound = "true";
+
+        const openCard = event => {
+            if (card.classList.contains("warning-gated")) return;
+            const target = event.target;
+            if (target?.closest?.("a,button,input,select,textarea,label,[role='button'],[data-nv-gallery-warning-gate],.nv-credit-pill")) return;
+            const href = card.dataset.nvCardHref;
+            if (href) window.location.href = href;
+        };
+
+        card.addEventListener("click", openCard);
+        card.addEventListener("keydown", event => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            if (event.target !== card || card.classList.contains("warning-gated")) return;
+            event.preventDefault();
+            const href = card.dataset.nvCardHref;
+            if (href) window.location.href = href;
+        });
+    });
+}
+
+function normalizeCardCreditHref(value) {
+    const href = String(value || "").trim();
+    if (!href || href === "#") return "";
+    try {
+        const parsed = new URL(href, window.location.href);
+        if (!/^https?:$/.test(parsed.protocol)) return "";
+        return /^https?:\/\//i.test(href) ? parsed.href : href;
+    } catch {
+        return "";
+    }
+}
+
+function enhanceCardCreditControl(control) {
+    if (!control || control.dataset.nvCardCreditBound === "true") return;
+    const href = normalizeCardCreditHref(control.dataset.creditHref || control.getAttribute("href") || "");
+    if (href) control.dataset.creditHref = href;
+    else delete control.dataset.creditHref;
+    if (control.tagName === "A") {
+        control.removeAttribute("href");
+        control.setAttribute("role", "button");
+        control.setAttribute("tabindex", "0");
+    }
+    control.dataset.nvCreditReady = "true";
+    control.dataset.nvCardCreditBound = "true";
+
+    let armedAt = 0;
+    control.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        const now = Date.now();
+        const link = control.dataset.creditHref || "";
+        if (link && control.classList.contains("is-open") && now - armedAt < 2600) {
+            control.classList.remove("is-open");
+            if (/^https?:\/\//i.test(link)) window.open(link, "_blank", "noopener,noreferrer");
+            else window.location.href = link;
+            return;
+        }
+        rootCloseCardCredits(control);
+        control.classList.add("is-open");
+        armedAt = now;
+    });
+}
+
+function rootCloseCardCredits(active) {
+    document.querySelectorAll(".nv-credit-pill.is-open").forEach(control => {
+        if (control !== active) control.classList.remove("is-open");
+    });
 }
 
 function renderSafetyOverlay(safety) {
@@ -397,23 +473,55 @@ function renderSafetyOverlay(safety) {
     `;
 }
 
+export function renderProjectImageCredit(item = {}) {
+    return item.__kind === "gallery" ? buildGalleryImageCredit(item) : buildOverviewCredit(item);
+}
+
 function buildOverviewCredit(item) {
-    const type = item.overview_card_credit_type || item.cover_credit_type || "no_credit_needed";
-    if (type === "no_credit_needed") return "";
+    return buildCompactCreditControl({
+        type: item.overview_card_credit_type || item.cover_credit_type || "credit_needed",
+        name: item.overview_card_credit_name || item.cover_credit_name || "",
+        username: item.overview_card_credit_nullverse_username || item.cover_credit_nullverse_username || "",
+        url: item.overview_card_credit_url || item.cover_credit_url || "",
+        note: item.overview_card_credit_note || item.cover_credit_note || "",
+        ownerUsername: item.username || item.owner_username || item.creator?.username || "",
+        context: "Preview image"
+    });
+}
 
-    let label = item.overview_card_credit_name || item.cover_credit_name || "Image credit";
-    let href = item.overview_card_credit_url || item.cover_credit_url || "";
-    const username = item.overview_card_credit_nullverse_username || item.cover_credit_nullverse_username || item.username || "";
+function buildGalleryImageCredit(item) {
+    return buildCompactCreditControl({
+        type: item.image_credit_type || "credit_needed",
+        name: item.image_credit_name || "",
+        username: item.image_credit_nullverse_username || "",
+        url: item.image_credit_url || "",
+        note: item.image_credit_note || "",
+        ownerUsername: item.username || item.owner_username || item.creator_username || "",
+        context: "Gallery image"
+    });
+}
 
-    if (type === "own_work" || type === "nullverse_creator") {
-        label = `@${username || "creator"}`;
-        href = username ? `profile.html?user=${encodeURIComponent(username)}` : "";
+function buildCompactCreditControl({ type, name, username, url, note, ownerUsername, context }) {
+    const normalizedType = String(type || "credit_needed");
+    let source = "No external credit needed";
+    let href = "";
+
+    if (normalizedType === "own_work") {
+        source = `@${ownerUsername || "creator"}`;
+        href = ownerUsername ? `profile.html?user=${encodeURIComponent(ownerUsername)}` : "";
+    } else if (normalizedType === "nullverse_creator" && username) {
+        source = `@${username}`;
+        href = `profile.html?user=${encodeURIComponent(username)}`;
+    } else if (normalizedType !== "no_credit_needed") {
+        source = name || formatLabel(normalizedType);
+        href = url || "";
     }
 
-    const inner = `Image credit: ${escapeHtml(label)}`;
-    return href
-        ? `<a class="nv-credit-pill" href="${escapeHtml(href)}"${href.startsWith("http") ? ' target="_blank" rel="noopener"' : ""}>${inner}</a>`
-        : `<span class="nv-credit-pill">${inner}</span>`;
+    const detail = normalizedType === "no_credit_needed" && !note
+        ? "No external credit was marked as required for this image."
+        : (note || "");
+    const actionHint = href ? `<span class="nv-credit-action-hint">Tap/click again to open source</span>` : "";
+    return `<button type="button" class="nv-credit-pill nv-universal-credit" data-nv-credit-ready="true" data-credit-href="${escapeHtml(href)}" data-credit-label="${escapeHtml(`${context} credit: ${source}`)}" aria-label="View ${escapeHtml(context)} credit"><span class="nv-credit-tooltip"><strong>${escapeHtml(context)} credit</strong><br>Source: ${escapeHtml(source)}${detail ? `<br><br>${escapeHtml(detail)}` : ""}${actionHint}</span></button>`;
 }
 
 

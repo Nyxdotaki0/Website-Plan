@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6689,6 +6689,8 @@
         })();
     </script>
     <script type="module" src="creator-privacy-guard.js?v=3" onerror="window.__nvCreatorPrivacyScriptFailed && window.__nvCreatorPrivacyScriptFailed()"></script>
+    <link rel="stylesheet" href="nullverse-credit.css?v=1">
+    <script src="nullverse-credit.js?v=1" defer></script>
 </head>
 <body data-page="gallery" data-nv-beta-only-user="true" data-nv-active-only="true" data-nv-guest-mode="restricted" data-nv-guest-brand-href="self" data-nv-guest-login-return="true">
 
@@ -7420,6 +7422,7 @@
                         name: media.title || media.name || `Extra Image ${index + 1}`,
                         heading: media.title || media.name || `Reference Image ${index + 1}`,
                         imageUrl: media.url || media.imageUrl || media.image_url || "",
+                        credit: normalizePublicCreditData(media.credit || {}, ""),
                         x: 48 + (index % 2) * 360,
                         y: 900 + Math.floor(index / 2) * 300,
                         w: 330,
@@ -7465,6 +7468,7 @@
                 heading: String(source.heading || source.title || (type === "main_image" ? "Main Gallery Image" : type === "extra_image" ? "Extra Image" : "Info")),
                 body: String(source.body || source.content || source.text || ""),
                 imageUrl: String(source.imageUrl || source.image_url || source.url || ""),
+                credit: normalizePublicCreditData(type === "main_image" ? (item || {}) : (source.credit || {}), ""),
                 x: dsClamp(dsNum(source.x, type === "main_image" ? 48 : type === "extra_image" ? 48 : 492), 0, DEFAULT_STUDIO_CANVAS_MAX.width - 40),
                 y: dsClamp(dsNum(source.y, type === "main_image" ? 48 : type === "extra_image" ? 640 + index * 24 : 48 + index * 24), 0, DEFAULT_STUDIO_CANVAS_MAX.height - 40),
                 w: dsClamp(dsNum(source.w ?? source.width, type === "main_image" ? 420 : type === "extra_image" ? 320 : 320), limits[0], limits[2]),
@@ -7732,14 +7736,16 @@
         function renderDefaultStudioImageObject(obj, publicMode = false) {
             const isExtra = obj?.type === "extra_image";
             const label = isExtra ? (obj.heading || obj.name || "Extra image") : (item?.title || "Gallery artwork");
-            const credit = isExtra ? (obj.heading || obj.name || "Reference Image") : (managerState?.defaultData?.credit || galleryItemCreditLabel());
             const source = isExtra ? obj.imageUrl : item?.image_url;
             const img = source
                 ? `<img src="${escapeAttr(source)}" alt="${escapeAttr(label)}">`
                 : `<div class="placeholder">${isExtra ? "Upload a JPG/WebP/GIF reference image" : "No gallery image"}</div>`;
             const cls = publicMode ? "default-studio-public-image" : "default-studio-image";
             const labelCls = publicMode ? "default-studio-public-image-label" : "default-studio-image-label";
-            return `<div class="${cls}">${img}<span class="${labelCls}">${escapeHtml(credit || label)}</span></div>`;
+            const creditSource = isExtra ? (obj.credit || {}) : (item || {});
+            const creditControl = source ? buildGalleryItemUniversalCredit(creditSource, label, profile?.username || "") : "";
+            const visibleLabel = isExtra && label ? `<span class="${labelCls}">${escapeHtml(label)}</span>` : "";
+            return `<div class="${cls}">${img}${creditControl}${visibleLabel}</div>`;
         }
 
         function renderDefaultStudioBlockObject(obj, publicMode = false) {
@@ -8337,6 +8343,7 @@
                                                                                                                                                                         ` : ""}
                                                                                                                                                                         <button class="button-muted" type="button" onclick="resetDefaultStudioImage('${id}')"${disabledAttr}>Reset Image Placement</button>
                                                                                                                                                                     </div>
+                                                                                                                                                                    ${renderDefaultStudioImageCreditInspector(obj, locked)}
                                                                                                                                                                 `;
             }
 
@@ -8379,6 +8386,75 @@
                                                                                                                                                             `;
         }
 
+
+        function defaultStudioCreditOptions(active) {
+            const current = normalizePublicCreditType(active || "own_work");
+            return [
+                ["own_work", "My own work"],
+                ["nullverse_creator", "Another Nullverse creator"],
+                ["external_artist", "External artist"],
+                ["photographer", "Photographer"],
+                ["stock_public_domain", "Stock / public domain"],
+                ["custom", "Custom credit"],
+                ["no_credit_needed", "No external credit needed"]
+            ].map(([value, label]) => `<option value="${value}" ${current === value ? "selected" : ""}>${label}</option>`).join("");
+        }
+
+        function renderDefaultStudioImageCreditInspector(obj, locked = false) {
+            const isMain = obj?.type === "main_image";
+            const c = normalizePublicCreditData(isMain ? (item || {}) : (obj?.credit || {}), "");
+            if (isMain) {
+                const source = c.type === "own_work" ? `@${profile?.username || "you"}` : c.type === "nullverse_creator" ? `@${c.creatorUsername || "creator"}` : (c.name || publicCreditTypeLabel(c.type));
+                return `<div class="default-studio-group"><h4>Image Credit</h4><p class="default-studio-note">This main-image credit is inherited from the gallery item so its card, showcase, and full page always agree.</p><p><strong>${escapeHtml(source)}</strong>${c.note ? `<br>${escapeHtml(c.note)}` : ""}</p></div>`;
+            }
+            const id = escapeAttr(obj.id);
+            const disabledAttr = locked ? " disabled" : "";
+            const type = normalizePublicCreditType(c.type);
+            const creatorField = type === "nullverse_creator" ? `<label>Nullverse Username</label><input value="${escapeAttr(c.creatorUsername || "")}" placeholder="username" oninput="updateDefaultStudioImageCredit('${id}','creatorUsername',this.value,false)"${disabledAttr}>` : "";
+            const nameField = ["external_artist", "photographer", "stock_public_domain"].includes(type) ? `<label>Source / Creator Name</label><input value="${escapeAttr(c.name || "")}" placeholder="Artist, photographer, archive, or source" oninput="updateDefaultStudioImageCredit('${id}','name',this.value,false)"${disabledAttr}>` : "";
+            const urlField = ["external_artist", "photographer", "stock_public_domain", "custom"].includes(type) ? `<label>Source Link</label><input value="${escapeAttr(c.url || c.sourceText || "")}" placeholder="https://…" oninput="updateDefaultStudioImageCredit('${id}','url',this.value,false)"${disabledAttr}>` : "";
+            const customField = type === "custom" ? `<label>Custom Credit Text</label><input value="${escapeAttr(c.customText || "")}" placeholder="Credit details" oninput="updateDefaultStudioImageCredit('${id}','customText',this.value,false)"${disabledAttr}>` : "";
+            const noteLabel = type === "no_credit_needed" ? "Why no external credit is needed" : "Permission / Source Note";
+            return `<div class="default-studio-group"><h4>Image Credit</h4><p class="default-studio-note">This credit follows this image. One press/click shows the details; a second opens the linked source.</p><label>Credit Type</label><select onchange="updateDefaultStudioImageCredit('${id}','type',this.value,true)"${disabledAttr}>${defaultStudioCreditOptions(type)}</select>${creatorField}${nameField}${urlField}${customField}<label>${noteLabel}</label><textarea oninput="updateDefaultStudioImageCredit('${id}','note',this.value,false)"${disabledAttr}>${escapeHtml(c.note || "")}</textarea></div>`;
+        }
+
+        window.updateDefaultStudioImageCredit = function (id, field, value, rerender = false) {
+            if (!managerState) return;
+            const obj = managerState.defaultData.objects.find(entry => entry.id === id);
+            if (!obj || obj.type !== "extra_image" || obj.locked) return;
+            obj.credit = normalizePublicCreditData(obj.credit || {}, "");
+            if (field === "type") obj.credit.type = normalizePublicCreditType(value);
+            else if (field === "creatorUsername") obj.credit.creatorUsername = String(value || "").replace(/^@+/, "").trim();
+            else if (field === "url") { obj.credit.url = String(value || "").trim(); obj.credit.sourceText = obj.credit.url; }
+            else if (field === "customText") { obj.credit.type = "custom"; obj.credit.customText = String(value || ""); }
+            else obj.credit[field] = String(value || "");
+            renderDefaultStudioCanvas();
+            if (rerender) renderDefaultStudioInspector();
+        };
+
+        function validateDefaultStudioImageCredits(data) {
+            for (const obj of (data?.objects || [])) {
+                if (obj.hidden || (obj.type !== "main_image" && obj.type !== "extra_image")) continue;
+                const imageUrl = obj.type === "main_image" ? item?.image_url : obj.imageUrl;
+                if (!imageUrl) continue;
+                const c = normalizePublicCreditData(obj.type === "main_image" ? (item || {}) : (obj.credit || {}), "");
+                let message = "";
+                if (c.type === "nullverse_creator" && !c.creatorUsername) message = "Choose the Nullverse creator who made this image.";
+                else if (["external_artist", "photographer"].includes(c.type) && (!c.name || !c.url)) message = "External artist and photographer credits need both a source name and source link.";
+                else if (c.type === "stock_public_domain" && !(c.url || c.note)) message = "Stock/public-domain images need a source link or source note.";
+                else if (c.type === "custom" && !c.customText) message = "Enter the custom image credit text.";
+                else if (c.type === "no_credit_needed" && !c.note) message = "Explain why this image does not need an external credit.";
+                if (!message) continue;
+                if (obj.type === "extra_image") {
+                    managerState.selected = [obj.id];
+                    renderDefaultStudioCanvas();
+                    renderDefaultStudioLayers();
+                    renderDefaultStudioInspector();
+                }
+                return { ok: false, message: `${obj.type === "main_image" ? "Main Gallery Image" : (obj.heading || obj.name || "Extra image")}: ${message}` };
+            }
+            return { ok: true, message: "" };
+        }
 
         function bindDefaultStudioImageInput() {
             const input = document.getElementById("default-studio-extra-image-input");
@@ -9642,6 +9718,10 @@
             try {
                 if (!currentUser || !item || currentUser.id !== item.owner_id) throw new Error("Only the creator can save this showcase.");
                 const defaultData = buildDefaultShowcaseFromManager();
+                if (publish && mode !== "custom") {
+                    const creditCheck = validateDefaultStudioImageCredits(defaultData);
+                    if (!creditCheck.ok) throw new Error(creditCheck.message);
+                }
                 const latest = getLatestShowcaseConfig();
                 const customLayout = latest.customLayout || extractLegacyCustomLayout(layoutDraftBundle) || extractLegacyCustomLayout(layoutBundle) || null;
                 const previousPublishedDefault = latest.defaultShowcase?.published || null;
@@ -10851,6 +10931,40 @@
             return credit || "Credit / source details can be added by the creator.";
         }
 
+        function safePublicCreditHref(value) {
+            const href = String(value || "").trim();
+            if (!href) return "";
+            if (/^https?:\/\//i.test(href)) return href;
+            if (/^[a-z0-9_.-]+\.html(?:[?#].*)?$/i.test(href)) return href;
+            return "";
+        }
+
+        function buildGalleryItemUniversalCredit(source = {}, context = "Gallery image", ownerUsername = "") {
+            const type = normalizePublicCreditType(source.image_credit_type || source.type || source.creditType || "credit_needed");
+            const username = String(source.image_credit_nullverse_username || source.creatorUsername || source.creator_username || source.nullverse_username || "").replace(/^@+/, "").trim();
+            const name = String(source.image_credit_name || source.name || source.creditName || source.credit_name || "").trim();
+            const note = String(source.image_credit_note || source.note || source.creditNote || source.credit_note || "").trim();
+            const url = String(source.image_credit_url || source.url || source.creditUrl || source.credit_url || "").trim();
+            const owner = ownerUsername || profile?.username || item?.owner_username || item?.username || "";
+            let label = "No external credit needed";
+            let href = "";
+
+            if (type === "own_work") {
+                label = `@${owner || "creator"}`;
+                href = owner ? `profile.html?user=${encodeURIComponent(owner)}` : "";
+            } else if (type === "nullverse_creator" && username) {
+                label = `@${username}`;
+                href = `profile.html?user=${encodeURIComponent(username)}`;
+            } else if (type !== "no_credit_needed") {
+                label = name || publicCreditTypeLabel(type);
+                href = safePublicCreditHref(url);
+            }
+
+            const detail = note || (type === "no_credit_needed" ? "No external credit was marked as required for this image." : "");
+            const hint = href ? `<span class="nv-credit-action-hint">Tap/click again to open source</span>` : "";
+            return `<button type="button" class="nv-universal-credit" data-credit-href="${escapeAttr(href)}" data-credit-label="${escapeAttr(`${context} credit: ${label}`)}" aria-label="View ${escapeAttr(context)} credit"><span class="nv-credit-tooltip"><strong>${escapeHtml(context)} credit</strong><br>Source: ${escapeHtml(label)}${detail ? `<br><br>${escapeHtml(detail)}` : ""}${hint}</span></button>`;
+        }
+
         function renderDefault(defaultData = null) {
             currentPublicMode = "default";
             currentRenderedCustomLayout = null;
@@ -10887,6 +11001,7 @@
                                                                                                                                                                                     <aside class="sheet-media-column">
                                                                                                                                                                                         <div class="sheet-media-frame">
                                                                                                                                                                                             ${mainImageHtml}
+                                                                                                                                                                                            ${item.image_url ? buildGalleryItemUniversalCredit(item, "Gallery image") : ""}
                                                                                                                                                                                             <span class="sheet-media-label">${escapeHtml(data.credit || galleryItemCreditLabel())}</span>
                                                                                                                                                                                         </div>
                                                                                                                                                                                         ${mediaItems.map((media, index) => renderDefaultMediaFrame(media, index)).join("")}
@@ -10909,6 +11024,7 @@
             return `
                                                                                                                                                                             <div class="sheet-media-frame extra">
                                                                                                                                                                                 <img src="${escapeAttr(source)}" alt="${escapeAttr(label)}" style="${sheetImagePlacementCssVars(placement)}">
+                                                                                                                                                                                ${buildGalleryItemUniversalCredit(media.credit || media, label)}
                                                                                                                                                                                 <span class="sheet-media-label">${escapeHtml(label)}</span>
                                                                                                                                                                             </div>
                                                                                                                                                                         `;
@@ -11364,16 +11480,16 @@
         }
 
         function renderPublicCreditPill(obj) {
-            const label = renderStudioTextPaintTarget(obj, publicCreditText(obj), "public-credit-pill-text");
-            const title = escapeHtml(publicCreditTitle(obj));
-            const titleAttr = escapeAttr(publicCreditTitle(obj));
-            const tooltip = title ? `<span class="public-credit-tooltip">${title}</span>` : "";
-            const href = publicCreditProfileHref(obj);
-            if (href) {
-                return `<a class="public-credit-pill clickable" href="${escapeAttr(href)}" title="${titleAttr}">${label}${tooltip}</a>`;
-            }
-            return `<span class="public-credit-pill" title="${titleAttr}">${label}${tooltip}</span>`;
+            const c = normalizePublicCreditData(obj?.credit || {}, obj?.text || "");
+            const href = c.type === "nullverse_creator" && c.creatorUsername
+                ? `profile.html?user=${encodeURIComponent(String(c.creatorUsername).replace(/^@+/, ""))}`
+                : safePublicCreditHref(c.url || c.sourceText || "");
+            const label = publicCreditText(obj);
+            const details = publicCreditTitle(obj);
+            const hint = href ? `<span class="nv-credit-action-hint">Tap/click again to open source</span>` : "";
+            return `<button type="button" class="public-credit-pill nv-universal-credit" data-credit-href="${escapeAttr(href)}" data-credit-label="${escapeAttr(label)}" aria-label="View image credit"><span class="nv-credit-tooltip"><strong>Image credit</strong><br>${escapeHtml(details || label)}${hint}</span></button>`;
         }
+
 
 
 
@@ -11541,7 +11657,19 @@
         }
 
         function renderStudioLikeCreditPill(source = {}) {
-            return `<div class="credit-pill">${escapeHtml(source.credit_label || source.credit || source.artist_credit || "Credit / No-AI proof")}</div>`;
+            return buildGalleryItemUniversalCredit(source, "Gallery artwork");
+        }
+
+        function renderStudioImageObjectCredit(obj, context = "Custom image") {
+            const c = normalizePublicCreditData(obj?.credit || {}, obj?.text || "");
+            const shaped = {
+                type: c.type,
+                creatorUsername: c.creatorUsername,
+                name: c.name,
+                url: c.url || c.sourceText,
+                note: c.note
+            };
+            return buildGalleryItemUniversalCredit(shaped, context);
         }
 
         function studioPreviewText(obj, fallback = "") {
@@ -11555,11 +11683,11 @@
             const text = studioPreviewText(obj, "");
 
             if (obj.type === "art_hero") {
-                return `<div class="art-hero">${renderStudioLikeImageHtml(imageUrl, "Artwork")}${renderStudioLikeCreditPill(item)}</div>`;
+                return `<div class="art-hero">${renderStudioLikeImageHtml(imageUrl, "Artwork")}${renderStudioImageObjectCredit(obj, "Artwork")}</div>`;
             }
 
             if (obj.type === "art_card") {
-                return `<div class="art-card">${renderStudioLikeImageHtml(imageUrl, "Artwork")}<div class="card-body"><h3>${escapeHtml(item.title || "Untitled")}</h3><p>${escapeHtml(item.description || "Gallery item description")}</p></div>${renderStudioLikeCreditPill(item)}</div>`;
+                return `<div class="art-card">${renderStudioLikeImageHtml(imageUrl, "Artwork")}${renderStudioImageObjectCredit(obj, "Artwork")}<div class="card-body"><h3>${escapeHtml(item.title || "Untitled")}</h3><p>${escapeHtml(item.description || "Gallery item description")}</p></div></div>`;
             }
 
             if (obj.type === "title") {
@@ -11603,11 +11731,11 @@
             }
 
             if (obj.type === "image_text") {
-                return `<div class="image-text"><div class="image-text-thumb">${imageUrl ? `<img src="${escapeAttr(imageUrl)}" style="${fit}" alt="Custom image">` : `<div class="placeholder">Upload image from Inspector</div>`}</div><div class="text-content">${text}</div></div>`;
+                return `<div class="image-text"><div class="image-text-thumb">${imageUrl ? `<img src="${escapeAttr(imageUrl)}" style="${fit}" alt="Custom image">${renderStudioImageObjectCredit(obj, "Custom image")}` : `<div class="placeholder">Upload image from Inspector</div>`}</div><div class="text-content">${text}</div></div>`;
             }
 
             if (obj.type === "image_box" || obj.type === "image") {
-                return `<div class="image-box">${obj.imageUrl ? `<img src="${escapeAttr(obj.imageUrl)}" style="${fit}" alt="Custom image">` : `<div class="placeholder">Upload image from Inspector</div>`}</div>`;
+                return `<div class="image-box">${obj.imageUrl ? `<img src="${escapeAttr(obj.imageUrl)}" style="${fit}" alt="Custom image">${renderStudioImageObjectCredit(obj, "Custom image")}` : `<div class="placeholder">Upload image from Inspector</div>`}</div>`;
             }
 
             if (["shape", "circle", "star"].includes(obj.type)) {

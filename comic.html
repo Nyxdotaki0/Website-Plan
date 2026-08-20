@@ -1041,6 +1041,47 @@
         }
 
 
+        /* Image credits now live on the image itself instead of a separate reader panel. */
+        .page-thumb {
+            position: relative;
+        }
+
+        .page-thumb > .credit-pill[data-nv-credit-ready="true"],
+        .page-thumb > .nv-universal-credit {
+            bottom: 46px;
+        }
+
+        .reader-page-credit-wrap,
+        .reader-webtoon-page {
+            position: relative;
+        }
+
+        .reader-page-credit-wrap {
+            display: inline-block;
+            max-width: 100vw;
+            max-height: calc(100vh - 120px);
+        }
+
+        .reader-page-credit-wrap > .reader-page {
+            max-width: 100%;
+            max-height: calc(100vh - 120px);
+        }
+
+        .reader-webtoon-page {
+            width: min(100%, 900px);
+        }
+
+        .reader-webtoon-page > img {
+            width: 100% !important;
+        }
+
+        /* Legacy detached credit panel is superseded by per-image controls. */
+        .reader-credit-desktop,
+        .reader-credit-mobile-btn,
+        .reader-credit-sheet {
+            display: none !important;
+        }
+
         .placed-image-frame {
             position: relative;
             overflow: hidden;
@@ -1133,6 +1174,8 @@
         })();
     </script>
     <script type="module" src="creator-privacy-guard.js?v=3" onerror="window.__nvCreatorPrivacyScriptFailed && window.__nvCreatorPrivacyScriptFailed()"></script>
+    <link rel="stylesheet" href="nullverse-credit.css?v=1">
+    <script src="nullverse-credit.js?v=1" defer></script>
 </head>
 <body data-page="comic" data-nv-beta-only-user="true" data-nv-active-only="true">
     <div class="nullverse-stars"></div>
@@ -2532,9 +2575,9 @@ ${pages.length ? `
 ${pages.map((page, pageIndex) => `
 <div class="page-thumb" onclick="openReader(${chapterIndex},${pageIndex})">
 <img class="placed-image" src="${escapeHtml(page.image_url || "")}" alt="Page ${pageIndex + 1}" style="${getPlacementTransformStyle(page.image_placement)}">
+${buildPageCreditPill(page, `Page ${pageIndex + 1}`)}
 <div class="page-thumb-footer">
 <span>Page ${pageIndex + 1}</span>
-${hasCredit(page) ? `<span class="credit-dot">?</span>` : ""}
 </div>
 </div>
 `).join("")}
@@ -2591,11 +2634,14 @@ ${hasCredit(page) ? `<span class="credit-dot">?</span>` : ""}
                 content.innerHTML = `
 <div class="reader-webtoon-stack">
 ${pages.map((page, index) => `
+<div class="reader-webtoon-page">
 <img class="placed-image"
 src="${escapeHtml(page.image_url || "")}"
 alt="Page ${index + 1}"
 data-page-index="${index}"
 style="${getPlacementTransformStyle(page.image_placement)}">
+${buildPageCreditPill(page, `Page ${index + 1}`)}
+</div>
 `).join("")}
 </div>
 `;
@@ -2610,7 +2656,7 @@ style="${getPlacementTransformStyle(page.image_placement)}">
             }
 
             const page = pages[readerPageIndex] || pages[0];
-            content.innerHTML = `<img class="reader-page placed-image" src="${escapeHtml(page.image_url || "")}" alt="Page ${readerPageIndex + 1}" style="${getPlacementTransformStyle(page.image_placement)}">`;
+            content.innerHTML = `<div class="reader-page-credit-wrap"><img class="reader-page placed-image" src="${escapeHtml(page.image_url || "")}" alt="Page ${readerPageIndex + 1}" style="${getPlacementTransformStyle(page.image_placement)}">${buildPageCreditPill(page, `Page ${readerPageIndex + 1}`)}</div>`;
             document.getElementById("reader-bottombar").textContent = `Chapter ${readerChapterIndex + 1} · Page ${readerPageIndex + 1} / ${pages.length}`;
             updateReaderCredit(page);
         }
@@ -2731,6 +2777,18 @@ style="${getPlacementTransformStyle(page.image_placement)}">
 </div>
 <div style="margin-top:12px;">${html || "No credit information shown."}</div>
 `;
+        }
+
+        function buildPageCreditPill(page, context = "Comic page") {
+            return buildCreditPill({
+                type: page?.image_credit_type || "no_credit_needed",
+                name: page?.image_credit_name || "",
+                username: page?.image_credit_nullverse_username || "",
+                url: page?.image_credit_url || "",
+                note: page?.image_credit_note || "",
+                ownerUsername: currentComic?.ownerProfile?.username || "",
+                context
+            });
         }
 
         function hasCredit(page) {
@@ -3037,8 +3095,8 @@ ${renderContentWarningPills(comic)}
         }
 
         function buildCreditPill({ type, name, username, url, note, ownerUsername, context = "Image" }) {
-            type = type || "no_credit_needed";
-            if (type === "no_credit_needed") return "";
+            type = type || "credit_needed";
+            // Keep a compact attribution control even for legacy "no credit needed" records.
             let label = "";
             let href = "";
 
