@@ -61,6 +61,11 @@
                 cursor: not-allowed
             }
 
+        .credit-system-overhaul .message {
+            margin-top: 14px;
+            color: var(--text-secondary, rgba(255,255,255,.68));
+        }
+
         .button-muted {
             background: rgba(255,255,255,.045);
             box-shadow: none
@@ -3848,7 +3853,7 @@
                 }
         }
     </style>
-    <link rel="stylesheet" href="nullverse-credit.css?v=2">
+    <link rel="stylesheet" href="nullverse-credit.css?v=3">
 </head>
 <body>
     <div class="studio-page" id="page">
@@ -4773,9 +4778,6 @@
             const showUrl = ["external_artist", "photographer", "stock_public_domain", "custom"].includes(type) ? "block" : "none";
             const showNote = "block";
             const showNoAi = ["own_work", "nullverse_creator", "external_artist", "photographer"].includes(type) ? "block" : "none";
-            const selectedCreator = c.creatorUsername
-                ? `<div class="credit-selected-creator"><span>Linked to <strong>@${esc(c.creatorUsername)}</strong>${c.creatorDisplayName ? ` · ${esc(c.creatorDisplayName)}` : ""}</span><button class="tiny warn" type="button" onclick="clearCreditCreator('${idv}')">×</button></div>`
-                : `<p class="credit-security-note">Search a Nullverse username, then press Add Creator. This is the only credit type that becomes a clickable profile link.</p>`;
 
             return `<div class="group credit-system-overhaul" data-credit-inspector="${idv}">
                                                                                                                 <h4>${imageCredit ? "Image Credit" : "Credit Pill System"}</h4>
@@ -4800,11 +4802,15 @@
                                                                                                                 <div id="credit-nullverse-${idv}" class="credit-mode-panel" style="display:${show("nullverse_creator")};">
                                                                                                                     <label>Nullverse Username</label>
                                                                                                                     <input id="credit-creatorUsername-${idv}" value="${escA(c.creatorUsername || "")}" placeholder="Example: alandotexe" oninput="updateCreditPillField('${idv}','creatorUsername',this.value,{live:true})" onchange="updateCreditPillField('${idv}','creatorUsername',this.value,{commit:true})">
-                                                                                                                    <div style="margin-top:-6px;margin-bottom:12px;">
-                                                                                                                        <label>Search Nullverse Creator</label>
-                                                                                                                        <div class="credit-search-row"><input id="credit-search-${idv}" placeholder="Search username or display name..." oninput="searchCreditCreators('${idv}',this.value)"><button type="button" onclick="searchCreditCreators('${idv}',document.getElementById('credit-search-${idv}')?.value || '')">Search</button></div>
+
+                                                                                                                    <div style="margin-top:-10px;margin-bottom:14px;">
+                                                                                                                        <button type="button"
+                                                                                                                                class="button"
+                                                                                                                                onclick="searchCreditCreators('${idv}')">
+                                                                                                                            Search Creator
+                                                                                                                        </button>
                                                                                                                     </div>
-                                                                                                                    ${selectedCreator}
+
                                                                                                                     <div id="credit-results-${idv}" class="credit-search-results"></div>
                                                                                                                 </div>
 
@@ -4913,57 +4919,73 @@
             if (tip) tip.textContent = creditPillTooltip(o) || "Hover details will appear here.";
         }
 
-        async function searchCreditCreators(id, query) {
-            const term = String(query || "").trim();
-            const box = document.getElementById(`credit-results-${id}`);
-            if (!box) return;
-            if (!term || term.length < 2) {
-                box.innerHTML = `<p class="status">Type at least 2 characters.</p>`;
+        async function searchCreditCreators(id) {
+            const input = document.getElementById(`credit-creatorUsername-${id}`);
+            const results = document.getElementById(`credit-results-${id}`);
+            if (!input || !results) return;
+            const search = input.value.trim().replace("@", "");
+
+            if (!search) {
+                results.innerHTML =
+                    `<p class="message">Type a username or display name first.</p>`;
                 return;
             }
 
-            clearTimeout(state.creditSearchTimers[id]);
-            state.creditSearchTimers[id] = setTimeout(async () => {
-                box.innerHTML = `<p class="status">Searching creators...</p>`;
-                const clean = term.replace(/[%_]/g, "").slice(0, 40);
-                const rows = [];
-                const seen = new Set();
-                const tables = [
-                    { name: "public_creator_profiles", columns: "id, username, display_name" },
-                    { name: "profiles", columns: "id, username, display_name" }
-                ];
+            results.innerHTML =
+                `<p class="message">Searching creators...</p>`;
 
-                for (const table of tables) {
-                    try {
-                        const { data, error } = await supabase
-                            .from(table.name)
-                            .select(table.columns)
-                            .or(`username.ilike.%${clean}%,display_name.ilike.%${clean}%`)
-                            .order("username", { ascending: true })
-                            .limit(8);
+            const { data, error } = await supabase
+                .from("profiles")
+                .select("id, username, display_name, role, role_name")
+                .or(`username.ilike.%${search}%,display_name.ilike.%${search}%`)
+                .order("username", { ascending: true })
+                .limit(8);
 
-                        if (error) {
-                            console.warn(`Creator search skipped for ${table.name}:`, error.message || error);
-                            continue;
-                        }
+            if (error) {
+                results.innerHTML =
+                    `<p class="message">${esc(error.message)}</p>`;
+                return;
+            }
 
-                        (data || []).forEach(profile => {
-                            const key = profile.id || profile.username;
-                            if (!key || seen.has(key) || !profile.username) return;
-                            seen.add(key);
-                            rows.push(profile);
-                        });
-                    } catch (error) {
-                        console.warn(`Creator search failed for ${table.name}:`, error);
-                    }
-                }
+            if (!data || data.length === 0) {
+                results.innerHTML =
+                    `<p class="message">No Nullverse creators found.</p>`;
+                return;
+            }
 
-                box.innerHTML = rows.length ? rows.slice(0, 8).map(profile => {
-                    const username = String(profile.username || "").replace(/^@+/, "");
-                    const display = profile.display_name || username;
-                    return `<button type="button" class="credit-search-result" onclick="selectCreditCreator('${escA(id)}','${escA(profile.id || "")}','${escA(username)}','${escA(display)}')"><span><strong>@${esc(username)}</strong><small>${display && display !== username ? ` · ${esc(display)}` : ""}</small></span><strong>Add Creator</strong></button>`;
-                }).join("") : `<p class="status">No matching Nullverse creators found.</p>`;
-            }, 260);
+            results.innerHTML = data.map(profile => `
+                <div style="
+                    border:1px solid var(--border-color, rgba(255,255,255,.12));
+                    border-radius:14px;
+                    padding:12px;
+                    margin-bottom:10px;
+                    background:rgba(255,255,255,.035);
+                ">
+                    <strong>${esc(profile.display_name || "Unnamed Creator")}</strong>
+
+                    <div class="message" style="margin:4px 0 10px;">
+                        @${esc(profile.username || "no-username")}
+                    </div>
+
+                    <button type="button"
+                            class="button"
+                            data-credit-id="${escA(profile.id || "")}"
+                            data-credit-username="${escA(profile.username || "")}"
+                            data-credit-display="${escA(profile.display_name || "")}"
+                            onclick="selectCreditCreatorFromButton('${escA(id)}', this)">
+                        Use This Creator
+                    </button>
+                </div>
+            `).join("");
+        }
+
+        function selectCreditCreatorFromButton(id, button) {
+            selectCreditCreator(
+                id,
+                button?.dataset?.creditId || "",
+                button?.dataset?.creditUsername || "",
+                button?.dataset?.creditDisplay || ""
+            );
         }
 
         function selectCreditCreator(id, creatorId, username, displayName = "") {
@@ -4976,6 +4998,12 @@
             o.credit.creatorDisplayName = displayName || "";
             updateCreditText(o);
             renderAll();
+
+            const input = document.getElementById(`credit-creatorUsername-${id}`);
+            if (input) input.value = o.credit.creatorUsername || "";
+            const results = document.getElementById(`credit-results-${id}`);
+            if (results) results.innerHTML = `<p class="message">Selected @${esc(o.credit.creatorUsername)}</p>`;
+
             toast(`Linked ${isImageCapable(o) ? "image credit" : "credit pill"} to @${o.credit.creatorUsername}.`, "good");
         }
 

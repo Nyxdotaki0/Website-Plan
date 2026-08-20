@@ -75,6 +75,31 @@
         root.querySelectorAll?.(SELECTOR).forEach(enhance);
     }
 
+    function positionTooltip(control) {
+        if (!control) return;
+        const tip = control.querySelector(":scope > .nv-credit-tooltip, :scope > .credit-tooltip");
+        if (!tip) return;
+
+        control.classList.remove("nv-credit-tip-right", "nv-credit-tip-below");
+
+        const controlRect = control.getBoundingClientRect();
+        const tipRect = tip.getBoundingClientRect();
+        const viewportWidth = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+        const viewportHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+        const edge = 10;
+        const gap = 9;
+        const tipWidth = tipRect.width || Math.min(286, Math.max(180, viewportWidth - 28));
+        const tipHeight = tipRect.height || 80;
+
+        if (controlRect.left + tipWidth > viewportWidth - edge) {
+            control.classList.add("nv-credit-tip-right");
+        }
+
+        if (controlRect.top - tipHeight - gap < edge && controlRect.bottom + tipHeight + gap <= viewportHeight - edge) {
+            control.classList.add("nv-credit-tip-below");
+        }
+    }
+
     function closeOthers(active = null) {
         document.querySelectorAll(`${SELECTOR}.${OPEN_CLASS}`).forEach(control => {
             if (control !== active) {
@@ -111,6 +136,7 @@
         closeOthers(control);
         control.classList.add(OPEN_CLASS);
         control.dataset.creditArmedAt = String(now);
+        requestAnimationFrame(() => positionTooltip(control));
     }, true);
 
     document.addEventListener("keydown", event => {
@@ -122,8 +148,23 @@
 
     document.addEventListener("pointerover", event => {
         const control = event.target.closest?.(SELECTOR);
-        if (control) enhance(control);
+        if (control) {
+            enhance(control);
+            requestAnimationFrame(() => positionTooltip(control));
+        }
     }, true);
+
+    document.addEventListener("focusin", event => {
+        const control = event.target.closest?.(SELECTOR);
+        if (control) {
+            enhance(control);
+            requestAnimationFrame(() => positionTooltip(control));
+        }
+    }, true);
+
+    window.addEventListener("resize", () => {
+        document.querySelectorAll(`${SELECTOR}.${OPEN_CLASS}`).forEach(positionTooltip);
+    }, { passive: true });
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", () => enhanceAll(), { once: true });
@@ -140,5 +181,5 @@
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
 
-    window.NullverseCredit = { enhanceAll, enhance, closeOthers, normalizeSafeHref };
+    window.NullverseCredit = { enhanceAll, enhance, closeOthers, normalizeSafeHref, positionTooltip };
 })();
