@@ -10,7 +10,7 @@ import {
     renderProfileImageCredit,
     escapeHtml,
     timeAgo
-} from "./nullverse-content-cards.js?v=20260820-2";
+} from "./nullverse-content-cards.js?v=20260820-3";
 import { fetchDashboardMetrics, loadViewerContext } from "./nullverse-data.js?v=20260820-2";
 
 const currentUser = await requireBetaAccess({ allowRestricted: false });

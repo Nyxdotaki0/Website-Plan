@@ -1,7 +1,7 @@
 import { requireBetaAccess } from "./betaGate.js";
 import { supabase } from "./supabaseClient.js?v=20260818";
 import { initNullverseShell } from "./nullverse-shell.js?v=7";
-import { bindCardInteractions, escapeHtml, renderEmptyCard, renderProfileImageCredit, renderSkeletonCards } from "./nullverse-content-cards.js?v=20260820-2";
+import { bindCardInteractions, escapeHtml, renderEmptyCard, renderProfileImageCredit, renderSkeletonCards } from "./nullverse-content-cards.js?v=20260820-3";
 import { loadViewerContext } from "./nullverse-data.js?v=20260820-2";
 
 const currentUser = await requireBetaAccess();

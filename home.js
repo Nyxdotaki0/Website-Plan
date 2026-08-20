@@ -17,7 +17,7 @@ import {
     renderSkeletonCards,
     timeAgo,
     escapeHtml
-} from "./nullverse-content-cards.js?v=20260820-2";
+} from "./nullverse-content-cards.js?v=20260820-3";
 import {
     attachProfiles,
     fetchDiscoverCreators,

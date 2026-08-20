@@ -1,4 +1,4 @@
-import "./nullverse-credit.js?v=20260820-2";
+import "./nullverse-credit.js?v=20260820-3";
 
 const DEFAULT_AVATAR = "https://placehold.co/160x160/1b1b28/ffffff?text=NV";
 const DEFAULT_COVER = "https://placehold.co/900x520/16161d/ffffff?text=Nullverse";
@@ -78,7 +78,14 @@ export function getSafetyDecision(item, preferences = {}) {
 
 export function renderProfileImageCredit(profile = {}, kind = "avatar", context = "Profile image", options = {}) {
     const prefix = kind === "banner" ? "banner" : "avatar";
-    const imageUrl = prefix === "banner" ? profile.banner_url : profile.avatar_url;
+
+    // Profile pictures/avatars are identity UI repeated throughout Nullverse.
+    // Crediting them on every appearance is visually redundant, so the global
+    // credit layer intentionally skips avatar/PFP pills. Profile banners and
+    // all creation/media imagery continue to use the universal credit system.
+    if (prefix === "avatar") return "";
+
+    const imageUrl = profile.banner_url;
     if (!imageUrl) return "";
 
     const fields = ["type", "name", "nullverse_username", "url", "note"];
