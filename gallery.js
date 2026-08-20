@@ -327,6 +327,7 @@ async function loadCreators() {
         container.innerHTML = creators.length
             ? creators.map(renderCreatorCard).join("")
             : renderEmptyCard("No visual creators yet", "Creators with public gallery work will appear here.");
+        bindCardInteractions(container);
     } catch (error) {
         container.innerHTML = renderEmptyCard("Could not load creators", error.message || "Refresh and try again.");
     }
