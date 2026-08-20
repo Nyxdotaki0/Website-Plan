@@ -35,9 +35,41 @@ export async function fetchHomeFeed(mode = "for_you", limit = 12, offset = 0) {
         p_offset: offset
     });
 
-    if (!rpc.error) return filterAccessibleCreatorItems(rpc.data || []);
+    if (!rpc.error) {
+        const accessible = await filterAccessibleCreatorItems(rpc.data || []);
+        return hydrateWorldCardCredits(accessible);
+    }
     console.warn("nv_home_feed unavailable, using direct query:", rpc.error.message);
     return fallbackWorldFeed(mode, limit, offset);
+}
+
+async function hydrateWorldCardCredits(rows = []) {
+    const safeRows = Array.isArray(rows) ? rows : [];
+    const ids = [...new Set(safeRows.map(row => row?.id || row?.content_id).filter(Boolean))];
+    if (!ids.length) return safeRows;
+
+    const { data, error } = await supabase
+        .from("worlds")
+        .select("id, cover_image_url, theme_overview_card_image_url, overview_card_credit_type, overview_card_credit_name, overview_card_credit_url, overview_card_credit_note, overview_card_credit_nullverse_username, cover_credit_type, cover_credit_name, cover_credit_url, cover_credit_note, cover_credit_nullverse_username, updated_at")
+        .in("id", ids);
+
+    if (error || !data?.length) {
+        if (error) console.warn("Could not refresh World card credits:", error.message);
+        return safeRows;
+    }
+
+    const byId = new Map(data.map(row => [String(row.id), row]));
+    return safeRows.map(row => {
+        const latest = byId.get(String(row.id || row.content_id));
+        if (!latest) return row;
+        return {
+            ...row,
+            ...latest,
+            cover_image_url: latest.cover_image_url || row.cover_image_url || "",
+            theme_overview_card_image_url: latest.theme_overview_card_image_url || row.theme_overview_card_image_url || "",
+            updated_at: latest.updated_at || row.updated_at
+        };
+    });
 }
 
 export async function fetchGalleryFeed(mode = "trending", limit = 12, offset = 0, options = {}) {
@@ -78,10 +110,19 @@ async function hydrateGalleryPreviewMedia(rows = []) {
 
     let result = await supabase
         .from("creator_proof_gallery")
-        .select("id, image_url, image_placement, updated_at")
+        .select("id, image_url, image_placement, image_credit_type, image_credit_name, image_credit_url, image_credit_note, image_credit_nullverse_username, updated_at")
         .in("id", ids);
 
-    // Older schemas may not have image_placement yet. Still refresh the image
+    // If the universal Gallery credit migration has not been run yet, keep the
+    // feed alive and fall back to the older media-only projection.
+    if (result.error) {
+        result = await supabase
+            .from("creator_proof_gallery")
+            .select("id, image_url, image_placement, updated_at")
+            .in("id", ids);
+    }
+
+    // Older schemas may not have image_placement either. Still refresh the image
     // URL so a newly replaced preview never remains stale.
     if (result.error) {
         result = await supabase
@@ -101,6 +142,7 @@ async function hydrateGalleryPreviewMedia(rows = []) {
         if (!latest) return row;
         return {
             ...row,
+            ...latest,
             image_url: latest.image_url || row.image_url || "",
             image_placement: latest.image_placement ?? row.image_placement ?? null,
             updated_at: latest.updated_at || row.updated_at
@@ -184,9 +226,9 @@ export async function fetchRecentContent(userId, limit = 8) {
 
     if (error) {
         console.warn("Recent content sync unavailable until migration runs:", error.message);
-        return readLocalRecentContent(limit);
+        return hydrateWorldCardCredits(readLocalRecentContent(limit));
     }
-    return data || [];
+    return hydrateWorldCardCredits(data || []);
 }
 
 export async function fetchDashboardMetrics() {

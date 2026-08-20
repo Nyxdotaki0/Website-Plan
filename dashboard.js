@@ -1,4 +1,4 @@
-﻿import { requireBetaAccess } from "./betaGate.js";
+import { requireBetaAccess } from "./betaGate.js";
 import { supabase } from "./supabaseClient.js?v=20260818";
 import { initNullverseShell } from "./nullverse-shell.js?v=7";
 import {
@@ -7,10 +7,11 @@ import {
     renderEmptyCard,
     renderSkeletonCards,
     renderProjectImageCredit,
+    renderProfileImageCredit,
     escapeHtml,
     timeAgo
-} from "./nullverse-content-cards.js?v=7";
-import { fetchDashboardMetrics, loadViewerContext } from "./nullverse-data.js?v=7";
+} from "./nullverse-content-cards.js?v=20260820-2";
+import { fetchDashboardMetrics, loadViewerContext } from "./nullverse-data.js?v=20260820-2";
 
 const currentUser = await requireBetaAccess({ allowRestricted: false });
 if (!currentUser) throw new Error("Nullverse session unavailable.");
@@ -40,9 +41,16 @@ function setupProfileHeader() {
     document.getElementById("dashboard-avatar").src = avatar;
     document.getElementById("dashboard-bio").textContent = profile?.bio || "Your creator profile connects everything you publish.";
 
-    if (profile?.banner_url) {
-        document.getElementById("dashboard-profile-banner").style.backgroundImage = `url("${profile.banner_url.replaceAll('"', '\\"')}")`;
+    const bannerElement = document.getElementById("dashboard-profile-banner");
+    const avatarElement = document.querySelector(".dashboard-profile-avatar");
+    if (profile?.banner_url && bannerElement) {
+        bannerElement.style.backgroundImage = `url("${profile.banner_url.replaceAll('"', '\\"')}")`;
+        bannerElement.insertAdjacentHTML("beforeend", renderProfileImageCredit(profile, "banner", "Profile banner"));
     }
+    if (profile?.avatar_url && avatarElement) {
+        avatarElement.insertAdjacentHTML("beforeend", renderProfileImageCredit(profile, "avatar", "Profile picture", { mini: true }));
+    }
+    window.NullverseCredit?.enhanceAll?.(document.querySelector(".dashboard-profile-card"));
 
     if (profile?.username) {
         const profileUrl = `profile.html?user=${encodeURIComponent(profile.username)}`;

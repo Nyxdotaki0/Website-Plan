@@ -12,10 +12,12 @@ import {
     renderEmptyCard,
     renderGalleryCard,
     renderProjectCard,
+    renderProfileImageCredit,
+    renderStoredImageCredit,
     renderSkeletonCards,
     timeAgo,
     escapeHtml
-} from "./nullverse-content-cards.js?v=7";
+} from "./nullverse-content-cards.js?v=20260820-2";
 import {
     attachProfiles,
     fetchDiscoverCreators,
@@ -25,7 +27,7 @@ import {
     fetchHomeFeed,
     fetchRecentContent,
     loadViewerContext
-} from "./nullverse-data.js?v=7";
+} from "./nullverse-data.js?v=20260820-2";
 
 const currentUser = await requireBetaAccess();
 if (!currentUser) throw new Error("Nullverse session unavailable.");
@@ -203,6 +205,7 @@ async function loadSpotlight() {
         if (fallback.length) {
             const content = fallback[0];
             item = {
+                ...content,
                 feature_type: content.content_type || "world",
                 title: content.title,
                 description: content.summary,
@@ -225,8 +228,15 @@ async function loadSpotlight() {
         return;
     }
 
+    const spotlightCredit = item.image_url ? renderStoredImageCredit(item,
+        item.image_credit_type || item.image_credit_name || item.image_credit_url || item.image_credit_nullverse_username ? "image" : "cover",
+        "Spotlight image",
+        { ownerUsername: item.username || profile?.username || "" }
+    ) : "";
+
     container.innerHTML = `
         <div class="home-spotlight-media" style="background-image:url('${escapeCssUrl(item.image_url || "https://placehold.co/1600x900/111118/ffffff?text=Nullverse+Spotlight")}')"></div>
+        ${spotlightCredit}
         <div class="home-spotlight-shade"></div>
         <div class="home-spotlight-content">
             <span class="home-spotlight-label">${escapeHtml(formatFeatureLabel(item.feature_type))}</span>
@@ -509,11 +519,18 @@ async function loadCreatorSuggestions() {
     const container = document.getElementById("home-creators-list");
     try {
         const creators = (await fetchDiscoverCreators(6)).filter(item => !viewer.blockedUserIds.includes(item.id));
-        container.innerHTML = creators.length ? creators.map(creator => `
-            <a class="home-mini-item" href="profile.html?user=${encodeURIComponent(creator.username || "")}">
-                <img src="${escapeHtml(creator.avatar_url || "https://placehold.co/100x100/1b1b28/ffffff?text=NV")}" alt="" loading="lazy">
-                <span><strong>${escapeHtml(creator.display_name || creator.username || "Creator")}</strong><span>@${escapeHtml(creator.username || "creator")}   ${Number(creator.content_count || 0)} creations</span></span>
-            </a>`).join("") : renderEmptyCard("No suggestions yet", "More creators will appear as Nullverse grows.");
+        container.innerHTML = creators.length ? creators.map(creator => {
+            const profileUrl = `profile.html?user=${encodeURIComponent(creator.username || "")}`;
+            return `
+            <article class="home-mini-item" data-nv-card-href="${escapeHtml(profileUrl)}" role="link" tabindex="0">
+                <span class="home-mini-avatar nv-credit-image-wrap">
+                    <img src="${escapeHtml(creator.avatar_url || "https://placehold.co/100x100/1b1b28/ffffff?text=NV")}" alt="" loading="lazy">
+                    ${renderProfileImageCredit(creator, "avatar", "Creator avatar", { mini: true })}
+                </span>
+                <span class="home-mini-copy"><strong>${escapeHtml(creator.display_name || creator.username || "Creator")}</strong><span>@${escapeHtml(creator.username || "creator")}   ${Number(creator.content_count || 0)} creations</span></span>
+            </article>`;
+        }).join("") : renderEmptyCard("No suggestions yet", "More creators will appear as Nullverse grows.");
+        bindCardInteractions(container);
     } catch (error) {
         container.innerHTML = renderEmptyCard("Creator suggestions unavailable", error.message || "Refresh and try again.");
     }

@@ -1,8 +1,8 @@
 import { requireBetaAccess } from "./betaGate.js";
 import { supabase } from "./supabaseClient.js?v=20260818";
 import { initNullverseShell } from "./nullverse-shell.js?v=7";
-import { bindCardInteractions, escapeHtml, renderEmptyCard, renderSkeletonCards } from "./nullverse-content-cards.js?v=7";
-import { loadViewerContext } from "./nullverse-data.js?v=7";
+import { bindCardInteractions, escapeHtml, renderEmptyCard, renderProfileImageCredit, renderSkeletonCards } from "./nullverse-content-cards.js?v=20260820-2";
+import { loadViewerContext } from "./nullverse-data.js?v=20260820-2";
 
 const currentUser = await requireBetaAccess();
 if (!currentUser) throw new Error("Nullverse session unavailable.");
@@ -146,10 +146,15 @@ function renderDirectoryCard(profile) {
 
     return `
         <article class="creator-directory-card" data-creator-id="${escapeHtml(profile.id)}" data-nv-card-href="profile.html?user=${encodeURIComponent(username)}" role="link" tabindex="0">
-            <div class="creator-directory-banner"${bannerStyle}></div>
+            <div class="creator-directory-banner"${bannerStyle}>
+                ${renderProfileImageCredit(profile, "banner", "Profile banner")}
+            </div>
             ${isPrivate ? `<span class="creator-directory-lock">Private</span>` : ""}
             <div class="creator-directory-body">
-                <div class="creator-directory-avatar"><img src="${escapeHtml(avatar)}" alt="" loading="lazy"></div>
+                <div class="creator-directory-avatar">
+                    <img src="${escapeHtml(avatar)}" alt="" loading="lazy">
+                    ${renderProfileImageCredit(profile, "avatar", "Profile picture", { mini: true })}
+                </div>
                 <h3><a href="profile.html?user=${encodeURIComponent(username)}">${escapeHtml(displayName)}</a></h3>
                 <div class="creator-directory-handle">@${escapeHtml(username)}</div>
                 <div class="creator-directory-type">${escapeHtml(profile.creator_type || "Creator")}${profile.profile_status ? ` · ${escapeHtml(profile.profile_status)}` : ""}</div>

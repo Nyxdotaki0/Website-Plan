@@ -10,8 +10,8 @@ import {
     renderEmptyCard,
     renderSkeletonCards,
     escapeHtml
-} from "./nullverse-content-cards.js?v=7";
-import { attachProfiles, fetchDiscoverCreators, fetchHomeFeed, loadViewerContext } from "./nullverse-data.js?v=7";
+} from "./nullverse-content-cards.js?v=20260820-2";
+import { attachProfiles, fetchDiscoverCreators, fetchHomeFeed, loadViewerContext } from "./nullverse-data.js?v=20260820-2";
 
 const currentUser = await requireBetaAccess();
 if (!currentUser) throw new Error("Nullverse session unavailable.");

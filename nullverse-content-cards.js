@@ -1,3 +1,5 @@
+import "./nullverse-credit.js?v=20260820-2";
+
 const DEFAULT_AVATAR = "https://placehold.co/160x160/1b1b28/ffffff?text=NV";
 const DEFAULT_COVER = "https://placehold.co/900x520/16161d/ffffff?text=Nullverse";
 const DEFAULT_GALLERY = "https://placehold.co/800x800/16161d/ffffff?text=Gallery";
@@ -74,6 +76,44 @@ export function getSafetyDecision(item, preferences = {}) {
     return { action: "show", warnings, rating };
 }
 
+export function renderProfileImageCredit(profile = {}, kind = "avatar", context = "Profile image", options = {}) {
+    const prefix = kind === "banner" ? "banner" : "avatar";
+    const imageUrl = prefix === "banner" ? profile.banner_url : profile.avatar_url;
+    if (!imageUrl) return "";
+
+    const fields = ["type", "name", "nullverse_username", "url", "note"];
+    const hasStoredCredit = fields.some(field => {
+        const key = `${prefix}_credit_${field}`;
+        return Object.prototype.hasOwnProperty.call(profile, key) && String(profile[key] ?? "").trim() !== "";
+    });
+
+    const ownerUsername = profile.username || profile.owner_username || profile.creator_username || profile.creator?.username || "";
+    return buildCompactCreditControl({
+        type: profile[`${prefix}_credit_type`] || "credit_needed",
+        name: profile[`${prefix}_credit_name`] || "",
+        username: profile[`${prefix}_credit_nullverse_username`] || "",
+        url: profile[`${prefix}_credit_url`] || "",
+        note: profile[`${prefix}_credit_note`] || (!hasStoredCredit ? "Attribution has not been added for this profile image yet." : ""),
+        ownerUsername,
+        context,
+        extraClass: options.mini ? "nv-credit-mini" : ""
+    });
+}
+
+export function renderStoredImageCredit(record = {}, prefix = "image", context = "Image", options = {}) {
+    const ownerUsername = options.ownerUsername || record.username || record.owner_username || record.creator_username || record.creator?.username || "";
+    return buildCompactCreditControl({
+        type: record[`${prefix}_credit_type`] || "credit_needed",
+        name: record[`${prefix}_credit_name`] || "",
+        username: record[`${prefix}_credit_nullverse_username`] || "",
+        url: record[`${prefix}_credit_url`] || "",
+        note: record[`${prefix}_credit_note`] || "",
+        ownerUsername,
+        context,
+        extraClass: options.mini ? "nv-credit-mini" : ""
+    });
+}
+
 export function renderContentCard(item = {}, options = {}) {
     const safety = options.safety || { action: "show", warnings: [] };
     if (safety.action === "hide") return "";
@@ -102,7 +142,10 @@ export function renderContentCard(item = {}, options = {}) {
             </div>
             <div class="nv-card-body">
                 <div class="nv-card-creator">
-                    <img src="${escapeHtml(avatar)}" alt="" loading="lazy">
+                    <span class="nv-credit-image-wrap nv-credit-avatar-wrap">
+                        <img src="${escapeHtml(avatar)}" alt="" loading="lazy">
+                        ${renderProfileImageCredit(item, "avatar", "Creator avatar", { mini: true })}
+                    </span>
                     <a href="${escapeHtml(getProfileUrl(item))}">${escapeHtml(displayName)}</a>
                 </div>
                 <h3><a href="${escapeHtml(url)}">${escapeHtml(title)}</a></h3>
@@ -203,7 +246,10 @@ export function renderGalleryCard(item = {}, options = {}) {
             ${shouldConfirmWarning ? renderGalleryWarningGate(item, safety) : ""}
             <div class="nv-card-body">
                 <div class="nv-card-creator">
-                    <img src="${escapeHtml(avatar)}" alt="" loading="lazy">
+                    <span class="nv-credit-image-wrap nv-credit-avatar-wrap">
+                        <img src="${escapeHtml(avatar)}" alt="" loading="lazy">
+                        ${renderProfileImageCredit(item, "avatar", "Creator avatar", { mini: true })}
+                    </span>
                     <a ${linkAttributes(profileUrl)}>${escapeHtml(displayName)}</a>
                 </div>
                 <h3><a ${linkAttributes(primaryUrl)}>${escapeHtml(title)}</a></h3>
@@ -274,10 +320,15 @@ export function renderCreatorCard(profile = {}) {
 
     return `
         <article class="nv-creator-card" data-nv-card-href="profile.html?user=${encodeURIComponent(username)}" role="link" tabindex="0">
-            <div class="nv-creator-banner"${banner ? ` style="background-image:url('${escapeCssUrl(banner)}')"` : ""}></div>
+            <div class="nv-creator-banner"${banner ? ` style="background-image:url('${escapeCssUrl(banner)}')"` : ""}>
+                ${renderProfileImageCredit(profile, "banner", "Profile banner")}
+            </div>
             ${isPrivate ? `<span class="nv-creator-private-pill">Private</span>` : ""}
             <div class="nv-creator-body">
-                <div class="nv-creator-avatar"><img src="${escapeHtml(avatar)}" alt="" loading="lazy"></div>
+                <div class="nv-creator-avatar">
+                    <img src="${escapeHtml(avatar)}" alt="" loading="lazy">
+                    ${renderProfileImageCredit(profile, "avatar", "Profile picture", { mini: true })}
+                </div>
                 <h3><a href="profile.html?user=${encodeURIComponent(username)}">${escapeHtml(displayName)}</a></h3>
                 <div class="nv-creator-handle">@${escapeHtml(username)}</div>
                 ${profile.bio ? `<p class="nv-creator-bio">${escapeHtml(profile.bio)}</p>` : ""}
@@ -341,7 +392,10 @@ export function renderActivityCard(activity = {}) {
 
     return `
         <article class="nv-activity-card" data-nv-card-href="${escapeHtml(link)}" role="link" tabindex="0">
-            <img class="nv-activity-avatar" src="${escapeHtml(avatar)}" alt="" loading="lazy">
+            <span class="nv-credit-image-wrap nv-activity-avatar-wrap">
+                <img class="nv-activity-avatar" src="${escapeHtml(avatar)}" alt="" loading="lazy">
+                ${renderProfileImageCredit(activity, "avatar", "Creator avatar", { mini: true })}
+            </span>
             <p><a href="${escapeHtml(profileUrl)}">${escapeHtml(displayName)}</a> ${escapeHtml(label)} ${activity.title ? `<a href="${escapeHtml(link)}">${escapeHtml(activity.title)}</a>` : ""}</p>
             <time>${activity.created_at ? escapeHtml(timeAgo(activity.created_at)) : "Recently"}</time>
         </article>
@@ -386,6 +440,7 @@ export function bindCardInteractions(root = document) {
     });
 
     root.querySelectorAll(".nv-credit-pill").forEach(enhanceCardCreditControl);
+    window.NullverseCredit?.enhanceAll?.(root);
 
     root.querySelectorAll("[data-nv-card-href]").forEach(card => {
         if (card.dataset.nvCardBound === "true") return;
@@ -394,7 +449,7 @@ export function bindCardInteractions(root = document) {
         const openCard = event => {
             if (card.classList.contains("warning-gated")) return;
             const target = event.target;
-            if (target?.closest?.("a,button,input,select,textarea,label,[role='button'],[data-nv-gallery-warning-gate],.nv-credit-pill")) return;
+            if (target?.closest?.("a,button,input,select,textarea,label,[role='button'],[data-nv-gallery-warning-gate],.nv-credit-pill,.nv-universal-credit")) return;
             const href = card.dataset.nvCardHref;
             if (href) window.location.href = href;
         };
@@ -501,7 +556,7 @@ function buildGalleryImageCredit(item) {
     });
 }
 
-function buildCompactCreditControl({ type, name, username, url, note, ownerUsername, context }) {
+function buildCompactCreditControl({ type, name, username, url, note, ownerUsername, context, extraClass = "" }) {
     const normalizedType = String(type || "credit_needed");
     let source = "No external credit needed";
     let href = "";
@@ -519,9 +574,11 @@ function buildCompactCreditControl({ type, name, username, url, note, ownerUsern
 
     const detail = normalizedType === "no_credit_needed" && !note
         ? "No external credit was marked as required for this image."
-        : (note || "");
+        : normalizedType === "credit_needed" && !note
+            ? "This image still needs attribution."
+            : (note || "");
     const actionHint = href ? `<span class="nv-credit-action-hint">Tap/click again to open source</span>` : "";
-    return `<button type="button" class="nv-credit-pill nv-universal-credit" data-nv-credit-ready="true" data-credit-href="${escapeHtml(href)}" data-credit-label="${escapeHtml(`${context} credit: ${source}`)}" aria-label="View ${escapeHtml(context)} credit"><span class="nv-credit-tooltip"><strong>${escapeHtml(context)} credit</strong><br>Source: ${escapeHtml(source)}${detail ? `<br><br>${escapeHtml(detail)}` : ""}${actionHint}</span></button>`;
+    return `<button type="button" class="nv-credit-pill nv-universal-credit${extraClass ? ` ${escapeHtml(extraClass)}` : ""}" data-nv-credit-ready="true" data-credit-href="${escapeHtml(href)}" data-credit-label="${escapeHtml(`${context} credit: ${source}`)}" aria-label="View ${escapeHtml(context)} credit"><span class="nv-credit-tooltip"><strong>${escapeHtml(context)} credit</strong><br>Source: ${escapeHtml(source)}${detail ? `<br><br>${escapeHtml(detail)}` : ""}${actionHint}</span></button>`;
 }
 
 

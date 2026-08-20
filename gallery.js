@@ -8,8 +8,8 @@ import {
     renderEmptyCard,
     renderGalleryCard,
     renderSkeletonCards
-} from "./nullverse-content-cards.js?v=7";
-import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nullverse-data.js?v=7";
+} from "./nullverse-content-cards.js?v=20260820-2";
+import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nullverse-data.js?v=20260820-2";
 
 let currentUser = null;
 let viewer = null;
