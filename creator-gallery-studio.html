@@ -3848,6 +3848,7 @@
                 }
         }
     </style>
+    <link rel="stylesheet" href="nullverse-credit.css?v=2">
 </head>
 <body>
     <div class="studio-page" id="page">
@@ -4449,7 +4450,7 @@
                 text: input.text ?? input.content ?? defaultText(type),
                 imageUrl: input.imageUrl || input.image_url || input.src || "",
                 styles: normalizeStyles(input.styles || {}, type),
-                credit: normalizeCreditData(input.credit || input.creditData || input, input.text ?? input.content ?? defaultText(type))
+                credit: normalizeCreditData(input.credit || input.creditData || (["art_hero", "art_card"].includes(type) ? galleryItemImageCreditData() : input), input.text ?? input.content ?? defaultText(type))
             };
 
             updateCreditText(o);
@@ -4566,6 +4567,18 @@
             })[raw] || raw || "own_work";
         }
 
+        function galleryItemImageCreditData(item = state.item) {
+            const source = item || {};
+            return {
+                image_credit_type: source.image_credit_type || "own_work",
+                image_credit_name: source.image_credit_name || "",
+                image_credit_url: source.image_credit_url || "",
+                image_credit_note: source.image_credit_note || "",
+                image_credit_no_ai: !!source.image_credit_no_ai,
+                image_credit_nullverse_username: source.image_credit_nullverse_username || ""
+            };
+        }
+
         function normalizeCreditData(input = {}, fallbackText = "") {
             const source = input && typeof input === "object" ? input : {};
             const type = normalizeCreditType(source.type || source.creditType || source.image_credit_type || "own_work");
@@ -4664,13 +4677,24 @@
         function sanitizeAll() { for (const mode of ["desktop", "mobile"]) { const l = state.layouts[mode] || normalizeLayout(null, mode); l.objects = (l.objects || []).map(normalizeObj).filter(Boolean).filter(o => !PROFILE_ONLY.has(o.type)); ensureRequired(l, mode); normalizeZ(l); state.layouts[mode] = l } }
         function normalizeZ(l) { l.objects.forEach((o, i) => { if (!Number.isFinite(Number(o.z))) o.z = i + 10 }); protectRequired(l, false) }
         function protectRequired(l = getLayout(), rerender = true) { if (!l) return; ensureRequired(l, l.mode || state.mode); const max = Math.max(10, ...l.objects.map(o => Number(o.z) || 0)); REQUIRED.forEach((t, i) => { const o = l.objects.find(x => x.type === t); if (o) { o.required = true; o.hidden = false; o.z = Math.max(Number(o.z) || 0, max + i + 1, 9800 + i) } }); if (rerender) renderAll() }
-        function createObj(type, opt = {}) { const mode = opt.mode || state.mode; const [minW, minH, maxW, maxH] = LIMITS[type] || LIMITS.text; const size = defaultSize(type, mode); const spawn = opt.x != null ? { x: opt.x, y: opt.y } : visibleCenter(); const layoutHeight = state.layouts?.[mode]?.canvas?.height || DEFAULT[mode].height; const zValue = opt.z != null ? Number(opt.z) : nextZ(); return { id: id(), type, name: opt.name || LABELS[type], x: clamp(num(opt.x, spawn.x - size.w / 2), 0, DEFAULT[mode].width - minW), y: clamp(num(opt.y, spawn.y - size.h / 2), 0, Math.max(0, layoutHeight - minH)), w: clamp(num(opt.w, size.w), minW, maxW), h: clamp(num(opt.h, size.h), minH, maxH), rotation: num(opt.rotation, 0), z: num(zValue, 10), locked: false, hidden: false, required: !!opt.required || REQUIRED.includes(type), text: opt.text ?? defaultText(type), imageUrl: opt.imageUrl || (["art_hero", "art_card"].includes(type) ? state.item?.image_url || "" : ""), styles: normalizeStyles(opt.styles || {}, type), credit: normalizeCreditData(opt.credit || {}, opt.text ?? defaultText(type)) } }
+        function createObj(type, opt = {}) { const mode = opt.mode || state.mode; const [minW, minH, maxW, maxH] = LIMITS[type] || LIMITS.text; const size = defaultSize(type, mode); const spawn = opt.x != null ? { x: opt.x, y: opt.y } : visibleCenter(); const layoutHeight = state.layouts?.[mode]?.canvas?.height || DEFAULT[mode].height; const zValue = opt.z != null ? Number(opt.z) : nextZ(); return { id: id(), type, name: opt.name || LABELS[type], x: clamp(num(opt.x, spawn.x - size.w / 2), 0, DEFAULT[mode].width - minW), y: clamp(num(opt.y, spawn.y - size.h / 2), 0, Math.max(0, layoutHeight - minH)), w: clamp(num(opt.w, size.w), minW, maxW), h: clamp(num(opt.h, size.h), minH, maxH), rotation: num(opt.rotation, 0), z: num(zValue, 10), locked: false, hidden: false, required: !!opt.required || REQUIRED.includes(type), text: opt.text ?? defaultText(type), imageUrl: opt.imageUrl || (["art_hero", "art_card"].includes(type) ? state.item?.image_url || "" : ""), styles: normalizeStyles(opt.styles || {}, type), credit: normalizeCreditData(opt.credit || (["art_hero", "art_card"].includes(type) ? galleryItemImageCreditData() : {}), opt.text ?? defaultText(type)) } }
         function defaultSize(t, mode) { const m = mode === "mobile"; return ({ art_hero: m ? { w: 340, h: 340 } : { w: 600, h: 600 }, art_card: m ? { w: 330, h: 420 } : { w: 420, h: 520 }, title: m ? { w: 330, h: 70 } : { w: 700, h: 90 }, description: m ? { w: 330, h: 150 } : { w: 700, h: 180 }, type_badge: m ? { w: 160, h: 44 } : { w: 220, h: 48 }, credit_badge: m ? { w: 220, h: 44 } : { w: 300, h: 48 }, credit_pill: m ? { w: 250, h: 44 } : { w: 340, h: 48 }, noai_badge: m ? { w: 220, h: 44 } : { w: 300, h: 48 }, back_gallery_button: m ? { w: 96, h: 34 } : { w: 112, h: 38 }, report_button: m ? { w: 82, h: 34 } : { w: 96, h: 38 }, text: m ? { w: 220, h: 44 } : { w: 320, h: 52 }, bio: m ? { w: 330, h: 190 } : { w: 520, h: 230 }, image: m ? { w: 240, h: 240 } : { w: 360, h: 360 }, image_text: m ? { w: 330, h: 170 } : { w: 520, h: 230 }, section: m ? { w: 330, h: 170 } : { w: 520, h: 230 }, shape: m ? { w: 220, h: 140 } : { w: 320, h: 180 }, circle: m ? { w: 180, h: 180 } : { w: 220, h: 220 }, star: m ? { w: 180, h: 180 } : { w: 220, h: 220 }, divider: m ? { w: 300, h: 20 } : { w: 520, h: 24 } })[t] || { w: 300, h: 60 } }
         function addObject(type) { if (!LABELS[type]) return toast("Unsupported layer type.", "bad"); const l = getLayout(); pushHistory(); if (REQUIRED.includes(type)) { const ex = l.objects.find(o => o.type === type); if (ex) { ex.hidden = false; ex.z = nextZ(); state.selected = [ex.id]; renderAll(); return toast(`${LABELS[type]} is already on the page, so I selected it.`, "warn") } } const o = createObj(type); if (o.type === "credit_pill") updateCreditText(o); l.objects.push(o); state.selected = [o.id]; protectRequired(l, false); renderAll(); toast(`${LABELS[type]} added.`, "good") }
         function renderAll() { renderCanvas(); renderLayers(); renderInspector(); renderReq(); updateButtons() }
         function renderCanvas() { const l = getLayout(), c = dom.canvas, size = DEFAULT[state.mode]; c.classList.toggle("mobile", state.mode === "mobile"); c.classList.toggle("snap", state.snap === "snap"); c.style.width = `${l.canvas.width || size.width}px`; c.style.minHeight = `${l.canvas.height || size.height}px`; c.style.setProperty("--canvas-bg", l.canvas.background || "var(--page-bg)"); c.style.background = l.canvas.background || "var(--page-bg)"; c.style.backgroundImage = l.canvas.backgroundImage ? `url('${String(l.canvas.backgroundImage).replace(/'/g, "%27")}')` : ""; c.style.backgroundSize = l.canvas.backgroundSize || "cover"; c.style.backgroundPosition = l.canvas.backgroundPosition || "center"; dom.page.style.setProperty("--canvas-bg", l.canvas.background || "var(--page-bg)"); dom.page.style.setProperty("--preview-page-bg", l.canvas.background || "var(--page-bg,#050506)"); dom.page.style.setProperty("--preview-page-bg-image", l.canvas.backgroundImage ? `url('${String(l.canvas.backgroundImage).replace(/'/g, "%27")}')` : "none"); dom.page.style.setProperty("--preview-page-bg-size", l.canvas.backgroundSize || "cover"); dom.page.style.setProperty("--preview-page-bg-position", l.canvas.backgroundPosition || "center");[...c.querySelectorAll(".obj,.marquee,.group-box")].forEach(n => n.remove());[...l.objects].sort((a, b) => (a.z || 0) - (b.z || 0)).forEach(o => { c.insertAdjacentHTML("beforeend", objHtml(o)); styleObj(c.querySelector(`[data-id="${CSS.escape(o.id)}"]`), o) }); dom.note.style.display = l.objects.filter(o => !o.hidden).length ? "none" : "flex"; renderGroupBox(); applyTransform() }
         function objHtml(o) { const sel = state.selected.includes(o.id), multi = sel && state.selected.length > 1, cls = ["obj", sel ? "selected" : "", multi ? "multi" : "", o.locked ? "locked" : "", o.hidden ? "hidden" : "", o.required ? "required" : "", ["text", "title", "description"].includes(o.type) ? "textlike" : "", o.styles?.borderPaint ? "grad-border" : ""].filter(Boolean).join(" "); return `<div class="${cls}" data-id="${escA(o.id)}" data-type="${escA(o.type)}"><div class="inner">${innerHtml(o)}</div>${handles()}<div class="rotate" data-rotate="1"></div></div>` }
-        function innerHtml(o) { const text = textMarkup(o.text || "", o), img = o.imageUrl || (["art_hero", "art_card"].includes(o.type) ? state.item?.image_url || "" : ""); const item = state.item || localItem(); switch (o.type) { case "art_hero": return `<div class="art-hero">${imageHtml(img, "Artwork")}${credit(item)}</div>`; case "art_card": return `<div class="art-card">${imageHtml(img, "Artwork")}<div class="card-body"><h3>${esc(item.title || "Untitled")}</h3><p>${esc(item.description || "Gallery item description")}</p></div>${credit(item)}</div>`; case "title": return `<div class="text-content" style="font-weight:850;line-height:1.05!important">${text}</div>`; case "description": case "text": return `<div class="text-content">${text}</div>`; case "bio": case "section": return `<div class="text-content" style="padding:var(--obj-pad,18px)">${text}</div>`; case "type_badge": case "credit_badge": case "noai_badge": return `<div class="badge-content">${text}</div>`; case "credit_pill": return creditPillStudioMarkup(o); case "back_gallery_button": case "report_button": return `<div class="button-content"><span class="button-label">${esc(o.text || LABELS[o.type])}</span></div>`; case "image": return `<div class="image-box">${imageHtml(img, "Custom image")}</div>`; case "image_text": return `<div class="image-text"><div class="image-text-thumb">${imageHtml(img, "Custom image")}</div><div class="text-content">${text}</div></div>`; case "shape": return `<div class="shape"></div>`; case "circle": return `<div class="shape circle"></div>`; case "star": return `<div class="shape star"></div>`; case "divider": return `<div class="divider"></div>`; default: return `<div class="text-content">${text}</div>` } }
+        function innerHtml(o) { const text = textMarkup(o.text || "", o), img = o.imageUrl || (["art_hero", "art_card"].includes(o.type) ? state.item?.image_url || "" : ""); const item = state.item || localItem(); switch (o.type) { case "art_hero": return `<div class="art-hero">${imageHtml(img, "Artwork")}${img ? studioImageCreditMarkup(o, "Artwork") : ""}</div>`; case "art_card": return `<div class="art-card">${imageHtml(img, "Artwork")}${img ? studioImageCreditMarkup(o, "Artwork") : ""}<div class="card-body"><h3>${esc(item.title || "Untitled")}</h3><p>${esc(item.description || "Gallery item description")}</p></div></div>`; case "title": return `<div class="text-content" style="font-weight:850;line-height:1.05!important">${text}</div>`; case "description": case "text": return `<div class="text-content">${text}</div>`; case "bio": case "section": return `<div class="text-content" style="padding:var(--obj-pad,18px)">${text}</div>`; case "type_badge": case "credit_badge": case "noai_badge": return `<div class="badge-content">${text}</div>`; case "credit_pill": return creditPillStudioMarkup(o); case "back_gallery_button": case "report_button": return `<div class="button-content"><span class="button-label">${esc(o.text || LABELS[o.type])}</span></div>`; case "image": return `<div class="image-box">${imageHtml(img, "Custom image")}${img ? studioImageCreditMarkup(o, "Image") : ""}</div>`; case "image_text": return `<div class="image-text"><div class="image-text-thumb">${imageHtml(img, "Custom image")}${img ? studioImageCreditMarkup(o, "Image") : ""}</div><div class="text-content">${text}</div></div>`; case "shape": return `<div class="shape"></div>`; case "circle": return `<div class="shape circle"></div>`; case "star": return `<div class="shape star"></div>`; case "divider": return `<div class="divider"></div>`; default: return `<div class="text-content">${text}</div>` } }
+        function studioImageCreditMarkup(o, context = "Image") {
+            const c = normalizeCreditData(o?.credit || {}, "");
+            let source = "No external credit needed";
+            if (c.type === "own_work") source = `@${state.ownerProfile?.username || state.item?.username || "you"}`;
+            else if (c.type === "nullverse_creator") source = c.creatorUsername ? `@${c.creatorUsername}` : "Nullverse creator";
+            else if (c.type === "custom") source = c.customText || "Custom credit";
+            else source = c.name || creditTypeLabel(c.type);
+            const detail = [c.note, c.url || c.sourceText].filter(Boolean).join(" · ");
+            return `<span class="nv-universal-credit studio-image-credit" aria-label="${escA(`${context} credit: ${source}`)}"><span class="nv-credit-tooltip"><strong>${esc(context)} credit</strong><br>Source: ${esc(source)}${detail ? `<br><br>${esc(detail)}` : ""}<br><span class="nv-credit-action-hint">Public view: press once for details, again for source</span></span></span>`;
+        }
+
         function imageHtml(url, label) { return url ? `<img src="${escA(url)}" alt="${escA(label)}">` : `<div class="placeholder">Upload image from Inspector</div>` }
         function textMarkup(text, o) {
             const styles = o?.styles || {};
@@ -4723,7 +4747,7 @@
 
             const contentControls = `<div class="group"><h4>Layer</h4><div class="inspector-group-compact"><span class="lock-state-pill ${o.locked ? "locked" : "unlocked"}">${o.locked ? "🔒 Locked" : "🔓 Unlocked"}</span>${o.required ? `<p class="note">Required gallery control. You can style and move it, but not hide or delete it.</p>` : ""}<label>Layer Name</label><input value="${escA(o.name || "")}" oninput="updateObjectField('${idv}','name',this.value,false)">${showTextBox ? `<label>Text</label><textarea data-object-text-id="${idv}" oninput="updateObjectText('${idv}',this.value)">${escT(o.text || "")}</textarea>` : ""}</div></div>`;
 
-            const creditControls = o.type === "credit_pill" ? creditInspector(o) : "";
+            const creditControls = (o.type === "credit_pill" || imgs) ? creditInspector(o) : "";
 
             const imageControls = imgs ? `<div class="group"><h4>Image</h4><button onclick="pickImageForObject('${idv}')">Upload / Replace Image</button><label>Image URL</label><input value="${escA(o.imageUrl || "")}" oninput="updateObjectField('${idv}','imageUrl',this.value,false)"><label>Image Fit</label><select onchange="updateObjectStyle('${idv}','imageFit',this.value,{commit:true})">${["cover", "contain", "fill", "none", "scale-down"].map(v => `<option value="${v}" ${s.imageFit === v ? "selected" : ""}>${v}</option>`).join("")}</select></div>` : "";
 
@@ -4739,7 +4763,8 @@
 
 
         function creditInspector(o) {
-            updateCreditText(o);
+            const imageCredit = isImageCapable(o) && o.type !== "credit_pill";
+            if (!imageCredit) updateCreditText(o);
             const idv = escA(o.id);
             const c = normalizeCreditData(o.credit || {}, o.text || "");
             const type = normalizeCreditType(c.type);
@@ -4753,10 +4778,10 @@
                 : `<p class="credit-security-note">Search a Nullverse username, then press Add Creator. This is the only credit type that becomes a clickable profile link.</p>`;
 
             return `<div class="group credit-system-overhaul" data-credit-inspector="${idv}">
-                                                                                                                <h4>Credit Pill System</h4>
-                                                                                                                <p class="credit-security-note">Comic-style credit behavior: the dropdown controls the pill text automatically. Custom text is its own option. External links stay plain text only.</p>
+                                                                                                                <h4>${imageCredit ? "Image Credit" : "Credit Pill System"}</h4>
+                                                                                                                <p class="credit-security-note">${imageCredit ? "This credit follows the image automatically. On the public page, one press/click opens the credit details and a second press/click opens the linked source when one exists." : "The dropdown controls the credit text automatically. On the public page, linked sources use the same two-step credit control."}</p>
                                                                                                                 <div class="credit-live-preview">
-                                                                                                                    <span class="credit-live-label">Live credit pill</span>
+                                                                                                                    <span class="credit-live-label">${imageCredit ? "Image credit preview" : "Live credit pill"}</span>
                                                                                                                     <span id="credit-preview-pill-${idv}" class="credit-live-pill">${esc(creditPillText(o))}</span>
                                                                                                                     <span id="credit-preview-tooltip-${idv}" class="credit-live-tooltip">${esc(creditPillTooltip(o) || "Hover details will appear here.")}</span>
                                                                                                                 </div>
@@ -4790,8 +4815,8 @@
 
                                                                                                                 <div id="credit-url-wrap-${idv}" class="credit-mode-panel" style="display:${showUrl};">
                                                                                                                     <label>Credit Link / Source Text</label>
-                                                                                                                    <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="Plain text only — external links will not be clickable" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
-                                                                                                                    <p class="credit-security-note">External URLs are saved only as text. They will not navigate anywhere from the public showcase.</p>
+                                                                                                                    <input id="credit-url-${idv}" value="${escA(c.url || c.sourceText || "")}" placeholder="https://source.example/artwork" oninput="updateCreditPillField('${idv}','url',this.value,{live:true})" onchange="updateCreditPillField('${idv}','url',this.value,{commit:true})">
+                                                                                                                    <p class="credit-security-note">A valid external source link opens only after the credit control is pressed/clicked a second time.</p>
                                                                                                                 </div>
 
                                                                                                                 <div id="credit-note-wrap-${idv}" class="credit-mode-panel" style="display:${showNote};">
@@ -4820,11 +4845,11 @@
         }
 
         function updateCreditType(id, type) {
-            const o = find(id); if (!o || o.type !== "credit_pill") return;
+            const o = find(id); if (!o || (o.type !== "credit_pill" && !isImageCapable(o))) return;
             pushHistory();
             o.credit = normalizeCreditData(o.credit || {}, o.text || "");
             const nextType = normalizeCreditType(type);
-            if (nextType === "custom" && !o.credit.customText) o.credit.customText = o.text || creditPillText(o) || "Custom credit";
+            if (nextType === "custom" && !o.credit.customText) o.credit.customText = o.type === "credit_pill" ? (o.text || creditPillText(o) || "Custom credit") : "Custom credit";
             o.credit.type = nextType;
             if (nextType !== "nullverse_creator") {
                 o.credit.creatorId = "";
@@ -4848,7 +4873,7 @@
         }
 
         function updateCreditPillField(id, key, value, options = {}) {
-            const o = find(id); if (!o || o.type !== "credit_pill") return;
+            const o = find(id); if (!o || (o.type !== "credit_pill" && !isImageCapable(o))) return;
             if (options.live || options.commit) paintHistory(`${id}:${key}:credit`, options);
             o.credit = normalizeCreditData(o.credit || {}, o.text || "");
 
@@ -4881,7 +4906,7 @@
         }
 
         function syncCreditInspectorPreview(id) {
-            const o = find(id); if (!o || o.type !== "credit_pill") return;
+            const o = find(id); if (!o || (o.type !== "credit_pill" && !isImageCapable(o))) return;
             const pill = document.getElementById(`credit-preview-pill-${id}`);
             const tip = document.getElementById(`credit-preview-tooltip-${id}`);
             if (pill) pill.textContent = creditPillText(o);
@@ -4942,7 +4967,7 @@
         }
 
         function selectCreditCreator(id, creatorId, username, displayName = "") {
-            const o = find(id); if (!o || o.type !== "credit_pill") return;
+            const o = find(id); if (!o || (o.type !== "credit_pill" && !isImageCapable(o))) return;
             pushHistory();
             o.credit = normalizeCreditData(o.credit || {}, o.text || "");
             o.credit.type = "nullverse_creator";
@@ -4951,11 +4976,11 @@
             o.credit.creatorDisplayName = displayName || "";
             updateCreditText(o);
             renderAll();
-            toast(`Linked credit pill to @${o.credit.creatorUsername}.`, "good");
+            toast(`Linked ${isImageCapable(o) ? "image credit" : "credit pill"} to @${o.credit.creatorUsername}.`, "good");
         }
 
         function clearCreditCreator(id) {
-            const o = find(id); if (!o || o.type !== "credit_pill") return;
+            const o = find(id); if (!o || (o.type !== "credit_pill" && !isImageCapable(o))) return;
             pushHistory();
             o.credit = normalizeCreditData(o.credit || {}, o.text || "");
             o.credit.creatorId = "";
@@ -4963,7 +4988,7 @@
             o.credit.creatorDisplayName = "";
             updateCreditText(o);
             renderAll();
-            toast("Removed linked Nullverse creator from this credit pill.", "warn");
+            toast(`Removed linked Nullverse creator from this ${isImageCapable(o) ? "image credit" : "credit pill"}.`, "warn");
         }
 
 
@@ -6461,6 +6486,26 @@
             }
         }
 
+        function validateStudioImageCredits(layout = getLayout()) {
+            for (const o of (layout?.objects || [])) {
+                if (!isImageCapable(o) || o.hidden) continue;
+                const imageUrl = o.imageUrl || (["art_hero", "art_card"].includes(o.type) ? state.item?.image_url || "" : "");
+                if (!imageUrl) continue;
+                const c = normalizeCreditData(o.credit || {}, "");
+                let message = "";
+                if (c.type === "nullverse_creator" && !c.creatorUsername) message = "Choose the Nullverse creator who made this image.";
+                else if (["external_artist", "photographer"].includes(c.type) && (!c.name || !c.url)) message = "External artist and photographer credits need both a source name and source link.";
+                else if (c.type === "stock_public_domain" && !(c.url || c.note)) message = "Stock/public-domain images need a source link or source note.";
+                else if (c.type === "no_credit_needed" && !c.note) message = "Explain why this image does not need an external credit.";
+                else if (c.type === "custom" && !c.customText) message = "Enter the custom image credit text.";
+                if (!message) continue;
+                state.selected = [o.id];
+                renderAll();
+                return { ok: false, message: `${o.name || LABELS[o.type] || "Image"}: ${message}` };
+            }
+            return { ok: true, message: "" };
+        }
+
         async function publishLayout() {
             try {
                 protectRequired(getLayout(), false);
@@ -6470,6 +6515,9 @@
                 if (miss.length) {
                     return toast(`Missing required controls: ${miss.map(t => LABELS[t]).join(", ")}`, "bad", 7000);
                 }
+
+                const creditCheck = validateStudioImageCredits(getLayout());
+                if (!creditCheck.ok) return toast(creditCheck.message, "bad", 8000);
 
                 const active = normalizeLayout(getLayout(), state.mode);
                 active.publishedSnapshot = makePublishedLayoutSnapshot(active);

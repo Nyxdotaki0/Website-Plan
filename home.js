@@ -502,6 +502,7 @@ async function loadFollowingActivity() {
     container.innerHTML = activity.length
         ? activity.map(renderActivityCard).join("")
         : renderEmptyCard("No new activity", "Follow creators to see meaningful publishing updates here.", { href: "explore.html", label: "Discover Creators" });
+    bindCardInteractions(container);
 }
 
 async function loadCreatorSuggestions() {

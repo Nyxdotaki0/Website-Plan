@@ -2,9 +2,11 @@
 import { supabase } from "./supabaseClient.js?v=20260818";
 import { initNullverseShell } from "./nullverse-shell.js?v=7";
 import {
+    bindCardInteractions,
     formatCompactNumber,
     renderEmptyCard,
     renderSkeletonCards,
+    renderProjectImageCredit,
     escapeHtml,
     timeAgo
 } from "./nullverse-content-cards.js?v=7";
@@ -125,6 +127,7 @@ function renderContinue() {
         ? items.map(renderProjectWithManagement).join("")
         : renderEmptyCard("Your studio is empty", "Create your first project to begin building in Nullverse.", { href: "create-world.html", label: "Create Something" });
     bindManagementButtons(container);
+    bindCardInteractions(container);
 }
 
 function renderProjects() {
@@ -135,6 +138,7 @@ function renderProjects() {
         ? items.map(renderProjectWithManagement).join("")
         : renderEmptyCard("No projects in this view", "Choose another filter or start something new.", { href: "create-world.html", label: "Create Something" });
     bindManagementButtons(container);
+    bindCardInteractions(container);
 }
 
 function renderProjectWithManagement(item) {
@@ -165,12 +169,13 @@ function renderProjectWithManagement(item) {
     const kind = isGallery ? "gallery" : "project";
 
     return `
-        <article class="dashboard-creation-card" data-dashboard-card="${escapeHtml(item.id || "")}">
-            <a class="dashboard-creation-media" href="${escapeHtml(editorUrl)}">
+        <article class="dashboard-creation-card" data-dashboard-card="${escapeHtml(item.id || "")}" data-nv-card-href="${escapeHtml(editorUrl)}" role="link" tabindex="0">
+            <div class="dashboard-creation-media">
                 <img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" loading="lazy">
+                ${renderProjectImageCredit(item)}
                 <span class="nv-card-type nv-type-${escapeHtml(type)}">${escapeHtml(label)}</span>
                 <span class="dashboard-creation-status ${published ? "published" : "draft"}">${published ? "Published" : "Draft"}</span>
-            </a>
+            </div>
 
             <button class="dashboard-card-menu-button" type="button" data-dashboard-menu-toggle="${escapeHtml(item.id || "")}" aria-label="Open project actions">⋮</button>
             <div class="dashboard-card-menu" data-dashboard-menu="${escapeHtml(item.id || "")}">
