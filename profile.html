@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -3820,7 +3820,7 @@
                     box-shadow: 0 0 0 1px rgba(135,210,255,.42), 0 0 18px rgba(135,210,255,.45) !important;
                 }
     </style>
-    <link rel="stylesheet" href="nullverse-shell.css?v=7">
+    <link rel="stylesheet" href="nullverse-shell.css?v=20260821-guest1">
 </head>
 <body data-page="profile" data-nv-beta-only-user="true" data-nv-active-only="true">
     <div class="nullverse-stars"></div>
@@ -4041,7 +4041,8 @@
     </div>
 
     <script type="module">
-        import { requireBetaAccess } from "./betaGate.js";
+        import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
+        import { filterGuestSafeContent, showGuestProtectedPage } from "./nullverse-guest.js?v=20260821-balanced2";
         import { supabase } from "./supabaseClient.js?v=20260818";
         import { createNotification } from "./notifications.js";
         import { setupNotificationBadge } from "./notificationBadge.js";
@@ -4083,7 +4084,8 @@
 
         setupMessageBadge();
 
-        const currentUser = await requireBetaAccess();
+        const currentUser = await requireBetaAccess({ allowGuest: true });
+        const isGuest = Boolean(currentUser?.isGuest);
         await setupProfileNavBadges();
 
         const {
@@ -4094,6 +4096,11 @@
         const defaultAvatar = "https://placehold.co/200x200/1b1b28/ffffff?text=NV";
         const params = new URLSearchParams(window.location.search);
         const usernameFromUrl = params.get("user");
+
+        if (isGuest && !usernameFromUrl) {
+            showGuestProtectedPage("view your own profile");
+            throw new Error("Guest personal profile route blocked.");
+        }
 
         let profile = null;
         let profilePremiumEntitlement = { isPremium: false, plan: "basic", available: true };
@@ -4174,6 +4181,7 @@
         }
 
         async function setupProfileNavBadges() {
+            if (isGuest) return;
             const notificationLink = document.querySelector('a[href="notifications.html"]');
 
             try {
@@ -4249,12 +4257,13 @@
                 galleryItems = [];
             }
 
-            canMessageProfile = canAccessProfile && currentUser && currentUser.id !== profileId
+            canMessageProfile = !isGuest && canAccessProfile && currentUser && currentUser.id !== profileId
                 ? await canMessageUser(profileId)
                 : false;
         }
 
         async function areUsersBlocked(userA, userB) {
+            if (!userA || !userB || isGuest) return false;
             const { data, error } = await supabase
                 .from("user_blocks")
                 .select("id, blocker_id, blocked_id")
@@ -9733,7 +9742,7 @@
                 return;
             }
 
-            galleryItems = (data || [])
+            galleryItems = filterGuestSafeContent(data || [], isGuest)
                 .filter(isGalleryItemPubliclyVisible)
                 .map(item => ({
                     ...item,
@@ -9761,15 +9770,17 @@
                 return;
             }
 
-            profileWorlds = data || [];
+            profileWorlds = filterGuestSafeContent(data || [], isGuest);
         }
 
         async function loadFollowData(profileId) {
             let [countResult, relationshipResult] = await Promise.all([
                 supabase.rpc("nv_profile_public_counts", { p_profile_id: profileId }),
-                currentUser && currentUser.id !== profileId
-                    ? supabase.rpc("nv_relationship_state", { p_target_id: profileId })
-                    : Promise.resolve({ data: [{ relationship_state: "self", follows_you: false, can_access: true }], error: null })
+                isGuest
+                    ? Promise.resolve({ data: [{ relationship_state: "none", follows_you: false, can_access: profile?.profile_visibility !== "private" }], error: null })
+                    : currentUser && currentUser.id !== profileId
+                        ? supabase.rpc("nv_relationship_state", { p_target_id: profileId })
+                        : Promise.resolve({ data: [{ relationship_state: "self", follows_you: false, can_access: true }], error: null })
             ]);
 
             if (countResult.error) {

@@ -1007,7 +1007,7 @@
             }
         }
     </style>
-    <link rel="stylesheet" href="nullverse-shell.css?v=5">
+    <link rel="stylesheet" href="nullverse-shell.css?v=20260821-guest1">
     <script>
         (() => {
             let settled = false;
@@ -1027,7 +1027,7 @@
             };
         })();
     </script>
-    <script type="module" src="creator-privacy-guard.js?v=3" onerror="window.__nvCreatorPrivacyScriptFailed && window.__nvCreatorPrivacyScriptFailed()"></script>
+    <script type="module" src="creator-privacy-guard.js?v=4" onerror="window.__nvCreatorPrivacyScriptFailed && window.__nvCreatorPrivacyScriptFailed()"></script>
     <link rel="stylesheet" href="nullverse-credit.css?v=20260820-3">
     <script src="nullverse-credit.js?v=20260820-3" defer></script>
 </head>
@@ -1243,13 +1243,13 @@
             new Promise(resolve => setTimeout(() => resolve({ denied: false, timedOut: true }), 7000))
         ]);
         if (__nvCreatorPrivacyState?.denied) await new Promise(() => { });
-        import { requireBetaAccess } from "./betaGate.js";
+        import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
+        import { showAdultGuestGate } from "./nullverse-guest.js?v=20260821-balanced2";
         import { supabase } from "./supabaseClient.js?v=20260818";
         import { setupNotificationBadge } from "./notificationBadge.js";
         import { createNotification } from "./notifications.js";
         import { setupMessageBadge } from "./messageBadge.js";
         import { getPremiumEntitlement, applyBasicProjectAppearance, applyBasicSectionAppearance } from "./premiumAccess.js?v=1";
-        setupMessageBadge();
         import {
             getCurrentUserWithPermissions,
             canModerateWorlds,
@@ -1303,8 +1303,9 @@
             "libre baskerville": "Libre Baskerville"
         };
 
-        const currentUser = await requireBetaAccess();
-        setupNotificationBadge();
+        const currentUser = await requireBetaAccess({ allowGuest: true });
+        const isGuest = Boolean(currentUser?.isGuest);
+        if (!isGuest) { setupNotificationBadge(); setupMessageBadge(); }
         const {
             profile: currentProfile,
             permissions: currentPermissions
@@ -1427,6 +1428,7 @@
         };
 
         async function areUsersBlocked(userA, userB) {
+            if (isGuest || !userA || !userB) return false;
             const { data, error } = await supabase
                 .from("user_blocks")
                 .select("id, blocker_id, blocked_id")
@@ -1443,6 +1445,12 @@
         }
 
         async function loadViewerContentPreferences() {
+            if (isGuest) {
+                ageRole = "guest";
+                contentExperience = "balanced";
+                blockedContentWarnings = [];
+                return;
+            }
             const { data: profile, error } = await supabase
                 .from("profiles")
                 .select("content_experience, blocked_content_warnings, age_role")
@@ -1548,6 +1556,7 @@
         function shouldBlockWorld(world) {
             const info = getWorldSafetyInfo(world);
 
+            if (isGuest) return false;
             if (ageRole === "minor") {
                 return info.isAdult || info.isMature || info.hasContentWarning;
             }
@@ -1570,6 +1579,7 @@
         function shouldWarnWorld(world) {
             const info = getWorldSafetyInfo(world);
 
+            if (isGuest) return info.isAdult || info.isMature || info.hasContentWarning;
             if (contentExperience !== "balanced") {
                 return false;
             }

@@ -6660,7 +6660,7 @@
             }
         }
     </style>
-    <link rel="stylesheet" href="nullverse-shell.css?v=2">
+    <link rel="stylesheet" href="nullverse-shell.css?v=20260821-guest1">
     <style id="gallery-item-mobile-nav-visibility">
         /* Keep the shared mobile navigation off desktop gallery-item pages. */
         #nv-mobile-nav {
@@ -6693,7 +6693,7 @@
             };
         })();
     </script>
-    <script type="module" src="creator-privacy-guard.js?v=3" onerror="window.__nvCreatorPrivacyScriptFailed && window.__nvCreatorPrivacyScriptFailed()"></script>
+    <script type="module" src="creator-privacy-guard.js?v=4" onerror="window.__nvCreatorPrivacyScriptFailed && window.__nvCreatorPrivacyScriptFailed()"></script>
     <link rel="stylesheet" href="nullverse-credit.css?v=20260820-3">
     <script src="nullverse-credit.js?v=20260820-3" defer></script>
 </head>
@@ -6961,6 +6961,7 @@
         ]);
         if (__nvCreatorPrivacyState?.denied) await new Promise(() => { });
         import { supabase } from "./supabaseClient.js?v=20260818";
+        import { getNullverseAccessContext, exitArchitectGuestPreview } from "./nullverse-guest.js?v=20260821-balanced2";
         import { setupNotificationBadge } from "./notificationBadge.js?v=20260818";
         import { setupMessageBadge } from "./messageBadge.js?v=20260818";
         import { createNotification } from "./notifications.js?v=20260818";
@@ -6970,6 +6971,7 @@
         const itemId = params.get("id") || params.get("item") || "";
         let currentUser = null;
         let viewerProfile = null;
+        let isGuestViewer = false;
         let galleryItemSafetyConfirmed = false;
         let item = null;
         let profile = null;
@@ -10033,11 +10035,21 @@
 
         async function getOptionalBetaUser() {
             try {
-                const { data: sessionData } = await supabase.auth.getSession();
-                const user = sessionData?.session?.user || null;
+                const access = await getNullverseAccessContext();
+                if (access?.mode === "locked_beta") {
+                    window.location.replace(`login.html?return=${encodeURIComponent(`${location.pathname.split("/").pop()}${location.search}`)}`);
+                    return null;
+                }
+                if (access?.isGuest) {
+                    isGuestViewer = true;
+                    viewerProfile = null;
+                    return null;
+                }
+                isGuestViewer = false;
+                const user = access?.actualUser || null;
                 if (!user) return null;
                 const { data: betaData } = await supabase.from("beta_access").select("role").ilike("email", String(user.email || '').trim().toLowerCase()).maybeSingle();
-                if (!betaData) { await supabase.auth.signOut(); return null; }
+                if (!betaData) return null;
                 try {
                     const { data: profileData } = await supabase
                         .from("profiles")
@@ -10045,23 +10057,9 @@
                         .eq("id", user.id)
                         .maybeSingle();
                     viewerProfile = profileData || null;
-
-                    const status = String(
-                        viewerProfile?.account_status || "active"
-                    ).trim().toLowerCase();
-
-                    if (status === "banned") {
-                        window.location.replace("banned.html");
-                        return null;
-                    }
-
-                    if (status === "suspended") {
-                        window.location.replace("suspended.html");
-                        return null;
-                    }
-
-                    if (status === "restricted") {
-                        window.location.replace("restricted.html");
+                    const status = String(viewerProfile?.account_status || "active").trim().toLowerCase();
+                    if (["banned", "suspended", "restricted"].includes(status)) {
+                        window.location.replace(`${status}.html`);
                         return null;
                     }
                 } catch (profileError) {
@@ -10106,10 +10104,15 @@
 `;
                 setupGalleryItemNavBadges();
             } else {
+                logo.href = "index.html";
                 nav.innerHTML = `
-<a href="creator-gallery.html" class="active" aria-current="page">Creator Gallery</a>
-<a href="login.html">Beta Login</a>
+<a href="index.html">Home</a>
+<a href="explore.html">Explore</a>
+<a href="creators.html">Creators</a>
+<a href="gallery.html" class="active" aria-current="page">Gallery</a>
+${sessionStorage.getItem("nullverse_architect_guest_preview") === "true" ? `<button type="button" id="gallery-item-guest-login">Log In</button>` : `<a href="login.html">Log In</a>`}
 `;
+                document.getElementById("gallery-item-guest-login")?.addEventListener("click", () => exitArchitectGuestPreview());
             }
         }
 
@@ -10586,9 +10589,9 @@
         }
 
         function galleryItemViewerExperience() {
-            // Public guests and signed-in non-beta visitors use Balanced Mode.
-            // Active beta users still honor the preference saved on their profile.
-            if (!currentUser || !viewerProfile) return "balanced";
+            // Guest Mode is permanently Balanced. Active signed-in beta users
+            // continue to honor the preference saved on their profile.
+            if (isGuestViewer || !currentUser || !viewerProfile) return "balanced";
 
             const exp = String(viewerProfile.content_experience || "balanced")
                 .trim()
@@ -10615,7 +10618,7 @@
             const sensitive = warnings.length > 0 || censorMode !== "none" || ageRating === "mature";
 
             if (explicitlyBlocked) return { action: "hide", reason: "blocked_preference", warnings };
-            if (ageRating === "mature" && !isGalleryItemViewerAdult()) return { action: "hide", reason: "age_block", warnings };
+            if (!isGuestViewer && ageRating === "mature" && !isGalleryItemViewerAdult()) return { action: "hide", reason: "age_block", warnings };
             if (experience === "safe" && sensitive) return { action: "hide", reason: "safe_mode", warnings };
             if (experience === "balanced" && sensitive && !galleryItemSafetyConfirmed) {
                 return { action: "warn", reason: "confirmation_required", warnings };
@@ -10636,7 +10639,8 @@
                 return `Safe Mode hides gallery showcases with content warnings or sensitive preview settings. Change your Content Experience in Account Settings to Balanced or Open to access it.`;
             }
 
-            if (!currentUser) return `This gallery showcase contains sensitive or Mature / 18+ content and cannot be opened by public guests.${warningText}`;
+            if (isGuestViewer) return `This gallery showcase is protected by Guest Balanced Mode. Review the warning and choose Show Showcase to reveal it.${warningText}`;
+            if (!currentUser) return `This gallery showcase is unavailable under the current viewer settings.${warningText}`;
             if (!isGalleryItemViewerAdult()) return `This gallery showcase is marked Mature / 18+ and cannot be opened by minors.${warningText}`;
             return `This gallery showcase is unavailable under your current content and age settings.${warningText}`;
         }

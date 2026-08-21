@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -168,6 +168,68 @@
                 color: white;
             }
 
+        .guest-divider {
+            display:flex;
+            align-items:center;
+            gap:12px;
+            margin:22px 0 16px;
+            color:#73737f;
+            font-size:.78rem;
+            text-transform:uppercase;
+            letter-spacing:.1em;
+            font-weight:800;
+        }
+
+        .guest-divider::before, .guest-divider::after {
+            content:"";
+            flex:1;
+            height:1px;
+            background:rgba(255,255,255,.08);
+        }
+
+        .guest-button {
+            background:rgba(255,255,255,.035);
+            color:#d9d9e2;
+        }
+
+        .guest-preview-note {
+            margin:10px 0 0;
+            color:#858590;
+            font-size:.82rem;
+            line-height:1.5;
+            text-align:center;
+        }
+
+        .guest-architect-backdrop {
+            position:fixed;
+            inset:0;
+            z-index:99999;
+            display:none;
+            align-items:center;
+            justify-content:center;
+            padding:22px;
+            background:rgba(0,0,0,.78);
+            backdrop-filter:blur(12px);
+            -webkit-backdrop-filter:blur(12px);
+        }
+
+        .guest-architect-backdrop.open { display:flex; }
+
+        .guest-architect-card {
+            width:min(470px,100%);
+            padding:28px;
+            border-radius:22px;
+            border:1px solid rgba(255,255,255,.12);
+            background:linear-gradient(145deg,rgba(28,28,34,.98),rgba(8,8,12,.98));
+            box-shadow:0 30px 90px rgba(0,0,0,.58);
+        }
+
+        .guest-architect-card h2 { margin:0 0 10px; }
+        .guest-architect-card p { margin-bottom:18px; }
+        .guest-architect-actions { display:flex; gap:10px; }
+        .guest-architect-actions button { flex:1; }
+        .guest-architect-actions .secondary { background:transparent; color:#b9b9c6; }
+
         @media(max-width:600px) {
 
             body {
@@ -207,6 +269,9 @@
                 <button class="link-button" onclick="sendPasswordReset()">
                     Forgot password?
                 </button>
+                <div class="guest-divider">or</div>
+                <button class="guest-button" type="button" onclick="continueAsGuest()">Continue as Guest</button>
+                <p class="guest-preview-note">Guest browsing is still in private beta.</p>
             </section>
 
             <section id="signup-section" class="hidden">
@@ -225,7 +290,20 @@
         </section>
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <div id="guest-architect-backdrop" class="guest-architect-backdrop" aria-hidden="true">
+        <section class="guest-architect-card" role="dialog" aria-modal="true" aria-labelledby="guest-architect-title">
+            <h2 id="guest-architect-title">Architect Guest Preview</h2>
+            <p>Guest access is still locked during beta. Sign in with a Void Architect account to preview Nullverse exactly as a guest will see it.</p>
+            <input id="guest-architect-email" type="email" placeholder="Void Architect email" autocomplete="username">
+            <input id="guest-architect-password" type="password" placeholder="Password" autocomplete="current-password">
+            <p id="guest-architect-message" class="message" style="min-height:0;margin-top:0;"></p>
+            <div class="guest-architect-actions">
+                <button type="button" class="secondary" onclick="closeGuestArchitectLogin()">Cancel</button>
+                <button type="button" onclick="enterArchitectGuestPreview()">Enter Guest Preview</button>
+            </div>
+        </section>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         const SUPABASE_URL = "https://baaygzddafopihtxyyjq.supabase.co";
@@ -750,6 +828,78 @@
         }
 
         handleAuthRedirectLanding();
+    </script>
+    <script type="module">
+        import {
+            NULLVERSE_GUEST_FLAGS,
+            enableArchitectGuestPreview,
+            showBetaGuestUnavailable
+        } from "./nullverse-guest.js?v=20260821-balanced2";
+
+        const guestBackdrop = document.getElementById("guest-architect-backdrop");
+        const guestMessage = document.getElementById("guest-architect-message");
+
+        window.continueAsGuest = function () {
+            if (NULLVERSE_GUEST_FLAGS.publicGuestAccess) {
+                window.location.href = SAFE_RETURN_PATH || "index.html";
+                return;
+            }
+
+            if (!NULLVERSE_GUEST_FLAGS.architectGuestPreview) {
+                showBetaGuestUnavailable();
+                return;
+            }
+
+            guestMessage.textContent = "";
+            guestBackdrop.classList.add("open");
+            guestBackdrop.setAttribute("aria-hidden", "false");
+            setTimeout(() => document.getElementById("guest-architect-email")?.focus(), 30);
+        };
+
+        window.closeGuestArchitectLogin = function () {
+            guestBackdrop.classList.remove("open");
+            guestBackdrop.setAttribute("aria-hidden", "true");
+            guestMessage.textContent = "";
+        };
+
+        window.enterArchitectGuestPreview = async function () {
+            const email = document.getElementById("guest-architect-email").value.trim();
+            const password = document.getElementById("guest-architect-password").value;
+
+            if (!email || !password) {
+                guestMessage.textContent = "Enter your Void Architect email and password.";
+                return;
+            }
+
+            guestMessage.textContent = "Verifying Void Architect access...";
+
+            try {
+                const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                if (error || !data?.user) {
+                    guestMessage.textContent = error?.message || "Could not verify this account.";
+                    return;
+                }
+
+                const allowed = await enableArchitectGuestPreview(data.user);
+                if (!allowed) {
+                    await supabaseClient.auth.signOut();
+                    closeGuestArchitectLogin();
+                    showBetaGuestUnavailable();
+                    return;
+                }
+
+                guestMessage.textContent = "Guest Preview ready. Opening Nullverse...";
+                window.location.replace(SAFE_RETURN_PATH || "index.html");
+            } catch (error) {
+                console.warn("Guest Preview verification failed:", error);
+                try { await supabaseClient.auth.signOut(); } catch {}
+                guestMessage.textContent = "Nullverse could not verify Guest Preview access. Try again.";
+            }
+        };
+
+        guestBackdrop?.addEventListener("click", event => {
+            if (event.target === guestBackdrop) closeGuestArchitectLogin();
+        });
     </script>
 </body>
 </html>

@@ -442,7 +442,11 @@ export function bindCardInteractions(root = document) {
         overlay.addEventListener("click", event => {
             event.preventDefault();
             event.stopPropagation();
+            // Balanced Mode reveal: make the preview visible and unlock normal
+            // navigation for this rendered card after the viewer confirms it.
+            card.classList.remove("warning-gated", "warning-hidden");
             card.classList.add("warning-revealed");
+            overlay.setAttribute("aria-hidden", "true");
         });
     });
 

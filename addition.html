@@ -590,7 +590,8 @@
     </div>
 
     <script type="module">
-        import { requireBetaAccess } from "./betaGate.js";
+        import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
+        import { installGuestInteractionGuards, applyGuestLegacyNavigation, isGuestBlockedAdultContent, showAdultGuestGate } from "./nullverse-guest.js?v=20260821-balanced2";
         import { supabase } from "./supabaseClient.js?v=20260818";
         import { setupNotificationBadge } from "./notificationBadge.js";
         import { setupMessageBadge } from "./messageBadge.js";
@@ -602,10 +603,17 @@
             canModerateContentOwner
         } from "./permissions.js?v=4";
 
-        setupMessageBadge();
+        // Guest Mode never initializes personal message badges.
 
-        const currentUser = await requireBetaAccess();
-        setupNotificationBadge();
+        const currentUser = await requireBetaAccess({ allowGuest: true });
+        const isGuest = Boolean(currentUser?.isGuest);
+        installGuestInteractionGuards(isGuest);
+        applyGuestLegacyNavigation(isGuest);
+        if (!isGuest) setupNotificationBadge();
+        if (isGuest) {
+            document.getElementById("comment-form")?.setAttribute("hidden", "hidden");
+            document.getElementById("report-addition-btn")?.setAttribute("hidden", "hidden");
+        }
 
         const {
             profile: currentProfile,
@@ -635,6 +643,7 @@
         await loadComments();
 
         async function loadBlockedUsers() {
+            if (isGuest) { blockedUserIds = []; return; }
             const { data } = await supabase
                 .from("user_blocks")
                 .select("blocker_id, blocked_id")
@@ -674,7 +683,7 @@
 
             const { data: world } = await supabase
                 .from("worlds")
-                .select("id, title, owner_id")
+                .select("id, title, owner_id, content_rating")
                 .eq("id", data.world_id)
                 .single();
 

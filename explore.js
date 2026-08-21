@@ -1,6 +1,7 @@
-import { requireBetaAccess } from "./betaGate.js";
+import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
+import { filterGuestSafeContent, showGuestActionPrompt } from "./nullverse-guest.js?v=20260821-balanced2";
 import { supabase } from "./supabaseClient.js?v=20260818";
-import { initNullverseShell } from "./nullverse-shell.js?v=7";
+import { initNullverseShell } from "./nullverse-shell.js?v=20260821-guest1";
 import {
     bindCardInteractions,
     getPublicContentUrl,
@@ -11,10 +12,11 @@ import {
     renderSkeletonCards,
     escapeHtml
 } from "./nullverse-content-cards.js?v=20260820-3";
-import { attachProfiles, fetchDiscoverCreators, fetchHomeFeed, loadViewerContext } from "./nullverse-data.js?v=20260820-2";
+import { attachProfiles, fetchDiscoverCreators, fetchHomeFeed, filterAccessibleCreatorItems, loadViewerContext } from "./nullverse-data.js?v=20260821-guest1";
 
-const currentUser = await requireBetaAccess();
+const currentUser = await requireBetaAccess({ allowGuest: true });
 if (!currentUser) throw new Error("Nullverse session unavailable.");
+const isGuest = Boolean(currentUser.isGuest);
 const viewer = await loadViewerContext(currentUser.id);
 await initNullverseShell({ page: "explore", user: currentUser, profile: viewer.profile });
 
@@ -148,6 +150,10 @@ async function queryContent() {
 
     let ownerIds = null;
     if (state.creatorFilter === "following") {
+        if (isGuest) {
+            showGuestActionPrompt("filter by creators you follow");
+            return [];
+        }
         const { data } = await supabase.from("follows").select("following_id").eq("follower_id", currentUser.id);
         ownerIds = (data || []).map(row => row.following_id);
         if (!ownerIds.length) return [];
@@ -195,6 +201,8 @@ async function queryContent() {
         }
     }
 
+    items = await filterAccessibleCreatorItems(items, "owner_id");
+    items = filterGuestSafeContent(items, isGuest);
     return attachLikeCounts(items);
 }
 
@@ -225,11 +233,12 @@ async function attachLikeCounts(items) {
 
 async function searchCreatorIds(search) {
     const safe = sanitizeTerm(search);
-    const { data } = await supabase
+    let query = supabase
         .from("profiles")
         .select("id")
-        .or(`username.ilike.%${safe}%,display_name.ilike.%${safe}%`)
-        .limit(30);
+        .or(`username.ilike.%${safe}%,display_name.ilike.%${safe}%`);
+    if (isGuest) query = query.eq("profile_visibility", "public");
+    const { data } = await query.limit(30);
     return (data || []).map(row => row.id);
 }
 
@@ -249,12 +258,13 @@ async function loadCreators() {
 
 async function loadTags() {
     const container = document.getElementById("explore-tags");
-    const { data } = await supabase
+    let tagQuery = supabase
         .from("worlds")
-        .select("genres, themes")
+        .select("genres, themes, content_rating")
         .eq("visibility", "published")
-        .eq("moderation_status", "visible")
-        .limit(250);
+        .eq("moderation_status", "visible");
+    if (isGuest) tagQuery = tagQuery.neq("content_rating", "adult");
+    const { data } = await tagQuery.limit(250);
 
     const counts = new Map();
     (data || []).flatMap(item => [item.genres, item.themes])

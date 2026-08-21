@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -380,7 +380,8 @@
     </div>
 
     <script type="module">
-        import { requireBetaAccess } from "./betaGate.js";
+        import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
+        import { installGuestInteractionGuards, applyGuestLegacyNavigation, isGuestBlockedAdultContent, showAdultGuestGate } from "./nullverse-guest.js?v=20260821-balanced2";
         import { supabase } from "./supabaseClient.js?v=20260818";
         import { setupNotificationBadge } from "./notificationBadge.js";
         import { createNotification } from "./notifications.js";
@@ -391,9 +392,12 @@
             canModerateContentOwner
         } from "./permissions.js?v=4";
 
-        const currentUser = await requireBetaAccess();
-        setupNotificationBadge();
-        setupMessageBadge();
+        const currentUser = await requireBetaAccess({ allowGuest: true });
+        const isGuest = Boolean(currentUser?.isGuest);
+        installGuestInteractionGuards(isGuest);
+        applyGuestLegacyNavigation(isGuest);
+        if (!isGuest) setupNotificationBadge();
+        if (!isGuest) setupMessageBadge();
 
         const {
             profile: currentProfile,
@@ -401,6 +405,9 @@
         } = await getCurrentUserWithPermissions(currentUser.id);
 
         const params = new URLSearchParams(window.location.search);
+        if (isGuest) {
+            document.getElementById("question-form-section")?.setAttribute("hidden", isGuest ? "hidden" : "");
+        }
         const literatureId = params.get("id");
 
         let currentLiterature = null;
@@ -426,6 +433,7 @@
         await loadQuestions();
 
         async function loadBlockedUsers() {
+            if (isGuest) { blockedUserIds = []; return; }
             const { data, error } = await supabase
                 .from("user_blocks")
                 .select("blocker_id, blocked_id")

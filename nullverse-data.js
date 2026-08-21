@@ -1,6 +1,9 @@
 import { supabase } from "./supabaseClient.js?v=20260818";
+import { getNullverseAccessContext, getGuestViewerContext, filterGuestSafeContent } from "./nullverse-guest.js?v=20260821-balanced2";
 
 export async function loadViewerContext(userId) {
+    if (!userId) return getGuestViewerContext();
+
     const [profileResult, forwardBlocks, reverseBlocks] = await Promise.all([
         supabase
             .from("profiles")
@@ -28,7 +31,20 @@ export async function loadViewerContext(userId) {
     };
 }
 
+async function applyCurrentGuestSafety(rows = []) {
+    const access = await getNullverseAccessContext();
+    return filterGuestSafeContent(rows, Boolean(access?.isGuest));
+}
+
 export async function fetchHomeFeed(mode = "for_you", limit = 12, offset = 0) {
+    const access = await getNullverseAccessContext();
+    if (access?.isGuest) {
+        // Architect Guest Preview keeps an authenticated Supabase session underneath.
+        // Bypass personalized RPC filtering so Guest Mode always uses its own fixed
+        // Balanced client safety rules instead of the Architect profile's settings.
+        return hydrateWorldCardCredits(await fallbackWorldFeed(mode === "following" ? "newest" : mode, limit, offset));
+    }
+
     const rpc = await supabase.rpc("nv_home_feed", {
         p_mode: mode,
         p_limit: limit,
@@ -37,7 +53,8 @@ export async function fetchHomeFeed(mode = "for_you", limit = 12, offset = 0) {
 
     if (!rpc.error) {
         const accessible = await filterAccessibleCreatorItems(rpc.data || []);
-        return hydrateWorldCardCredits(accessible);
+        const guestSafe = await applyCurrentGuestSafety(accessible);
+        return hydrateWorldCardCredits(guestSafe);
     }
     console.warn("nv_home_feed unavailable, using direct query:", rpc.error.message);
     return fallbackWorldFeed(mode, limit, offset);
@@ -73,16 +90,24 @@ async function hydrateWorldCardCredits(rows = []) {
 }
 
 export async function fetchGalleryFeed(mode = "trending", limit = 12, offset = 0, options = {}) {
-    const rpc = await supabase.rpc("nv_gallery_feed", {
-        p_mode: mode,
-        p_limit: limit,
-        p_offset: offset,
-        p_search: options.search || null,
-        p_age_rating: options.ageRating || null
-    });
+    const access = await getNullverseAccessContext();
+    const guest = Boolean(access?.isGuest);
 
-    if (!rpc.error) return hydrateGalleryPreviewMedia(await filterAccessibleCreatorItems(rpc.data || []));
-    console.warn("nv_gallery_feed unavailable, using direct query:", rpc.error.message);
+    if (!guest) {
+        const rpc = await supabase.rpc("nv_gallery_feed", {
+            p_mode: mode,
+            p_limit: limit,
+            p_offset: offset,
+            p_search: options.search || null,
+            p_age_rating: options.ageRating || null
+        });
+
+        if (!rpc.error) {
+            const accessible = await filterAccessibleCreatorItems(rpc.data || []);
+            return hydrateGalleryPreviewMedia(await applyCurrentGuestSafety(accessible));
+        }
+        console.warn("nv_gallery_feed unavailable, using direct query:", rpc.error.message);
+    }
 
     let query = supabase
         .from("creator_proof_gallery")
@@ -100,7 +125,9 @@ export async function fetchGalleryFeed(mode = "trending", limit = 12, offset = 0
 
     const { data, error } = await query;
     if (error) throw error;
-    return hydrateGalleryPreviewMedia(await attachProfiles(data || [], "owner_id"));
+    const attached = await attachProfiles(data || [], "owner_id");
+    const accessible = await filterAccessibleCreatorItems(attached, "owner_id");
+    return hydrateGalleryPreviewMedia(await applyCurrentGuestSafety(accessible));
 }
 
 async function hydrateGalleryPreviewMedia(rows = []) {
@@ -151,26 +178,36 @@ async function hydrateGalleryPreviewMedia(rows = []) {
 }
 
 export async function fetchDiscoverCreators(limit = 10) {
+    const access = await getNullverseAccessContext();
+    const guest = Boolean(access?.isGuest);
     const directory = await supabase.rpc("nv_creator_directory", {
         p_search: null,
         p_creator_type: null,
-        p_mode: "for_you",
-        p_privacy: "all",
+        p_mode: guest ? "trending" : "for_you",
+        p_privacy: guest ? "public" : "all",
         p_require_gallery: false,
         p_require_content: false,
         p_limit: limit,
         p_offset: 0
     });
-    if (!directory.error) return directory.data || [];
+    if (!directory.error) {
+        const rows = directory.data || [];
+        return guest ? rows.filter(row => row.profile_visibility !== "private") : rows;
+    }
 
     const rpc = await supabase.rpc("nv_discover_creators", { p_limit: limit });
-    if (!rpc.error) return rpc.data || [];
+    if (!rpc.error) {
+        const rows = rpc.data || [];
+        return guest ? rows.filter(row => row.profile_visibility !== "private") : rows;
+    }
 
-    const { data, error } = await supabase
+    let query = supabase
         .from("profiles")
         .select("id, username, display_name, avatar_url, banner_url, bio, creator_type, profile_status, role, role_name, account_status, profile_visibility, discoverable")
         .eq("account_status", "active")
-        .not("username", "is", null)
+        .not("username", "is", null);
+    if (guest) query = query.eq("profile_visibility", "public");
+    const { data, error } = await query
         .order("created_at", { ascending: false })
         .limit(limit);
     if (error) throw error;
@@ -182,14 +219,31 @@ export async function filterAccessibleCreatorItems(items = [], ownerKey = "owner
     const ownerIds = [...new Set(rows.map(row => row?.[ownerKey]).filter(Boolean))];
     if (!ownerIds.length) return rows;
 
-    const { data, error } = await supabase.rpc("nv_filter_accessible_creator_ids", { p_owner_ids: ownerIds });
+    const access = await getNullverseAccessContext();
+    const guest = Boolean(access?.isGuest);
+    const [{ data, error }, publicProfiles] = await Promise.all([
+        supabase.rpc("nv_filter_accessible_creator_ids", { p_owner_ids: ownerIds }),
+        guest
+            ? supabase.from("profiles").select("id, profile_visibility").in("id", ownerIds)
+            : Promise.resolve({ data: null, error: null })
+    ]);
+
+    const guestPublicIds = guest
+        ? new Set((publicProfiles?.data || []).filter(profile => profile.profile_visibility !== "private").map(profile => String(profile.id)))
+        : null;
+
     if (error) {
         console.warn("Creator privacy filter unavailable until its migration runs:", error.message);
-        return rows;
+        return guest
+            ? rows.filter(row => guestPublicIds.has(String(row?.[ownerKey] || "")))
+            : rows;
     }
 
     const allowed = new Set((data || []).map(row => String(row.owner_id || row)));
-    return rows.filter(row => allowed.has(String(row?.[ownerKey] || "")));
+    return rows.filter(row => {
+        const ownerId = String(row?.[ownerKey] || "");
+        return allowed.has(ownerId) && (!guest || guestPublicIds.has(ownerId));
+    });
 }
 
 export async function fetchFollowingActivity(limit = 8) {
@@ -213,7 +267,7 @@ export async function fetchFeaturedContent(limit = 6) {
         console.warn("Featured content unavailable until migration runs:", error.message);
         return [];
     }
-    return data || [];
+    return applyCurrentGuestSafety(data || []);
 }
 
 export async function fetchRecentContent(userId, limit = 8) {
@@ -274,7 +328,9 @@ async function fallbackWorldFeed(mode, limit, offset) {
     if (error) throw error;
 
     const withProfiles = await attachProfiles(data || [], "owner_id");
-    return attachLikeCounts(withProfiles);
+    const accessible = await filterAccessibleCreatorItems(withProfiles, "owner_id");
+    const guestSafe = await applyCurrentGuestSafety(accessible);
+    return attachLikeCounts(guestSafe);
 }
 
 async function attachLikeCounts(items) {
