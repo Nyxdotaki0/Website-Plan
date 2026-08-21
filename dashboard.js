@@ -11,11 +11,7 @@ import {
     escapeHtml,
     timeAgo
 } from "./nullverse-content-cards.js?v=20260820-3";
-<<<<<<< HEAD
-import { fetchDashboardMetrics, loadViewerContext } from "./nullverse-data.js?v=20260821-guest1";
-=======
 import { fetchDashboardMetrics, loadViewerContext } from "./nullverse-data.js?v=20260821-fix2";
->>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 
 const currentUser = await requireBetaAccess({ allowRestricted: false });
 if (!currentUser) throw new Error("Nullverse session unavailable.");

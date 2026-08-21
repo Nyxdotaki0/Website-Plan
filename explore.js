@@ -1,9 +1,5 @@
 import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
-<<<<<<< HEAD
-import { filterGuestSafeContent, showGuestActionPrompt } from "./nullverse-guest.js?v=20260821-balanced2";
-=======
 import { filterGuestSafeContent, showGuestActionPrompt } from "./nullverse-guest.js?v=20260821-fix3";
->>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 import { supabase } from "./supabaseClient.js?v=20260818";
 import { initNullverseShell } from "./nullverse-shell.js?v=20260821-guest1";
 import {
@@ -16,11 +12,7 @@ import {
     renderSkeletonCards,
     escapeHtml
 } from "./nullverse-content-cards.js?v=20260820-3";
-<<<<<<< HEAD
-import { attachProfiles, fetchDiscoverCreators, fetchHomeFeed, filterAccessibleCreatorItems, loadViewerContext } from "./nullverse-data.js?v=20260821-guest1";
-=======
 import { attachProfiles, fetchDiscoverCreators, fetchHomeFeed, filterAccessibleCreatorItems, loadViewerContext } from "./nullverse-data.js?v=20260821-fix2";
->>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 
 const currentUser = await requireBetaAccess({ allowGuest: true });
 if (!currentUser) throw new Error("Nullverse session unavailable.");
@@ -271,10 +263,6 @@ async function loadTags() {
         .select("genres, themes, content_rating")
         .eq("visibility", "published")
         .eq("moderation_status", "visible");
-<<<<<<< HEAD
-    if (isGuest) tagQuery = tagQuery.neq("content_rating", "adult");
-=======
->>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
     const { data } = await tagQuery.limit(250);
 
     const counts = new Map();

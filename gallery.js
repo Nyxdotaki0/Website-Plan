@@ -1,9 +1,5 @@
 import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
-<<<<<<< HEAD
-import { showGuestActionPrompt } from "./nullverse-guest.js?v=20260821-balanced2";
-=======
 import { showGuestActionPrompt } from "./nullverse-guest.js?v=20260821-fix3";
->>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 import { supabase } from "./supabaseClient.js?v=20260818";
 import { initNullverseShell } from "./nullverse-shell.js?v=20260821-guest1";
 import {
@@ -14,11 +10,7 @@ import {
     renderGalleryCard,
     renderSkeletonCards
 } from "./nullverse-content-cards.js?v=20260820-3";
-<<<<<<< HEAD
-import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nullverse-data.js?v=20260821-guest1";
-=======
 import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nullverse-data.js?v=20260821-fix2";
->>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 
 let currentUser = null;
 let viewer = null;

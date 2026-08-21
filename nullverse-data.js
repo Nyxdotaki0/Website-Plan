@@ -1,9 +1,5 @@
 import { supabase } from "./supabaseClient.js?v=20260818";
-<<<<<<< HEAD
-import { getNullverseAccessContext, getGuestViewerContext, filterGuestSafeContent } from "./nullverse-guest.js?v=20260821-balanced2";
-=======
 import { getNullverseAccessContext, getGuestViewerContext, filterGuestSafeContent } from "./nullverse-guest.js?v=20260821-fix3";
->>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 
 export async function loadViewerContext(userId) {
     if (!userId) return getGuestViewerContext();

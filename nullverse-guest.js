@@ -197,32 +197,11 @@ export function showGuestActionPrompt(action = "use this feature", options = {})
     return false;
 }
 
-<<<<<<< HEAD
-export function showAdultGuestGate(options = {}) {
-    ensureGuestStyles();
-    document.querySelector(".nv-guest-modal-backdrop")?.remove();
-    const returnTo = options.returnTo || `${location.pathname.split("/").pop() || "index.html"}${location.search || ""}${location.hash || ""}`;
-    const backdrop = document.createElement("div");
-    backdrop.className = "nv-guest-modal-backdrop";
-    backdrop.innerHTML = `
-        <section class="nv-guest-modal" role="dialog" aria-modal="true">
-            <h2>This creation is restricted to adults</h2>
-            <p>18+ material is not available in Guest Mode. To view adult content, sign in to a Nullverse account and complete age verification.</p>
-            <div class="nv-guest-modal-actions">
-                ${isArchitectGuestPreviewRequested() ? `<button class="primary" type="button" data-nv-exit-guest-preview>Log In as Architect</button>` : `<a class="primary" href="login.html?return=${encodeURIComponent(returnTo)}">Log In</a>`}
-                <a href="explore.html">Continue Exploring</a>
-            </div>
-        </section>`;
-    document.body.appendChild(backdrop);
-    backdrop.querySelector("[data-nv-exit-guest-preview]")?.addEventListener("click", () => exitArchitectGuestPreview());
-    return false;
-=======
 export function showAdultGuestGate() {
     // Deprecated compatibility helper. Guest Mode is permanently Balanced and
     // never hard-blocks content based on an Adult/Mature rating. Any caller that
     // still reaches this helper must allow the normal warning/reveal flow.
     return true;
->>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 }
 
 export function showGuestProtectedPage(action = "use this feature") {

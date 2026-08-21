@@ -1,9 +1,5 @@
 import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
-<<<<<<< HEAD
-import { filterGuestSafeContent } from "./nullverse-guest.js?v=20260821-balanced2";
-=======
 import { filterGuestSafeContent } from "./nullverse-guest.js?v=20260821-fix3";
->>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 import { supabase } from "./supabaseClient.js?v=20260818";
 import { initNullverseShell } from "./nullverse-shell.js?v=20260821-guest1";
 import {
@@ -32,11 +28,7 @@ import {
     fetchHomeFeed,
     fetchRecentContent,
     loadViewerContext
-<<<<<<< HEAD
-} from "./nullverse-data.js?v=20260821-guest1";
-=======
 } from "./nullverse-data.js?v=20260821-fix2";
->>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 
 const currentUser = await requireBetaAccess({ allowGuest: true });
 if (!currentUser) throw new Error("Nullverse session unavailable.");
