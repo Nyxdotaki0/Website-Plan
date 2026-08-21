@@ -1,6 +1,11 @@
 import { supabase } from "./supabaseClient.js?v=20260818";
 import { setupNotificationBadge } from "./notificationBadge.js?v=20260818";
 import { setupMessageBadge } from "./messageBadge.js?v=20260818";
+import {
+    getNullverseAccessContext,
+    installGuestInteractionGuards,
+    exitArchitectGuestPreview
+} from "./nullverse-guest.js?v=20260821";
 
 const ICONS = {
     search: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>`,
@@ -38,10 +43,15 @@ export async function initNullverseShell(options = {}) {
     const guestLoginHref = options.guestLoginHref || "login.html";
     let user = options.user || null;
     let profile = options.profile || null;
+    const access = await getNullverseAccessContext();
+    const isGuest = Boolean(access?.isGuest || user?.isGuest);
+    const isArchitectGuestPreview = Boolean(access?.isArchitectGuestPreview);
 
-    if (!user) {
-        const { data } = await supabase.auth.getSession();
-        user = data?.session?.user || null;
+    if (isGuest) {
+        user = null;
+        profile = null;
+    } else if (!user) {
+        user = access?.actualUser || null;
     }
 
     if (user && options.betaOnlyUser) {
@@ -73,15 +83,18 @@ export async function initNullverseShell(options = {}) {
     const mobileMount = document.getElementById("nv-mobile-nav");
 
     if (headerMount) {
-        headerMount.innerHTML = buildHeader({ page, user, profile, guestMode, guestBrandHref, guestLoginHref });
+        headerMount.innerHTML = buildHeader({ page, user, profile, guestMode, guestBrandHref, guestLoginHref, isGuest, isArchitectGuestPreview });
     }
 
     if (mobileMount) {
-        mobileMount.innerHTML = buildMobileNavigation({ page, user, profile });
+        mobileMount.innerHTML = buildMobileNavigation({ page, user, profile, isGuest });
     }
 
-    document.body.classList.toggle("nv-shell-no-mobile-nav", !user);
-    setupShellInteractions({ user, profile });
+    document.body.classList.toggle("nv-shell-no-mobile-nav", !user && !isGuest);
+    document.body.classList.toggle("nv-shell-guest", isGuest);
+    document.body.classList.toggle("nv-shell-architect-guest-preview", isArchitectGuestPreview);
+    setupShellInteractions({ user, profile, isGuest, isArchitectGuestPreview });
+    installGuestInteractionGuards(isGuest);
 
     if (user) {
         const realtimeBadges = !useSnapshotShellBadges();
@@ -93,15 +106,15 @@ export async function initNullverseShell(options = {}) {
         });
     }
 
-    return { user, profile };
+    return { user, profile, isGuest, isArchitectGuestPreview, accessMode: access?.mode || "authenticated" };
 }
 
-function buildHeader({ page, user, profile, guestMode, guestBrandHref, guestLoginHref }) {
+function buildHeader({ page, user, profile, guestMode, guestBrandHref, guestLoginHref, isGuest, isArchitectGuestPreview }) {
     const avatar = profile?.avatar_url || DEFAULT_AVATAR;
     const displayName = profile?.display_name || profile?.username || "Creator";
     const username = profile?.username || "creator";
 
-    if (!user && guestMode === "restricted") {
+    if (!user && !isGuest && guestMode === "restricted") {
         return `
             <header class="nv-site-header nv-restricted-guest-header">
                 <div class="nv-header-inner">
@@ -133,7 +146,7 @@ function buildHeader({ page, user, profile, guestMode, guestBrandHref, guestLogi
                 </nav>
 
                 <div class="nv-header-actions">
-                    <div class="nv-menu-wrap nv-create-wrap">
+                    ${user ? `<div class="nv-menu-wrap nv-create-wrap">
                         <button class="nv-header-button primary" type="button" data-nv-menu-button="create" aria-expanded="false" aria-label="Create">
                             ${ICONS.plus}<span>Create</span>
                         </button>
@@ -146,7 +159,7 @@ function buildHeader({ page, user, profile, guestMode, guestBrandHref, guestLogi
                             <div class="nv-menu-divider"></div>
                             ${menuItem("Customize Profile", "account-settings.html#profile-design", ICONS.profile)}
                         </div>
-                    </div>
+                    </div>` : ""}
 
                     <button class="nv-icon-button" type="button" data-nv-search-open aria-label="Search Nullverse">
                         ${ICONS.search}
@@ -181,6 +194,8 @@ function buildHeader({ page, user, profile, guestMode, guestBrandHref, guestLogi
                                 <button class="nv-menu-item danger" type="button" data-nv-logout>${ICONS.logout}<span>Log Out</span></button>
                             </div>
                         </div>
+                    ` : isGuest ? `
+                        ${isArchitectGuestPreview ? `<span class="nv-guest-preview-pill" title="Void Architect Guest Preview">Guest Preview</span><button class="nv-header-button" type="button" data-nv-exit-guest-preview>Log In</button>` : `<a class="nv-header-button" href="login.html">Log In</a>`}
                     ` : `
                         <a class="nv-header-button" href="login.html">Beta Login</a>
                     `}
@@ -200,8 +215,19 @@ function buildHeader({ page, user, profile, guestMode, guestBrandHref, guestLogi
     `;
 }
 
-function buildMobileNavigation({ page, user, profile }) {
-    if (!user) return "";
+function buildMobileNavigation({ page, user, profile, isGuest }) {
+    if (!user && !isGuest) return "";
+
+    if (isGuest) {
+        return `
+            <nav class="nv-mobile-bottom-nav nv-mobile-guest-nav" aria-label="Mobile navigation">
+                ${mobileLink("Home", "index.html", "home", page, ICONS.home)}
+                ${mobileLink("Discover", "explore.html", "explore", ["explore", "creators"].includes(page) ? "explore" : page, ICONS.explore)}
+                ${mobileLink("Creators", "creators.html", "creators", page, ICONS.creators)}
+                ${mobileLink("Gallery", "gallery.html", "gallery", page, ICONS.gallery)}
+            </nav>
+        `;
+    }
 
     return `
         <nav class="nv-mobile-bottom-nav" aria-label="Mobile navigation">
@@ -248,7 +274,7 @@ function galleryCreateUrl(profile) {
     return `${base}${base.includes("?") ? "&" : "?"}new=item`;
 }
 
-function setupShellInteractions({ user }) {
+function setupShellInteractions({ user, isGuest, isArchitectGuestPreview }) {
     const searchOverlay = document.getElementById("nv-global-search");
     const searchInput = document.getElementById("nv-global-search-input");
     const menuButtons = [...document.querySelectorAll("[data-nv-menu-button]")];
@@ -406,6 +432,10 @@ function setupShellInteractions({ user }) {
             event.preventDefault();
             document.querySelector("[data-nv-search-open]")?.click();
         }
+    });
+
+    document.querySelector("[data-nv-exit-guest-preview]")?.addEventListener("click", () => {
+        exitArchitectGuestPreview();
     });
 
     document.querySelector("[data-nv-logout]")?.addEventListener("click", async () => {

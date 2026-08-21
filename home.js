@@ -1,6 +1,7 @@
-import { requireBetaAccess } from "./betaGate.js";
+import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
+import { filterGuestSafeContent } from "./nullverse-guest.js?v=20260821";
 import { supabase } from "./supabaseClient.js?v=20260818";
-import { initNullverseShell } from "./nullverse-shell.js?v=7";
+import { initNullverseShell } from "./nullverse-shell.js?v=20260821-guest1";
 import {
     bindCardInteractions,
     getEditorContentUrl,
@@ -27,17 +28,18 @@ import {
     fetchHomeFeed,
     fetchRecentContent,
     loadViewerContext
-} from "./nullverse-data.js?v=20260820-2";
+} from "./nullverse-data.js?v=20260821-guest1";
 
-const currentUser = await requireBetaAccess();
+const currentUser = await requireBetaAccess({ allowGuest: true });
 if (!currentUser) throw new Error("Nullverse session unavailable.");
+const isGuest = Boolean(currentUser.isGuest);
 
 const viewer = await loadViewerContext(currentUser.id);
 const profile = viewer.profile;
 await initNullverseShell({ page: "home", user: currentUser, profile });
 
 const state = {
-    feedMode: "for_you",
+    feedMode: isGuest ? "trending" : "for_you",
     feedOffset: 0,
     pageSize: 8,
     feedFinished: false,
@@ -56,7 +58,7 @@ paintInitialSkeletons();
 await Promise.all([
     loadContinueSection(),
     loadSpotlight(),
-    resetFeed("for_you"),
+    resetFeed(isGuest ? "trending" : "for_you"),
     loadGalleryShelf(),
     loadTypeShelf("literature", "home-literature-shelf"),
     loadTypeShelf("comic", "home-comic-shelf"),
@@ -67,6 +69,23 @@ await Promise.all([
 ]);
 
 function setupWelcome() {
+    if (isGuest) {
+        document.getElementById("home-welcome-title").textContent = "Explore the Nullverse.";
+        document.getElementById("home-welcome-copy").textContent = "Browse public creations, creator profiles, galleries, and communities in read-only Guest Mode.";
+        const primary = document.getElementById("home-primary-action");
+        if (primary) { primary.href = "explore.html"; primary.textContent = "Explore Creations"; }
+        const panel = document.querySelector(".home-quick-panel");
+        if (panel) panel.innerHTML = `
+            <a class="home-quick-card" href="explore.html?type=world"><strong>Browse Worlds</strong><span>Discover public worldbuilding projects.</span></a>
+            <a class="home-quick-card" href="explore.html?type=literature"><strong>Read Literature</strong><span>Open published stories and chapters.</span></a>
+            <a class="home-quick-card" href="explore.html?type=comic"><strong>Read Comics</strong><span>Browse published comics and manga.</span></a>
+            <a class="home-quick-card" href="gallery.html"><strong>Browse Gallery</strong><span>Explore public artwork and creator showcases.</span></a>`;
+        document.querySelectorAll('[data-home-feed="for_you"],[data-home-feed="following"]').forEach(button => button.style.display = "none");
+        const dashboardLink = document.querySelector('a[href="dashboard.html"]');
+        if (dashboardLink) dashboardLink.style.display = "none";
+        return;
+    }
+
     const displayName = profile?.display_name || profile?.username || "Creator";
     document.getElementById("home-welcome-title").textContent = `Welcome back, ${displayName}.`;
 
@@ -106,6 +125,15 @@ function paintInitialSkeletons() {
 
 async function loadContinueSection() {
     const container = document.getElementById("home-continue-grid");
+
+    if (isGuest) {
+        container.innerHTML = renderEmptyCard(
+            "Guest Mode is read-only",
+            "Sign in to save reading progress, create projects, or continue your own work. You can still browse everything public below.",
+            { href: "explore.html", label: "Explore Nullverse" }
+        );
+        return;
+    }
 
     const [projectsResult, galleryResult, recent] = await Promise.all([
         supabase.from("worlds").select("*").eq("owner_id", currentUser.id).order("updated_at", { ascending: false }).limit(4),
@@ -493,7 +521,8 @@ async function loadTypeShelf(type, containerId) {
             .order("updated_at", { ascending: false })
             .limit(24);
         if (error) throw error;
-        const items = await attachProfiles(data || [], "owner_id");
+        let items = await attachProfiles(data || [], "owner_id");
+        items = filterGuestSafeContent(items, isGuest);
         const html = items
             .map(item => renderContentCard(item, { safety: getSafetyDecision(item, viewer.safety) }))
             .filter(Boolean)
@@ -508,6 +537,10 @@ async function loadTypeShelf(type, containerId) {
 
 async function loadFollowingActivity() {
     const container = document.getElementById("home-activity-list");
+    if (isGuest) {
+        container.innerHTML = renderEmptyCard("Sign in for Following Activity", "Guest Mode does not track follows or personal activity.", { href: "creators.html", label: "Discover Creators" });
+        return;
+    }
     const activity = await fetchFollowingActivity(8);
     container.innerHTML = activity.length
         ? activity.map(renderActivityCard).join("")

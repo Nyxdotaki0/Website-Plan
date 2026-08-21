@@ -1,6 +1,6 @@
-import { requireBetaAccess } from "./betaGate.js";
+import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
 import { supabase } from "./supabaseClient.js?v=20260818";
-import { initNullverseShell } from "./nullverse-shell.js?v=7";
+import { initNullverseShell } from "./nullverse-shell.js?v=20260821-guest1";
 import {
     bindCardInteractions,
     formatCompactNumber,
@@ -11,7 +11,7 @@ import {
     escapeHtml,
     timeAgo
 } from "./nullverse-content-cards.js?v=20260820-3";
-import { fetchDashboardMetrics, loadViewerContext } from "./nullverse-data.js?v=20260820-2";
+import { fetchDashboardMetrics, loadViewerContext } from "./nullverse-data.js?v=20260821-guest1";
 
 const currentUser = await requireBetaAccess({ allowRestricted: false });
 if (!currentUser) throw new Error("Nullverse session unavailable.");

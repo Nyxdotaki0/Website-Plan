@@ -1,6 +1,7 @@
-import { requireBetaAccess } from "./betaGate.js?v=9";
+import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
+import { showGuestActionPrompt } from "./nullverse-guest.js?v=20260821";
 import { supabase } from "./supabaseClient.js?v=20260818";
-import { initNullverseShell } from "./nullverse-shell.js?v=9";
+import { initNullverseShell } from "./nullverse-shell.js?v=20260821-guest1";
 import {
     bindCardInteractions,
     normalizeWarningList,
@@ -9,14 +10,16 @@ import {
     renderGalleryCard,
     renderSkeletonCards
 } from "./nullverse-content-cards.js?v=20260820-3";
-import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nullverse-data.js?v=20260820-2";
+import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nullverse-data.js?v=20260821-guest1";
 
 let currentUser = null;
 let viewer = null;
+let isGuest = false;
 
 try {
-    currentUser = await requireBetaAccess();
+    currentUser = await requireBetaAccess({ allowGuest: true });
     if (!currentUser) throw new Error("Nullverse session unavailable.");
+    isGuest = Boolean(currentUser.isGuest);
 
     viewer = await withGalleryRetry(
         () => loadViewerContext(currentUser.id),
@@ -42,7 +45,12 @@ try {
     throw startupError;
 }
 
-if (viewer.profile?.username) {
+if (isGuest) {
+    const myGallery = document.getElementById("gallery-my-gallery");
+    const addItem = document.getElementById("gallery-add-item");
+    if (myGallery) { myGallery.href = "creators.html?gallery=1"; myGallery.textContent = "Browse Creator Galleries"; }
+    if (addItem) addItem.style.display = "none";
+} else if (viewer.profile?.username) {
     const base = `creator-gallery.html?user=${encodeURIComponent(viewer.profile.username)}`;
     document.getElementById("gallery-my-gallery").href = base;
     document.getElementById("gallery-add-item").href = `${base}&new=item`;
@@ -96,6 +104,7 @@ const revealedWarningItemIds = new Set();
 let pendingWarningCard = null;
 
 async function refreshGalleryViewerContext() {
+    if (isGuest) return false;
     const { data: profile, error } = await supabase
         .from("profiles")
         .select("id, username, display_name, avatar_url, role, account_status, content_experience, blocked_content_warnings, age_role")
@@ -154,6 +163,11 @@ function setupControls() {
 
     document.getElementById("gallery-rating").addEventListener("change", event => {
         state.ageRating = event.target.value;
+        if (isGuest && ["mature", "adult", "18+", "18_plus"].includes(String(state.ageRating).toLowerCase())) {
+            state.ageRating = "";
+            event.target.value = "";
+            showGuestActionPrompt("view 18+ material");
+        }
         resetGallery();
     });
 

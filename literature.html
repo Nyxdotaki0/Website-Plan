@@ -2259,7 +2259,7 @@
             }
         }
     </style>
-    <link rel="stylesheet" href="nullverse-shell.css?v=5">
+    <link rel="stylesheet" href="nullverse-shell.css?v=20260821-guest1">
     <script>
         (() => {
             let settled = false;
@@ -2279,7 +2279,7 @@
             };
         })();
     </script>
-    <script type="module" src="creator-privacy-guard.js?v=3" onerror="window.__nvCreatorPrivacyScriptFailed && window.__nvCreatorPrivacyScriptFailed()"></script>
+    <script type="module" src="creator-privacy-guard.js?v=4" onerror="window.__nvCreatorPrivacyScriptFailed && window.__nvCreatorPrivacyScriptFailed()"></script>
     <link rel="stylesheet" href="nullverse-credit.css?v=20260820-3">
     <script src="nullverse-credit.js?v=20260820-3" defer></script>
 </head>
@@ -2468,6 +2468,7 @@
         ]);
         if (__nvCreatorPrivacyState?.denied) await new Promise(() => { });
         import { supabase } from "./supabaseClient.js?v=20260818";
+        import { getNullverseAccessContext, showAdultGuestGate } from "./nullverse-guest.js?v=20260821";
         import { setupNotificationBadge } from "./notificationBadge.js";
         import { createNotification } from "./notifications.js";
         import { setupMessageBadge } from "./messageBadge.js";
@@ -2547,12 +2548,23 @@
 
         async function initializeOptionalViewer() {
             try {
-                const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-                const sessionUser = sessionData?.session?.user || null;
+                const access = await getNullverseAccessContext();
 
-                if (sessionError || !sessionUser) {
+                if (access?.mode === "locked_beta") {
+                    window.location.replace(`login.html?return=${encodeURIComponent(getLiteratureReturnPath())}`);
                     return;
                 }
+
+                if (access?.isGuest) {
+                    currentUser = null;
+                    currentProfile = null;
+                    currentPermissions = [];
+                    isGuestReader = true;
+                    return;
+                }
+
+                const sessionUser = access?.actualUser || null;
+                if (!sessionUser) return;
 
                 const normalizedEmail = String(sessionUser.email || "").trim().toLowerCase();
                 if (!normalizedEmail) {
@@ -4118,6 +4130,7 @@
         function shouldBlockContent(item) {
             const info = getContentSafetyInfo(item);
 
+            if (isGuestReader) return info.isAdult;
             if (ageRole === "minor") return info.isAdult || info.isMature || info.hasContentWarning;
             if (info.hasHardBlockedWarning) return true;
             if (contentExperience === "open") return false;
@@ -4129,6 +4142,7 @@
         function shouldWarnContent(item) {
             const info = getContentSafetyInfo(item);
 
+            if (isGuestReader) return !info.isAdult && (info.isMature || info.hasContentWarning);
             if (contentExperience !== "balanced") return false;
             if (ageRole === "minor") return false;
             if (info.hasHardBlockedWarning) return false;
@@ -4178,6 +4192,11 @@
 
             if (literature.moderation_status === "hidden" && !staffAccess) {
                 showNotFound("This literature has been hidden by Nullverse staff.");
+                return;
+            }
+
+            if (isGuestReader && getContentSafetyInfo(literature).isAdult) {
+                showAdultGuestGate();
                 return;
             }
 
@@ -4252,7 +4271,9 @@
             } else if (profile) {
                 const creatorName = profile.display_name || profile.username || "Unknown Creator";
                 const username = profile.username ? ` (@${profile.username})` : "";
-                document.getElementById("book-creator").textContent = `by ${creatorName}${username}`;
+                document.getElementById("book-creator").innerHTML = profile.username
+                    ? `by <a href="profile.html?user=${encodeURIComponent(profile.username)}">${escapeHtml(creatorName)}${escapeHtml(username)}</a>`
+                    : `by ${escapeHtml(creatorName)}`;
             } else {
                 document.getElementById("book-creator").textContent = "by Unknown Creator";
             }

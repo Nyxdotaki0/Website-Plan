@@ -1,4 +1,8 @@
-﻿import { supabase } from "./supabaseClient.js?v=20260818";
+import { supabase } from "./supabaseClient.js?v=20260818";
+import {
+    getNullverseAccessContext,
+    showGuestProtectedPage
+} from "./nullverse-guest.js?v=20260821";
 
 function getAgeRoleFromBirthDate(birthDate) {
     const today = new Date();
@@ -202,29 +206,42 @@ export async function requireBetaAccess(options = {}) {
     const {
         allowRestricted = true,
         allowSuspended = false,
-        allowBanned = false
+        allowBanned = false,
+        allowGuest = false,
+        guestAction = "use this feature"
     } = options;
 
     let user = null;
 
     try {
-        const sessionResult = await withTimeout(
-            supabase.auth.getSession(),
-            4500
+        const access = await withTimeout(
+            getNullverseAccessContext(),
+            6500
         );
 
-        if (sessionResult?.error) throw sessionResult.error;
+        if (access?.isGuest) {
+            if (allowGuest) {
+                return access.effectiveUser;
+            }
 
-        const session = sessionResult.data?.session || null;
-        if (!session?.user) {
+            showGuestProtectedPage(guestAction);
+            // Keep the calling page suspended so legacy editors/personal tools
+            // cannot continue initialization with the Architect session that
+            // exists underneath Guest Preview.
+            await new Promise(() => {});
+            return null;
+        }
+
+        if (!access?.actualUser) {
             clearBrokenSession();
             redirectTo("/login.html");
             return null;
         }
 
-        // The session already includes the authenticated user. Avoid a second
-        // network validation on every navigation; RLS remains the data guard.
-        user = session.user;
+        // The access resolver already validated the saved browser session.
+        // In Architect Guest Preview it masks the real architect identity;
+        // protected pages are stopped above before any privileged code runs.
+        user = access.actualUser;
     } catch (error) {
         console.warn("Auth connection failed:", error);
         // Never destroy a valid saved session because the network/backend had

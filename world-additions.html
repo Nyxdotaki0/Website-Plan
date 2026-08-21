@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -503,14 +503,18 @@
     </main>
 
     <script type="module">
-        import { requireBetaAccess } from "./betaGate.js";
+        import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
+        import { installGuestInteractionGuards, applyGuestLegacyNavigation, isGuestBlockedAdultContent, showAdultGuestGate } from "./nullverse-guest.js?v=20260821";
         import { supabase } from "./supabaseClient.js?v=20260818";
         import { setupNotificationBadge } from "./notificationBadge.js";
         import { setupMessageBadge } from "./messageBadge.js";
-        setupMessageBadge();
+        // Guest Mode never initializes personal message badges.
 
-        const currentUser = await requireBetaAccess({ allowRestricted: false });
-        setupNotificationBadge();
+        const currentUser = await requireBetaAccess({ allowRestricted: false, allowGuest: true });
+        const isGuest = Boolean(currentUser?.isGuest);
+        installGuestInteractionGuards(isGuest);
+        applyGuestLegacyNavigation(isGuest);
+        if (!isGuest) setupNotificationBadge();
 
         const params = new URLSearchParams(window.location.search);
         const worldId = params.get("id");
@@ -521,6 +525,7 @@
         let blockedUserIds = [];
 
         async function loadBlockedUsers() {
+            if (isGuest) { blockedUserIds = []; return; }
 
             const { data, error } = await supabase
                 .from("user_blocks")
@@ -568,6 +573,10 @@
             }
 
             currentWorld = data;
+            if (isGuest && isGuestBlockedAdultContent(currentWorld)) {
+                showAdultGuestGate();
+                return;
+            }
             if (
                 blockedUserIds.includes(currentWorld.owner_id)
             ) {
@@ -595,6 +604,12 @@
 
             const message =
                 document.getElementById("addition-mode-message");
+
+            if (isGuest) {
+                createLink.style.display = "none";
+                message.textContent = "Guest browsing is read-only. Log in to contribute to this community.";
+                return;
+            }
 
             if (
                 blockedUserIds.includes(currentWorld.owner_id)

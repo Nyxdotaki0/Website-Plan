@@ -4703,7 +4703,7 @@
             margin-bottom: 18px;
         }
     </style>
-    <link rel="stylesheet" href="nullverse-shell.css?v=2">
+    <link rel="stylesheet" href="nullverse-shell.css?v=20260821-guest1">
     <script>
         (() => {
             let settled = false;
@@ -4723,7 +4723,7 @@
             };
         })();
     </script>
-    <script type="module" src="creator-privacy-guard.js?v=3" onerror="window.__nvCreatorPrivacyScriptFailed && window.__nvCreatorPrivacyScriptFailed()"></script>
+    <script type="module" src="creator-privacy-guard.js?v=4" onerror="window.__nvCreatorPrivacyScriptFailed && window.__nvCreatorPrivacyScriptFailed()"></script>
     <link rel="stylesheet" href="placement-studio-mobile.css?v=2">
     <script defer src="placement-studio-mobile.js?v=3"></script>
     <link rel="stylesheet" href="nullverse-credit.css?v=20260820-3">
@@ -5001,6 +5001,7 @@
         ]);
         if (__nvCreatorPrivacyState?.denied) await new Promise(() => { });
         import { supabase } from "./supabaseClient.js";
+        import { getNullverseAccessContext, exitArchitectGuestPreview } from "./nullverse-guest.js?v=20260821";
         import { optimizeImage } from "./imageUtils.js";
         import { createNotification } from "./notifications.js";
         import { getPremiumEntitlement, showPremiumNotice } from "./premiumAccess.js?v=2";
@@ -5212,15 +5213,24 @@
 
         async function getOptionalBetaUser() {
             try {
-                const { data: sessionData } = await supabase.auth.getSession();
-                const user = sessionData?.session?.user || null;
+                const access = await getNullverseAccessContext();
+                if (access?.mode === "locked_beta") {
+                    window.location.replace(`login.html?return=${encodeURIComponent(`${location.pathname.split("/").pop()}${location.search}`)}`);
+                    return null;
+                }
+                if (access?.isGuest) {
+                    viewerProfile = null;
+                    return null;
+                }
+
+                const user = access?.actualUser || null;
                 if (!user) return null;
                 const normalizedEmail = String(user.email || "").trim().toLowerCase();
                 let betaResult;
                 try {
                     betaResult = await withGalleryRetry(() => supabase.from("beta_access").select("role").ilike("email", normalizedEmail).maybeSingle(), 2);
                 } catch (betaError) {
-                    console.warn("Optional gallery beta check unavailable; continuing as guest:", betaError);
+                    console.warn("Optional gallery beta check unavailable:", betaError);
                     return null;
                 }
                 const betaData = betaResult?.data || null;
@@ -5231,23 +5241,10 @@
                         .select("*")
                         .eq("id", user.id)
                         .maybeSingle(), 2);
-                    const vp = viewerResult?.data || null;
-
-                    viewerProfile = vp || null;
-
+                    viewerProfile = viewerResult?.data || null;
                     const status = String(viewerProfile?.account_status || "active").toLowerCase();
-                    if (status === "banned") {
-                        window.location.replace("banned.html");
-                        return null;
-                    }
-
-                    if (status === "suspended") {
-                        window.location.replace("suspended.html");
-                        return null;
-                    }
-
-                    if (status === "restricted") {
-                        window.location.replace("restricted.html");
+                    if (["banned", "suspended", "restricted"].includes(status)) {
+                        window.location.replace(`${status}.html`);
                         return null;
                     }
                 } catch (err) {
@@ -5270,8 +5267,9 @@
                 nav.innerHTML = `<a href="index.html">Home</a><a href="notifications.html">Notifications</a><a href="explore.html">Explore</a>
                                                                         <a href="gallery.html">Gallery</a><a href="profile.html">Profile</a><a href="dashboard.html">Dashboard</a><a href="messages.html">Messages</a><button onclick="logOut()">Log Out</button>`;
             } else {
-                if (logoLink) logoLink.href = "creator-gallery.html";
-                nav.innerHTML = `<a href="creator-gallery.html">Creator Gallery</a><a href="login.html">Beta Login</a>`;
+                if (logoLink) logoLink.href = "index.html";
+                nav.innerHTML = `<a href="index.html">Home</a><a href="explore.html">Explore</a><a href="creators.html">Creators</a><a href="gallery.html">Gallery</a>${sessionStorage.getItem("nullverse_architect_guest_preview") === "true" ? `<button type="button" id="legacy-guest-login">Log In</button>` : `<a href="login.html">Log In</a>`}`;
+                document.getElementById("legacy-guest-login")?.addEventListener("click", () => exitArchitectGuestPreview());
             }
         }
 
@@ -5344,7 +5342,7 @@
             const backProfileLink = $("back-profile-link");
             if (backProfileLink) {
                 backProfileLink.href = `profile.html?user=${encodeURIComponent(profile.username)}`;
-                backProfileLink.style.display = currentUser ? "inline-flex" : "none";
+                backProfileLink.style.display = "inline-flex";
             }
             $("add-gallery-button").style.display = isOwner ? "inline-flex" : "none";
             $("owner-manage-toggle").style.display = isOwner ? "inline-flex" : "none";

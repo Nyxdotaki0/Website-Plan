@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -300,17 +300,24 @@
     </div>
 
     <script type="module">
-        import { requireBetaAccess } from "./betaGate.js";
+        import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
+        import { installGuestInteractionGuards, applyGuestLegacyNavigation, isGuestBlockedAdultContent, showAdultGuestGate } from "./nullverse-guest.js?v=20260821";
         import { supabase } from "./supabaseClient.js?v=20260818";
         import { createNotification } from "./notifications.js";
         import { setupNotificationBadge } from "./notificationBadge.js";
         import { setupMessageBadge } from "./messageBadge.js";
-        setupMessageBadge();
+        // Guest Mode never initializes personal message badges.
 
-        const currentUser = await requireBetaAccess();
-        setupNotificationBadge();
+        const currentUser = await requireBetaAccess({ allowGuest: true });
+        const isGuest = Boolean(currentUser?.isGuest);
+        installGuestInteractionGuards(isGuest);
+        applyGuestLegacyNavigation(isGuest);
+        if (!isGuest) setupNotificationBadge();
 
         const params = new URLSearchParams(window.location.search);
+        if (isGuest) {
+            document.getElementById("comment-form-section")?.setAttribute("hidden", isGuest ? "hidden" : "");
+        }
 
         const worldId = params.get("id");
 
@@ -319,6 +326,7 @@
         let pendingCommentReport = null;
         let blockedUserIds = [];
         async function loadBlockedUsers() {
+            if (isGuest) { blockedUserIds = []; return; }
             const { data, error } = await supabase
                 .from("user_blocks")
                 .select("blocker_id, blocked_id")
@@ -365,6 +373,10 @@
             }
 
             currentWorld = data;
+            if (isGuest && isGuestBlockedAdultContent(currentWorld)) {
+                showAdultGuestGate();
+                return;
+            }
             if (blockedUserIds.includes(currentWorld.owner_id)) {
                 alert("These comments are unavailable.");
                 window.location.href = "explore.html";

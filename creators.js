@@ -1,11 +1,13 @@
-import { requireBetaAccess } from "./betaGate.js";
+import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
+import { showGuestActionPrompt } from "./nullverse-guest.js?v=20260821";
 import { supabase } from "./supabaseClient.js?v=20260818";
-import { initNullverseShell } from "./nullverse-shell.js?v=7";
+import { initNullverseShell } from "./nullverse-shell.js?v=20260821-guest1";
 import { bindCardInteractions, escapeHtml, renderEmptyCard, renderProfileImageCredit, renderSkeletonCards } from "./nullverse-content-cards.js?v=20260820-3";
-import { loadViewerContext } from "./nullverse-data.js?v=20260820-2";
+import { loadViewerContext } from "./nullverse-data.js?v=20260821-guest1";
 
-const currentUser = await requireBetaAccess();
+const currentUser = await requireBetaAccess({ allowGuest: true });
 if (!currentUser) throw new Error("Nullverse session unavailable.");
+const isGuest = Boolean(currentUser.isGuest);
 const viewer = await loadViewerContext(currentUser.id);
 await initNullverseShell({ page: "creators", user: currentUser, profile: viewer.profile });
 
@@ -13,8 +15,8 @@ const params = new URLSearchParams(location.search);
 const state = {
     search: params.get("q") || "",
     creatorType: params.get("type") || "",
-    mode: params.get("mode") || "for_you",
-    privacy: params.get("privacy") || "all",
+    mode: isGuest ? (["trending", "newest"].includes(params.get("mode")) ? params.get("mode") : "trending") : (params.get("mode") || "for_you"),
+    privacy: isGuest ? "public" : (params.get("privacy") || "all"),
     requireGallery: params.get("gallery") === "1",
     requireContent: params.get("content") === "1",
     offset: 0,
@@ -33,9 +35,19 @@ function hydrateControls() {
     document.getElementById("creators-search").value = state.search;
     document.getElementById("creators-type").value = state.creatorType;
     document.getElementById("creators-privacy").value = state.privacy;
+    if (isGuest) {
+        const privacySelect = document.getElementById("creators-privacy");
+        privacySelect.value = "public";
+        privacySelect.disabled = true;
+        privacySelect.style.display = "none";
+        document.querySelector(".creators-toolbar p")?.replaceChildren(document.createTextNode("Browse public creator profiles and their public creations."));
+    }
     document.getElementById("creators-has-gallery").checked = state.requireGallery;
     document.getElementById("creators-has-content").checked = state.requireContent;
-    document.querySelectorAll("[data-creator-mode]").forEach(button => button.classList.toggle("active", button.dataset.creatorMode === state.mode));
+    document.querySelectorAll("[data-creator-mode]").forEach(button => {
+        button.classList.toggle("active", button.dataset.creatorMode === state.mode);
+        if (isGuest && ["for_you", "following"].includes(button.dataset.creatorMode)) button.style.display = "none";
+    });
 }
 
 function bindControls() {
@@ -56,7 +68,7 @@ function bindControls() {
     ["creators-type", "creators-privacy", "creators-has-gallery", "creators-has-content"].forEach(id => {
         document.getElementById(id).addEventListener("change", () => {
             state.creatorType = document.getElementById("creators-type").value;
-            state.privacy = document.getElementById("creators-privacy").value;
+            state.privacy = isGuest ? "public" : document.getElementById("creators-privacy").value;
             state.requireGallery = document.getElementById("creators-has-gallery").checked;
             state.requireContent = document.getElementById("creators-has-content").checked;
             resetCreators();
@@ -166,7 +178,7 @@ function renderDirectoryCard(profile) {
                 </div>
                 <div class="creator-directory-actions">
                     <a class="creators-button" href="profile.html?user=${encodeURIComponent(username)}">View Profile</a>
-                    <button class="creators-button creator-follow-action ${escapeHtml(relationship)}" type="button" data-creator-follow="${escapeHtml(profile.id)}">${escapeHtml(followLabel)}</button>
+                    <button class="creators-button creator-follow-action ${escapeHtml(relationship)}" type="button" data-creator-follow="${escapeHtml(profile.id)}">${escapeHtml(isGuest ? "Follow" : followLabel)}</button>
                     ${canOpenGallery ? `<a class="creators-button" href="creator-gallery.html?user=${encodeURIComponent(username)}">Open Gallery</a>` : `<span class="creators-button" aria-disabled="true">Gallery Locked</span>`}
                 </div>
             </div>
@@ -175,6 +187,7 @@ function renderDirectoryCard(profile) {
 }
 
 async function toggleCreatorFollow(button) {
+    if (isGuest) { showGuestActionPrompt("follow this creator"); return; }
     if (button.disabled) return;
     const creatorId = button.dataset.creatorFollow;
     button.disabled = true;
