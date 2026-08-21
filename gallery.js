@@ -1,5 +1,9 @@
 import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
+<<<<<<< HEAD
 import { showGuestActionPrompt } from "./nullverse-guest.js?v=20260821-balanced2";
+=======
+import { showGuestActionPrompt } from "./nullverse-guest.js?v=20260821-fix3";
+>>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 import { supabase } from "./supabaseClient.js?v=20260818";
 import { initNullverseShell } from "./nullverse-shell.js?v=20260821-guest1";
 import {
@@ -10,7 +14,11 @@ import {
     renderGalleryCard,
     renderSkeletonCards
 } from "./nullverse-content-cards.js?v=20260820-3";
+<<<<<<< HEAD
 import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nullverse-data.js?v=20260821-guest1";
+=======
+import { fetchDiscoverCreators, fetchGalleryFeed, loadViewerContext } from "./nullverse-data.js?v=20260821-fix2";
+>>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 
 let currentUser = null;
 let viewer = null;
@@ -426,9 +434,15 @@ function openGalleryWarningModal(button) {
     const summary = document.getElementById("gallery-warning-summary");
     const tags = document.getElementById("gallery-warning-tags");
     const confirmButton = document.getElementById("gallery-warning-confirm");
-    if (!modal || !title || !summary || !tags || !confirmButton) return;
-
     pendingWarningCard = button.closest(".nv-gallery-card");
+
+    // Fail open to the explicit reveal action rather than leaving a dead warning
+    // overlay if this page is ever served with stale/missing modal markup.
+    if (!modal || !title || !summary || !tags || !confirmButton) {
+        revealPendingGalleryWarning();
+        return;
+    }
+
     const itemTitle = button.dataset.galleryItemTitle || "Gallery item";
     const warningSummary = button.dataset.galleryWarningSummary || "Sensitive content";
     const warningTags = String(button.dataset.galleryWarningTags || warningSummary)

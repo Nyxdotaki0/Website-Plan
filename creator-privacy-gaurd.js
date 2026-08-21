@@ -1,5 +1,9 @@
 import { supabase } from "./supabaseClient.js?v=20260818";
+<<<<<<< HEAD
 import { getNullverseAccessContext, showGuestActionPrompt } from "./nullverse-guest.js?v=20260821-balanced2";
+=======
+import { getNullverseAccessContext, showGuestActionPrompt } from "./nullverse-guest.js?v=20260821-fix3";
+>>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 
 let finalState = { denied: false, access: null, route: null };
 let guestViewer = false;

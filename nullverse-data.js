@@ -1,5 +1,9 @@
 import { supabase } from "./supabaseClient.js?v=20260818";
+<<<<<<< HEAD
 import { getNullverseAccessContext, getGuestViewerContext, filterGuestSafeContent } from "./nullverse-guest.js?v=20260821-balanced2";
+=======
+import { getNullverseAccessContext, getGuestViewerContext, filterGuestSafeContent } from "./nullverse-guest.js?v=20260821-fix3";
+>>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 
 export async function loadViewerContext(userId) {
     if (!userId) return getGuestViewerContext();
@@ -301,7 +305,23 @@ export async function attachProfiles(items, ownerKey = "owner_id") {
         .in("id", ids);
 
     const map = Object.fromEntries((data || []).map(profile => [profile.id, profile]));
-    return (items || []).map(item => ({ ...item, ...(map[item?.[ownerKey]] || {}) }));
+    return (items || []).map(item => {
+        const profile = map[item?.[ownerKey]] || null;
+        if (!profile) return item;
+
+        // Never allow the joined creator profile to overwrite the creation/gallery
+        // row identity. Guest feeds use direct table queries more often than the
+        // personalized RPC feeds, and the previous merge order replaced item.id
+        // with profiles.id (the creator UUID). That produced valid-looking cards
+        // whose links opened world/literature/comic pages with the wrong ID.
+        const { id: profileId, ...profileFields } = profile;
+        return {
+            ...item,
+            ...profileFields,
+            id: item.id,
+            profile_id: profileId
+        };
+    });
 }
 
 async function fallbackWorldFeed(mode, limit, offset) {

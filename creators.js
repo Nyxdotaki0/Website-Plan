@@ -1,9 +1,17 @@
 import { requireBetaAccess } from "./betaGate.js?v=20260821-guest1";
+<<<<<<< HEAD
 import { showGuestActionPrompt } from "./nullverse-guest.js?v=20260821-balanced2";
 import { supabase } from "./supabaseClient.js?v=20260818";
 import { initNullverseShell } from "./nullverse-shell.js?v=20260821-guest1";
 import { bindCardInteractions, escapeHtml, renderEmptyCard, renderProfileImageCredit, renderSkeletonCards } from "./nullverse-content-cards.js?v=20260820-3";
 import { loadViewerContext } from "./nullverse-data.js?v=20260821-guest1";
+=======
+import { showGuestActionPrompt } from "./nullverse-guest.js?v=20260821-fix3";
+import { supabase } from "./supabaseClient.js?v=20260818";
+import { initNullverseShell } from "./nullverse-shell.js?v=20260821-guest1";
+import { bindCardInteractions, escapeHtml, renderEmptyCard, renderProfileImageCredit, renderSkeletonCards } from "./nullverse-content-cards.js?v=20260820-3";
+import { loadViewerContext } from "./nullverse-data.js?v=20260821-fix2";
+>>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 
 const currentUser = await requireBetaAccess({ allowGuest: true });
 if (!currentUser) throw new Error("Nullverse session unavailable.");

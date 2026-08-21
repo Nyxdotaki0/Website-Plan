@@ -1005,8 +1005,8 @@ export function createEditorDraftManager(options) {
     } = {}) {
         status(
             manual
-                ? "Saving draft…"
-                : "Autosaving…",
+                ? "Saving draft"
+                : "Autosaving",
             "saving"
         );
 
@@ -1113,7 +1113,7 @@ export function createEditorDraftManager(options) {
             dirty = true;
 
             status(
-                "Text autosaved — image pending",
+                "Text autosaved  image pending",
                 "warning"
             );
         } else if (cloudResult.ok) {
@@ -1125,7 +1125,7 @@ export function createEditorDraftManager(options) {
             );
         } else if (localSaved) {
             status(
-                "Saved locally — cloud unavailable",
+                "Saved locally  cloud unavailable",
                 "warning"
             );
         } else {
@@ -1350,7 +1350,7 @@ export function createEditorDraftManager(options) {
 
     async function restoreLatest() {
         status(
-            "Checking for drafts…",
+            "Checking for drafts",
             "saving"
         );
 
@@ -1488,7 +1488,7 @@ export function createEditorDraftManager(options) {
         publishing = true;
 
         status(
-            "Publishing…",
+            "Publishing",
             "saving"
         );
 
@@ -1632,12 +1632,12 @@ export function createEditorDraftManager(options) {
                     dirty = true;
 
                     status(
-                        "Publish failed — draft kept",
+                        "Publish failed  draft kept",
                         "error"
                     );
 
                     showToast(
-                        "Publish failed — draft kept",
+                        "Publish failed  draft kept",
 
                         error?.message
                         || "The public update did not finish. Your private draft is still available.",

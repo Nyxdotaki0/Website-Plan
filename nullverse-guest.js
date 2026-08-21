@@ -197,6 +197,7 @@ export function showGuestActionPrompt(action = "use this feature", options = {})
     return false;
 }
 
+<<<<<<< HEAD
 export function showAdultGuestGate(options = {}) {
     ensureGuestStyles();
     document.querySelector(".nv-guest-modal-backdrop")?.remove();
@@ -215,6 +216,13 @@ export function showAdultGuestGate(options = {}) {
     document.body.appendChild(backdrop);
     backdrop.querySelector("[data-nv-exit-guest-preview]")?.addEventListener("click", () => exitArchitectGuestPreview());
     return false;
+=======
+export function showAdultGuestGate() {
+    // Deprecated compatibility helper. Guest Mode is permanently Balanced and
+    // never hard-blocks content based on an Adult/Mature rating. Any caller that
+    // still reaches this helper must allow the normal warning/reveal flow.
+    return true;
+>>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 }
 
 export function showGuestProtectedPage(action = "use this feature") {

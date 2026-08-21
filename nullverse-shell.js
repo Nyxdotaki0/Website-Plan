@@ -5,7 +5,11 @@ import {
     getNullverseAccessContext,
     installGuestInteractionGuards,
     exitArchitectGuestPreview
+<<<<<<< HEAD
 } from "./nullverse-guest.js?v=20260821-balanced2";
+=======
+} from "./nullverse-guest.js?v=20260821-fix3";
+>>>>>>> a2b440e (Fix guest creation readers and gallery warning review)
 
 const ICONS = {
     search: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>`,
